@@ -262,6 +262,16 @@ This is a SCOUT task: the deliverable is a written report, not a PR.
 The worktree is your laboratory - install, run, edit, and make scratch commits freely; all of it is discarded at teardown.
 The report is the only thing that survives, so anything worth keeping must be in it.
 
+# Mandatory task breakdown
+Before any investigation, edit, test, or other task action, use the harness's
+To-Do List extension and create an in-depth dependency-aware tracker with at
+least five checkable items: preflight, scoped discovery, bounded work/evidence,
+validation, and postflight/closeout. Keep it visible and update it at every
+phase change. Do not substitute prose or a filesystem TODO file. If the
+extension is unavailable or the tracker has fewer than five items, append
+`blocked: To-Do List extension unavailable or incomplete` to the status file and
+stop; firstmate must not treat the task as started.
+
 # Rules
 1. Never push to any remote and never open a PR.
 2. Stay inside this worktree; the only files you may write outside it are the report and the status file below.
@@ -373,6 +383,16 @@ The path check is authoritative: \`git rev-parse --git-dir\` and \`git rev-parse
 If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append \`blocked: launched in primary checkout, not an isolated worktree\` to the status file and stop.
 
 1. First action: create your branch: \`git checkout -b fm/$ID\`$SETUP2
+
+# Mandatory task breakdown
+Before any investigation, edit, test, or other task action, use the harness's
+To-Do List extension and create an in-depth dependency-aware tracker with at
+least five checkable items: preflight, scoped discovery, bounded work/evidence,
+validation, and postflight/closeout. Keep it visible and update it at every
+phase change. Do not substitute prose or a filesystem TODO file. If the
+extension is unavailable or the tracker has fewer than five items, append
+`blocked: To-Do List extension unavailable or incomplete` to the status file and
+stop; firstmate must not treat the task as started.
 
 # Rules
 $RULE1

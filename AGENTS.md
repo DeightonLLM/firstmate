@@ -262,14 +262,25 @@ Treat file or subsystem overlap as a risk signal rather than an automatic reason
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
 
+### Mandatory To-Do List gate
+
+Before dispatching any crew, the primary must use the harness's To-Do List
+extension to create an in-depth dependency-aware tracker with at least five
+checkable items: preflight, scoped discovery, bounded work/evidence,
+validation, and postflight/closeout. Keep the tracker visible and update it at
+each phase change. A prose plan, backlog entry, or filesystem TODO is not a
+substitute. If the extension is unavailable or the tracker is missing/fewer
+than five items, do not spawn or classify work as started; record the blocker
+and repair the intake first.
+
 ### Dispatch and supervision handoff
 
-Spawn only through `bin/fm-spawn.sh` after the profile and backend checks in section 4.
+Spawn only through `bash /path/to/firstmate/bin/fm-spawn.sh` after the profile and backend checks in section 4. Always invoke `fm-spawn.sh` with `bash`, never as a bare command resolved through `/bin/sh`; the script requires Bash (uses `${BASH_SOURCE[0]}` and `BASH_SOURCE` arrays) and will Bad-substitution error if run through POSIX sh.
 The spawn must resolve a genuine isolated task worktree distinct from the primary checkout; a failed isolation assertion stops the task.
 After spawning, confirm the worker is processing the brief, handle any trust dialog through `harness-adapters`, and record ship or scout work as under way.
 A persistent secondmate is recorded in the secondmate registry and runtime state, never as a backlog work item.
 
-Steer a worker with short single-line messages through fail-closed `fm-send`; put long instructions in a file.
+Steer a worker with short single-line messages through fail-closed `fm-send.sh` (invoke as `bash /path/to/firstmate/bin/fm-send.sh`); put long instructions in a file.
 A secondmate's routed reply returns through status or a document pointer, not by firstmate peeking into its chat.
 For the parent-owned correlation, recovery, and escalation contract on marked secondmate requests, see `bin/fm-pending-reply-lib.sh`.
 Supervise all live work under section 8.
