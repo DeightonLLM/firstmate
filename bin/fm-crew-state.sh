@@ -51,6 +51,15 @@
 # of state; exit 2 only on a usage error (no id).
 set -u
 
+# Guard: when sourced (e.g. for unit testing of callers), skip top-level execution.
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
+  # Being sourced - only define functions, skip top-level execution.
+  return 0 2>/dev/null || exit 0
+fi  ###########################################################################
+# Below runs only when this script is EXECUTED directly (not sourced).       ###
+# Function definitions below are parsed but not executed during source.     ###
+#############################################################################
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"

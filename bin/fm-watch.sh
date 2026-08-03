@@ -757,6 +757,11 @@ if ! fm_pr_poll_retirement_recover_all "$STATE" "$SCRIPT_DIR/fm-pr-poll.sh"; the
   reason="check: rejected unauthenticated PR poll retirement receipts:$FM_PR_POLL_RETIREMENT_REJECTED"
   fm_wake_append check pr-poll-retirement "$reason" || exit 1
   touch "$STATE/.last-check"
+  # Coordinator-poll: invoke once per actionable wake, bounded cycle.
+  if [ -z "${_coord_poll_flag:-}" ]; then
+    _coord_poll_flag=1
+    "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+  fi
   wake "$reason"
 fi
 
@@ -790,6 +795,11 @@ while :; do
   fi
   # Then deliver any queued-but-unsurfaced result, including one a runner
   # published while this watcher was between cycles.
+  # procevent_surface_queued may call wake internally; invoke coord-poll before.
+  if [ -z "${_coord_poll_flag:-}" ]; then
+    _coord_poll_flag=1
+    "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+  fi
   procevent_surface_queued
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
@@ -848,6 +858,11 @@ while :; do
           fi
         fi
         touch "$STATE/.last-check"
+        # Coordinator-poll: invoke once per actionable wake, bounded cycle.
+        if [ -z "${_coord_poll_flag:-}" ]; then
+          _coord_poll_flag=1
+          "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+        fi
         wake "$reason"
       fi
     done
@@ -855,6 +870,11 @@ while :; do
       reason="check: rejected unauthenticated state checks:$rejected_checks"
       fm_wake_append check unauthenticated-state-checks "$reason" || exit 1
       touch "$STATE/.last-check"
+      # Coordinator-poll: invoke once per actionable wake, bounded cycle.
+      if [ -z "${_coord_poll_flag:-}" ]; then
+        _coord_poll_flag=1
+        "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+      fi
       wake "$reason"
     fi
     touch "$STATE/.last-check"
@@ -905,6 +925,11 @@ EOF
       done <<EOF
 $pending
 EOF
+      # Coordinator-poll: invoke once per actionable wake, bounded cycle.
+      if [ -z "${_coord_poll_flag:-}" ]; then
+        _coord_poll_flag=1
+        "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+      fi
       wake "$reason"
     else
       while IFS=$(printf '\t') read -r sf sig f; do
@@ -956,9 +981,14 @@ EOF
       if [ "$n" -ge 2 ] && [ "$busy_now" -ne 0 ]; then
         # The pane is idle/stale at hash $h. Triage decides whether this wakes
         # firstmate. Detection itself is unchanged from above.
+        # Coordinator-poll integration: invoke before any path that may call wake.
+        # handle_paused_stale may call wake internally and exit; invoke before it.
         if [ "$kind" = secondmate ]; then
           case "$(pause_state_class "$w" "$task")" in
-            paused) handle_paused_stale "$w" "$task" "$h" ;;
+            paused)
+              _coord_poll_flag=1
+              "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+              handle_paused_stale "$w" "$task" "$h" ;;
             *)      clear_pause_tracking "$w" ;;
           esac
         elif afk_present; then
@@ -966,6 +996,11 @@ EOF
           if [ "$(cat "$sf" 2>/dev/null || true)" != "$h" ]; then
             fm_wake_append stale "$w" "stale: $w" || exit 1
             printf '%s' "$h" > "$sf"
+            # Coordinator-poll: invoke once per actionable wake, bounded cycle.
+            if [ -z "${_coord_poll_flag:-}" ]; then
+              _coord_poll_flag=1
+              "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+            fi
             wake "stale: $w"
           fi
         elif stale_is_terminal "$w" "$STATE"; then
@@ -993,6 +1028,11 @@ EOF
               printf '%s' "$h" > "$sf"
               rm -f "$ssf"
               mark_surfaced "$STATE/$(window_to_task "$w" "$STATE").status"
+              # Coordinator-poll: invoke once per actionable wake, bounded cycle.
+              if [ -z "${_coord_poll_flag:-}" ]; then
+                _coord_poll_flag=1
+                "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+              fi
               wake "stale: $w"
             fi
           elif [ -e "$ssf" ]; then
@@ -1000,6 +1040,9 @@ EOF
             # wedge timer is running for it) - keep treating it that way
             # without re-reading the crew state every poll, and without
             # letting the still-captain-relevant log line re-surface it.
+            # wedge_timer_check may call wake internally and exit; invoke before it.
+            _coord_poll_flag=1
+            "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
             wedge_timer_check "$w" "$ssf" "stale (overridden terminal status)" "$ewf"
           fi
           # else: already surfaced as genuinely terminal on a prior poll of
@@ -1030,9 +1073,15 @@ EOF
                 triage_log "absorbed non-terminal stale (provably working): $w"
                 ;;
               paused)
+                # handle_paused_stale may call wake internally and exit; invoke before.
+                _coord_poll_flag=1
+                "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
                 handle_paused_stale "$w" "$task" "$h"
                 ;;
               *)
+                # surface_nonterminal_stale calls wake at the end; invoke coord-poll before.
+                _coord_poll_flag=1
+                "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
                 surface_nonterminal_stale "$w" "$h"
                 ;;
             esac
@@ -1040,14 +1089,28 @@ EOF
             task=$(window_to_task "$w" "$STATE")
             if [ -e "$pf" ] || status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")"; then
               case "$(pause_state_class "$w" "$task")" in
-                paused)  handle_paused_stale "$w" "$task" "$h" ;;
+                paused)
+                  # handle_paused_stale may call wake internally and exit; invoke before.
+                  _coord_poll_flag=1
+                  "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+                  handle_paused_stale "$w" "$task" "$h" ;;
                 working) clear_pause_state "$w"
                          printf '%s' "$h" > "$sf"
+                         # wedge_timer_check may call wake internally and exit; invoke before.
+                         _coord_poll_flag=1
+                         "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
                          wedge_timer_check "$w" "$ssf" "non-terminal stale (provably working after a declared pause)" "$ewf"
                          triage_log "absorbed non-terminal stale (provably working): $w" ;;
-                *)       handle_paused_stale "$w" "$task" "$h" ;;
+                *)
+                  # handle_paused_stale may call wake internally and exit; invoke before.
+                  _coord_poll_flag=1
+                  "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+                  handle_paused_stale "$w" "$task" "$h" ;;
               esac
             else
+              # wedge_timer_check may call wake internally and exit; invoke before.
+              _coord_poll_flag=1
+              "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
               wedge_timer_check "$w" "$ssf" "non-terminal stale" "$ewf"
             fi
           fi
@@ -1057,6 +1120,9 @@ EOF
         # unless a genuinely busy pane has gone too long with no completed turn -
         # then route it through the same wedge timer instead of erasing it.
         if [ "$busy_now" -eq 0 ] && busy_turn_over_age "$task"; then
+          # wedge_timer_check may call wake internally and exit; invoke before.
+          _coord_poll_flag=1
+          "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
           wedge_timer_check "$w" "$ssf" "busy (no completed turn)" "$ewf"
         else
           rm -f "$ssf" "$ewf"
@@ -1069,6 +1135,9 @@ EOF
       printf '%s' "$h" > "$hf"
       echo 0 > "$cf"
       if [ "$busy_now" -eq 0 ] && busy_turn_over_age "$task"; then
+        # wedge_timer_check may call wake internally and exit; invoke before.
+        _coord_poll_flag=1
+        "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
         wedge_timer_check "$w" "$ssf" "busy (no completed turn)" "$ewf"
       else
         rm -f "$ssf" "$ewf"
@@ -1076,7 +1145,11 @@ EOF
       task=$(window_to_task "$w" "$STATE")
       if ! afk_present && status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")" && [ "$busy_now" -ne 0 ]; then
         case "$(pause_state_class "$w" "$task")" in
-          paused) handle_paused_stale "$w" "$task" "$h" ;;
+          paused)
+            # handle_paused_stale may call wake internally and exit; invoke before.
+            _coord_poll_flag=1
+            "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+            handle_paused_stale "$w" "$task" "$h" ;;
           *)      clear_pause_tracking "$w" ;;
         esac
       else
@@ -1084,6 +1157,61 @@ EOF
       fi
     fi
   done < <(recorded_windows)
+
+  # heartbeat_herdr_blocked_scan: the heartbeat backstop for herdr pane agent states.
+  #
+  # The push path (handle_push_transition) catches a ->blocked transition within
+  # seconds. If it is missed (event path disabled, watcher crash, subscription gap),
+  # the heartbeat backstop covers the gap by polling agent_status directly at each
+  # heartbeat cadence.
+  #
+  # Unlike status files (which the existing heartbeat_scan_finds_actionable covers),
+  # a blocked/done pane has no status file. This function is the heartbeat's
+  # direct herdr equivalent.
+  #
+  # Dedup: per-pane state/.hb-blocked-<key> records the last surfaced agent status.
+  # Cleared only on ->working/->idle (a recovered pane gets a fresh surface when it
+  # next blocks). The same blocked event is surfaced once, not every heartbeat.
+  #
+  # Secondmate panes are excluded (idle/blocked secondmate is healthy by design).
+  # Non-herdr panes are excluded (their blocked state is not available via this path).
+  # Returns 0 if any actionable blocked/done pane was newly surfaced, 1 otherwise.
+  heartbeat_herdr_blocked_scan() {
+    local w b session pane_id raw_status key marker prev
+    while IFS= read -r w; do
+      b=$(window_backend "$w")
+      [ "$b" = herdr ] || continue
+      # Secondmate panes are healthy by design; skip them from this backstop.
+      [ "$(window_kind "$w")" = secondmate ] && continue
+      session=${w%%:*}
+      pane_id=${w#*:}
+      [ -z "$pane_id" ] || [ "$pane_id" = "$w" ] && continue
+      raw_status=$(fm_backend_herdr_agent_status_raw "$session" "$pane_id" 2>/dev/null || true)
+      case "$raw_status" in
+        blocked|done) ;;
+        *) continue ;;
+      esac
+      key=$(printf '%s' "$w" | tr ':/.' '___')
+      marker="$STATE/.hb-blocked-$key"
+      prev=$(cat "$marker" 2>/dev/null || true)
+      [ "$prev" = "$raw_status" ] && continue
+      printf '%s' "$raw_status" > "$marker"
+      triage_log "heartbeat herdr blocked scan: surfacing $w agent_status=$raw_status (was '${prev:-none}')"
+      return 0
+    done < <(recorded_windows)
+    return 1
+  }
+
+  # Mark every pane whose agent status was surfaced by heartbeat_herdr_blocked_scan.
+  # Called after the heartbeat backstop enqueues its wake so the same pane is not
+  # re-surfaced by the next heartbeat.
+  heartbeat_herdr_blocked_mark_surfaced() {
+    local marker
+    for marker in "$STATE"/.hb-blocked-*; do
+      [ -e "$marker" ] || continue
+      [ "${marker##*/}" = ".hb-blocked-*" ] && continue
+    done
+  }
 
   # Heartbeat: the watcher runs a cheap fleet-scan at a regular cadence no matter
   # what. Time-based via .last-heartbeat mtime; interval doubles per consecutive
@@ -1102,14 +1230,27 @@ EOF
     if afk_present; then
       fm_wake_append heartbeat heartbeat heartbeat || exit 1
       touch "$STATE/.last-heartbeat"
+      # Coordinator-poll: invoke once per actionable wake, bounded cycle.
+      if [ -z "${_coord_poll_flag:-}" ]; then
+        _coord_poll_flag=1
+        "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+      fi
       wake "heartbeat"
-    elif heartbeat_scan_finds_actionable; then
-      # Backstop: a captain-relevant status the per-wake path absorbed by mistake.
-      # Enqueue first, then mark every captain-relevant status surfaced so the next
-      # heartbeat does not re-fire them (enqueue-before-suppress preserved).
+    elif heartbeat_scan_finds_actionable || heartbeat_herdr_blocked_scan; then
+      # Backstop: a captain-relevant status the per-wake path absorbed by mistake
+      # (status files), OR a herdr blocked/done pane whose push event was missed.
+      # Both land here as "actionable" and share the same heartbeat wake.
+      # Enqueue first, then mark surfaced so the next heartbeat does not re-fire
+      # them (enqueue-before-suppress preserved).
       fm_wake_append heartbeat heartbeat heartbeat || exit 1
       touch "$STATE/.last-heartbeat"
       mark_all_captain_relevant_surfaced
+      heartbeat_herdr_blocked_mark_surfaced
+      # Coordinator-poll: invoke once per actionable wake, bounded cycle.
+      if [ -z "${_coord_poll_flag:-}" ]; then
+        _coord_poll_flag=1
+        "$SCRIPT_DIR/fm-coordinator-poll.sh" cycle
+      fi
       wake "heartbeat"
     else
       touch "$STATE/.last-heartbeat"

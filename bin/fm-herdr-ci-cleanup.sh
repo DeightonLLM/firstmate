@@ -45,11 +45,22 @@ is_lab_name() {
   [[ "$name" =~ ^fm-lab-[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]]
 }
 
+fm_browser_process_count() {
+  # Count chrome/chromium processes, excluding the daemon itself.
+  # Scoped to user-initiated Chrome, not the chrome-devtools-mcp daemon.
+  pgrep -c -f 'chrome|chromium' 2>/dev/null || echo 0
+}
+
 case "$cmd" in
   snapshot)
     list_sessions_json | jq -c '[.sessions[]? | .name] | unique | sort' >"$path" \
       || die "failed to write session snapshot to $path"
     log "wrote session snapshot to $path ($(jq -r 'length' "$path") names)"
+    # Record browser process count in a companion file for teardown diff.
+    browser_count=$(fm_browser_process_count)
+    printf '%s' "$browser_count" >"${path}.browser-count" \
+      || die "failed to write browser count snapshot"
+    log "browser process count at snapshot: $browser_count"
     ;;
   teardown)
     [ -f "$path" ] || die "snapshot file not found: $path"
@@ -64,6 +75,19 @@ case "$cmd" in
       | .name
     ')
     failed=0
+    # Report browser process-count diff before session cleanup so it always runs.
+    # This is advisory only; CI teardown must not fail due to browser deltas
+    # since Chrome may be shared across jobs or legitimately persisting.
+    pre_count=0
+    if [ -f "${path}.browser-count" ]; then
+      pre_count=$(cat "${path}.browser-count" 2>/dev/null || echo 0)
+    fi
+    post_count=$(fm_browser_process_count)
+    if [ "$post_count" -gt "$pre_count" ]; then
+      log "warning: browser process count increased from ${pre_count} to ${post_count} after CI teardown"
+    else
+      log "browser process count: ${pre_count} -> ${post_count} (CI teardown)"
+    fi
     if [ -z "$candidates" ]; then
       log "no job-owned fm-lab-* sessions to clean"
       exit 0

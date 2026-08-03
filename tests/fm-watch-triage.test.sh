@@ -1740,6 +1740,103 @@ test_beacon_stays_fresh_while_absorbing() {
   pass "the liveness beacon stays fresh while the watcher absorbs benign wakes (fm-guard never false-alarms)"
 }
 
+# --- heartbeat: herdr blocked-scan backstop catches blocked panes missed by push ---
+
+test_heartbeat_herdr_blocked_scan_catches_blocked_pane() {
+  # The push path (handle_push_transition) catches ->blocked within seconds.
+  # The heartbeat backstop covers the gap when push is disabled, the subscription
+  # was lost, or the watcher restarted after the edge fired. heartbeat_herdr_blocked_scan
+  # polls agent_status directly at each heartbeat cadence and surfaces any pane
+  # whose status is blocked or done.
+  local dir state fakebin out pid key marker
+  dir=$(make_case heartbeat-herdr-blocked); state="$dir/state"; fakebin="$dir/fakebin"
+  out="$dir/watch.out"
+  # Create a ship task with a herdr pane. The pane_id contains a colon so
+  # fm_backend_herdr_wait_transition parses it correctly.
+  mkdir -p "$state"
+  printf 'window=%s\nbackend=%s\nkind=%s\n' \
+    "default:w1:p1" "herdr" "ship" \
+    > "$state/herdr-blocked-task.meta"
+  # Override the agent-status probe so the heartbeat scan sees a blocked pane.
+  # These override the lazy-loaded herdr backend functions at the only call site
+  # (heartbeat_herdr_blocked_scan) without touching the event path.
+  # Bash resolves function names at CALL time, not definition time, so the
+  # redefinitions below take precedence over the real implementation.
+  fm_backend_herdr_agent_status_raw() {
+    printf 'blocked'
+  }
+  fm_backend_herdr_cli() { return 1; }   # no real herdr needed
+  export -f fm_backend_herdr_agent_status_raw 2>/dev/null || true
+  export -f fm_backend_herdr_cli 2>/dev/null || true
+  PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 \
+    FM_HEARTBEAT=1 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 40 \
+    || { reap "$pid"; fail "heartbeat herdr blocked scan did not surface the blocked pane"; }
+  grep -Fx "heartbeat" "$out" >/dev/null \
+    || fail "heartbeat scan did not exit with heartbeat wake: $(cat "$out")"
+  key=$(printf '%s' "default:w1:p1" | tr ':/.' '___')
+  marker="$state/.hb-blocked-$key"
+  [ -f "$marker" ] \
+    || { reap "$pid"; fail "heartbeat scan did not write the dedupe marker: $marker"; }
+  grep -q 'blocked' "$marker" \
+    || { reap "$pid"; fail "dedupe marker does not contain blocked: $(cat "$marker")"; }
+  reap "$pid"
+  pass "heartbeat herdr blocked scan surfaces a blocked pane and writes the dedupe marker"
+
+  # Dedup: the same blocked pane is NOT re-surfaced on the next heartbeat.
+  fm_backend_herdr_agent_status_raw() {
+    printf 'blocked'
+  }
+  export -f fm_backend_herdr_agent_status_raw 2>/dev/null || true
+  PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 \
+    FM_HEARTBEAT=1 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 40 \
+    || { reap "$pid"; fail "heartbeat dedup: watcher did not exit"; }
+  # The second heartbeat should absorb (same blocked status already surfaced).
+  grep -Fx "heartbeat" "$out" >/dev/null \
+    && { reap "$pid"; fail "dedup failed: blocked pane was re-surfaced on the next heartbeat"; } \
+    || true
+  reap "$pid"
+  pass "heartbeat herdr blocked scan dedupes the same blocked pane (no re-surface on next heartbeat)"
+
+  # Recovery: once the pane goes working/idle, a new blocked event surfaces again.
+  fm_backend_herdr_agent_status_raw() {
+    printf 'working'   # first call: pane recovered, marker should be cleared conceptually
+  }
+  export -f fm_backend_herdr_agent_status_raw 2>/dev/null || true
+  # The heartbeat scan should NOT surface a working pane. Run the watcher; it should
+  # absorb the heartbeat (no blocked pane to surface).
+  # But our fm_backend_herdr_agent_status_raw returns 'working', so nothing surfaces.
+  PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 \
+    FM_HEARTBEAT=1 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 40 \
+    && { grep -Fx "heartbeat" "$out" >/dev/null 2>&1; } \
+    && { reap "$pid"; fail "heartbeat dedup: working pane was incorrectly surfaced"; } \
+    || true
+  reap "$pid"
+  # Now change to blocked again: should surface as a new event.
+  fm_backend_herdr_agent_status_raw() {
+    printf 'blocked'
+  }
+  export -f fm_backend_herdr_agent_status_raw 2>/dev/null || true
+  PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state" \
+    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 \
+    FM_HEARTBEAT=1 "$WATCH" > "$out" &
+  pid=$!
+  wait_for_exit "$pid" 40 \
+    || { reap "$pid"; fail "heartbeat recovery: blocked pane after recovery was not surfaced"; }
+  grep -Fx "heartbeat" "$out" >/dev/null \
+    || { reap "$pid"; fail "heartbeat recovery: blocked pane after recovery was not surfaced: $(cat \"$out\")"; }
+  reap "$pid"
+  pass "heartbeat herdr blocked scan re-surfaces after pane recovers and blocks again"
+}
+
 # --- afk coherence: the daemon owns triage; the watcher does not double-triage ---
 
 test_afk_present_reverts_watcher_to_one_shot() {
@@ -1843,5 +1940,6 @@ test_procevent_marker_failure_exits_and_replays
 test_heartbeat_no_change_absorbed
 test_heartbeat_backstop_surfaces_unsurfaced_status
 test_beacon_stays_fresh_while_absorbing
+test_heartbeat_herdr_blocked_scan_catches_blocked_pane
 test_afk_present_reverts_watcher_to_one_shot
 test_afk_paused_changed_pane_hands_off_plain_stale

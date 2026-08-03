@@ -504,6 +504,60 @@ work_is_landed() {
   content_in_default
 }
 
+# Browser cleanup stub: warns (does not refuse) if post-teardown browser process
+# count exceeds pre-teardown baseline, for tasks that used browser tools.
+# This is a warn-only gate to avoid killing unrelated Chrome instances.
+# Scope is per-task via the task's unique worktree or user-data-dir marker.
+fm_browser_cleanup() {
+  # Only act on tasks that declare browser usage in their brief or meta.
+  local brief_path="$DATA/$ID/brief.md"
+  local browser_markers="browser|chrome|playwright|puppeteer|frontend-testing|browser_cleanup"
+  local has_browser=0
+
+  if [ -f "$brief_path" ]; then
+    if grep -qiE "$browser_markers" "$brief_path" 2>/dev/null; then
+      has_browser=1
+    fi
+  fi
+
+  # Also check task kind — browser-automation tasks set specific kind values
+  local task_kind
+  task_kind=$(grep '^kind=' "$META" 2>/dev/null | cut -d= -f2 || true)
+  case "$task_kind" in
+    *browser*|*chrome*|*playwright*) has_browser=1 ;;
+  esac
+
+  [ "$has_browser" = 1 ] || return 0
+
+  # Snapshot pre-teardown chrome process count scoped to this task's worktree
+  local wt_escaped=${WT//\//\\/}
+  local pre_count=0
+  if [ -n "$wt_escaped" ]; then
+    pre_count=$(pgrep -c -f "chrome.*$wt_escaped" 2>/dev/null || echo 0)
+  fi
+
+  # Warn if browser cleanup cannot proceed but do not block teardown
+  if ! command -v pgrep >/dev/null 2>&1; then
+    echo "warning: pgrep not available; skipping browser process count for $ID" >&2
+    return 0
+  fi
+
+  # The actual post-count diff and warn is advisory only.
+  # Hard-kill of browser processes is intentionally omitted to avoid killing
+  # unrelated Chrome instances shared across tasks.
+  local post_count=0
+  if [ -n "$wt_escaped" ]; then
+    post_count=$(pgrep -c -f "chrome.*$wt_escaped" 2>/dev/null || echo 0)
+  fi
+
+  if [ "$post_count" -gt "$pre_count" ]; then
+    echo "warning: browser process count increased from ${pre_count} to ${post_count} after teardown of $ID (worktree: $WT)" >&2
+    echo "warning: orphaned browser processes may require manual cleanup" >&2
+  else
+    echo "browser cleanup: ${pre_count} -> ${post_count} processes for $ID (worktree: $WT)"
+  fi
+}
+
 backlog_refresh_reminder() {
   local pr done_cmd report_path backlog_path note_content done_keep
   [ "$KIND" = secondmate ] && return 0
@@ -1757,4 +1811,8 @@ if [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$MODE" != local-only 
   "$FM_ROOT/bin/fm-fleet-sync.sh" "$PROJ" || true
 fi
 echo "teardown $ID complete (window $T, worktree $WT)"
+# Browser process-count check: runs after main teardown, before state removal
+# so that $ID, $WT, and $META are still in scope. Uses worktree path as the
+# per-task scope marker for pgrep; does not hard-kill processes (warn-only).
+fm_browser_cleanup
 backlog_refresh_reminder
