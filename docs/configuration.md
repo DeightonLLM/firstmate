@@ -223,6 +223,16 @@ The Kimi installer requires an existing regular non-symlink `~/.kimi-code/config
 Its `remove` action excises only the marker-delimited Firstmate region and removes Firstmate's hook files.
 For Pi and pi-signed secondmate launches, `fm-spawn.sh` starts the selected executable with `-e` pointed at the secondmate home's own tracked `.pi/extensions/fm-primary-pi-watch.ts` and `.pi/extensions/fm-primary-turnend-guard.ts`, both already present from the secondmate home's git worktree.
 
+### Batch spawn pacing
+
+When `fm-spawn.sh` receives a batch of task pairs, it waits **250 ms** between
+successive launches by default. This prevents a six-lane refill from bursting
+all prompt submissions into the provider at once and triggering avoidable rate
+limits. The delay is controlled by the numeric `FM_SPAWN_DISPATCH_DELAY_SEC`
+environment variable for diagnostics or a deliberately different cadence; an
+unset value resolves to `0.25`. The delay applies only between batch items and
+does not change the launch command or the worker's retry budget.
+
 ## Crew dispatch profiles (config/crew-dispatch.json)
 
 `config/crew-dispatch.json` is an optional local, gitignored file containing natural-language rules that firstmate reads before dispatching a crewmate or scout.
