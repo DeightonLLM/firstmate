@@ -49,6 +49,8 @@ const YELLOW = "\u001b[33m";
 const RESET = "\u001b[39m";
 
 export const CALM_WORKING_SHIP_WIDGET_KEY = "firstmate-calm-working-ship";
+export const CALM_WORKING_SHIP_BRAND = "HD2.ai/Crisp-R";
+const BRAND_MIN_WIDTH = 40;
 /** Scheduler period. One tick advances the water by one phase. */
 export const CALM_WORKING_SHIP_TICK_MS = 220;
 /** Boat moves one column every Nth tick, so it travels at 220 * 4 = 880ms per column. */
@@ -140,6 +142,7 @@ export function createCalmWorkingShipAnimation(): CalmWorkingShipAnimation {
   };
 
   const boat = (text: string): string => `${YELLOW}${text}${RESET}`;
+  const brand = (text: string): string => `${BLUE}${text}${RESET}`;
 
   return {
     position: () => position,
@@ -194,8 +197,17 @@ export function createCalmWorkingShipAnimation(): CalmWorkingShipAnimation {
             water(position + SAIL_WIDTH, width - position - SAIL_WIDTH),
         ];
       } else {
+        const sailCol = position + SAIL_OFFSET;
+        let sailRow = " ".repeat(sailCol) + boat(sail);
+        if (width >= BRAND_MIN_WIDTH) {
+          const brandCol = width - CALM_WORKING_SHIP_BRAND.length;
+          if (sailCol + SAIL_WIDTH < brandCol) {
+            const gap = brandCol - (sailCol + SAIL_WIDTH);
+            sailRow += " ".repeat(gap) + brand(CALM_WORKING_SHIP_BRAND);
+          }
+        }
         frame = [
-          " ".repeat(position + SAIL_OFFSET) + boat(sail),
+          sailRow,
           water(0, position) +
             boat(HULL) +
             water(position + HULL_WIDTH, width - position - HULL_WIDTH),

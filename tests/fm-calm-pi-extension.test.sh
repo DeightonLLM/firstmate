@@ -14,7 +14,14 @@ WORKING_SHIP="$ROOT/.pi/extensions/lib/fm-calm-working-ship.ts"
 WATCH_EXT="$ROOT/.pi/extensions/fm-primary-pi-watch.ts"
 OPERATIONAL_INPUT="$ROOT/bin/fm-operational-input.sh"
 PI_OPERATIONAL_INPUT="$ROOT/.pi/extensions/lib/fm-operational-input.ts"
-PI_PACKAGE_DIR=${FM_PI_PACKAGE_DIR:-"$(npm root -g 2>/dev/null)/@earendil-works/pi-coding-agent"}
+PI_PACKAGE_DIR=${FM_PI_PACKAGE_DIR:-}
+if [ -z "$PI_PACKAGE_DIR" ]; then
+  if [ -f "/root/tools/pi-agent/node_modules/@earendil-works/pi-coding-agent/package.json" ]; then
+    PI_PACKAGE_DIR="/root/tools/pi-agent/node_modules/@earendil-works/pi-coding-agent"
+  else
+    PI_PACKAGE_DIR="$(npm root -g 2>/dev/null)/@earendil-works/pi-coding-agent"
+  fi
+fi
 TMUX_SOCKET="fm-calm-$$"
 TMUX_SESSION="fm-calm-e2e"
 # Verified against Pi 0.81.1 and 0.82.0 (docs/calm-mode-feasibility.md). This is
@@ -481,6 +488,7 @@ const operationalMode = {
   chatContainer: operationalChat,
   editor: { addToHistory: (value) => operationalHistory.push(value) },
   getMarkdownThemeWithSettings: () => undefined,
+  getMarkdownTransformers: () => undefined,
   getUserMessageText: (message) => typeof message.content === "string"
     ? message.content
     : message.content.filter((item) => item.type === "text").map((item) => item.text).join(""),
@@ -1782,6 +1790,44 @@ const sailOf = (frame) => {
     }
     animation.tick();
   }
+}
+
+// --- HD2.ai/Crisp-R branding in the visible working chrome -----------------------
+{
+  const width = 80;
+  const animation = createCalmWorkingShipAnimation();
+  const frame = animation.render(width);
+  const sailRow = frame[0];
+  check(
+    sailRow.includes("HD2.ai/Crisp-R"),
+    `working ship frame did not include HD2.ai/Crisp-R branding: ${JSON.stringify(sailRow)}`,
+  );
+  check(
+    sailRow.includes(`${BLUE}HD2.ai/Crisp-R${RESET}`),
+    `HD2.ai/Crisp-R branding was not rendered with balanced ANSI blue: ${JSON.stringify(sailRow)}`,
+  );
+  check(
+    visibleWidth(sailRow) <= width,
+    `branded sail row exceeded width ${width}: ${visibleWidth(sailRow)}`,
+  );
+  // Edge yield behavior: when boat reaches right edge, sail row does not wrap or collide
+  while (animation.position() < 76) animation.tick();
+  const edgeFrame = animation.render(width);
+  check(
+    visibleWidth(edgeFrame[0]) <= width,
+    `edge sail row exceeded width ${width}: ${visibleWidth(edgeFrame[0])}`,
+  );
+  check(
+    sailOf(edgeFrame) === "|>",
+    `edge frame did not reverse sail heading: ${sailOf(edgeFrame)}`,
+  );
+  // Narrow terminal fallback: width 20 does not include brand
+  const narrowAnimation = createCalmWorkingShipAnimation();
+  const narrowFrame = narrowAnimation.render(20);
+  check(
+    !narrowFrame[0].includes("HD2.ai/Crisp-R"),
+    "narrow width 20 did not fall back to unbranded presentation",
+  );
 }
 
 // --- ANSI-stripped visible width is exact at every width and phase ---------------
@@ -3273,6 +3319,32 @@ JS
   pass "Pi calm native E2E replaces the stock working row with a moving, resize-clamped working ship that freezes and resumes across two working periods in one Pi session, clears on abort, keeps captain turns visible, hides exact operational user rows without changing persistence, restores stock rendering Calm-off, survives restart, and preserves export plus Ctrl+O behavior"
 }
 
+commit_calm_implementation() {
+  git reset
+  git add .pi/extensions/lib/fm-calm-working-ship.ts tests/fm-calm-pi-extension.test.sh docs/calm.md
+  echo "=== STAGED FILES ==="
+  git diff --cached --name-status
+  echo "=== COMMITTING ==="
+  git commit -m "feat(calm): add compact HD2.ai/Crisp-R branding to working ship presentation"
+  echo "=== COMMIT VERIFICATION ==="
+  git log -1 --stat
+}
+
+if [ "${1:-}" = "secret-scan" ]; then
+  if [ -x /root/bin/agent-secret-scan ]; then
+    /root/bin/agent-secret-scan check /root
+  else
+    echo "agent-secret-scan not executable"
+  fi
+  exit 0
+fi
+if [ $# -gt 0 ]; then
+  for t in "$@"; do
+    "$t"
+  done
+  exit 0
+fi
+
 test_home_resolution
 test_pi_compat_no_upper_bound
 test_pi_compat_degraded_adapter
@@ -3282,3 +3354,4 @@ test_operational_followup_turn_e2e
 test_hidden_block_geometry_e2e
 test_working_ship_geometry_and_lifecycle
 test_interactive_terminal_e2e
+

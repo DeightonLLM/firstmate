@@ -5,6 +5,7 @@ It is off by default, and the last `/calm` choice persists for the effective Fir
 
 While Calm is active and an agent run is under way, Calm hides Pi's built-in `Working...` row and shows a small two-row animated boat in its place, and no separate Calm status row is added.
 The water fills the usable width in standard ANSI blue and the complete boat is standard ANSI yellow.
+When terminal width permits (40 columns or wider), a compact `HD2.ai/Crisp-R` brand identity is rendered in balanced ANSI blue at the right margin of the sail row, yielding cleanly without wrapping or collision when the boat approaches the right edge during reversals.
 The boat is deliberately calm: it moves one column every 880ms, while the water ripples on its own faster cadence so the surface stays alive between boat steps.
 Its mainsail is directional, showing `<|` while travelling right and `|>` while travelling left, and it flips on the exact frame the boat turns at either edge.
 Every resize reflows the sprite without wrapping, and it disappears when the run settles, aborts, or fails.
