@@ -1,0 +1,188 @@
+# Machine-readable mirror of HOSTS.md. Generated from and validated against the Markdown.
+# Do not edit fields that the Markdown does not support; the preflight rejects such edits.
+version: 1
+last_verified: 2026-09-15
+hosts:
+  - id: controller
+    provider: local
+    alias: ""
+    canonical_hostname: local-controller
+    tailscale_ip: UNKNOWN
+    public_ip: UNKNOWN
+    role: Controller; runs FirstMate tooling, agents, and orchestration
+    tier: LOCAL
+    tenants: []
+    evidence_paths:
+      - AGENTS.md
+    sources:
+      - AGENTS.md controller context
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: This warehouse lives on the controller. It is not a service host.
+  - id: controller-panel
+    provider: contabo
+    alias: panel.dubzai.com
+    canonical_hostname: vmi3196300
+    tailscale_ip: UNKNOWN
+    public_ip: UNKNOWN
+    role: Controller 1Panel entrypoint; backend on internal port 14200
+    tier: HD2_IN_HOUSE
+    tenants:
+      - controller
+    evidence_paths:
+      - AGENTS.md
+    sources:
+      - AGENTS.md Management URL map
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: Forced to lang=en by HTTPS proxy.
+  - id: hd2stack
+    provider: contabo
+    alias: hd2stack.dubzai.com
+    canonical_hostname: vmi3238503
+    tailscale_ip: 100.71.95.76
+    public_ip: UNKNOWN
+    role: HD2stack 1Panel entrypoint and HD2 in-house host; historical inventory also places an HD2 AnythingLLM instance here, but current service/DNS origin is not verified
+    tier: HD2_IN_HOUSE
+    tenants:
+      - hd2
+    evidence_paths:
+      - AGENTS.md
+      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - AGENTS.md Management URL map
+      - BRANDON_CAMPAIGN_CONTROL.md section 2 (HD2 infrastructure is outside client work)
+      - BR-CAPACITY-HD2-001 read-only placement audit (Brandon placement blocked)
+    last_verified: 2026-09-19
+    freshness_days: 30
+    status: KNOWN
+    notes: A later read-only placement audit recorded 79 percent disk and blocked Brandon placement; do not use this shared HD2 host for Brandon services.
+  - id: srv797124
+    provider: hostinger
+    alias: srv797124-hd2
+    canonical_hostname: srv797124
+    tailscale_ip: UNKNOWN
+    public_ip: 100.92.152.109
+    role: HD2.ai edge/review host; live WordPress site at hd2.ai
+    tier: KVM1_HOSTINGER
+    tenants:
+      - hd2
+    evidence_paths:
+      - AGENTS.md
+    sources:
+      - AGENTS.md Hostinger note
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: Distinct from HD2Stack vmi3238503; the operator alias and canonical hostname both refer to this node only.
+  - id: srv1137994-aminolifesciences
+    provider: hostinger
+    alias: animovps
+    canonical_hostname: srv1137994-aminolifesciences
+    tailscale_ip: 100.69.211.43
+    public_ip: UNKNOWN
+    role: Brandon edge/control plane per PRD v3 section 7.1; staging and worker tenants
+    tier: BRANDON_LEGACY_VPS
+    tenants:
+      - core-distro
+      - cbd-data
+    evidence_paths:
+      - data/BR-INV-001/report.md
+    sources:
+      - BR-INV-001/report.md Host 1
+      - AMINOVPS_COORDINATE_MAP_20260711.md
+      - L1_AMINOVPS_V2_REMOTE_INVENTORY_20260714.md
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: PARTIAL
+    notes: Documented runtime versions exist; OS, CPU, RAM, disk, firewall, and backup posture are not documented.
+  - id: srv1856614
+    provider: hostinger
+    alias: brandon-hub
+    canonical_hostname: srv1856614
+    tailscale_ip: 100.86.247.105
+    public_ip: 2.25.197.26
+    role: Brandon hub host for staged OnePanel/OpenResty and private platform services
+    tier: BRANDON_HUB
+    tenants:
+      - brandon-hub
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md
+    sources:
+      - BRANDON_HUB_SERVICE_MATRIX.md sections 1 and 3
+      - BRANDON_CAMPAIGN_CONTROL.md sections 2 and 4 (only live hub campaign target)
+      - three-vps-eligibility-m3.md section 4.5
+      - BRANDON_HUB_BACKUP_DECISION.md operator-confirmed continuity rule
+    last_verified: 2026-09-19
+    freshness_days: 30
+    status: PARTIAL
+    notes: Provisioned/hardened hub; application cutover and provider snapshot/backup details remain gated. Distinct from Hetzner brandon-compute.
+  - id: brandon-compute
+    provider: hetzner
+    alias: hetzner-compute
+    canonical_hostname: brandon-compute
+    asset: "AX42-2 #3027423 HEL1-DC9"
+    tailscale_ip: 100.106.6.22
+    public_ip: 157.180.99.39
+    ssh_user: hd2admin
+    role: Brandon dedicated compute plane for local LLM/model testing, benchmarks, scraping, enrichment, Qdrant, and bounded worker preparation
+    tier: HETZNER_COMPUTE
+    tenants:
+      - brandon-compute
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md
+    sources:
+      - BRANDON_VPS_COMPUTE_ROUTING_CONTRACT.md
+      - agy-route-repair.md sections 1-2 and 5-7
+      - m3-runtime-preparation.md sections 1-2
+      - BR-COMPUTE-PLACEMENT-RECHECK-20260918/report.md current live status and placement review
+      - /root/.ssh/config
+    last_verified: 2026-09-18
+    freshness_days: 30
+    status: PARTIAL
+    notes: Coordinates and prior route/capacity/runtime evidence are accepted; current live re-verification is blocked by Tailscale interactive re-auth. PRD v3 places compute and Qdrant here, separate from the Hostinger hub srv1856614.
+  - id: whoosh-runtime
+    provider: UNKNOWN
+    alias: ""
+    canonical_hostname: UNKNOWN
+    tailscale_ip: UNKNOWN
+    public_ip: UNKNOWN
+    role: Whoosh project production host
+    tier: UNKNOWN
+    tenants:
+      - whoosh
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 1
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: BLOCKED
+    notes: BR-AUD-004 is BLOCKED_BY_DEPENDENCY; exact repository, hosting, runtime, and production IP required.
+  - id: retained-evidence
+    provider: local
+    alias: ""
+    canonical_hostname: agent-work
+    tailscale_ip: UNKNOWN
+    public_ip: UNKNOWN
+    role: Read-only retention of five exact duplicate PHP file pairs and Brandon/HD2 evidence bundles
+    tier: LOCAL
+    tenants:
+      - music-metrics
+      - lawyer
+      - core-distro
+      - elevate
+      - cbd-data
+    evidence_paths:
+      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+    sources:
+      - MINI_SPRINT_PREPARATION_REPORT.md section 5
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: Music Metrics write-locked; preserved byte-for-byte evidence only.
