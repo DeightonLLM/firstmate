@@ -586,10 +586,10 @@ backlog_refresh_reminder() {
         }
       }
     ' "$backlog_path" > "$backlog_path.tmp" && mv "$backlog_path.tmp" "$backlog_path"
-    printf 'Backlog: $ID moved to Done in data/backlog.md (manual mode).\n'
+    printf "Backlog: %s moved to Done in data/backlog.md (manual mode).\n" "$ID"
     # Trigger next-cycle dispatch: append a done-wake so the watcher sees completion
     fm_wake_append signal "$ID" "$backlog_path: task $ID completed" \
-      || printf 'warning: fm_wake_append failed for $ID; next-cycle trigger may not fire\n' >&2
+      || printf "warning: fm_wake_append failed for %s; next-cycle trigger may not fire\n" "$ID" >&2
   else
     printf '%s\n' "Backlog: $ID just finished. Update data/backlog.md - move $ID to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due."
   fi
