@@ -555,8 +555,7 @@ backlog_refresh_reminder() {
         # Found the task in In flight: convert to Done format and collect it
         gsub(/^## In flight/, "## Done")
         sub(/ \[[xX]\]/, " [x]")
-        done_items[id] = $0 note
-        done_count++
+        moved_items[++moved_count] = $0 note
         next
       }
       in_inflight { print; next }
@@ -565,23 +564,27 @@ backlog_refresh_reminder() {
       }
       in_done && /^## Queued/ { in_done=0; print; next }
       in_done && /^- \[/ {
-        done_count++
-        done_items[NR] = $0
+        done_items[++done_count] = $0
         next
       }
       { print }
       END {
-        if (done_count > keep) {
+        total_done = done_count + moved_count
+        if (total_done > keep) {
           # Print only the most recent <keep> items
-          start = done_count - keep + 1
-          for (i in done_items) {
-            n = int(i)
-            if (n >= start) print done_items[n]
+          start = total_done - keep + 1
+          for (i = 1; i <= done_count; i++) {
+            if (i >= start) print done_items[i]
+          }
+          for (i = 1; i <= moved_count; i++) {
+            if (done_count + i >= start) print moved_items[i]
           }
         } else {
-          for (i in done_items) {
-            n = int(i)
-            print done_items[n]
+          for (i = 1; i <= done_count; i++) {
+            print done_items[i]
+          }
+          for (i = 1; i <= moved_count; i++) {
+            print moved_items[i]
           }
         }
       }

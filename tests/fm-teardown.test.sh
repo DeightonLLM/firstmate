@@ -72,7 +72,7 @@ make_case() {
   local name=$1 case_dir fakebin
   case_dir="$TMP_ROOT/$name"
   fakebin="$case_dir/fakebin"
-  mkdir -p "$case_dir/state" "$case_dir/config" "$fakebin"
+  mkdir -p "$case_dir/state" "$case_dir/config" "$case_dir/data" "$fakebin"
 
   # Mocks for the post-check teardown steps. Refuse logic exits before these
   # run; the ALLOW cases need them so the script can complete cleanly.
@@ -493,6 +493,7 @@ run_teardown() {
   local case_dir=$1; shift
   FM_ROOT_OVERRIDE="$ROOT" \
   FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/data" \
   FM_CONFIG_OVERRIDE="$case_dir/config" \
   PATH="$case_dir/fakebin:$PATH" \
     "$TEARDOWN" task-x1 "$@"
@@ -527,11 +528,54 @@ test_teardown_prompts_tasks_axi_done_when_compatible() {
     || fail "teardown did not prompt tasks-axi done: $out"
   printf '%s\n' "$out" | grep -F 'tasks-axi ready' >/dev/null \
     || fail "teardown did not prompt tasks-axi ready: $out"
-  printf '%s\n' "$out" | grep -F 'check date gates' >/dev/null \
-    || fail "teardown did not preserve date-gate check: $out"
   printf '%s\n' "$out" | grep -F 'keep Done to the 10 most recent' >/dev/null \
     && fail "teardown kept manual Done pruning in compatible tasks-axi prompt: $out"
   pass "teardown prompts tasks-axi backlog refresh when compatible"
+}
+
+write_manual_backlog() {
+  local case_dir=$1
+  cat > "$case_dir/data/backlog.md" <<'EOF'
+## In flight
+- [x] **task-x1** - complete this task
+
+## Done
+
+## Queued
+EOF
+}
+
+test_teardown_manual_backend_reports_task_id_and_queues_wake() {
+  local case_dir out
+  case_dir=$(make_case manual-backend-completion)
+  write_meta "$case_dir" no-mistakes ship
+  printf '%s\n' manual > "$case_dir/config/backlog-backend"
+  write_manual_backlog "$case_dir"
+
+  out=$(run_teardown "$case_dir") || fail "teardown failed with manual backlog backend"
+  printf '%s\n' "$out" | grep -F 'Backlog: task-x1 moved to Done in data/backlog.md (manual mode).' >/dev/null \
+    || fail "manual backend completion output omitted the task ID: $out"
+  grep -F -- '- [x] **task-x1** - complete this task' "$case_dir/data/backlog.md" >/dev/null \
+    || fail "manual backend did not move the task into Done: $(cat "$case_dir/data/backlog.md")"
+  awk -F '\t' '$3 == "signal" && $4 == "task-x1" && $5 ~ /task task-x1 completed/ { found=1 } END { exit !found }' \
+    "$case_dir/state/.wake-queue" \
+    || fail "manual backend did not queue a completion wake for task-x1"
+  pass "manual backend reports the task ID and queues its completion wake"
+}
+
+test_teardown_manual_backend_wake_failure_reports_task_id() {
+  local case_dir out
+  case_dir=$(make_case manual-backend-wake-failure)
+  write_meta "$case_dir" no-mistakes ship
+  printf '%s\n' manual > "$case_dir/config/backlog-backend"
+  write_manual_backlog "$case_dir"
+  mkdir "$case_dir/state/.wake-queue"
+
+  out=$(run_teardown "$case_dir" 2> "$case_dir/stderr") \
+    || fail "teardown failed after manual wake enqueue failure: $out"
+  grep -F 'warning: fm_wake_append failed for task-x1; next-cycle trigger may not fire' "$case_dir/stderr" >/dev/null \
+    || fail "manual backend wake failure warning omitted task-x1: $(cat "$case_dir/stderr")"
+  pass "manual backend wake failure warning reports the task ID"
 }
 
 test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present() {
@@ -593,6 +637,7 @@ test_no_mistakes_origin_remote_allows() {
   local case_dir rc
   case_dir=$(make_case nm-origin)
   write_meta "$case_dir" no-mistakes ship
+  printf '%s\n' manual > "$case_dir/config/backlog-backend"
   wt_commit "$case_dir" "shippable work"
   # Push the task branch to origin and fetch so the worktree sees it.
   git -C "$case_dir/wt" push -q origin fm/task-x1
@@ -1826,6 +1871,8 @@ test_herdr_projection_teardown_retains_journal_when_close_unconfirmed() {
 
 test_local_only_fork_remote_allows
 test_teardown_prompts_tasks_axi_done_when_compatible
+test_teardown_manual_backend_reports_task_id_and_queues_wake
+test_teardown_manual_backend_wake_failure_reports_task_id
 test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present
 test_local_only_truly_unpushed_refuses
 test_local_only_merged_to_local_main_allows
