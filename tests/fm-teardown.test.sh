@@ -555,12 +555,49 @@ test_teardown_manual_backend_reports_task_id_and_queues_wake() {
   out=$(run_teardown "$case_dir") || fail "teardown failed with manual backlog backend"
   printf '%s\n' "$out" | grep -F 'Backlog: task-x1 moved to Done in data/backlog.md (manual mode).' >/dev/null \
     || fail "manual backend completion output omitted the task ID: $out"
-  grep -F -- '- [x] **task-x1** - complete this task' "$case_dir/data/backlog.md" >/dev/null \
-    || fail "manual backend did not move the task into Done: $(cat "$case_dir/data/backlog.md")"
+  awk '
+    /^## Done/ { in_done=1; next }
+    /^## / { in_done=0 }
+    in_done && /- \[x\] \*\*task-x1\*\* - complete this task/ { found=1 }
+    END { exit !found }
+  ' "$case_dir/data/backlog.md" \
+    || fail "manual backend did not move task-x1 into Done: $(cat "$case_dir/data/backlog.md")"
   awk -F '\t' '$3 == "signal" && $4 == "task-x1" && $5 ~ /task task-x1 completed/ { found=1 } END { exit !found }' \
     "$case_dir/state/.wake-queue" \
     || fail "manual backend did not queue a completion wake for task-x1"
   pass "manual backend reports the task ID and queues its completion wake"
+}
+
+test_teardown_manual_backend_retains_latest_ten_done_items_in_done_section() {
+  local case_dir out i
+  case_dir=$(make_case manual-backend-done-retention)
+  write_meta "$case_dir" no-mistakes ship
+  printf '%s\n' manual > "$case_dir/config/backlog-backend"
+  cat > "$case_dir/data/backlog.md" <<'EOF'
+## In flight
+- [x] **task-x1** - complete this task
+
+## Done
+EOF
+  for i in $(seq -w 1 11); do
+    printf -- '- [x] **done-%s** - existing task\n' "$i" >> "$case_dir/data/backlog.md"
+  done
+  printf '\n## Queued\n- [ ] **queued-1** - queued task\n' >> "$case_dir/data/backlog.md"
+
+  out=$(run_teardown "$case_dir") || fail "teardown failed with manual backlog backend"
+  awk '
+    /^## Done/ { in_done=1; next }
+    /^## / { in_done=0 }
+    in_done && /^- \[x\]/ { done[++count]=$0 }
+    /^## Queued/ { in_queued=1; next }
+    in_queued && /^## / { in_queued=0 }
+    in_queued && /\*\*task-x1\*\*/ { bad=1 }
+    END {
+      if (count != 10 || done[1] !~ /done-03/ || done[9] !~ /done-11/ || done[10] !~ /task-x1/ || bad) exit 1
+    }
+  ' "$case_dir/data/backlog.md" \
+    || fail "manual backend did not retain the latest ten tasks under Done: $(cat "$case_dir/data/backlog.md")"
+  pass "manual backend retains the latest ten Done items in the Done section"
 }
 
 test_teardown_manual_backend_wake_failure_reports_task_id() {
@@ -1872,6 +1909,7 @@ test_herdr_projection_teardown_retains_journal_when_close_unconfirmed() {
 test_local_only_fork_remote_allows
 test_teardown_prompts_tasks_axi_done_when_compatible
 test_teardown_manual_backend_reports_task_id_and_queues_wake
+test_teardown_manual_backend_retains_latest_ten_done_items_in_done_section
 test_teardown_manual_backend_wake_failure_reports_task_id
 test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present
 test_local_only_truly_unpushed_refuses
