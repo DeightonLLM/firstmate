@@ -15,9 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Install pinned ShellCheck
+      - name: Install pinned ShellCheck + jq 1.7
         run: |
           set -eu
+          sudo wget -qO /usr/local/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7/jq-linux-amd64
+          sudo chmod +x /usr/local/bin/jq
           bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       # Single owner of the lint definition (file set + config + version). Do not
@@ -46,9 +48,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Install pinned ShellCheck
+      - name: Install pinned ShellCheck + jq 1.7
         run: |
           set -eu
+          sudo wget -qO /usr/local/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7/jq-linux-amd64
+          sudo chmod +x /usr/local/bin/jq
           bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Install tasks-axi
@@ -78,9 +82,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Install pinned ShellCheck
+      - name: Install pinned ShellCheck + jq 1.7
         run: |
           set -eu
+          sudo wget -qO /usr/local/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7/jq-linux-amd64
+          sudo chmod +x /usr/local/bin/jq
           bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Install tasks-axi
@@ -115,9 +121,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Install pinned ShellCheck
+      - name: Install pinned ShellCheck + jq 1.7
         run: |
           set -eu
+          sudo wget -qO /usr/local/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7/jq-linux-amd64
+          sudo chmod +x /usr/local/bin/jq
           bin/fm-install-shellcheck.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: Require tmux for e2e tests

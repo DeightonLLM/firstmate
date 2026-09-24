@@ -269,7 +269,7 @@ least five checkable items: preflight, scoped discovery, bounded work/evidence,
 validation, and postflight/closeout. Keep it visible and update it at every
 phase change. Do not substitute prose or a filesystem TODO file. If the
 extension is unavailable or the tracker has fewer than five items, append
-`blocked: To-Do List extension unavailable or incomplete` to the status file and
+'blocked: To-Do List extension unavailable or incomplete' to the status file and
 stop; firstmate must not treat the task as started.
 
 # Rules
@@ -391,7 +391,7 @@ least five checkable items: preflight, scoped discovery, bounded work/evidence,
 validation, and postflight/closeout. Keep it visible and update it at every
 phase change. Do not substitute prose or a filesystem TODO file. If the
 extension is unavailable or the tracker has fewer than five items, append
-`blocked: To-Do List extension unavailable or incomplete` to the status file and
+'blocked: To-Do List extension unavailable or incomplete' to the status file and
 stop; firstmate must not treat the task as started.
 
 # Rules

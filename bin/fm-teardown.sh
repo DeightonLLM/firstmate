@@ -543,6 +543,23 @@ backlog_refresh_reminder() {
     fi
     done_keep=${FM_BACKLOG_DONE_KEEP:-10}
     awk -v id="$ID" -v note="$note_content" -v keep="$done_keep" '
+      function emit_done( total, start, i) {
+        total = done_count + moved_count
+        if (total > keep) {
+          # Print only the most recent <keep> items
+          start = total - keep + 1
+          for (i = 1; i <= done_count; i++) {
+            if (i >= start) print done_items[i]
+          }
+          for (i = 1; i <= moved_count; i++) {
+            if (done_count + i >= start) print moved_items[i]
+          }
+        } else {
+          for (i = 1; i <= done_count; i++) print done_items[i]
+          for (i = 1; i <= moved_count; i++) print moved_items[i]
+        }
+        done_emitted=1
+      }
       BEGIN { OFS="\n"; ORS="\n" }
       /^## In flight/ { in_inflight=1; print; next }
       in_inflight && /^## / && !/^## In flight/ {
@@ -555,41 +572,27 @@ backlog_refresh_reminder() {
         # Found the task in In flight: convert to Done format and collect it
         gsub(/^## In flight/, "## Done")
         sub(/ \[[xX]\]/, " [x]")
-        done_items[id] = $0 note
-        done_count++
+        moved_items[++moved_count] = $0 note
         next
       }
       in_inflight { print; next }
       /^## Done/ {
         in_done=1; print; next
       }
-      in_done && /^## Queued/ { in_done=0; print; next }
+      in_done && /^## Queued/ { emit_done(); in_done=0; print; next }
       in_done && /^- \[/ {
-        done_count++
-        done_items[NR] = $0
+        done_items[++done_count] = $0
         next
       }
       { print }
       END {
-        if (done_count > keep) {
-          # Print only the most recent <keep> items
-          start = done_count - keep + 1
-          for (i in done_items) {
-            n = int(i)
-            if (n >= start) print done_items[n]
-          }
-        } else {
-          for (i in done_items) {
-            n = int(i)
-            print done_items[n]
-          }
-        }
+        if (!done_emitted) emit_done()
       }
     ' "$backlog_path" > "$backlog_path.tmp" && mv "$backlog_path.tmp" "$backlog_path"
-    printf 'Backlog: $ID moved to Done in data/backlog.md (manual mode).\n'
+    printf "Backlog: %s moved to Done in data/backlog.md (manual mode).\n" "$ID"
     # Trigger next-cycle dispatch: append a done-wake so the watcher sees completion
     fm_wake_append signal "$ID" "$backlog_path: task $ID completed" \
-      || printf 'warning: fm_wake_append failed for $ID; next-cycle trigger may not fire\n' >&2
+      || printf "warning: fm_wake_append failed for %s; next-cycle trigger may not fire\n" "$ID" >&2
   else
     printf '%s\n' "Backlog: $ID just finished. Update data/backlog.md - move $ID to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due."
   fi
