@@ -296,6 +296,7 @@ tests/fm-tmux-submit-busy.test.sh
 tests/fm-send-settle.test.sh
 tests/fm-send-strict.test.sh
 tests/fm-spawn-batch.test.sh
+tests/fm-spawn-bash-regression.test.sh
 tests/fm-supervision-instructions.test.sh
 tests/fm-ensure-agents-md.test.sh
 tests/fm-composer-lib.test.sh
