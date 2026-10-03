@@ -857,14 +857,131 @@ SH
   pass "cycle-exit ledger links a verified successor and remains size-capped"
 }
 
-test_stopped_watcher_is_live_but_stale_then_exit_is_classified() {
-  local dir state fakebin armout armpid watcher_pid i status
+test_arm_recovers_only_its_stale_live_watcher() {
+  local dir state bin armout armpid unrelated first second helper count i rc owner_match lock_pid beat_age arm_output first_alive unrelated_alive
+  dir=$(make_case arm-stale-live-recovery)
+  state="$dir/state"
+  bin="$dir/bin"
+  armout="$dir/arm.out"
+  mkdir -p "$bin"
+  cp "$WATCH_ARM" "$bin/fm-watch-arm.sh"
+  cp "$LIB" "$bin/fm-wake-lib.sh"
+  cat > "$bin/fm-watch.sh" <<'SH'
+#!/usr/bin/env bash
+set -u
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/fm-wake-lib.sh
+. "$SCRIPT_DIR/fm-wake-lib.sh"
+WATCH_LOCK="$STATE/.watch.lock"
+WATCH_PATH="$SCRIPT_DIR/fm-watch.sh"
+fm_lock_try_acquire "$WATCH_LOCK" || exit 0
+WATCHER_PID=${BASHPID:-$$}
+printf '%s\n' "$FM_HOME" > "$WATCH_LOCK/fm-home"
+printf '%s\n' "$WATCH_PATH" > "$WATCH_LOCK/watcher-path"
+fm_pid_identity "$WATCHER_PID" > "$WATCH_LOCK/pid-identity"
+trap 'fm_lock_release "$WATCH_LOCK"' EXIT
+touch "$STATE/.last-watcher-beat"
+printf '%s\n' "$WATCHER_PID" >> "$STATE/watcher-starts"
+if [ "$(wc -l < "$STATE/watcher-starts" | tr -d '[:space:]')" = 1 ]; then
+  wedged=$(sleep 300 & printf '%s\n' "$!" > "$STATE/helper-$WATCHER_PID"; printf 'leaked pipe writer\n')
+else
+  while :; do
+    touch "$STATE/.last-watcher-beat"
+    sleep 0.05
+  done
+fi
+SH
+  chmod +x "$bin/fm-watch.sh" "$bin/fm-watch-arm.sh"
+
+  sleep 300 &
+  unrelated=$!
+  PATH="$dir/fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" \
+    FM_GUARD_GRACE=5 FM_ARM_ATTACH_POLL=0.1 FM_ARM_CONFIRM_TIMEOUT=2 \
+    "$bin/fm-watch-arm.sh" > "$armout" &
+  armpid=$!
+  i=0
+  while [ "$i" -lt 80 ] && [ ! -s "$state/watcher-starts" ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  first=$(head -1 "$state/watcher-starts" 2>/dev/null || true)
+  helper=$(cat "$state/helper-$first" 2>/dev/null || true)
+  if [ -z "$first" ] || [ -z "$helper" ]; then
+    kill -TERM "$armpid" "$unrelated" 2>/dev/null || true
+    wait "$armpid" 2>/dev/null || true
+    wait "$unrelated" 2>/dev/null || true
+    [ -z "$helper" ] || kill "$helper" 2>/dev/null || true
+    fail "stale-live fixture did not reach its blocked pipe-read state"
+  fi
+  i=0
+  while [ "$i" -lt 80 ] && ! grep -qF 'watcher: started pid=' "$armout" 2>/dev/null; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  if ! grep -qF 'watcher: started pid=' "$armout" 2>/dev/null; then
+    kill -TERM "$armpid" "$first" "$unrelated" 2>/dev/null || true
+    kill "$helper" 2>/dev/null || true
+    wait "$armpid" 2>/dev/null || true
+    wait "$unrelated" 2>/dev/null || true
+    fail "arm did not confirm the initial healthy watcher before the stale-beat transition"
+  fi
+  touch -t 200001010000 "$state/.last-watcher-beat"
+
+  i=0
+  while [ "$i" -lt 80 ] && [ "$(wc -l < "$state/watcher-starts" | tr -d '[:space:]')" -lt 2 ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  count=$(wc -l < "$state/watcher-starts" | tr -d '[:space:]')
+  if [ "$count" -lt 2 ]; then
+    owner_match=0
+    FM_HOME="$dir" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_watcher_lock_matches_pid "$2" "$3" "$4" "$5"' \
+      _ "$LIB" "$state" "$bin/fm-watch.sh" "$dir" "$first" && owner_match=1
+    lock_pid=$(cat "$state/.watch.lock/pid" 2>/dev/null || true)
+    beat_age=$(FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_path_age "$2"' _ "$LIB" "$state/.last-watcher-beat")
+    arm_output=$(<"$armout")
+    kill -TERM "$armpid" "$first" "$unrelated" 2>/dev/null || true
+    [ -z "$helper" ] || kill "$helper" 2>/dev/null || true
+    wait "$armpid" 2>/dev/null || true
+    wait "$unrelated" 2>/dev/null || true
+    fail "arm left its live but stale watcher in place instead of recovering it (starts=$count lock_pid=$lock_pid owner_match=$owner_match beat_age=$beat_age output=$arm_output)"
+  fi
+  second=$(tail -1 "$state/watcher-starts")
+  sleep 0.3
+  count=$(wc -l < "$state/watcher-starts" | tr -d '[:space:]')
+  lock_pid=$(cat "$state/.watch.lock/pid" 2>/dev/null || true)
+  first_alive=0
+  is_live_non_zombie "$first" && first_alive=1
+  unrelated_alive=0
+  is_live_non_zombie "$unrelated" && unrelated_alive=1
+  rc=0
+  FM_HOME="$dir" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_watcher_healthy "$2" "$3" 1 "$4"' \
+    _ "$LIB" "$state" "$bin/fm-watch.sh" "$dir" || rc=$?
+  kill -TERM "$armpid" 2>/dev/null || true
+  wait "$armpid" 2>/dev/null || true
+  kill "$helper" "$unrelated" 2>/dev/null || true
+  wait "$unrelated" 2>/dev/null || true
+
+  [ "$count" = 2 ] || fail "stale recovery started more than one replacement cycle (starts=$count)"
+  ! is_live_non_zombie "$first" || fail "the stale watcher remained alive beside its replacement"
+  [ "$lock_pid" = "$second" ] || fail "replacement did not exclusively own the watcher lock before cleanup"
+  [ "$first_alive" -eq 0 ] || fail "stale recovery launched a replacement before the old watcher exited"
+  [ "$rc" -eq 0 ] || fail "replacement heartbeat was not fresh under the exact home/path/pid identity"
+  [ "$unrelated_alive" -eq 1 ] || fail "stale recovery terminated an unrelated live process"
+  ! grep -qF 'watcher: FAILED' "$armout" || fail "stale recovery reported a failed cycle"
+  pass "arm recovers an exact stale live watcher once without overlap or collateral termination"
+}
+
+test_arm_recovers_stopped_exact_watcher() {
+  local dir state fakebin armout armpid watcher_pid replacement candidate i starts status
   dir=$(make_case stopped-watcher)
   state="$dir/state"
   fakebin="$dir/fakebin"
   armout="$dir/arm.out"
   mark_pr_check_migration_complete "$state"
-  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH_ARM" > "$armout" &
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_GUARD_GRACE=5 \
+    FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    FM_ARM_ATTACH_POLL=0.1 "$WATCH_ARM" > "$armout" &
   armpid=$!
   i=0
   while [ "$i" -lt 80 ]; do
@@ -873,24 +990,44 @@ test_stopped_watcher_is_live_but_stale_then_exit_is_classified() {
     i=$((i + 1))
   done
   watcher_pid=$(cat "$state/.watch.lock/pid" 2>/dev/null || true)
-  grep -qF "watcher: started pid=$watcher_pid" "$armout" || fail "load counterfactual watcher did not start"
+  grep -qF "watcher: started pid=$watcher_pid" "$armout" || fail "counterfactual watcher did not start"
 
   kill -STOP "$watcher_pid" 2>/dev/null || fail "could not SIGSTOP watcher"
-  touch -t 200001010000 "$state/.last-watcher-beat"
   FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_alive "$2"' _ "$LIB" "$watcher_pid" \
     || fail "SIGSTOP watcher was not classified as a live pid"
-  if FM_HOME="$dir" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_watcher_healthy "$2" "$3" 300 "$4"' _ "$LIB" "$state" "$WATCH" "$dir"; then
-    fail "SIGSTOP watcher with a stale beacon was classified healthy"
-  fi
-
+  touch -t 200001010000 "$state/.last-watcher-beat"
+  replacement=
+  i=0
+  while [ "$i" -lt 100 ]; do
+    candidate=$(cat "$state/.watch.lock/pid" 2>/dev/null || true)
+    if [ -n "$candidate" ] && [ "$candidate" != "$watcher_pid" ] \
+      && FM_HOME="$dir" FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_watcher_healthy "$2" "$3" 5 "$4"' \
+        _ "$LIB" "$state" "$WATCH" "$dir"; then
+      replacement=$candidate
+      break
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  i=0
+  while [ "$i" -lt 40 ] && [ "$(grep -cF 'watcher: started pid=' "$armout" 2>/dev/null || true)" -lt 2 ]; do
+    sleep 0.05
+    i=$((i + 1))
+  done
+  starts=$(grep -cF 'watcher: started pid=' "$armout" 2>/dev/null || true)
+  status=0
+  is_live_non_zombie "$watcher_pid" && status=1
   kill -CONT "$watcher_pid" 2>/dev/null || true
-  kill -TERM "$watcher_pid" 2>/dev/null || true
-  wait_for_exit "$armpid" 80
-  status=$?
-  [ "$status" -ne 0 ] && [ "$status" -ne 124 ] || fail "terminated stopped-watcher cycle did not surface nonzero (status $status)"
-  grep -Eq 'reason=(nonzero-exit|signal-exit)' "$state/.watch-cycle-exits.log" \
-    || fail "terminated watcher exit was not classified in the lifecycle ledger"
-  pass "SIGSTOP distinguishes live PID from stale beacon and termination records the exit class"
+  kill -TERM "$armpid" 2>/dev/null || true
+  wait "$armpid" 2>/dev/null || true
+  [ -z "$replacement" ] || { is_live_non_zombie "$replacement" && status=2; }
+
+  [ -n "$replacement" ] || fail "arm did not replace the exact stale stopped watcher"
+  [ "$starts" = 2 ] || fail "stale stopped-owner recovery should start exactly one replacement (starts=$starts)"
+  [ "$status" -eq 0 ] || fail "stale recovery left the old or replacement watcher alive after cleanup"
+  grep -q 'reason=stale-heartbeat-recovered' "$state/.watch-cycle-exits.log" \
+    || fail "recovered stopped-watcher cycle was not classified in the lifecycle ledger"
+  pass "arm reclaims only its exact stale stopped watcher and starts one fresh cycle"
 }
 
 test_pid_identity_is_locale_invariant() {
@@ -1038,4 +1175,5 @@ test_arm_propagates_immediate_wake_before_confirmation
 test_arm_waits_for_peer_beacon_after_child_stands_down
 test_arm_fails_loud_when_no_fresh_watcher_confirmable
 test_cycle_exit_ledger_links_successor_and_stays_bounded
-test_stopped_watcher_is_live_but_stale_then_exit_is_classified
+test_arm_recovers_only_its_stale_live_watcher
+test_arm_recovers_stopped_exact_watcher

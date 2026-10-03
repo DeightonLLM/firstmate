@@ -23,8 +23,8 @@
 # This script forks the watcher as a tracked child, then VERIFIES the outcome
 # before it settles in. It confirms a watcher process is genuinely alive AND the
 # liveness beacon (state/.last-watcher-beat) is fresh within FM_GUARD_GRACE (the
-# single source of truth, shared with fm-watch.sh and fm-guard.sh), and prints
-# exactly one unambiguous status line:
+# single source of truth, shared with fm-watch.sh and fm-guard.sh), and reports
+# unambiguous lifecycle status lines:
 #   watcher: started pid=<N> (beacon fresh)              - it launched one and confirmed it
 #   watcher: attached pid=<N> (beacon <age>s)            - a live+fresh successor holds the lock;
 #                                                          this arm attaches and follows it
@@ -32,10 +32,14 @@
 #   watcher: FAILED - cycle ended without an actionable reason
 #                                                        - a clean cycle ended with no wake and no
 #                                                          verified healthy successor
-# It NEVER reports started/attached/healthy off a stale beacon or a dead/reused pid: a
-# stale-beacon or dead-pid holder either self-heals (the fresh child steals the
-# dead lock per the singleton self-eviction/steal path and is confirmed) or this
-# returns the FAILED line. On started it waits the child and propagates the wake
+#   watcher: recovering stale owned pid=<N> (beacon <age>s) - the exact stale
+#                                                        child will be stopped before a successor starts
+# It NEVER reports started/attached/healthy off a stale beacon or a dead/reused pid:
+# after confirming its own child, a stale beacon is recovered only when home, path,
+# pid, and process identity still match; that child is stopped before the lock
+# primitive reclaims it and the arm starts exactly one confirmed successor. Other
+# unverifiable live holders are not killed and produce the FAILED line. On started
+# it supervises the child and propagates the wake
 # reason; on attached it stays live across identity-matched successors. An
 # attached cycle that ends without a healthy successor is a typed nonzero failure,
 # never a clean empty completion. On FAILED it exits non-zero so the failure is
@@ -378,6 +382,61 @@ cleanup_child() {
   fi
 }
 
+# kill -0 can include an exited child that has not yet been reaped as a zombie.
+watcher_child_running() {
+  local process_state
+  fm_pid_alive "$1" || return 1
+  process_state=$(ps -p "$1" -o stat= 2>/dev/null | tr -d '[:space:]')
+  case "$process_state" in *[Zz]*) return 1 ;; esac
+  return 0
+}
+
+# A stale beacon is recoverable only for this arm's exact watcher child.
+owned_child_heartbeat_stale() {
+  local lock_pid age
+  [ -n "$child" ] || return 1
+  lock_pid=$(cat "$WATCH_LOCK/pid" 2>/dev/null || true)
+  [ "$lock_pid" = "$child" ] || return 1
+  fm_pid_alive "$child" || return 1
+  fm_watcher_lock_matches_pid "$STATE" "$WATCH" "$child" "$FM_HOME" || return 1
+  age=$(fm_path_age "$BEAT")
+  [ "$age" -ge "$GRACE" ]
+}
+
+recover_stale_owned_child() {
+  local stale_pid=$child stale_identity current_identity age rc
+  owned_child_heartbeat_stale || return 1
+  stale_identity=$(fm_pid_identity "$stale_pid") || return 1
+  owned_child_heartbeat_stale || return 1
+  age=$(fm_path_age "$BEAT")
+  echo "watcher: recovering stale owned pid=$stale_pid (beacon ${age}s)"
+  kill -TERM "$stale_pid" 2>/dev/null || true
+  sleep 0.2
+  current_identity=$(fm_pid_identity "$stale_pid" 2>/dev/null || true)
+  if [ "$current_identity" = "$stale_identity" ]; then
+    kill -KILL "$stale_pid" 2>/dev/null || true
+  fi
+  wait "$stale_pid" 2>/dev/null
+  rc=$?
+  cycle_log_append "$rc" "$(cycle_signal_name "$rc")" stale-heartbeat-recovered none
+  rm -f "$child_out" 2>/dev/null || true
+  child=
+  child_out=
+  FM_WATCH_PREDECESSOR_ARM_PID=$ARM_PID
+  export FM_WATCH_PREDECESSOR_ARM_PID
+  exec "$0"
+  echo "watcher: FAILED - could not restart after stale heartbeat" >&2
+  exit 1
+}
+
+wait_owned_child() {
+  while watcher_child_running "$child"; do
+    owned_child_heartbeat_stale && recover_stale_owned_child
+    sleep "$ATTACH_POLL"
+  done
+  wait "$child"
+}
+
 # shellcheck disable=SC2329 # Invoked indirectly by the signal traps below.
 handle_arm_signal() {
   local signal=$1 rc=$2
@@ -466,7 +525,7 @@ while :; do
       cycle_refresh_lock_before
       cycle_mark_predecessor_successor "started:$child"
       echo "watcher: started pid=$child (beacon fresh)"
-      wait "$child"
+      wait_owned_child
       rc=$?
       owned_child_finished "$rc"
       exit $?
