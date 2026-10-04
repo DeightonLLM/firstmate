@@ -32,7 +32,7 @@ machine-readable mirror.
 | Role | Controller; runs FirstMate tooling, agents, and orchestration | `AGENTS.md` |
 | Tenants | (none — tooling host) | n/a |
 | Status | `KNOWN` | n/a |
-| Last verified | 2026-09-15 | n/a |
+| Last verified | 2026-09-29 | `docs/audits-20260928/FULLHYG-ELEVATES.md` |
 | Freshness days | 30 | n/a |
 | Notes | This warehouse lives on the controller. It is not a service host. | n/a |
 
@@ -48,7 +48,7 @@ machine-readable mirror.
 | Role | Controller 1Panel host; entrypoint for `panel.dubzai.com` | `AGENTS.md` Management URL map |
 | Tenants | (controller tooling) | n/a |
 | Status | `KNOWN` | n/a |
-| Last verified | 2026-09-15 | n/a |
+| Last verified | 2026-09-29 | `docs/audits-20260928/FULLHYG-ELEVATES.md` |
 | Freshness days | 30 | n/a |
 
 ## `hd2stack` — Contabo host `vmi3238503` (HD2 in-house)
@@ -79,7 +79,7 @@ machine-readable mirror.
 | Role | HD2.ai edge/review host; live WordPress site at `hd2.ai` | `AGENTS.md` Management URL map |
 | Tenants | `hd2` | `AGENTS.md` Management URL map |
 | Status | `KNOWN` | n/a |
-| Last verified | 2026-09-15 | n/a |
+| Last verified | 2026-09-29 | `docs/audits-20260928/FULLHYG-ELEVATES.md` |
 | Freshness days | 30 | n/a |
 | Notes | Distinct from HD2Stack `vmi3238503`; the operator alias and canonical hostname both refer to this node only | `AGENTS.md` Hostinger note |
 
@@ -89,15 +89,15 @@ machine-readable mirror.
 |---|---|---|
 | Tier | `BRANDON_LEGACY_VPS` | `BR-INV-001/report.md` §Host 1 |
 | Provider | Hostinger (KVM8 per PRD v3 §7.1) | `BR-INV-001/report.md` §Host 1 |
-| Canonical hostname | `srv1137994-aminolifesciences`; alias `animovps` | `BR-INV-001/report.md` §Host 1 |
+| Canonical hostname | `srv1137994-aminolifesciences`; aliases: `animovps` (deprecated), `elevatesVPS` (current operator alias) | `BR-INV-001/report.md` §Host 1; operator ruling 2026-09-29 |
 | Tailscale IP | `100.69.211.43` | `BR-INV-001/report.md` §Host 1 |
 | Public IP | UNKNOWN — not surfaced in workspace | `BR-INV-001/report.md` §Host 1 |
-| SSH path | `tailscale ssh animovps` (documented); Tailscale target `100.69.211.43` | `BR-INV-001/report.md` §Host 1 |
-| Role | Brandon edge/control plane per PRD v3 §7.1; current tenant: staging + worker + production port reservations | `BR-INV-001/report.md` §Host 1 |
+| SSH path | `ssh elevatesVPS` (current) or `ssh animovps` (deprecated alias, same host); key-only over Tailscale | operator ruling 2026-09-29; `/root/.ssh/config` |
+| Role | Brandon edge/control plane per PRD v3 §7.1; tenants: staging + worker + production port reservations. **Serves ElevateSci.com** (brand: ElevateSci — the "elevates/animovps" names are legacy for this same node). Now also an HD2 coding surface: firstmate repo at `/root/firstmate` (baseline `1b2442b`, 2026-09-29), mcode 0.5.8 authed, 8 CPU / 31 GB RAM | `BR-INV-001/report.md` §Host 1; operator ruling + fleet hygiene session 2026-09-29 (`docs/audits-20260928/FULLHYG-ELEVATES.md`) |
 | Tenants | `core-distro` (staging), `cbd-data` (worker) | `BR-INV-001/report.md` §Host 1 |
 | Runtime | Docker `29.1.3`, Percona MySQL `8.4.10-10`, PHP CLI `8.4.22`, Node.js `v22.19.0`, Python `3.12.3`, Composer `2.8.12`, Nginx | `BR-INV-001/report.md` §Host 1 |
 | Status | `PARTIAL` — runtime versions documented; OS/CPU/RAM/disk/firewall/backup posture not documented | `BR-INV-001/report.md` §Host 1 |
-| Last verified | 2026-09-15 | n/a |
+| Last verified | 2026-09-29 | `docs/audits-20260928/FULLHYG-ELEVATES.md` |
 | Freshness days | 30 | n/a |
 | Notes | PRD-v3 proposed rename `bdn-edge-01` is not in evidence; hostname drift is out of Phase 0 scope | `BR-INV-001/report.md` §Host 1 |
 
@@ -161,7 +161,7 @@ machine-readable mirror.
 | Role | Five exact duplicate PHP file pairs preserved byte-for-byte under `agent-work` evidence; Music Metrics write-locked | `MINI_SPRINT_PREPARATION_REPORT.md` §5 |
 | Tenants | `music-metrics` (write-locked), `lawyer` (read-only), `core-distro`/`elevate`/`cbd-data` retained | `MINI_SPRINT_PREPARATION_REPORT.md` §5 |
 | Status | `KNOWN` (preserved evidence) | n/a |
-| Last verified | 2026-09-15 | n/a |
+| Last verified | 2026-09-29 | `docs/audits-20260928/FULLHYG-ELEVATES.md` |
 | Freshness days | 30 | n/a |
 
 ---

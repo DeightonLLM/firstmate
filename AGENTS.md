@@ -545,3 +545,24 @@ Keep this file for knowledge useful to almost every future agent session in this
 Do not repeat what the codebase already shows; point to the authoritative file, skill, command, or doc.
 Prefer rewriting or pruning existing entries over appending new ones.
 When updating this file, preserve every safety boundary and keep the always-loaded contract concise.
+
+## Delegation-first execution (captain directive 2026-09-26)
+- Execution work is DELEGATED BY DEFAULT: MiniMax 2.7 subagents via `mcode exec "<self-contained bounded task>"` (headless) do implementation/analysis; Gemini reviews every deliverable via `agy --model "Gemini 3.8 Flash (Medium)" --print`.
+- The controller (Codex/Pi) coordinates, spot-verifies, and handles only captain-gated actions. Solo implementation requires a stated reason (credential gate, sub-minute task, or no delegable boundary).
+- Hetz/brandon compute is the parallel muscle: batch independent jobs as brandon lanes (max 3 concurrent) with coordination headers (objective, boundary, evidence path, model lane, stop condition); AGY-review before closeout. Reports route to the controller, never relayed through the operator.
+
+## Deterministic swarm protocol (captain directive 2026-09-26) — study → plot → execute parallel
+- For EVERY non-trivial task: (1) STUDY the surface (paths, access, constraints), (2) PLOT the swarm: disjoint lanes with objective/boundary/evidence-path/model-lane/stop-condition, (3) EXECUTE lanes concurrently, never serially.
+- Lane types: MiniMax 2.7 (`mcode exec`) for implementation on accessible surfaces; hetz/brandon lanes for parallel compute-bound work; controller for coordination + captain-gated actions only. Gemini (AGY) reviews deliverables before closeout.
+- Default swarm size: 2-4 disjoint lanes + coordinator. Prefer existing subdomains/routes/infra over new DNS. Backups precede any live mutation (fail-closed).
+
+- BOOT: read /root/agent-work/deightonllm-firstmate/CONTROLLER_STATE.md and BOARD.md before any task work. Keep both current — they are the durable memory; the captain must never re-explain basics.
+
+## Todo board format (deterministic — every session, captain-approved 2026-09-26)
+- Every todo line: `[owner @ host] task — state`. Owners: controller / MiniMax @ <host> / hetz @ brandon / subagent @ <host>.
+- Exactly one in_progress (active focus); running/queued/blocked nuance lives in the content text.
+- The todo list IS the captain's visible board. Update after every lane event; never show untagged items.
+
+## War-room rule (captain directive 2026-09-26)
+- ONE consolidated view per host: all active lane panes/windows live in the host's default tmux server under a 'war-room' session (or the primary agent TUI layout). Per-task tmux servers are torn down on task close — never leave stale sockets (verify with: for s in /tmp/tmux-*; do tmux -S $s list-sessions; done).
+- The captain must be able to see every running lane in one place; if a lane is invisible, that is a defect — fix visibility before adding work.

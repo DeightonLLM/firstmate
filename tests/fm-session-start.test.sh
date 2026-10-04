@@ -48,7 +48,9 @@ new_world() {
   root="$w/root"
   home="$w/home"
   fakebin="$w/fakebin"
-  mkdir -p "$home/state" "$home/data" "$home/config" "$fakebin"
+  mkdir -p "$home/state" "$home/data" "$home/config" "$fakebin" "$root/bin" "$root/docs/system-context"
+  printf '%s\n' '# context index fixture' > "$root/docs/system-context/INDEX.md"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$root/bin/fm-context-preflight.sh"
   git init -q -b main "$root"
   git -C "$root" commit -q --allow-empty -m init
   printf '%s|%s|%s\n' "$root" "$home" "$fakebin"
@@ -667,11 +669,9 @@ EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_claude "$fakebin"
   append_wake "$home/state" signal task-a "done: must remain queued" || fail "seed wake failed"
-  chmod 0500 "$home/state"
 
   status=0
-  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH") || status=$?
-  chmod 0700 "$home/state"
+  out=$(FM_STATE_OVERRIDE=/proc run_session_start "$home" "$root" "$fakebin:$BASE_PATH") || status=$?
 
   expect_code 0 "$status" "fm-session-start.sh must exit 0 when lock publication fails"
   assert_contains "$out" "cannot write session lock" "lock publication failure was not surfaced"
@@ -767,8 +767,8 @@ $rec
 EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_claude "$fakebin"
-  # Force a MISSING diagnostic line so the bootstrap section is non-trivial.
-  rm -f "$fakebin/node"
+  # tasks-axi is absent from the fake toolchain and fixed test PATH, so this
+  # deterministically supplies the actionable diagnostic for this assertion.
 
   printf 'window=fm-sess:w1\nkind=ship\n' > "$home/state/task-a.meta"
 
@@ -791,7 +791,7 @@ EOF
   [ "$context_line" -lt "$fleet_line" ] || fail "CONTEXT did not precede FLEET STATE"
   [ "$fleet_line" -lt "$next_line" ] || fail "FLEET STATE did not precede NEXT STEP"
 
-  missing_line=$(printf '%s\n' "$out" | grep -n 'MISSING: node' | head -1 | cut -d: -f1)
+  missing_line=$(printf '%s\n' "$out" | grep -n 'MISSING: tasks-axi' | head -1 | cut -d: -f1)
   [ -n "$missing_line" ] || fail "MISSING diagnostic did not appear at all"
   [ "$missing_line" -lt "$fleet_line" ] || fail "actionable MISSING diagnostic was buried after the bulk fleet-state digest"
 
@@ -1195,6 +1195,28 @@ EOF
   pass "an empty fleet reports (none) for in-flight tasks and an absent AFK flag"
 }
 
+test_next_step_emits_visible_todo_board_guidance() {
+  local rec root home fakebin out
+  rec=$(new_world next-step-todo)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+
+  assert_contains "$out" "VISIBLE TO-DO BOARD" "session start did not name the visible To-Do board"
+  assert_contains "$out" "Use the To-Do List extension before task work" "session start did not require To-Do initialization"
+  assert_contains "$out" "Put the active item first" "session start did not keep the active item visible"
+  assert_contains "$out" "prune completed history that would hide live work" "session start did not prevent completed items obscuring active work"
+  assert_contains "$out" "SYSTEM-CONTEXT WAREHOUSE" "session start did not put the warehouse on the startup radar"
+  assert_contains "$out" "Read docs/system-context/INDEX.md before host, service, placement, or PRD decisions" "session start did not direct the primary to the warehouse index"
+  assert_contains "$out" "run bin/fm-context-preflight.sh before warehouse-dependent work" "session start did not direct the primary to validate warehouse data"
+
+  pass "session start surfaces both the visible To-Do board and system-context warehouse"
+}
+
 test_next_step_sources_x_mode_cadence() {
   local rec root home fakebin out
   rec=$(new_world next-step-x)
@@ -1392,6 +1414,7 @@ EOF
 }
 
 test_context_digest_absent_empty_present
+test_next_step_emits_visible_todo_board_guidance
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
 test_session_lock_concurrent_single_winner

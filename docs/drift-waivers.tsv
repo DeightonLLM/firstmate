@@ -1,0 +1,20 @@
+.github/workflows/ci.yml	repo CI tweak; pipeline contract owned by CONTRIBUTING.md/AGENTS.md; no behavioral doc change needed	2026-09-29
+/root/.minimax/config.yaml	controller runtime config, outside repo doc surface	2026-09-29
+/root/bin/agent-intent-guard	changed in 2026-09-29 fleet-hygiene hardening; evidence docs/audits-20260928/MUT-INTENTGUARD.md	2026-09-29
+/root/bin/agent-secret-scan	changed in 2026-09-29 fail-closed fix; evidence docs/audits-20260928/MUT-SECSCAN-FAILCLOSED.md	2026-09-29
+/root/bin/agent-secret-scan.bak-	timestamped backup, non-operational	2026-09-29
+/root/bin/agy-coordinate-guard-hook.test.sh	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/brandon-herdr-layout-guard	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/check-saas-status.test.sh	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/firstmate-sync	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/fleet-hygiene	changed in 2026-09-29 fleet-hygiene campaign; evidence docs/audits-20260928/FLEET-HYGIENE-PLAN-20260929.md	2026-09-29
+/root/bin/fleet-hygiene.bak-	timestamped backup, non-operational	2026-09-29
+/root/bin/herdr-agent-start-fresh	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/herdr-agent-verify-startup	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/herdr-coordinate-lease-ensure	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/herdr-dispatch-ack	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/herdr-review-send	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/lane-stall-watch	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/validate-agent-prompt-routing	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+/root/bin/validate-herdr-lane-prompt	changed in 2026-09-29 hardening; covered by docs/audits-20260928/ series	2026-09-29
+bin/fm-session-start.sh	script header is the single doc owner (AGENTS.md §3 points here); behavior unchanged, ordering docs already accurate	2026-09-29

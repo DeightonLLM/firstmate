@@ -158,10 +158,30 @@ fm_backend_herdr_workspace_label() {
 # compatible if a future herdr build honors it. Never used by
 # fm_backend_herdr_version_check, which is intentionally session-independent
 # (reads only .client.* fields).
+# Request/response herdr CLI calls are hard-bounded so one hung call (wedged
+# server, stalled socket) can no longer freeze a whole watcher poll cycle in
+# pipe_read (2026-10-03/04 recurring controller wedges: arm in do_wait, watcher
+# and its poll child in pipe_read, heartbeat frozen for 10-20 min at a time).
+# Matches the ecosystem's own practice (oh-my-openagent ships hang watchdogs for
+# subprocess-spawning paths). The one daemonizing call (`server`) keeps its
+# unbounded background start. Override the bound only in tests via
+# FM_BACKEND_HERDR_CLI_TIMEOUT.
+FM_BACKEND_HERDR_CLI_TIMEOUT=${FM_BACKEND_HERDR_CLI_TIMEOUT:-10}
+
 fm_backend_herdr_cli() {  # <session> <herdr-subcommand-and-args...>
   local session=$1
   shift
-  HERDR_SESSION="$session" herdr "$@" --session "$session"
+  if [ "$1" = "server" ]; then
+    HERDR_SESSION="$session" herdr "$@" --session "$session"
+    return
+  fi
+  if command -v timeout >/dev/null 2>&1; then
+    HERDR_SESSION="$session" timeout -k 2 "$FM_BACKEND_HERDR_CLI_TIMEOUT" herdr "$@" --session "$session"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    HERDR_SESSION="$session" gtimeout -k 2 "$FM_BACKEND_HERDR_CLI_TIMEOUT" herdr "$@" --session "$session"
+  else
+    HERDR_SESSION="$session" herdr "$@" --session "$session"
+  fi
 }
 
 # fm_backend_herdr_tool_check: refuse loudly if herdr or jq is missing.
@@ -3192,7 +3212,7 @@ fm_backend_herdr_wait_transition() {  # <session> <timeout_secs> <state_dir> <pa
     rm -rf "$fifo_dir" 2>/dev/null || true
     return 2
   fi
-  if ! IFS= read -r -u 9 line || [ "$line" != "@subscribed" ]; then
+  if ! IFS= read -r -t $((timeout + 5)) -u 9 line || [ "$line" != "@subscribed" ]; then
     rc=2
   fi
 
@@ -3224,7 +3244,7 @@ fm_backend_herdr_wait_transition() {  # <session> <timeout_secs> <state_dir> <pa
   # with `cut`, NOT `IFS=$'\t' read`: a tab is IFS-whitespace, so `read` would
   # collapse an empty middle field (e.g. an absent workspace_id) and shift the
   # status into the wrong column. `cut` preserves empty fields.
-  while [ "$rc" -eq 1 ] && IFS= read -r line <&9; do
+  while [ "$rc" -eq 1 ] && IFS= read -r -t $((timeout + 5)) line <&9; do
     [ -n "$line" ] || continue
     pane_id=$(printf '%s' "$line" | cut -f1)
     ws=$(printf '%s' "$line" | cut -f2)
@@ -3238,16 +3258,21 @@ fm_backend_herdr_wait_transition() {  # <session> <timeout_secs> <state_dir> <pa
       break
     fi
   done
-  if [ "$rc" -eq 0 ]; then
+  if [ "$rc" -ne 1 ]; then
     kill "$reader_pid" 2>/dev/null || true
   fi
-  if [ "$rc" -eq 2 ]; then
-    kill "$reader_pid" 2>/dev/null || true
+  # Bounded reap (2026-10-04 wedge #6): the watcher previously blocked forever
+  # in pipe_read on the FIFO when the reader hung past its own budget. The
+  # reads above are now -t bounded; this reap kills a still-hung reader so the
+  # wait below can never block the watcher.
+  local reap_ticks=0
+  while kill -0 "$reader_pid" 2>/dev/null && [ "$reap_ticks" -lt 10 ]; do
+    sleep 0.5
+    reap_ticks=$((reap_ticks + 1))
+  done
+  if kill -0 "$reader_pid" 2>/dev/null; then
+    kill -KILL "$reader_pid" 2>/dev/null || true
   fi
-  # No actionable edge: distinguish a clean full-budget wait (reader exit 0 ->
-  # return 1, caller already waited) from a reader error (connect/subscribe
-  # failure, exit non-zero -> return 2, caller sleeps and counts toward the
-  # runtime-disable threshold).
   wait "$reader_pid" 2>/dev/null || reader_rc=$?
   exec 9<&-
   rm -rf "$fifo_dir" 2>/dev/null || true

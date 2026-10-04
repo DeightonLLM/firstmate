@@ -233,6 +233,61 @@ hash_file() {
   fi
 }
 
+fresh_agent_baseline_manifest() {
+  local baseline_root file digest
+  local policy_file="/root/AGENTS.md"
+  local project_policy_file="/root/agent-work/AGENTS.md"
+  local routing_file="/root/docs/agent-policy/HERDR_AGENT_ROUTING.md"
+  local bounded_file="/root/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md"
+  local lean_ctx_file="/root/.codex/LEAN-CTX.md"
+  local warehouse_file warehouse_preflight_file
+  local -a required hashes
+
+  baseline_root="${FM_BASELINE_ROOT:-$FM_ROOT}"
+  baseline_root="$(cd "$baseline_root" 2>/dev/null && pwd -P)" || {
+    printf 'BASELINE: FAIL fresh-agent baseline root is unavailable\n' >&2
+    return 2
+  }
+  warehouse_file="$baseline_root/docs/system-context/INDEX.md"
+  warehouse_preflight_file="$baseline_root/bin/fm-context-preflight.sh"
+  required=(
+    "$policy_file" "$project_policy_file" "$routing_file" "$bounded_file"
+    "$lean_ctx_file" "$warehouse_file" "$warehouse_preflight_file"
+  )
+
+  for file in "${required[@]}"; do
+    if [ ! -f "$file" ]; then
+      printf 'BASELINE: FAIL required fresh-agent baseline file is missing: %s\n' "$file" >&2
+      return 2
+    fi
+    digest="$(hash_file "$file")" || {
+      printf 'BASELINE: FAIL cannot hash required fresh-agent baseline file: %s\n' "$file" >&2
+      return 2
+    }
+    case "$digest" in
+      sha256:*) hashes+=("$digest") ;;
+      *)
+        printf 'BASELINE: FAIL SHA-256 tool unavailable for required baseline file: %s\n' "$file" >&2
+        return 2
+        ;;
+    esac
+  done
+
+  printf '# Fresh-agent baseline\n'
+  printf 'Baseline manifest: fresh-agent-baseline/v1\n'
+  printf 'policy=%s %s\n' "$policy_file" "${hashes[0]}"
+  printf 'project-policy=%s %s\n' "$project_policy_file" "${hashes[1]}"
+  printf 'routing=%s %s\n' "$routing_file" "${hashes[2]}"
+  printf 'bounded=%s %s\n' "$bounded_file" "${hashes[3]}"
+  printf 'lean-ctx=%s %s\n' "$lean_ctx_file" "${hashes[4]}"
+  printf 'warehouse=%s %s\n' "$warehouse_file" "${hashes[5]}"
+  printf 'warehouse-preflight=%s %s\n' "$warehouse_preflight_file" "${hashes[6]}"
+  printf 'goal-queue=%s/data/backlog.md\n' "$FM_HOME"
+  printf 'state-handoff=%s/state/.wake-queue\n' "$FM_HOME"
+  printf 'state-records=%s/state/*.meta; %s/state/*.status\n' "$FM_HOME" "$FM_HOME"
+  printf 'Read pointers and hashes above; do not paste or inherit prior conversation history.\n'
+}
+
 pi_extension_loaded() {
   local marker=$1 expected_version=$2 lock=$3 marker_version marker_pid lock_pid
   [ -f "$marker" ] && [ -f "$lock" ] && [ -n "$expected_version" ] || return 1
@@ -242,6 +297,15 @@ pi_extension_loaded() {
   [ -n "$marker_pid" ] || return 1
   [ "$marker_version" = "$expected_version" ] && [ "$marker_pid" = "$lock_pid" ]
 }
+
+if [ "${1:-}" = "--baseline-manifest" ]; then
+  fresh_agent_baseline_manifest || exit $?
+  exit 0
+fi
+
+# Validate the content-pinned policy/context pointers before any session lock,
+# bootstrap, wake-queue, or other mutating startup step.
+fresh_agent_baseline_manifest || exit 2
 
 section "SESSION START - $FM_HOME"
 
@@ -281,6 +345,12 @@ if [ -n "$BOOT_OUT" ]; then
   printf '%s\n' "$BOOT_OUT"
 else
   printf '(silent - all good)\n'
+fi
+
+# Observability probe: orphaned lean-ctx background processes (PPID=1)
+ORPHAN_LCTX=$(ps -eo pid,ppid,rss,etime,cmd 2>/dev/null | awk '$2 == 1 && /lean-ctx/ && !/awk/ {print $0}')
+if [ -n "$ORPHAN_LCTX" ]; then
+  printf 'LEAN_CTX_ORPHANS (PPID=1):\n%s\n' "$ORPHAN_LCTX"
 fi
 
 # --- 3. wake-drain -------------------------------------------------------
@@ -443,6 +513,18 @@ This script never starts supervision itself.
 
 EOF
 fi
+cat <<'EOF'
+VISIBLE TO-DO BOARD
+Use the To-Do List extension before task work. Seed or refresh it from the current goal and queue.
+Put the active item first and keep it within the initially visible rows.
+Include [model @ surface lane-id], host, and exact artifact paths; prune completed history that would hide live work.
+The session-start shell digest does not populate the extension's in-memory list.
+
+SYSTEM-CONTEXT WAREHOUSE
+Read docs/system-context/INDEX.md before host, service, placement, or PRD decisions.
+Follow its file map and run bin/fm-context-preflight.sh before warehouse-dependent work.
+The session-start baseline pins the index and preflight paths; read the index before relying on it.
+EOF
 cat <<'EOF'
 The digest above is complete for this session start. Do NOT re-read
 data/projects.md, data/secondmates.md, data/captain.md,

@@ -175,6 +175,27 @@ _event_cap_fails=0
 # watcher and owns triage, so the watcher must behave one-shot (enqueue + exit on
 # every wake) and let the daemon classify - never absorb here, or the daemon's
 # digest/injection layer would never see the wake.
+# --- Per-phase cycle instrumentation (temporary; see report 2026-10-04) ---
+# Writes one line per completed phase to state/.watch-phase.log so the dominant
+# cost of a sweep can be attributed instead of guessed. Purely observational: a
+# failed append can never affect triage (|| true), and no phase decision reads
+# it back. Safe to delete together with its call sites.
+WATCH_PHASE_LOG="$STATE/.watch-phase.log"
+_wphase_last=$SECONDS
+_wphase() {  # <phase-name>
+  local _now=$SECONDS
+  printf '%s phase=%s dur=%ss\n' "$(date -u +%FT%TZ)" "$1" \
+    "$(( _now - _wphase_last ))" >> "$WATCH_PHASE_LOG" 2>/dev/null || true
+  _wphase_last=$_now
+}
+_wcap_last=$SECONDS
+_wcap() {  # <window> <outcome>  — per-window backend capture attribution
+  local _now=$SECONDS
+  printf '%s window=%s capture=%s dur=%ss\n' "$(date -u +%FT%TZ)" "$1" "$2" \
+    "$(( _now - _wcap_last ))" >> "$WATCH_PHASE_LOG" 2>/dev/null || true
+  _wcap_last=$_now
+}
+
 afk_present() { [ -e "$STATE/.afk" ]; }
 
 hash_pane() {
@@ -633,9 +654,18 @@ heartbeat_scan_finds_actionable() {
 # supervision cycle: the reader is a short-lived subprocess of THIS watcher, not
 # a second watcher, so every guard/beacon/arm/turn-end mechanism is unchanged.
 event_wait_or_sleep() {
-  local w b session first_backend="" first_session="" rec rc
+  local w b session first_backend="" first_session="" rec rc _win_n=0
   local windows=()
   while IFS= read -r w; do
+    # Progress-sampled liveness: long (350-400s) sweeps left the beat stale
+    # past the 300s guard grace and tripped false WATCHER-DOWN alarms every
+    # cycle (2026-10-04). Touching the beat every 10 windows reports honest
+    # progress: the watcher is alive and mid-sweep, not dead.
+    _win_n=$((_win_n + 1))
+    if [ $((_win_n % 10)) -eq 1 ]; then
+      touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
+    fi
+    touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
     b=$(window_backend "$w")
     fm_backend_has_push "$b" || continue
     # Secondmate endpoints are supervised via status writes, not pane/agent
@@ -780,17 +810,21 @@ while :; do
   # repost after grace, and escalate once if the recovery turn is also missed.
   # No conversation scraping; unresolved records are never silently expired.
   fm_pending_reply_tick "$STATE" || true
+  _wphase pending_reply_tick
+  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
 
   # Process-to-event liveness repair. This never discovers a result by polling:
   # each registered source has its own child blocking on that source, and this
   # only republishes results already captured durably and restarts a source
   # whose owner is gone. It is a no-op with nothing registered.
   if [ -d "$STATE/procevent" ]; then
-    FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-procevent.sh" reconcile >/dev/null 2>&1 || true
+    timeout 30 env FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-procevent.sh" reconcile >/dev/null 2>&1 || true
+  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
   fi
   # Then deliver any queued-but-unsurfaced result, including one a runner
   # published while this watcher was between cycles.
   procevent_surface_queued
+  _wphase procevent
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.
@@ -859,6 +893,7 @@ while :; do
     fi
     touch "$STATE/.last-check"
   fi
+  _wphase checks_loop
 
   # On the first changed signal, linger one grace period and re-scan before
   # classifying: a crewmate's final status write and the same turn's turn-end
@@ -866,6 +901,7 @@ while :; do
   # costs a full firstmate turn each. The re-scan also picks up a newer
   # signature for an already-pending file (last write wins below).
   pending=$(scan_signals)
+  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
   if [ -n "$pending" ]; then
     sleep "$SIGNAL_GRACE"
     pending=$(printf '%s\n%s' "$pending" "$(scan_signals)")
@@ -916,12 +952,44 @@ EOF
       triage_log "absorbed benign $reason"
     fi
   fi
+  _wphase signal_scan
 
   # Layer 1 backbone: pane staleness. Two consecutive identical hashes with no busy
   # signature means the crewmate finished, is waiting, or is wedged. Each distinct
   # stale hash is surfaced, absorbed, or timed toward escalation once (.stale-*
   # remembers the hash already classified).
+  # Amortized presence (2026-10-03/04 load fix): one bulk pane list per cycle
+  # answers existence for every LOCAL pane, so the per-window loop below stops
+  # paying two CLI startups per dead historical record (93 recorded windows
+  # made each sweep take ~9 minutes). A pane absent from a SUCCESSFUL bulk list
+  # is marked dead directly (marker refreshed each cycle; a pane that reappears
+  # stops the refreshing, so the marker expires after FM_DEAD_WINDOW_TTL and
+  # the window re-enters supervision automatically). An empty/failed map falls
+  # back to the per-window decay probes below - fail-closed to old behavior.
+  _cyc0=$SECONDS
+  echo "$(date -u +%FT%TZ) sweep_start" >> /root/agent-work/deightonllm-firstmate/state/.watch-cycle.log
+  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat
+  FM_WIN_STATUS_MAP=
+  FM_HERDR_BIN=$(command -v herdr 2>/dev/null || true)
+  [ -n "$FM_HERDR_BIN" ] || [ -x /root/.local/bin/herdr ] && FM_HERDR_BIN=${FM_HERDR_BIN:-/root/.local/bin/herdr}
+  if [ -n "$FM_HERDR_BIN" ] && [ -x "$FM_HERDR_BIN" ]; then
+    FM_WIN_STATUS_MAP=$(timeout -k 2 "${FM_BACKEND_HERDR_CLI_TIMEOUT:-10}" "$FM_HERDR_BIN" pane list --json 2>/dev/null \
+      | jq -r '.result.panes[]? | "\(.pane_id)\t\(.agent_status // "")"' 2>/dev/null || true)
+  fi
+  _wphase bulk_pane_list
   while IFS= read -r w; do
+    if [ "$(window_backend "$w")" = herdr ] && [ -n "$FM_WIN_STATUS_MAP" ]; then
+      pane_id=${w#*:}
+      dkey=${w//:/_}
+      dkey=${dkey//\//_}
+      dkey=${dkey//./_}
+      if printf '%s\n' "$FM_WIN_STATUS_MAP" | awk -F '\t' -v p="$pane_id" '$1 == p { found = 1 } END { exit !found }'; then
+        rm -f "$STATE/.win-dead-$dkey" 2>/dev/null || true
+      else
+        touch "$STATE/.win-dead-$dkey"
+        continue
+      fi
+    fi
     kind=$(window_kind "$w")
     task=$(window_to_task "$w" "$STATE")
     key=${w//:/_}
@@ -934,7 +1002,19 @@ EOF
     if [ "$kind" = secondmate ] && ! status_is_paused "$last"; then
       continue
     fi
-    tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) || continue
+    # Dead-window decay: a window whose backend read fails is almost always a
+    # finished/historical task record whose pane is long gone. Probe it at most
+    # once per FM_DEAD_WINDOW_TTL instead of every poll, so a fleet with many
+    # stale task metas does not turn every 15s cycle into hundreds of backend
+    # calls (2026-10-03/04 controller wedges + multi-minute sweeps). Age-based,
+    # so a window that comes back is re-probed automatically after the TTL.
+    deadf="$STATE/.win-dead-$key"
+    if [ "$(age_of "$deadf")" -lt "${FM_DEAD_WINDOW_TTL:-300}" ]; then
+      continue
+    fi
+    tail40=$(fm_backend_capture "$(window_backend "$w")" "$w" 40 "$(window_label "$w")" 2>/dev/null) || { touch "$deadf"; _wcap "$w" fail; continue; }
+    _wcap "$w" ok
+    rm -f "$deadf" 2>/dev/null || true
     h=$(printf '%s' "$tail40" | hash_pane)
     key=$(printf '%s' "$w" | tr ':/.' '___')
     hf="$STATE/.hash-$key"
@@ -1084,6 +1164,7 @@ EOF
       fi
     fi
   done < <(recorded_windows)
+  _wphase per_window_loop
 
   # Heartbeat: the watcher runs a cheap fleet-scan at a regular cadence no matter
   # what. Time-based via .last-heartbeat mtime; interval doubles per consecutive
@@ -1118,7 +1199,11 @@ EOF
     fi
   fi
 
+  echo "$(date -u +%FT%TZ) cycle_end dur=$(( SECONDS - ${_cyc0:-$SECONDS} ))s" >> /root/agent-work/deightonllm-firstmate/state/.watch-cycle.log
+  _wphase heartbeat
+  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
   # Terminal wait: a bounded native-event wait for push-capable homes (herdr),
   # else the blind poll sleep. See event_wait_or_sleep.
   event_wait_or_sleep
+  _wphase event_wait_or_sleep
 done
