@@ -1,18 +1,41 @@
-// Pi PreToolUse guard: a secondmate home may never act as a controller.
+// Pi PreToolUse guard: a secondmate home may never take the controller's own
+// Pi watcher seat.
 //
 // Authority model: only the primary home owns the controller seats. A home
-// whose root carries the .fm-secondmate-home identity marker (written by
+// whose root carries a genuine .fm-secondmate-home identity marker (written by
 // bin/fm-home-seed.sh, validated by secondmate-provisioning, documented in
-// docs/configuration.md) is a secondmate, so it may never run the two
-// controller entry points - bin/fm-session-start.sh and bin/fm-watch-arm.sh -
-// and may never call the controller's own Pi watcher tool fm_watch_arm_pi.
-// A secondmate routes that work to the primary firstmate instead.
+// docs/configuration.md) is a secondmate, so it may never call the primary's
+// Pi watcher tool fm_watch_arm_pi. A secondmate routes that one call to the
+// primary firstmate instead.
 //
-// Everything else is allowed, and a home WITHOUT the marker is never denied:
-// this guard keys on the session home root (FM_HOME, then FM_ROOT_OVERRIDE,
-// then the checkout holding this extension) and returns {} for every call
-// whenever that root has no marker. It therefore cannot fault a primary home
-// even if it is loaded there by mistake.
+// What a secondmate may NOT be denied is its OWN supervision. The per-home
+// bin/fm-session-start.sh and bin/fm-watch-arm.sh are legitimate inside a
+// secondmate home, and blocking them would break a seeded home at startup:
+//   - its charter tells it to "run normal firstmate bootstrap and recovery
+//     through bin/fm-session-start.sh for your own home" (bin/fm-brief.sh),
+//   - bin/fm-watch-arm.sh --restart resolves exactly THIS home's watcher pid
+//     from this home's state/.watch.lock, so it can never touch a sibling
+//     (see its header on why `pkill -f bin/fm-watch.sh` is forbidden), and
+//   - bin/fm-turnend-guard.sh already treats a marked home as running its own
+//     primary firstmate session.
+// So the deny list is exactly one call. There is no bash classifier here: a
+// command string is not a reliable identity for a seat, and a home that
+// legitimately runs both scripts must not be told otherwise.
+//
+// Everything else is allowed, and a home WITHOUT a genuine marker is never
+// denied: this guard keys on the session home root (FM_HOME, then
+// FM_ROOT_OVERRIDE, then the checkout holding this extension) and returns {}
+// for every call whenever that root has no genuine marker. It therefore cannot
+// fault a primary home even if it is loaded there by mistake.
+//
+// The marker predicate below mirrors fm_root_is_secondmate_home in
+// bin/fm-primary-scope-lib.sh exactly, including its edge semantics, so the
+// two layers cannot drift into disagreeing about which home this is: a
+// symlinked marker, a marker that is not a regular file, a marker whose first
+// line is empty or whitespace-only, an id outside [A-Za-z0-9._-], and a marker
+// with no trailing newline are all NOT secondmate homes; only the FIRST line
+// is read and ALL ASCII whitespace in it is stripped before the charset test.
+// Seeding always writes the id with a trailing newline.
 //
 // The decision is Pi-native: returning { block: true, reason } from a
 // tool_call listener stops the call before the tool runs (verified against
@@ -21,98 +44,69 @@
 // submitted command, and the guard holds no mutable state.
 //
 // Colocated test: .pi/extensions/fm-secondmate-guard.test.sh
-import { existsSync } from "node:fs";
+import { lstatSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-// A home carrying this marker is a secondmate, not a controller.
+// A home carrying a genuine version of this marker is a secondmate, not a
+// controller.
 const HOME_MARKER = ".fm-secondmate-home";
-// The controller seats a secondmate may never take.
-const CONTROLLER_SCRIPTS = ["fm-session-start.sh", "fm-watch-arm.sh"];
+// The single controller seat a secondmate may never take.
 const CONTROLLER_TOOL = "fm_watch_arm_pi";
-// Leading words that hand the rest of a segment to a shell or a runner, so
-// `bash bin/fm-session-start.sh` and `env FOO=1 bin/fm-watch-arm.sh` are still
-// invocations of the script rather than invocations of the wrapper.
-const WRAPPERS = new Set([
-  "bash",
-  "sh",
-  "zsh",
-  "ksh",
-  "dash",
-  "env",
-  "exec",
-  "source",
-  ".",
-  "nohup",
-  "time",
-  "sudo",
-  "xargs",
-]);
+// The id charset the shell predicate accepts, after stripping whitespace.
+const VALID_ID = /^[A-Za-z0-9._-]+$/;
+// Exactly the ASCII set bash's [[:space:]] removes under LC_ALL=C, which is the
+// locale fm_root_is_secondmate_home pins before stripping the id.
+const ASCII_WHITESPACE = /[ \t\n\v\f\r]/g;
 
 function homeRoot(): string {
   return process.env.FM_HOME || process.env.FM_ROOT_OVERRIDE || extensionRoot;
 }
 
+// Mirrors fm_root_is_secondmate_home (bin/fm-primary-scope-lib.sh). A marker
+// that is merely PRESENT is not enough: the shell accepts a home only when the
+// marker is a real file holding a real id, and this guard must agree, or one
+// layer would arm a controller the other believes is a secondmate.
 function isSecondmateHome(): boolean {
-  return existsSync(`${homeRoot()}/${HOME_MARKER}`);
-}
-
-// Strip the cheap obfuscation the arm prefilter also strips (line
-// continuations, quotes, CR) so `bin/fm-watc\<newline>h-arm.sh` and
-// 'bin/fm-watch-arm.sh' classify as the plain invocations they are. A newline
-// that is not a continuation stays a separator.
-function normalize(command: string): string {
-  return command.replace(/\\\r?\n/g, "").replace(/["'`]/g, "").replace(/\r/g, "");
-}
-
-function basename(token: string): string {
-  const parts = token.split("/");
-  return parts[parts.length - 1] ?? "";
-}
-
-function isControllerScript(token: string): boolean {
-  return CONTROLLER_SCRIPTS.includes(basename(token));
-}
-
-// Split on the operators that begin a new simple command, so a controller
-// script is found in any position, not only the first segment.
-function segments(command: string): string[] {
-  return normalize(command)
-    .split(/(?:;|&&|\|\||\||&|\n)/)
-    .map((segment) => segment.trim())
-    .filter(Boolean);
-}
-
-function deniesSegment(segment: string): boolean {
-  const tokens = segment.split(/\s+/).filter(Boolean);
-  if (!tokens.length) return false;
-  // A shell or runner wrapper makes any named controller script in the
-  // segment an invocation, including one behind wrapper flags such as
-  // `sudo -u fm bin/fm-watch-arm.sh`.
-  if (WRAPPERS.has(tokens[0])) return tokens.some(isControllerScript);
-  // Otherwise only the command word itself is an invocation, so a read that
-  // merely names the file (`cat bin/fm-watch-arm.sh`) stays allowed. Leading
-  // VAR=value assignments are also inspected, because that is how a command
-  // word can be smuggled in for later expansion (`ARM=bin/fm-watch-arm.sh;
-  // "$ARM"`).
-  let index = 0;
-  let smuggled = false;
-  for (; index < tokens.length; index += 1) {
-    const assignment = /^[A-Za-z_][A-Za-z0-9_]*=/.exec(tokens[index]);
-    if (!assignment) break;
-    if (isControllerScript(tokens[index].slice(assignment[0].length))) smuggled = true;
+  const marker = `${homeRoot()}/${HOME_MARKER}`;
+  try {
+    // [ -L "$marker" ] && return 1: a symlink is rejected even when it points
+    // at a perfectly good marker.
+    if (lstatSync(marker).isSymbolicLink()) return false;
+    // [ -f "$marker" ] || return 1: a directory or device is not a marker.
+    if (!statSync(marker).isFile()) return false;
+  } catch {
+    return false;
   }
-  return smuggled || isControllerScript(tokens[index] ?? "");
+
+  let content: string;
+  try {
+    content = readFileSync(marker, "utf8");
+  } catch {
+    return false;
+  }
+
+  // `IFS= read -r id < marker` reads the FIRST line and returns non-zero when
+  // it hits EOF with no newline, which the shell treats as no marker at all.
+  const newline = content.indexOf("\n");
+  if (newline === -1) return false;
+
+  // id=${id//[[:space:]]/} strips whitespace everywhere in the line, not just
+  // around it, then [ -n "$id" ] and the [A-Za-z0-9._-] case test follow.
+  const id = content.slice(0, newline).replace(ASCII_WHITESPACE, "");
+  if (!id) return false;
+  return VALID_ID.test(id);
 }
 
 function denyReason(what: string): string {
   return (
-    `fm-secondmate-guard: denied - this session's home root has the ${HOME_MARKER} marker, so it is a ` +
-    `secondmate home and a secondmate may never act as a controller. Blocked: ${what}. ` +
-    `Route this to the primary firstmate instead of running it here.`
+    `fm-secondmate-guard: denied - this session's home root has a genuine ${HOME_MARKER} marker, so it is a ` +
+    `secondmate home, and a secondmate may never take the controller's own watcher seat. Blocked: ${what}. ` +
+    `Route watcher arming to the primary firstmate instead. This guard does NOT block this home's own ` +
+    `bin/fm-session-start.sh or bin/fm-watch-arm.sh: those are legitimate per-home supervision in a secondmate home.`
   );
 }
 
@@ -121,14 +115,7 @@ export default function (pi: ExtensionAPI) {
     if (event.type !== "tool_call") return {};
     if (!isSecondmateHome()) return {};
     const toolName = String((event as { toolName?: unknown }).toolName ?? "");
-    if (toolName === CONTROLLER_TOOL) {
-      return { block: true, reason: denyReason(`the ${CONTROLLER_TOOL} tool call`) };
-    }
-    if (toolName !== "bash") return {};
-    const command = String((event as { input?: { command?: unknown } }).input?.command ?? "");
-    if (!command) return {};
-    const denied = segments(command).find((segment) => deniesSegment(segment));
-    if (!denied) return {};
-    return { block: true, reason: denyReason(`bash: ${command}`) };
+    if (toolName !== CONTROLLER_TOOL) return {};
+    return { block: true, reason: denyReason(`the ${CONTROLLER_TOOL} tool call`) };
   });
 }
