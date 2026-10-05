@@ -150,3 +150,4 @@ that is an exact-byte provenance limitation, not a missing warehouse source.
 4. To add a record, edit the Markdown first, then mirror the change
    into YAML, then re-run the preflight. The preflight must return
    `PASS` before the change is considered valid.
+- [LEAN-CTX-TERMINAL-LAYERS.md](LEAN-CTX-TERMINAL-LAYERS.md) — why some terminals run lean-ctx-wrapped and some raw; per-surface enforcement matrix (2026-10-04)

@@ -211,7 +211,7 @@ hash_pane() {
 # consumed only by the Grok-scoped fallback inside the contract.
 window_is_busy() {  # <window> <tail40>
   local w=$1 tail40=$2 task meta verdict
-  task=$(window_to_task "$w" "$STATE")
+  task=$(winmeta_task "$w")
   meta="$STATE/$task.meta"
   if [ -n "$task" ] && [ -f "$meta" ]; then
     verdict=$(fm_busy_classify_meta "$meta" "$task" "$STATE" "$tail40")
@@ -222,9 +222,82 @@ window_is_busy() {  # <window> <tail40>
   [ "${verdict%% *}" = busy ]
 }
 
+# --- per-cycle window->meta index (2026-10-04 TASK 1, O(n^2) -> O(n) load fix) ---
+# window_kind/window_backend/window_harness each called fm_backend_meta_for_window,
+# which linearly scans EVERY state/*.meta and pays a 3-subprocess grep|tail|cut
+# pipeline per file per key. Called once per recorded window that is
+# O(windows x metas): measured 135s across 93 recorded metas, and the phase log
+# showed per_window_loop as the dominant sink of the ~430s sweep. window_to_task
+# repeats the same full scan with two more greps per file.
+#
+# One bulk awk pass per cycle builds the same answers in O(n). Every accessor keeps
+# its ORIGINAL scan as a fail-closed fallback, so a missing, empty, or unreadable
+# map degrades to the old (slow but correct) behavior rather than to a wrong
+# answer. Mechanism class = N+1 -> single batch, the same shape as
+# code-yeongyu/oh-my-openagent's "one git batch per reload instead of one git
+# process per note" (releases page) and its idle-session polling skip
+# (commit 184779bbf, fixes #8290).
+FM_WINMETA_MAP="$STATE/.watch-winmeta-map"
+
+winmeta_build() {
+  local tmp
+  FM_WINMETA_MAP="$STATE/.watch-winmeta-map"
+  tmp=$(umask 077; mktemp "$STATE/.winmeta-build.XXXXXX" 2>/dev/null) || return 0
+  # Per file take the LAST window=/terminal= value (fm_meta_get's `tail -1`
+  # semantics) and emit them in glob order, so a lookup that stops at the first
+  # hit reproduces the linear scan's early return exactly.
+  awk '
+    function flush(   b) {
+      if (file == "") return
+      b = file; sub(/.*\//, "", b); sub(/\.meta$/, "", b)
+      if (win  != "" && !wd) { print win  "\t" file "\t" b; wd = 1 }
+      if (term != "" && !td) { print term "\t" file "\t" b; td = 1 }
+    }
+    FNR == 1 { flush(); file = FILENAME; win = ""; term = ""; wd = 0; td = 0 }
+    /^window=/   { w = $0; sub(/^[^=]*=/, "", w); win  = w }
+    /^terminal=/ { t = $0; sub(/^[^=]*=/, "", t); term = t }
+    END { flush() }
+  ' "$STATE"/*.meta > "$tmp" 2>/dev/null || true
+  if [ ! -s "$tmp" ]; then
+    # No metas, or the bulk pass failed: leave the map absent so every accessor
+    # falls back to its original scan. Only ever drops our own staging file.
+    [ -f "$tmp" ] && unlink "$tmp" 2>/dev/null
+    return 0
+  fi
+  if ! mv -f "$tmp" "$FM_WINMETA_MAP" 2>/dev/null; then
+    [ -f "$tmp" ] && unlink "$tmp" 2>/dev/null
+  fi
+  return 0
+}
+
+# winmeta_field <target> <2=meta path|3=task id>; empty when the map is unusable.
+winmeta_field() {
+  local row
+  [ -n "$FM_WINMETA_MAP" ] && [ -s "$FM_WINMETA_MAP" ] || return 0
+  row=$(awk -F'\t' -v p="$1" -v c="$2" '$1 == p { print $c; exit }' "$FM_WINMETA_MAP" 2>/dev/null || true)
+  [ -n "$row" ] && printf '%s' "$row"
+  return 0
+}
+
+# winmeta_meta <target>: the meta path, else the original linear scan.
+winmeta_meta() {
+  local m
+  m=$(winmeta_field "$1" 2)
+  if [ -n "$m" ] && [ -f "$m" ]; then printf '%s' "$m"; return 0; fi
+  fm_backend_meta_for_window "$1" "$STATE" 2>/dev/null || true
+}
+
+# winmeta_task <target>: the task id, else the original window_to_task.
+winmeta_task() {
+  local t
+  t=$(winmeta_field "$1" 3)
+  if [ -n "$t" ]; then printf '%s' "$t"; return 0; fi
+  window_to_task "$1" "$STATE" 2>/dev/null || true
+}
+
 window_kind() {
   local w=$1 meta kind
-  meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
+  meta=$(winmeta_meta "$w")
   if [ -n "$meta" ]; then
     kind=$(grep '^kind=' "$meta" | cut -d= -f2- || true)
     [ -n "$kind" ] || kind=ship
@@ -239,7 +312,7 @@ window_kind() {
 # contract) when no matching meta carries the field, or none matches at all.
 window_backend() {
   local w=$1 meta backend
-  meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
+  meta=$(winmeta_meta "$w")
   if [ -n "$meta" ]; then
     backend=$(grep '^backend=' "$meta" | cut -d= -f2- || true)
     [ -n "$backend" ] || backend=tmux
@@ -251,14 +324,14 @@ window_backend() {
 
 window_harness() {
   local w=$1 meta
-  meta=$(fm_backend_meta_for_window "$w" "$STATE" 2>/dev/null || true)
+  meta=$(winmeta_meta "$w")
   [ -n "$meta" ] || return 0
   grep '^harness=' "$meta" | cut -d= -f2- || true
 }
 
 window_label() {
   local w=$1 task
-  task=$(window_to_task "$w" "$STATE")
+  task=$(winmeta_task "$w")
   [ -n "$task" ] && printf 'fm-%s' "$task"
 }
 
@@ -973,10 +1046,28 @@ EOF
   FM_HERDR_BIN=$(command -v herdr 2>/dev/null || true)
   [ -n "$FM_HERDR_BIN" ] || [ -x /root/.local/bin/herdr ] && FM_HERDR_BIN=${FM_HERDR_BIN:-/root/.local/bin/herdr}
   if [ -n "$FM_HERDR_BIN" ] && [ -x "$FM_HERDR_BIN" ]; then
-    FM_WIN_STATUS_MAP=$(timeout -k 2 "${FM_BACKEND_HERDR_CLI_TIMEOUT:-10}" "$FM_HERDR_BIN" pane list --json 2>/dev/null \
+    # `herdr pane list` already emits the {"result":{"panes":[...]}} envelope on
+    # stdout; `herdr pane list --help` documents ONLY --workspace, so the
+    # `--json` flag that briefly appeared here made the CLI exit non-zero with
+    # "unknown option: --json" on stderr. Because 2>/dev/null swallowed that and
+    # the pipeline was `|| true`, the map silently came back EMPTY, the
+    # per-window herdr existence fast path below never engaged, and every one of
+    # the 93 recorded windows fell through to its own bounded pane capture
+    # (~1-8s each) - the 400-545s sweep times measured 2026-10-04. Do not
+    # re-add --json: `herdr api schema` has that flag, `pane list` does not.
+    FM_WIN_STATUS_MAP=$(timeout -k 2 "${FM_BACKEND_HERDR_CLI_TIMEOUT:-10}" "$FM_HERDR_BIN" pane list 2>/dev/null \
       | jq -r '.result.panes[]? | "\(.pane_id)\t\(.agent_status // "")"' 2>/dev/null || true)
   fi
+  # Observational only: an empty map degrades every window back to a per-window
+  # capture, which is correct but slow. Name it in the phase log so that exact
+  # regression is diagnosable in one cycle instead of hiding behind cycle_end.
+  if [ -z "$FM_WIN_STATUS_MAP" ]; then
+    printf '%s WARN=bulk_pane_map_empty backend=%s\n' \
+      "$(date -u +%FT%TZ)" "${FM_HERDR_BIN:-none}" >> "$WATCH_PHASE_LOG" 2>/dev/null || true
+  fi
   _wphase bulk_pane_list
+  winmeta_build
+  _wphase winmeta_map
   while IFS= read -r w; do
     if [ "$(window_backend "$w")" = herdr ] && [ -n "$FM_WIN_STATUS_MAP" ]; then
       pane_id=${w#*:}
@@ -991,7 +1082,7 @@ EOF
       fi
     fi
     kind=$(window_kind "$w")
-    task=$(window_to_task "$w" "$STATE")
+    task=$(winmeta_task "$w")
     key=${w//:/_}
     key=${key//\//_}
     key=${key//./_}
@@ -1064,7 +1155,7 @@ EOF
           # authoritative source fm-crew-state.sh itself already prioritizes
           # over the log) a chance to override before trusting the log.
           if [ "$(cat "$sf" 2>/dev/null || true)" != "$h" ]; then
-            if crew_is_provably_working "$(window_to_task "$w" "$STATE")"; then
+            if crew_is_provably_working "$(winmeta_task "$w")"; then
               printf '%s' "$h" > "$sf"
               date +%s > "$ssf"
               triage_log "absorbed stale (provably working, overriding a stale captain-relevant status): $w"
@@ -1072,7 +1163,7 @@ EOF
               fm_wake_append stale "$w" "stale: $w" || exit 1
               printf '%s' "$h" > "$sf"
               rm -f "$ssf"
-              mark_surfaced "$STATE/$(window_to_task "$w" "$STATE").status"
+              mark_surfaced "$STATE/$(winmeta_task "$w").status"
               wake "stale: $w"
             fi
           elif [ -e "$ssf" ]; then
@@ -1101,7 +1192,7 @@ EOF
           #     waiting on a decision, or wedged) instead of leaving the finish to
           #     wait out the timer.
           if [ "$(cat "$sf" 2>/dev/null || true)" != "$h" ]; then
-            task=$(window_to_task "$w" "$STATE")
+            task=$(winmeta_task "$w")
             case "$(pause_state_class "$w" "$task")" in
               working)
                 clear_pause_tracking "$w"
@@ -1117,7 +1208,7 @@ EOF
                 ;;
             esac
           else
-            task=$(window_to_task "$w" "$STATE")
+            task=$(winmeta_task "$w")
             if [ -e "$pf" ] || status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")"; then
               case "$(pause_state_class "$w" "$task")" in
                 paused)  handle_paused_stale "$w" "$task" "$h" ;;
@@ -1141,7 +1232,7 @@ EOF
         else
           rm -f "$ssf" "$ewf"
         fi
-        if [ -e "$pf" ] && { [ "$n" -ge 2 ] || ! status_is_paused_or_captain_held "$(last_status_line "$STATE/$(window_to_task "$w" "$STATE").status")"; }; then
+        if [ -e "$pf" ] && { [ "$n" -ge 2 ] || ! status_is_paused_or_captain_held "$(last_status_line "$STATE/$(winmeta_task "$w").status")"; }; then
           clear_pause_tracking "$w"
         fi
       fi
@@ -1153,7 +1244,7 @@ EOF
       else
         rm -f "$ssf" "$ewf"
       fi
-      task=$(window_to_task "$w" "$STATE")
+      task=$(winmeta_task "$w")
       if ! afk_present && status_is_paused_or_captain_held "$(last_status_line "$STATE/$task.status")" && [ "$busy_now" -ne 0 ]; then
         case "$(pause_state_class "$w" "$task")" in
           paused) handle_paused_stale "$w" "$task" "$h" ;;

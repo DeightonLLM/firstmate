@@ -1,5 +1,66 @@
 # LIVE BOARD — who is working
-**Last update: 2026-10-03 22:47 UTC — harness unblocked: cap 10/11, M3 gates retired, panes cleared, watcher recovered (3rd time today)**
+**Last update: 2026-10-05 ~18:45 UTC — LANE STANDARD LOCKED; RAG tuning FAIL-RESTORED; lanes A/B/D rewriting missing artifacts**
+
+## 2026-10-05 ~18:45 UTC — LANE STANDARD LOCKED + RAG VERDICT
+- STANDARD LOCKED (WAR-ROOM LANE STANDARD v2): every lane = TUI + visible pane label (herdr pane rename) + state/lanes registration; lane-spawn.sh refuses (exit 64) unnamed/unregistered spawns; watcher alarms by lane letter (RAW-SHELL / APPROVAL / UNREGISTERED-LANE / LOCAL-EVIDENCE). Labels live on windows: LANE-A pF, LANE-B pG, LANE-C pJ, LANE-D pK, LANE-E pE, LANE-F pH.
+- RAG TTFT: FAIL-RESTORED — topN 7/threshold 0.20 cut prompt tokens but end-to-end LLM time ROSE on 2/3 queries; workspace restored to topN 10/threshold 0.15 (backup intact). RAG-side TTFT win not available; remaining lever is provider-side (model choice/prompt caching). Artifact: brandon rag-ttft-20261005.md.
+- ARTIFACT GAP CAUGHT: lanes A/B/D completed analysis in-pane (todos 7/7, 5/5, 6/6) but wrote no files; steered to write artifacts from completed context — all three re-running. Gate that caught it: artifact+VERDICT verification in hd2fleet.check.sh.
+- LANES NOW: A spec-v2 rewrite RUNNING; B zcode-prep rewrite RUNNING; D parity rewrite RUNNING; C apply-standby (gated); F gemini-recheck standby; E fixture done. Dubz: clean.
+
+## 2026-10-05 ~16:35 UTC — CAPTAIN VISIBILITY ORDER EXECUTED
+- VISIBLE NOW: hd2stack w6:t5 "REPAIR-YARD" → w6:pF agent `spec-rev` (pi/M3.1) writing WIDGET-PATCH-SPEC-V2 (fixes Gemini REVISE defects); w6:pE #5496 fixture (15 bg results, reconcile pending); BRANDON w1E:p6 RAG TTFT tuning on captain GO. Stale done panes pB/pC/pD closed.
+- CONTROLLER (dubz): ZERO agent jobs — all headless lanes finished/migrated; kept free for emergencies per captain.
+- USAGE: hd2stack 7.5 GB RAM available, load 1.5 (5-min), 2 worker panes — not over-subscribed.
+- ZCODE: study VERDICT NOT-SUITABLE — the 0.67-coefficient/1.5x quota benefit EXPIRED 2026-08-01; GUI-only AppImage, no Linux CLI, no extension host. Launch+prep CANCELLED, no purchase. Artifact: warehouse/reports/ZCODE-HARNESS-STUDY-20261005.md.
+- GEMINI REVIEW: VERDICT REVISE — RCA diagnosis sound; patch spec P3/P4 defects + mobile keyboard math + missing host-executable verification. Spec-v2 lane addresses all; no live re-patch until spec-v2 + review pass.
+
+## 2026-10-05 16:03 UTC — WIDGET INCIDENT RESOLVED (captain confirmed working)
+- WHY IT BROKE: the `focusfix` widget layer set the composer `position:fixed` with a phone-keyboard `bottom`/`height` formula; on desktop the formula pins the composer OUTSIDE the visible window on click-to-type (all browsers). Sending still worked — only display moved. The `viewportfit` layer additionally rewrote the host page's viewport meta unconditionally. Full mechanism + corrected P1–P4 patch spec: `warehouse/reports/WIDGET-COMPOSER-BUG-RCA-20261005.md`.
+- FIX: two rollbacks (viewportfit, then focusfix). Live = 674,287 B sha256 `1f1bb8c4…` (widgetfix4/consentfix2/hdsizingfix2), verified served local+public. Captain confirmed widget working 16:0x UTC.
+- OPEN on widget: Gemini review of patch spec (RCA-REVIEW artifact); corrected mobile patch re-apply ONLY after review + real-browser validation; NOTE RCA also flags consentfix layer bugs (page-wide preventDefault, permanent form.hidden, hot-path MutationObserver) — deliberately out of scope, separate change later.
+- RAG TTFT: captain reports longer time-to-first-token (expected: topN 3→10 grew prompt ~2.5x). Recommendation queued: topN 7, threshold 0.20, trim system prompt; apply only on captain GO (DB change, backup first).
+- DOCS: `warehouse/chatbots/` created — `ANYTHINGLLM-SITUATION.md` (docs lane, in flight) + `INDEX.md` linking old Sept fix docs (anythingllm-isolation-deep-0924 etc.).
+- ALSO RUNNING: mcode RCA lane done; mcode docs lane finishing; #5496 fixture lane (hd2stack pE) reconcile pending.
+
+## 2026-10-05 05:22 UTC — LIVE LANE RECONCILIATION (wake 1387)
+- ACTIVE: HD2Stack w6:pE — #5496 fixture-resume ticket 060 delivered; spinner verified at 05:22 UTC. Reconcile next wake.
+- IDLE/COMPLETE: HD2 w6:pB Android QA = VERDICT FAIL (no Android browser runtime; static only); w6:pC iOS QA = VERDICT PASS as study only (no WebKit runtime; no device pass claimed); w6:pD complete/idle. No other HD2 worker is currently active.
+- BRANDON: widget stack second review PASS + viewport-fit fix report PASS; actual iPhone/Android device test remains captain-side. RAG dedupe PASS. Current Brandon pane status not re-verified this wake.
+- GEMINI: no live supervisor process/pane and no surface-audit artifact — stale claimed-running item; re-dispatch required if still wanted.
+- Open, not active: canonical-index merge to warehouse README; Gemini surface audit; hetz Gates A-E (captain GO); brand-guard keep/drop; physical device tests.
+
+## 2026-10-04 late — ARCHITECTURE CHANGE (captain order)
+- dubz controller = DELEGATION + MONITORING ONLY; no worker agents run from its panes. ALL new lanes dispatch to **hd2stack** panes (verified ready: mcode + herdr, 6 CPU/11 GiB); captain watches via herdr machine switcher, labeled war-room layout. In-flight controller lanes (wD3:p43 merge, wD3:p45 docs, wD3:p46 no-mistakes, p3R/p3S/p3W) finish in place. Exceptions: main pane, QUOTA TUI, REVIEW·M3.1, controller session, secondmate homes. Rule recorded in data/captain.md.
+
+## 2026-10-04 late-night — handoff state (read after session-start)
+- ELEVATE: w1E:p6 (brandon) — first recreate used :latest which republished v1.16.2 (no fix); rollback done; AUTHORIZED: pull explicit mintplexlabs/anythingllm:1.17.0 + recreate + verify (embed returns JSON, chat answers, Core intact) + recovery report. Old build defect: /api/embed routes absent (upstream issue #3978 matches).
+- FIRSTMATE UPDATE: mcode worker pane wD3:p43 (tab wD3:t1V, WORKER · upstream-update) — merging upstream kunchenguid/firstmate into isolated clone /root/agent-work/firstmate-upstream-update/repo, enabling config/wait-no-turns (PR #4859, the speed feature), MERGE-REPORT.md + cutover plan (cutover to live home is captain-gated). Our copy was frozen at local-only b8fb5d6 — that hash is also what broke secondmate syncs.
+- STANDING ORDERS LIVE: dark factory (controller ≤ coordination; lanes execute); VISIBLE LANES (no headless for real work; mcode sends = type+enter+VERIFY working); routine lanes medium/low effort; M3.1 reviews low-effort output (M3.1 = mcode-only, never Pi); secondmate harness pinned pi+gpt-6-luna (effort per job, never GLM on hd2stack); no-GLM-on-brandon; lane asks flow via status, never silent parking.
+- PRODUCTION-GATE fix: controller patched (open panes carry old code until restart — new sessions clean); brandon patch dispatched (w1G:p2); hd2stack patch queued (diff remote /root/.pi/agent/extensions/02-production-gate.ts md5 72ad39f5 vs fixed, backup, push).
+- QUEUED: lavish bearings (needs fm-fleet-snapshot jq E2BIG fix — temp-file not argv); warehouse docs fix (SAAS_ACCESS_INVENTORY + SAAS_STATE_MAP per hd2stack lane's facts); luna-6-med poller restore; pi-codex-fast install (pi.dev/packages rule in learnings); weekly stale-check lane; JOB 2 test CI registration; Gemini+M3.1 review of Elevate recovery report when it lands.
+- AWAITING CAPTAIN: no-mistakes install GO; brand-guard cron keep/drop.
+
+## 2026-10-04 late — Elevate live-state changes (captain-direct)
+- Container RENAMED: hd2stack-anythingllm → elevate-anythingllm (live rename, healthy, /api/ping online; run-config captured; compose file updated, adopts on next compose up; host DIR rename deferred to next sanctioned restart). Mechanical brand-guard live: /usr/local/bin/hd2stack-brand-guard.sh + cron 15min on brandon.
+- Credential pointer UNBLOCKED: /home/hd2admin/hd2stack-anythingllm/.api-key (600) authenticates /api/v1/workspaces 200; workspaces [core-distro, elevate] confirmed existing.
+- TWO lanes on the fix: w1E:p6 (single executor, Core-pattern workspace UPDATE per exec GO) + w1G:p2 (read-only discovery, Brandon-dispatched) — reconciliation steer sent to w1E:p6; watching for duplicate mutation. Recovery report still pending.
+- lane-todo-board.sh BUILT+tested (31 cases/76 assertions) — todos visible per lane; permanent war-room pane wiring pending.
+
+## 2026-10-04 evening — Captain refinement (relayed via hd2stack pane)
+- Target architecture (captain): hd2.ai instance on hd2stack physical stays untouched (HD2-internal only); ONE client AnythingLLM on brandon :3001 holding BOTH RAG workspaces (Elevate + Core-Distro). Current container already matches; superseded the secondmate's second-instance idea.
+- QUEUED (needs captain GO + brandon firstmate, restart mutation): rename the client container off the `hd2stack-` prefix. Not during the P0 fix.
+- Elevate P0: Option A GO delivered (file + pane steer, w1E:p6 working): backup DB → read-only diff Core(working) vs Elevate → narrow Elevate-only UPDATE to local ollama per Core's pattern → verify /api/embed → recovery report. Gemini+M3.1 review on report.
+- JOB 2 guard: built+corrected on branch secondmate-guard-20261004 (98/98 assertions; deny narrowed to fm_watch_arm_pi; marker predicate mirrored; diff-verified 15/15 vs shell). NOT merged — merge/wiring is captain-gated follow-up. Charters corrected (orchestrator/handoff → read-only, no coordination); captain.md standing order 'NO POINTLESS STOPPING' recorded.
+- Kun bundle review: Gemini 3/4 PASS; Kun-Lane-B config inventory REVISION_REQUIRED (unverified 'enforced cap' claim).
+
+## 2026-10-04 03:20 UTC — Controller restart day: one controller restored
+| Item | State |
+|---|---|
+| Controller | Fresh Pi session wD3:p41 holds lock; watcher armed (extension-owned). Duplicate GLM controller-style lanes (orchestrator wD3:p42, handoff wD7:p2) closed on captain GO; findings saved to data/duplicate-lane-findings-20261004.md (incl. 6/7 baseline pins stale — unverified claim to re-check). Stale panes cleared. Live panes: controller + QUOTA + REVIEW·M3.1 + hd2stack supervisor (wD9:p2). |
+| HD2 identity | hd2stack secondmate charter + registry now carry a binding identity block (controller-local vs physical Contabo vmi3238503 vs brandon-compute; container named `hd2stack-anythingllm` actually runs on brandon-compute:3001 — names lie). Live steer to wD9:p2 pending (pane busy; fm-send delivery unconfirmed ×2 — will land on idle). |
+| Elevate | Full picture read: warehouse (elevate-dashboard on KVM8 srv1137994, /api/* fails-closed record superseded by live hash match), outage work order + route recheck (brandon-compute:3001 healthy; embed path returns HTML; Elevate-workspace-only reversible fix, checkpoint first, Core read-only). BLOCKER: Brandon's 2026-10-02 REPLY says the Elevate work order never reached its inbox — redelivery + kick is the next action, then hetz lane executes, Gemini + M3.1 review evidence. |
+| Job 2 (queued) | Mechanical fix: secondmate homes must never run controller session-start/watcher (role marker + hook); charter hygiene for orchestrator/handoff homes. After Elevate, delegated lane. |
+| Parked | no-mistakes install needs captain GO; secondmate sync skips (dangling commit b8fb5d64); Brandon system-ops still blocked on stale-wake task ownership. |
 
 ## 2026-10-03 22:47 UTC — Unlock executed under operator order (live-verified)
 | Item | State |
@@ -647,3 +708,7 @@
 | R3 REV hardening | DONE locally (failure-aggregation + flock + flag-dir + reproducible MariaDB test); VERDICT: CLOSED. NOT deployed live — awaits operator GO per isolation policy |
 | Codex Luna MAX R3 re-review | REVIEW: CHANGES_REQUIRED on 4 minor items (F-01/02/03/11) — accepted with disclosed residuals; campaign closed |
 | Live deploy | b01b8dae (live working); 8cdb6b43 (REV3 hardened, local) — deploy needs operator GO |
+
+## 2026-10-05 01:4xZ — ELEVATE P0 RESOLVED (chat answered YES, end-to-end)
+- Root cause: env `GENERIC_OPEN_AI_BASE_PATH=host.docker.internal:8081` unreachable from container. Fix (captain-authorized): GenericOpenAiBasePath=http://172.17.0.1:8081/v1 via /api/v1/system/update-env with .api-key → 200, picked up per-request. LFM2.5 answered "What does Elevate Scientific do?" correctly (233 tok, 4.8s). Widget WORKS.
+- Core-Distro untouched (workspace row sha256 identical). One authorized test chat (chatId=15). DB backup: anythingllm.db.backup-pre-llmfix-20261005-013331. Report: from-brandon-compute/2026-10-04-elevate-assistant-recovery.md. Remaining deferred: host-DIR rename (next recreate window), service crash-loop S1 on hd2stack (new ticket), merge cutover (fixture #5496 in fix).

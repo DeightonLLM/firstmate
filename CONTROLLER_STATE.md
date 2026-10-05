@@ -1,5 +1,39 @@
 # CONTROLLER STATE — vmi3196300
-**Updated: 2026-10-03 22:47 UTC**
+**Updated: 2026-10-05 ~16:35 UTC — visibility order executed; ZCode rejected; spec-v2 in flight**
+
+## 2026-10-05 ~16:35 UTC — FLEET VISIBILITY + ZCODE DECISION
+- Captain order: controller free for emergencies; all agents visible on hd2stack. Executed: REPAIR-YARD tab (w6:t5) hosts spec-rev (pi, w6:pF) on patch-spec-v2; stale done panes closed; dubz has zero agent jobs.
+- ZCode study (ZCODE-HARNESS-STUDY-20261005.md): NOT-SUITABLE — promo quota benefit expired 2026-08-01, GUI-only AppImage, no extension host. Launch cancelled; no spend. Captain's 5-hour-session goal needs a different route (options: GLM coding-plan key inside pi as custom provider — benefit terms unverified).
+- Gemini review REVISE on patch spec; spec-rev lane producing corrected v2 with host-executable verification. RAG TTFT on Brandon in flight.
+- hd2stack headroom: 7.5 GB RAM avail, load 1.5 (5m), 2 worker panes.
+
+## 2026-10-05 16:03 UTC — WIDGET INCIDENT RESOLUTION
+- Root cause (RCA-verified): focusfix layer pinned the composer `position:fixed` with a keyboard-only `bottom`/`height` formula → on desktop focus the composer rendered outside the viewport on ALL browsers; send path unaffected. viewportfit layer compounded by mutating host viewport meta unconditionally. Evidence: `warehouse/reports/WIDGET-COMPOSER-BUG-RCA-20261005.md` (+P1–P4 patch spec, validation checklist).
+- Remediation: rollback #1 viewportfit (~06:45 UTC), rollback #2 focusfix (~07:5x UTC); live bytes 674,287 sha256 `1f1bb8c4…`, served local+public verified; captain confirmed working.
+- Widget backups all preserved on brandon (`*.bak-*` incl. `bak-broken-viewportfit`, `bak-broken-focusfix`); layer copies also at `/tmp/widget-layers/` on controller.
+- Pending: Gemini review (pid 4148764) of patch spec → then corrected mobile patch via Brandon, browser-validated BEFORE live; consentfix layer bugs documented but deferred (separate blast radius); RAG TTFT tuning recommendation awaiting captain GO; docs lane finishing `warehouse/chatbots/ANYTHINGLLM-SITUATION.md`; `INDEX.md` written (old Sept docs linked).
+
+## 2026-10-05 05:22 UTC — LIVE LANE RECONCILIATION (wake 1387)
+- HD2 pE is the only worker confirmed active: fixture #5496 resume ticket 060 delivered and spinner observed. Verify next wake.
+- HD2 pB Android QA ended with VERDICT FAIL because no Android browser runtime; pC iOS QA ended with study PASS but no WebKit/device runtime; pD idle/done. No device pass claimed.
+- Brandon widget fix stack has second review PASS and viewport-fit report PASS; captain's physical device check remains open. RAG dedupe report PASS. Brandon current panes not reverified in this wake.
+- Gemini surface audit/supervisor is NOT running (no process/pane/artifact). Prior board claims corrected; any retry is a real pending dispatch, not active work.
+- Pending: warehouse canonical-index merge, Gemini surface audit if still required, hetz Gates A-E captain GO, brand-guard keep/drop, physical device check.
+
+## 2026-10-04 late — ARCHITECTURE CHANGE (captain order)
+- dubz controller = DELEGATION + MONITORING ONLY; worker agents no longer run from controller panes. ALL new lanes dispatch to **hd2stack** (verified: /usr/bin/mcode, /usr/local/bin/herdr, 6 CPU / 11 GiB, load 0.48); captain watches via herdr machine switcher in a labeled war-room layout. In-flight controller lanes (wD3:p43 merge, wD3:p45 docs, wD3:p46 no-mistakes, p3R/p3S/p3W) finish in place; controller-local exceptions: main pane, QUOTA TUI, REVIEW·M3.1, controller session, secondmate homes. Rule recorded in data/captain.md; BOARD.md carries the same entry.
+- Elevate P0 state: v1.17.0 attempted ×2 by brandon lane, FAILED byte-identical, clean rollback ×2; embed routes verified PRESENT in image (embeddedEndpoints + embedManagement mounted) → Option E→config fix directed to w1E:p6 (RUNNING): capture snippet URL → test verbatim → check workspace embed records via admin key → create/wire embed if missing (workspace-scoped, checkpoint first, Core read-only) → end-to-end verify + report. Variant tags (A) rejected on image-independence evidence.
+
+## 2026-10-04 late — Elevate: rename+credential landed captain-direct; Option A executing
+- Captain steered hd2stack secondmate directly: client container renamed hd2stack-anythingllm → elevate-anythingllm (live, zero-downtime, healthy; run-config captured; host dir rename deferred); brand-guard cron (15min) now fails any hd2stack-branded container on brandon; admin credential pointer verified at /home/hd2admin/hd2stack-anythingllm/.api-key (600, /api/v1/workspaces 200); workspaces core-distro + elevate confirmed pre-existing.
+- Option A (Core-pattern workspace UPDATE) executing on w1E:p6; w1G:p2 (Brandon-dispatched, read-only discovery) reconciled as non-mutator via steer; single-executor rule recorded. Recovery report + Gemini/M3.1 review still pending. Clarifications learned: Core uses system default generic-openai/lfm2.5 (NOT ollama); embeddings are shared system_settings (never touched); container networking makes host-ollama unreachable without host.docker.internal (moot under Core pattern).
+- Harness additions this session: fm-secondmate-guard (branch secondmate-guard-20261004, 98/98, merge/wiring captain-gated); lane-todo-board.sh (built, tested); NO POINTLESS STOPPING standing order in captain.md; orchestrator/handoff charters corrected read-only.
+
+## 2026-10-04 03:20 UTC — One-controller restore + hd2stack identity fix + Elevate study complete
+- Fresh Pi controller (wD3:p41) holds the lock; watcher extension-armed. Duplicate GLM controller-style lanes (orchestrator wD3:p42, handoff wD7:p2) closed on explicit captain GO ("stop doubling"); their partial findings preserved in `data/duplicate-lane-findings-20261004.md` — notably an UNVERIFIED claim that 6/7 fresh-agent baseline sha256 pins are stale (incl. an impossible duplicate hash); treat as lead, not fact, until re-checked. Stale blank/gate-checker panes cleared per standing hygiene order. Live panes: controller, QUOTA (wD3:p3J), REVIEW·M3.1 (wD3:p3K), hd2stack supervisor (wD9:p2).
+- hd2stack secondmate identity confusion fixed at the source: charter now opens with a binding Identity block (agent runs on controller vmi3196300; subject = physical Contabo vmi3238503; brandon-compute 100.106.6.22 is separate; a container NAMED `hd2stack-anythingllm` runs on brandon-compute:3001 serving agents.elevatesci.com — never infer host from names) and the registry entry carries the same warning. Live steer to wD9:p2 could not be delivered (pane busy; fm-send unconfirmed ×2); no bypass used — steer lands on next idle.
+- Elevate full picture studied (warehouse INDEX → SERVICE_CATALOG/WAREHOUSE_BOUNDARIES/PRD, outage work order 2026-10-03, route recheck 2026-10-03): fix = minimal reversible Elevate-workspace-specific correction on the shared brandon AnythingLLM (embed API path returning HTML), checkpoint before write, Core-Distro read-only, no shared-service restart/DB/Docker/DNS writes; evidence to `from-brandon-compute/2026-10-03-elevate-assistant-recovery.md`. BLOCKER found: Brandon's 2026-10-02 REPLY says the Elevate work order files never reached its inbox — next action is redelivery + coordinator kick, then one clean Brandon lane executes; Gemini 3.8 + M3.1 Flash Preview review evidence before closeout.
+- Job 2 (captain-ordered, after Elevate): mechanical hook so secondmate homes can never run controller session-start/watcher + orchestrator/handoff charter hygiene. Delegated lane with tests.
 
 ## 2026-10-03 22:47 UTC — Unlock executed under operator order
 - Watcher wedged twice more this hour (arm 3793549 3h36m; then arm 4003632 ~20 min). Each was verified by exact command + lock identity and terminated (TERM ignored; KILL required). The extension re-armed each time; the current cycle (arm 329436 / watcher 329451) beat 22:46:20Z is fresh. That is three wedges today on top of five prior — the permanent fix (firstmate-controller-watcher-heartbeat-20261003) should take priority over the stalled publication decision.
@@ -425,3 +459,6 @@ Single source of truth: `data/IDENTITY.md`. Use canonical names in all new docs;
 | cpanel-cbd-data | cbd-data.com:2083 | Hostinger | cbd-data.com shared hosting (UAPI) | — |
 
 **Chatbot hosting rule**: AnythingLLM chatbots at agents.elevatesci.com + core-distro.com live on `brandon-compute`. The hd2.ai / llm.hd2.ai chatbot lives on `contabo-vmi3238503` — Contabo, NOT Hostinger. Do not route hd2.ai chatbot work to Hostinger cPanel.
+
+## 2026-10-05 01:4xZ — ELEVATE P0 RESOLVED
+- Chat end-to-end YES (LFM2.5 via GenericOpenAiLLM, public widget path). Root cause: unreachable GENERIC_OPEN_AI_BASE_PATH (host.docker.internal) → fixed to docker bridge 172.17.0.1:8081/v1 via authorized update-env; Core-Distro byte-identical; DB backup pre-llmfix taken. Embed routes were never broken (wrong-path diagnosis — see warehouse/reports/ELEVATE-P0-POSTMORTEM-20261005.md).
