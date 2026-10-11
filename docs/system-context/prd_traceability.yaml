@@ -98,17 +98,22 @@ prd_items:
     status: EVIDENCED
     blocker: AUTHORIZATION
     evidence_paths:
-      - ../BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/evidence.md
-      - ../BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/decision-and-rollback.md
-      - ../BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/tdd-evidence.md
-      - ../BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/lane-b-local-adapter-checker.md
+      - docs/system-context/evidence/BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/evidence.md
+      - docs/system-context/evidence/BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/decision-and-rollback.md
+      - docs/system-context/evidence/BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/tdd-evidence.md
+      - docs/system-context/evidence/BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/lane-b-local-adapter-checker.md
     sources:
       - Gate-CBD-ENRICH-003 bounded private broker acceptance
       - CBD Lane B local status-helper TDD and independent checker
       - Access Baseline Registry Gate-003 record
     last_verified: 2026-09-18
     freshness_days: 30
-    notes: Private RabbitMQ bootstrap and deterministic local status helper are evidenced; no publisher/consumer adapter, project_id, idempotency key, durable persistence/restore, or end-to-end Hostinger-to-Hetzner acceptance. Gate-004 and cutover remain unauthorized.
+    notes: "EVIDENCE RECONSTRUCTED 2026-09-18 -> 2026-10-11: the four cited files were never"
+      " committed and were lost outside the repo; they were faithfully regenerated from the"
+      " retained status.txt. The TDD and independent-checker records are CLAIMS whose"
+      " underlying outputs were NOT retained and are explicitly marked unverified - they do"
+      " not satisfy the real-independent-evidence rule. Private RabbitMQ bootstrap and"
+      " deterministic local status helper are evidenced;" no publisher/consumer adapter, project_id, idempotency key, durable persistence/restore, or end-to-end Hostinger-to-Hetzner acceptance. Gate-004 and cutover remain unauthorized.
   - id: whoosh-audit
     prd_section: Whoosh audit
     scope: whoosh
