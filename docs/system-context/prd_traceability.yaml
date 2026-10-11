@@ -8,7 +8,7 @@ prd_items:
     status: DELIVERED
     blocker: NONE
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md Elevate row
     last_verified: 2026-09-15
@@ -20,7 +20,7 @@ prd_items:
     status: BLOCKED
     blocker: AUTHORIZATION
     evidence_paths:
-      - data/prd-delivery-plan-20260914/SOFTWARE_LANES.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/SOFTWARE_LANES.md
     sources:
       - SOFTWARE_LANES.md Lane 1
       - PRD_DELIVERY_MAP.md BR-ELEVATE-OPS-001
@@ -33,7 +33,7 @@ prd_items:
     status: EVIDENCED
     blocker: NONE
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md Core Distro row
       - BR-AUD-002 report
@@ -46,7 +46,7 @@ prd_items:
     status: EVIDENCED
     blocker: NONE
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md Core Distro row
       - BR-CORE-001 PASS/FAIL/NOT_RUNTIME_VERIFIABLE
@@ -59,7 +59,7 @@ prd_items:
     status: BLOCKED
     blocker: OPERATOR_INPUT
     evidence_paths:
-      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+      - docs/system-context/evidence/data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
     sources:
       - MINI_SPRINT_PREPARATION_REPORT.md section 3
     last_verified: 2026-09-15
@@ -71,7 +71,7 @@ prd_items:
     status: EVIDENCED
     blocker: NONE
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md CBD-Data row
       - BR-AUD-005 report
@@ -84,8 +84,8 @@ prd_items:
     status: EVIDENCED
     blocker: AUTHORIZATION
     evidence_paths:
-      - data/cbd-worker-canary/report.md
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/cbd-worker-canary/report.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - cbd-worker-canary report
       - PRD_DELIVERY_MAP.md unresolved area 2
@@ -120,7 +120,7 @@ prd_items:
     status: BLOCKED
     blocker: DEPENDENCY
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 1
       - BR-AUD-004 status BLOCKED_BY_DEPENDENCY
@@ -133,7 +133,7 @@ prd_items:
     status: UNKNOWN
     blocker: DEPENDENCY
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 1
     last_verified: 2026-09-15
@@ -145,7 +145,7 @@ prd_items:
     status: EVIDENCED
     blocker: NONE
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-HUB-006
       - evidence/BR-HUB-006/stage2-4-migration.md
@@ -158,7 +158,7 @@ prd_items:
     status: BLOCKED
     blocker: OPERATOR_INPUT
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
       - docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 4
@@ -173,7 +173,7 @@ prd_items:
     status: EVIDENCED
     blocker: NONE
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-COMPUTE-LLM-001
     last_verified: 2026-09-15
@@ -185,7 +185,7 @@ prd_items:
     status: EVIDENCED
     blocker: NONE
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-COMPUTE-PI-1PANEL-001
     last_verified: 2026-09-15
@@ -197,7 +197,7 @@ prd_items:
     status: EVIDENCED
     blocker: NONE
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-COMPUTE-GATEWAY-SPEC-001
       - evidence/BR-COMPUTE-GATEWAY-SPEC-001/M3_REVIEW.md
@@ -210,7 +210,7 @@ prd_items:
     status: UNKNOWN
     blocker: UNKNOWN
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 3
     last_verified: 2026-09-15
@@ -222,7 +222,7 @@ prd_items:
     status: UNKNOWN
     blocker: UNKNOWN
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 5
     last_verified: 2026-09-15
@@ -234,7 +234,7 @@ prd_items:
     status: UNKNOWN
     blocker: OPERATOR_INPUT
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 6
     last_verified: 2026-09-15
@@ -246,7 +246,7 @@ prd_items:
     status: UNKNOWN
     blocker: UNKNOWN
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 7
     last_verified: 2026-09-15
@@ -258,7 +258,7 @@ prd_items:
     status: BLOCKED
     blocker: DEPENDENCY
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 8
     last_verified: 2026-09-15
@@ -270,7 +270,7 @@ prd_items:
     status: BLOCKED
     blocker: OPERATOR_INPUT
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 4
     last_verified: 2026-09-15
@@ -282,7 +282,7 @@ prd_items:
     status: BLOCKED
     blocker: OPERATOR_INPUT
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 4
     last_verified: 2026-09-15
@@ -294,7 +294,7 @@ prd_items:
     status: UNKNOWN
     blocker: AUTHORIZATION
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 2
     last_verified: 2026-09-15
