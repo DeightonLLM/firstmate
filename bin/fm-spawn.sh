@@ -543,6 +543,17 @@ if [ "$HARNESS" = pi-signed ] && ! command -v pi-signed >/dev/null 2>&1; then
   exit 1
 fi
 
+# Dispatch guard (captain ruling 2026-10-11: enforce the rules, do not rely on
+# remembering them). Runs HERE - after the harness is resolved to a concrete
+# adapter, and BEFORE any worktree, endpoint, backend, or state mutation - so a
+# refused dispatch leaves absolutely nothing behind. The guard fails closed:
+# any non-zero exit aborts the spawn and the guard's own stderr reason is the
+# captain-facing message. See bin/fm-dispatch-guard.sh for the four rules and
+# their narrow, logged bypasses.
+if ! "$FM_ROOT/bin/fm-dispatch-guard.sh" "$HARNESS" "$MODEL"; then
+  exit 64
+fi
+
 # config/secondmate-harness may carry optional model/effort tokens alongside the
 # harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
 # --secondmate spawn and no explicit per-spawn harness/raw launch was supplied, so
