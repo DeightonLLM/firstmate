@@ -555,16 +555,38 @@ if [ "$HARNESS" = pi-signed ] && ! command -v pi-signed >/dev/null 2>&1; then
   exit 1
 fi
 
-# Dispatch guard (captain ruling 2026-10-11: enforce the rules, do not rely on
-# remembering them). Runs HERE - after the harness is resolved to a concrete
-# adapter, and BEFORE any worktree, endpoint, backend, or state mutation - so a
-# refused dispatch leaves absolutely nothing behind. The guard fails closed:
-# any non-zero exit aborts the spawn and the guard's own stderr reason is the
-# captain-facing message. See bin/fm-dispatch-guard.sh for the four rules and
-# their narrow, logged bypasses.
-if ! "$FM_ROOT/bin/fm-dispatch-guard.sh" "$HARNESS" "$MODEL"; then
-  exit 64
-fi
+# model_from_launch_command: print the model a raw launch command carries in its
+# own `--model` flag (either `--model X` or `--model=X`, with one level of
+# quoting stripped), or nothing when it carries none. Every verified adapter
+# takes `--model` (see model_flag_for_harness), and only a raw launch command can
+# smuggle a model past flag parsing - the guard has to see it to be able to ban
+# it.
+model_from_launch_command() {  # <launch-command>
+  local line=$1 word prev='' val
+  # shellcheck disable=SC2086  # deliberate word-splitting: the launch command IS a word list
+  for word in $line; do
+    case "$prev" in
+      --model)
+        val=$word
+        val=${val#\'}; val=${val%\'}
+        val=${val#\"}; val=${val%\"}
+        printf '%s\n' "$val"
+        return 0
+        ;;
+    esac
+    case "$word" in
+      --model=*)
+        val=${word#--model=}
+        val=${val#\'}; val=${val%\'}
+        val=${val#\"}; val=${val%\"}
+        printf '%s\n' "$val"
+        return 0
+        ;;
+    esac
+    prev=$word
+  done
+  return 0
+}
 
 # config/secondmate-harness may carry optional model/effort tokens alongside the
 # harness ("<harness> [<model>] [<effort>]"). They apply only when this is a
@@ -572,6 +594,10 @@ fi
 # the harness itself came from the secondmate config fallback chain. Resolving
 # here on every spawn makes the pin durable across respawns. Precedence: explicit
 # --model/--effort flags still win over the file's tokens.
+#
+# MODEL MUST be resolved BEFORE the dispatch guard below. It used to be resolved
+# after it, so every secondmate spawn handed the guard an empty model and a
+# configured model was never checked against the Sol ban.
 if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
   if [ "$MODEL_SET" -eq 0 ]; then
     SM_MODEL=$("$SCRIPT_DIR/fm-harness.sh" secondmate-model)
@@ -586,6 +612,30 @@ if [ "$KIND" = secondmate ] && [ -z "$ARG3" ]; then
       esac
     fi
   fi
+fi
+
+# The concrete model the guard must judge, on EVERY path:
+#   ship / scout / secondmate  - MODEL, already resolved above from --model or
+#                                the secondmate config token
+#   raw launch command         - the --model the caller wrote into the command
+#                                itself, which no flag parser will ever see
+# GUARD_MODEL is deliberately separate from MODEL: extracting a model out of a
+# raw launch command must not change what the launch command or the task meta
+# record, only what the guard is able to check.
+GUARD_MODEL="$MODEL"
+if [ -z "$GUARD_MODEL" ] && [ "$MODEL_SET" -eq 0 ]; then
+  GUARD_MODEL="$(model_from_launch_command "$LAUNCH")"
+fi
+
+# Dispatch guard (captain ruling 2026-10-11: enforce the rules, do not rely on
+# remembering them). Runs HERE - after the harness AND the concrete model are
+# resolved, and BEFORE any worktree, endpoint, backend, or state mutation - so a
+# refused dispatch leaves absolutely nothing behind. The guard fails closed:
+# any non-zero exit aborts the spawn and the guard's own stderr reason is the
+# captain-facing message. See bin/fm-dispatch-guard.sh for the four rules and
+# their narrow, logged bypasses.
+if ! "$FM_ROOT/bin/fm-dispatch-guard.sh" "$HARNESS" "$GUARD_MODEL"; then
+  exit 64
 fi
 
 secondmate_registry_value() {
