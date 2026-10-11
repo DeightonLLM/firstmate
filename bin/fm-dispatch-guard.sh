@@ -266,15 +266,38 @@ if command -v quota-axi >/dev/null 2>&1 \
     *)      want="" ;;
   esac
   if [ -n "$want" ]; then
+    # Scope the quota check to the window family this spawn actually uses.
+    # Taking the provider-wide minimum wrongly refuses a Gemini spawn because
+    # AGY's UNUSED claude_gpt window hit 0% - found by independent review, and a
+    # live over-refusal that would have wedged Gemini at the worst moment.
+    scope=""
+    if [ "$want" = agy ]; then
+      case "$MODEL" in
+        *gemini*) scope=gemini ;;
+        *claude*) scope=claude_gpt ;;
+      esac
+    fi
     cache="$(mktemp "${TMPDIR:-/tmp}/fm-guard-quota.XXXXXX")"
     if timeout 90 quota-axi --json --max-age 60s > "$cache" 2>/dev/null; then
-      pct="$(jq -r --arg p "$want" '
-        [ .providers[]? | select(.provider == $p) | .windows[]?.percentRemaining ]
-        | map(select(. != null)) | if length == 0 then "unknown" else min end
-      ' "$cache" 2>/dev/null)"
+      if [ -n "$scope" ]; then
+        pct="$(jq -r --arg p "$want" --arg s "$scope" '
+          [ .providers[]? | select(.provider == $p) | .windows[]?
+            | select((.id // "") | test($s)) | .percentRemaining ]
+          | map(select(. != null)) | if length == 0 then "unknown" else min end
+        ' "$cache" 2>/dev/null)"
+      else
+        pct="$(jq -r --arg p "$want" '
+          [ .providers[]? | select(.provider == $p) | .windows[]?.percentRemaining ]
+          | map(select(. != null)) | if length == 0 then "unknown" else min end
+        ' "$cache" 2>/dev/null)"
+      fi
       if [ -n "${pct:-}" ] && [ "$pct" != "unknown" ] && [ "${pct%%.*}" -le 0 ] 2>/dev/null; then
         rm -f "$cache"
-        refuse "provider '${want}' quota is exhausted (most constrained window at ${pct}%). Check quota BEFORE dispatching; a dead provider produces only failing agents."
+        if [ -n "$scope" ]; then
+          refuse "provider '${want}' ${scope} quota is exhausted (most constrained ${scope} window at ${pct}%). Check quota BEFORE dispatching; a dead provider produces only failing agents."
+        else
+          refuse "provider '${want}' quota is exhausted (most constrained window at ${pct}%). Check quota BEFORE dispatching; a dead provider produces only failing agents."
+        fi
       fi
     fi
     rm -f "$cache"

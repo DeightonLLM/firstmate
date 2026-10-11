@@ -258,6 +258,41 @@ if [ -n "$SNAP" ]; then
   assert_allow "unreadable quota evidence never blocks" agy gemini-3.1-pro-high QUOTA_AXI_SNAPSHOT="$LOGDIR/does-not-exist"
 fi
 
+echo "== Rule 4 scoping: never refuse on a window the spawn does not use =="
+# Regression found by independent review of a live guard: the rule took the
+# provider-wide MINIMUM across all windows, so an exhausted UNUSED agy
+# claude_gpt window refused a Gemini spawn. That is a live over-refusal that
+# would have wedged Gemini precisely when Claude's window died.
+SCOPED="$LOGDIR/quota.scoped.cache"
+DEADGEM="$LOGDIR/quota.deadgemini.cache"
+if [ -r "$CACHE" ]; then
+  # Derive from the REAL cache - quota-axi rejects hand-written snapshots with
+  # VALIDATION_ERROR, which would make the guard fail open and turn every
+  # "allow" assertion into a false pass.
+  jq '(.providers[]? | select(.provider=="agy") | .windows[]?
+        | select((.id // "") | test("claude_gpt"))) |= (.percentRemaining = 0)' \
+    "$CACHE" > "$SCOPED" 2>/dev/null
+  jq '(.providers[]? | select(.provider=="agy") | .windows[]?
+        | select((.id // "") | test("gemini"))) |= (.percentRemaining = 0)' \
+    "$CACHE" > "$DEADGEM" 2>/dev/null
+fi
+
+if [ -s "$SCOPED" ] && [ -s "$DEADGEM" ]; then
+  # Guard against a fixture that does not actually carry the windows we need.
+  if jq -e 'any(.providers[]? | select(.provider=="agy") | .windows[]?;
+              (.id|test("claude_gpt")) and .percentRemaining==0)' "$SCOPED" >/dev/null 2>&1 \
+     && jq -e 'any(.providers[]? | select(.provider=="agy") | .windows[]?;
+                     (.id|test("gemini")) and .percentRemaining==0)' "$DEADGEM" >/dev/null 2>&1; then
+    assert_allow "gemini spawn ALLOWED even when the unused claude window is 0%" agy gemini-3.1-pro-high QUOTA_AXI_SNAPSHOT="$SCOPED"
+    assert_refuse "a claude model on the dead claude window IS still refused" 64 agy claude-opus-5-5-high QUOTA_AXI_SNAPSHOT="$SCOPED"
+    assert_refuse "a genuinely dead gemini window IS refused" 64 agy gemini-3.1-pro-high QUOTA_AXI_SNAPSHOT="$DEADGEM"
+  else
+    bad "scoped quota fixtures are invalid - Rule 4 scoping left unverified"
+  fi
+else
+  bad "could not derive scoped quota fixtures from $CACHE - Rule 4 scoping left unverified"
+fi
+
 echo "== global bypass =="
 assert_allow "global bypass allows a legal model" agy gemini-3.1-pro-high FM_DISPATCH_GUARD_BYPASS=1
 
