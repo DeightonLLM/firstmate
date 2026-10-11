@@ -45,14 +45,19 @@ detect_own() {
   # is unambiguous when firstmate runs natively on grok.
   [ "${GROK_AGENT:-}" = "1" ] && { echo grok; return; }
   # Layer 2: walk the parent chain and match the command name.
+  # Walk depth matches the shared session-lock lib's ancestry walk so one
+  # session cannot resolve as a verified harness for the lock while reporting
+  # unknown here. A shallow walk silently degrades to unknown once a real
+  # session nests past it (tool wrapper -> runtime -> shell -> multiplexer).
   local pid=$$ comm args
-  for _ in 1 2 3 4 5 6 7 8; do
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null) || break
     case "$(basename -- "$comm")" in
       *claude*) echo claude; return ;;
       *codex*) echo codex; return ;;
       *opencode*) echo opencode; return ;;
       *grok*) echo grok; return ;;
+      minimax-code) echo minimax-code; return ;;
       kimi) echo kimi; return ;;
       pi-signed) echo pi; return ;;
       pi) echo pi; return ;;
@@ -64,6 +69,7 @@ detect_own() {
           *codex*) echo codex; return ;;
           *opencode*) echo opencode; return ;;
           *grok*) echo grok; return ;;
+          *minimax-code*) echo minimax-code; return ;;
           *" pi "*|*/pi) echo pi; return ;;
         esac ;;
     esac
