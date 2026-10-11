@@ -1,6 +1,6 @@
 ---
 name: harness-adapters
-description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, and kimi.
+description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, kimi, and agy.
 user-invocable: false
 metadata:
   internal: true
@@ -127,6 +127,7 @@ The supported launch-profile flags below are verified locally; each row records 
 | pi / pi-signed | `--model <model>` | `--thinking <low\|medium\|high\|xhigh\|max>` | Verified 2026-07-27 on Pi and pi-signed 0.82.0. Both expose the same accepted thinking levels and completed the same model-qualified max-thinking smoke. |
 | opencode | `--model <provider/model>` | none for firstmate's interactive launch | Verified on opencode 1.17.6. `opencode run` has `--variant`, but firstmate launches the interactive `opencode --prompt` path, which has no verified effort flag. |
 | kimi | `--model <model>` | none | Verified 2026-07-25 on Kimi Code CLI 0.29.1. |
+| agy | `--model <model>` | `--effort <low\|medium\|high\|xhigh\|max>` | Verified 2026-10-11 against the installed AGY binary's own flag help and flag parser. agy model slugs (for example `gemini-3.1-pro-high`) also encode a reasoning tier in the name, so `--model` and `--effort` are independent axes and both are threaded. |
 
 The concrete `harness` field owns adapter identity independently of the model provider: `harness=pi` with `model=xai/grok-*` is Pi using xAI, not `harness=grok`, and does not require Grok CLI login; `harness=grok` remains the standalone Grok Build CLI adapter.
 No script resolves that split for you: establish which credential store a tuple reads from the discovery surfaces below plus `quota-axi auth --json`'s per-provider sources, and show that reasoning rather than inferring it from a harness, model, or source name.
@@ -144,6 +145,7 @@ Use the discovery surface in the current authenticated environment because suppo
 | pi / pi-signed | Run the selected executable as `<executable> --list-models [search]`; Pi's installed `docs/models.md` owns how built-in, extension-registered, and custom provider/model entries reach that list. |
 | grok | Run `grok models`, which lists the models available to the current Grok installation and account. |
 | kimi | Run `kimi provider list --json`, which lists the current provider and model configuration. |
+| agy | Run `agy models`, which lists the models available to the current AGY installation and account. |
 
 For an unfamiliar harness or model namespace, establish support and provider identity from that harness's authoritative CLI help, model listing, or current documentation rather than guessing from a name or prefix.
 A listing that reaches the account and does not contain the model is concrete evidence the model is unsupported: block that candidate and quote the result.
@@ -163,6 +165,7 @@ Natural language is acceptable if uncertain.
 - pi and pi-signed: no separate verified skill invocation beyond normal command behavior; use natural language if the exact skill command is uncertain.
 - grok: `/<skill>`, for example `/no-mistakes` (same form as claude). Verified end to end: grok discovers the user-level `no-mistakes` skill, `/no-mistakes` invokes it, and grok drives a real `no-mistakes axi run`. Like codex's `$`/`/` popups, typing `/<skill>` opens grok's slash-autocomplete, so a too-fast Enter selects the popup entry instead of sending, and for an argument-taking command (like `/no-mistakes`'s optional task-first argument) that first Enter only expands the popup selection into an argument-hint placeholder rather than submitting - a genuine second Enter is required (see the grok section below for the 2026-07-03 incident and fix). `fm_tmux_submit_core`'s retried Enter (used by `fm-send` on the tmux backend) handles this through the structural composer reader; the herdr backend needed a dedicated fix (`fm_backend_herdr_composer_state`, docs/herdr-backend.md) because its prior delta-based verification false-positived on that same popup-close content change.
 - kimi: `/<skill>`, for example `/no-mistakes`.
+- agy: not verified. The AGY binary ships a `/skills` slash command and agent skills, but no `/<skill>` invocation form has been live-confirmed, so use natural language.
 
 ## Submission acknowledgement hazards
 
@@ -397,3 +400,56 @@ The delivery-only spinner match covers the full moon-phase glyph set rather than
 Each Kimi crew worktree receives a gitignored `.fm-kimi-turnend` token pointer, and the global hook touches that task's `state/<id>.turn-ended` only when the Stop payload's `cwd`, pointer, and registry entry all agree.
 A guarded silent hook cannot be verified from absence of effect, so prove invocation with an unguarded probe before concluding that the hook did not fire.
 The guarded turn-end signal remains a wake notification; standalone Kimi has no busy-state source until one is live-verified.
+
+## agy (VERIFIED 2026-10-11, agy 1.3.3 binary at /root/.local/bin/agy)
+
+AGY is the Antigravity CLI. Its launch flag help, hook reference, and schema strings are
+embedded in the installed binary, which is the authoritative source for every fact below.
+
+| Fact | Value |
+|---|---|
+| Busy state | UNKNOWN, by design. No semantic busy source is credited for agy, so `fm_busy_sources_for_harness agy` trusts nothing and an agy task classifies `unknown`, never idle. Do not add a trust-table entry without a live-verified lifecycle source. |
+| Exit command | `/exit` (labelled "Exit the CLI" in the binary's slash-command table) |
+| Interrupt | `ctrl+c`; the interrupt key binding is present in the binary, but a live interrupt was NOT exercised, so treat it as unverified. |
+| Skill invocation | Not verified. Use natural language until a `/<skill>` form is live-confirmed. |
+| Autonomy | `--dangerously-skip-permissions` (auto-approves all tool permission requests without prompting). |
+| Launch | `agy --prompt-interactive "<brief>"`. `-i` takes the brief as its VALUE, verified by the flag parser rejecting a bare `-i` with "flag needs an argument: -i". |
+| Env marker | None found. Detection is not implemented; firstmate records `harness=agy` from the spawn argument only. |
+
+**Never launch agy headlessly.** `-p`/`--print` is a one-shot print mode; a positional
+prompt is rejected outright ("Prompts are read only from -p/--print, -i/--prompt-interactive,
+or stdin"). A supervised crewmate must use `--prompt-interactive`.
+
+### Turn-end signal: a global `Stop` hook
+
+AGY has a real hook surface, documented in-binary: named hook groups in a `hooks.json`,
+each supporting `enabled` plus the `PreToolUse`, `PostToolUse`, `PreInvocation`,
+`PostInvocation`, and `Stop` arrays. `Stop` handlers are a FLAT list of handler objects
+(not matcher-grouped), fire when the execution loop terminates, receive a camelCase
+protojson object on stdin, and MUST emit a JSON object on stdout.
+
+`fm-spawn.sh` merges one firstmate-owned named block, `fm-firstmate-turn-end`, into agy's
+shared user hooks file `$HOME/.gemini/config/hooks.json`. The merge is surgical: it
+replaces only that one key and preserves every other key the captain owns, and it refuses
+the spawn if the existing file is missing, not a regular file, or not valid JSON.
+agy workspace-local hooks (`<workspace>/.agents/hooks.json`) are deliberately NOT used,
+because they only load after a folder-trust grant that firstmate will not manufacture.
+
+The hook is a silent, always-zero no-op for every non-firstmate agy session. It reads
+`workspacePaths` (the documented camelCase workspace ARRAY; agy has no single `cwd`
+field and no workspace environment variable) and fires only when a workspace holds a
+gitignored `.fm-agy-turnend` pointer naming a token in the private registry
+`$HOME/.gemini/config/fm-turn-end.d/`, whose entry must be an absolute `*.turn-ended`
+path. It always prints `{"decision":"stop"}`, because only `"continue"` blocks a stop;
+emitting it explicitly means the notification can never wedge a crewmate's turn.
+Secondmate spawns skip the pointer, since an idle pane is healthy and needs no wake.
+
+**What is verified and what is not.** Verified here: the hook block is accepted by agy's
+own `agy plugin validate` ("hooks: 2 processed"), the shipped hook body correctly touches
+only its own task's marker and stays inert for a foreign workspace, an unregistered token,
+a malformed pointer, a registry entry that is not a `*.turn-ended` marker, and a missing
+`jq` - all covered by `tests/fm-agy-harness.test.sh`. NOT verified: that a real agy turn
+actually delivers the `Stop` event to this hook in the interactive TUI. Establishing that
+requires launching an agy agent, which the implementing task forbade. Treat agy's turn-end
+signal as schema-verified and logic-verified but NOT live-verified; confirm it on the
+first real dispatch before relying on it for supervision.

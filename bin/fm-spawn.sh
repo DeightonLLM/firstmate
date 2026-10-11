@@ -70,7 +70,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi)
+#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|agy)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. pi-signed launches that exact executable name from PATH and
@@ -118,6 +118,9 @@
 # a firstmate-owned global hook and registry, and a gitignored per-task pointer.
 # grok uses a firstmate-owned global hook under ${GROK_HOME:-$HOME/.grok}/hooks
 # plus a gitignored .fm-grok-turnend worktree pointer and a state token.
+# agy uses a firstmate-owned named Stop hook merged into agy's shared user
+# hooks.json ($HOME/.gemini/config/hooks.json) plus a gitignored .fm-agy-turnend
+# worktree pointer and a state token.
 # On success prints: spawned <id> harness=<name> kind=<ship|scout|secondmate> mode=<mode> yolo=<on|off> window=<backend-target> worktree=<path>
 # mode/yolo are resolved per-project from data/projects.md for ship/scout tasks;
 # secondmate spawns record mode=secondmate, yolo=off, home=, and projects=.
@@ -425,7 +428,7 @@ FIRSTMATE_HOME=
 
 if [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|claude|codex|opencode|pi|pi-signed|grok|kimi)
+    ''|claude|codex|opencode|pi|pi-signed|grok|kimi|agy)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -491,6 +494,13 @@ launch_template() {
     # Its turn-end signal is a globally configured Stop hook plus a guarded
     # per-task worktree token, so no launch placeholder belongs here.
     kimi) printf '%s' '__KIMIBIN__ __MODELFLAG__--auto' ;;
+    # agy (Antigravity CLI): --prompt-interactive takes the brief as its value
+    # and stays in the supervised TUI (never headless; -p/--print is a one-shot
+    # print mode and is never used here). --dangerously-skip-permissions is agy's
+    # equivalent of claude's autonomous flag. agy's turn-end signal does NOT ride
+    # the launch command - it is a Stop hook installed below (global hooks.json +
+    # per-task pointer), so the template is identical for ship/scout/secondmate.
+    agy) printf '%s' 'agy __MODELFLAG____EFFORTFLAG__--dangerously-skip-permissions --prompt-interactive "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -614,7 +624,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi)
+    claude|codex|opencode|pi|pi-signed|grok|kimi|agy)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -651,6 +661,14 @@ effort_flag_for_harness() {
       # its --thinking flag.
       case "$effort" in
         low|medium|high|xhigh|max) printf -- '--thinking %s ' "$(shell_quote "$effort")" ;;
+      esac
+      ;;
+    agy)
+      # agy --help documents --effort as the reasoning-effort knob for the
+      # current CLI session with the full low|medium|high|xhigh|max vocabulary
+      # (verified against the installed binary's own flag help).
+      case "$effort" in
+        low|medium|high|xhigh|max) printf -- '--effort %s ' "$(shell_quote "$effort")" ;;
       esac
       ;;
     # opencode's interactive `opencode --prompt` launch has a verified --model
@@ -1592,6 +1610,126 @@ EOF
       printf '%s\n' "${auth_file##*/}" > "$STATE/$ID.kimi-turnend-token"
       printf 'token=%s\n' "${auth_file##*/}" > "$WT/.fm-kimi-turnend"
       exclude_path '.fm-kimi-turnend'
+      ;;
+    agy*)
+      # agy (Antigravity CLI) fires a Stop hook when its execution loop
+      # terminates - the clean equivalent of codex's notify=, pi's turn_end, and
+      # grok's Stop hook. agy's Stop payload is JSON on stdin with camelCase
+      # protojson keys; the workspace arrives as the workspacePaths ARRAY (not a
+      # single cwd), so the hook resolves the pointer from that array.
+      #
+      # agy workspace-local hooks (<workspace>/.agents/hooks.json) only load after
+      # a folder-trust grant, which firstmate will not manufacture by editing agy's
+      # managed trust state. Its SHARED USER hooks.json ($HOME/.gemini/config/hooks.json)
+      # is always loaded by the CLI, so the hook lives there - the same shape as
+      # grok's always-trusted global hook. It is one firstmate-owned NAMED hook block,
+      # merged into the captain's existing hooks.json without touching any other key,
+      # and it is a guarded no-op for every non-firstmate agy session: it fires only
+      # when a workspace holds a .fm-agy-turnend pointer naming a token in the
+      # firstmate-owned registry. Secondmates skip the pointer (idle panes are
+      # healthy, so no stale-pane detection applies to them).
+      if [ "$KIND" != secondmate ]; then
+        AGY_CONFIG_DIR="$HOME/.gemini/config"
+        AGY_HOOKS_JSON="$AGY_CONFIG_DIR/hooks.json"
+        AGY_HOOK_SCRIPT="$AGY_CONFIG_DIR/fm-turn-end.sh"
+        AGY_AUTH_DIR="$AGY_CONFIG_DIR/fm-turn-end.d"
+        AGY_HOOK_NAME="fm-firstmate-turn-end"
+        command -v jq >/dev/null 2>&1 || {
+          echo "error: refusing agy spawn because jq is required to install the guarded turn-end hook" >&2
+          exit 1
+        }
+        # Refuse rather than guess: a hooks.json we cannot parse could be mangled.
+        if [ -e "$AGY_HOOKS_JSON" ]; then
+          [ -f "$AGY_HOOKS_JSON" ] && [ ! -L "$AGY_HOOKS_JSON" ] || {
+            echo "error: refusing agy spawn because $AGY_HOOKS_JSON is not a regular file" >&2
+            exit 1
+          }
+          jq -e . "$AGY_HOOKS_JSON" >/dev/null 2>&1 || {
+            echo "error: refusing agy spawn because $AGY_HOOKS_JSON is not valid JSON" >&2
+            exit 1
+          }
+        fi
+        mkdir -p "$AGY_AUTH_DIR"
+        old_umask=$(umask)
+        umask 077
+        auth_file=$(mktemp "$AGY_AUTH_DIR/fm.XXXXXXXXXXXX")
+        umask "$old_umask"
+        printf '%s\n' "$TURNEND" > "$auth_file"
+        printf '%s\n' "${auth_file##*/}" > "$STATE/$ID.agy-turnend-token"
+
+        # The shipped hook body. Every path is silent and exits zero: this is a wake
+        # notification only, so it must never break or block the agy session. stderr
+        # is discarded, but stdout is kept because agy's Stop contract REQUIRES a JSON
+        # object on stdout; decision "stop" explicitly allows the agent to terminate
+        # (only "continue" blocks), so the signal can never wedge a turn.
+        # workspacePaths is the documented camelCase workspace array.
+        cat > "$AGY_HOOK_SCRIPT" <<'AGY_HOOK_EOF'
+#!/usr/bin/env bash
+# Firstmate agy turn-end hook. Managed by bin/fm-spawn.sh.
+# Passive wake notification: silent, always zero, never blocks the turn.
+set +e
+exec 2>/dev/null
+emit() { printf '{"decision":"stop"}\n'; }
+payload=
+IFS= read -r payload || [ -n "$payload" ] || { emit; exit 0; }
+command -v jq >/dev/null 2>&1 || { emit; exit 0; }
+workspaces=$(jq -er 'select(type == "object") | (.workspacePaths // []) | .[] | strings | select(length > 0)' <<< "$payload" 2>/dev/null) || workspaces=
+while IFS= read -r workspace; do
+  [ -n "$workspace" ] || continue
+  pointer="$workspace/.fm-agy-turnend"
+  [ -f "$pointer" ] || continue
+  first=
+  IFS= read -r -n 256 first < "$pointer" 2>/dev/null || [ -n "$first" ] || continue
+  case "$first" in token=*) token=${first#token=} ;; *) continue ;; esac
+  case "$token" in fm.????????????) : ;; *) continue ;; esac
+  case "$token" in *[!A-Za-z0-9._-]*) continue ;; esac
+  auth_dir=${HOME:-}/.gemini/config/fm-turn-end.d
+  [ -n "${HOME:-}" ] || continue
+  target=$(cat "$auth_dir/$token" 2>/dev/null) || continue
+  case "$target" in /*.turn-ended) : ;; *) continue ;; esac
+  touch -- "$target" 2>/dev/null || continue
+done <<WS
+$workspaces
+WS
+# Always emit the Stop decision object; only "continue" blocks, so this never
+# prevents the crewmate's turn from ending normally.
+emit
+exit 0
+AGY_HOOK_EOF
+        chmod 700 "$AGY_HOOK_SCRIPT"
+
+        # Merge (never clobber) the firstmate-owned named hook block into agy's
+        # shared user hooks.json, preserving every other key the captain owns.
+        agy_hook_cmd=$(printf 'bash %s' "$(shell_quote "$AGY_HOOK_SCRIPT")")
+        agy_hook_entry=$(jq -nc --arg cmd "$agy_hook_cmd" \
+          '{"type":"command","command":$cmd,"timeout":5}')
+        agy_block=$(jq -nc --argjson handler "$agy_hook_entry" \
+          '{"enabled":true,"Stop":[$handler]}')
+        if [ -e "$AGY_HOOKS_JSON" ]; then
+          merged=$(jq -S --arg name "$AGY_HOOK_NAME" --argjson block "$agy_block" \
+            '.[$name] = $block' "$AGY_HOOKS_JSON") || {
+            echo "error: refusing agy spawn because the turn-end hook could not be merged into $AGY_HOOKS_JSON" >&2
+            exit 1
+          }
+        else
+          merged=$(jq -nc --arg name "$AGY_HOOK_NAME" --argjson block "$agy_block" \
+            '{($name): $block}')
+        fi
+        printf '%s\n' "$merged" > "$AGY_HOOKS_JSON.tmp.$$" || {
+          echo "error: refusing agy spawn because $AGY_HOOKS_JSON could not be written" >&2
+          exit 1
+        }
+        jq -e . "$AGY_HOOKS_JSON.tmp.$$" >/dev/null 2>&1 || {
+          echo "error: refusing agy spawn because the merged agy hooks.json did not validate" >&2
+          exit 1
+        }
+        mv -f "$AGY_HOOKS_JSON.tmp.$$" "$AGY_HOOKS_JSON" || {
+          echo "error: refusing agy spawn because $AGY_HOOKS_JSON could not be replaced" >&2
+          exit 1
+        }
+        printf 'token=%s\n' "${auth_file##*/}" > "$WT/.fm-agy-turnend"
+        exclude_path '.fm-agy-turnend'
+      fi
       ;;
   esac
 fi
