@@ -33,7 +33,7 @@ services:
     evidence_paths:
       - docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md
       - docs/system-context/WAREHOUSE_BOUNDARIES.md
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - BRANDON_HUB_TASKS.md task 9
       - BRANDON_HUB_SERVICE_MATRIX.md section 3.5
@@ -53,7 +53,7 @@ services:
       - read
       - mock-test
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-HUB-006
       - BR-HUB-006 stage 2-4 migration evidence
@@ -72,7 +72,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-HUB-006
       - BR-HUB-006 stage 2-4 migration evidence
@@ -92,7 +92,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-HUB-006
       - PRD_DELIVERY_MAP.md unresolved area 2
@@ -113,7 +113,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-HUB-006
       - BR-HUB-006 stage 2-4 migration evidence
@@ -132,7 +132,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md BR-HUB-006
       - PRD_DELIVERY_MAP.md unresolved area 3
@@ -153,7 +153,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 4
     last_verified: 2026-09-15
@@ -170,7 +170,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 4
     last_verified: 2026-09-15
@@ -190,7 +190,7 @@ services:
       - mock-test
       - staging-deploy
     evidence_paths:
-      - data/BR-INV-001/report.md
+      - docs/system-context/evidence/BR-INV-001/report.md
     sources:
       - BR-INV-001/report.md Host 1
     last_verified: 2026-09-15
@@ -208,8 +208,8 @@ services:
       - read
       - mock-test
     evidence_paths:
-      - data/BR-AUD-002/report.md
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/BR-AUD-002/report.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - BR-AUD-002/report.md
       - PRD_DELIVERY_MAP.md
@@ -229,8 +229,8 @@ services:
       - local-build
       - mock-test
     evidence_paths:
-      - data/BR-INV-001/report.md
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/BR-INV-001/report.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - BR-INV-001/report.md Host 1
       - PRD_DELIVERY_MAP.md
@@ -248,7 +248,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md
     last_verified: 2026-09-15
@@ -266,7 +266,7 @@ services:
       - read
     evidence_paths:
       - docs/system-context/ELEVATE_NGINX_ROUTE_20260919.md
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - hosts.yaml
       - PRD_DELIVERY_MAP.md
@@ -291,7 +291,7 @@ services:
       - local-build
       - mock-test
     evidence_paths:
-      - data/prd-delivery-plan-20260914/SOFTWARE_LANES.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/SOFTWARE_LANES.md
     sources:
       - SOFTWARE_LANES.md Lane 1
     last_verified: 2026-09-15
@@ -308,7 +308,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+      - docs/system-context/evidence/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
     sources:
       - MINI_SPRINT_PREPARATION_REPORT.md section 5
     last_verified: 2026-09-15
@@ -325,7 +325,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+      - docs/system-context/evidence/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
     sources:
       - MINI_SPRINT_PREPARATION_REPORT.md section 5
     last_verified: 2026-09-15
@@ -342,7 +342,7 @@ services:
     allowed_actions:
       - read
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 1
     last_verified: 2026-09-15
