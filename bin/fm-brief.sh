@@ -6,7 +6,7 @@
 # description, acceptance criteria, and context, and may adjust other sections
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> [--scout] [--herdr-lab]
+# Usage: fm-brief.sh <task-id> <repo-name> [--scout] [--herdr-lab] [--harness <name>]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
@@ -26,6 +26,12 @@
 #   The flag must be explicit because {TASK} is filled after scaffolding and the
 #   caller-supplied repo string cannot reliably identify this repo. Briefs made
 #   without it carry a loud declaration so an omitted contract cannot be silent.
+#   --harness names the harness this brief is scaffolded for, so a
+#   capability-gated mandate picks the variant that harness can actually satisfy.
+#   It defaults to the effective crewmate harness resolved by bin/fm-harness.sh
+#   crew - the same resolution fm-spawn.sh uses for an unflagged crewmate spawn.
+#   Pass it explicitly whenever the spawn will use its own --harness, an adapter
+#   profile, or a raw launch command.
 # For ship tasks, the definition of done is shaped by the project's delivery mode
 # (data/projects.md via fm-project-mode.sh; see the project-management skill
 # and AGENTS.md task lifecycle):
@@ -67,6 +73,7 @@ esac
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 PAUSED_VERB=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
 
+
 resolve_directory_input() {
   local name=$1 path=$2 resolved
   case "$path" in
@@ -94,15 +101,21 @@ fi
 KIND=ship
 HERDR_LAB=0
 NO_PROJECTS=0
+HARNESS_ARG=""
 POS=()
-for a in "$@"; do
-  case "$a" in
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --scout) KIND=scout ;;
     --secondmate) KIND=secondmate ;;
     --herdr-lab) HERDR_LAB=1 ;;
     --no-projects) NO_PROJECTS=1 ;;
-    *) POS+=("$a") ;;
+    --harness)
+      [ "$#" -ge 2 ] || { echo "error: --harness requires a value" >&2; exit 1; }
+      HARNESS_ARG=$2; shift ;;
+    --harness=*) HARNESS_ARG=${1#--harness=} ;;
+    *) POS+=("$1") ;;
   esac
+  shift
 done
 ID=${POS[0]}
 
@@ -177,6 +190,79 @@ emit_baseline_block() {
     printf 'Read pointers and hashes above; do not paste or inherit prior conversation history.\n'
   } > "$BASELINE_TMP"
 }
+
+# --- Harness capability gate ---------------------------------------------------
+# A mandate the target harness physically cannot satisfy is a wedge, not a safety
+# net: the crewmate reports `blocked:` on first contact and the captain watches a
+# lane that stops every tick. The mandatory task breakdown is therefore selected
+# from an explicit capability set instead of being hardcoded, keyed by harness name
+# rather than by model name or a match on the CLI path. Promoting a harness into
+# this list requires recorded verification evidence that it provides a To-Do List
+# extension; anything unlisted, unknown, or passed as a raw launch command resolves
+# to the fallback discipline below, which is never the impossible mandate.
+# Evidence per entry:
+#   claude            native To-Do List extension (Claude Code).
+#   pi, pi-signed     pi.dev extension lineage; mcode is a documented pi.dev fork
+#                     whose To-Do List extension is verified in
+#                     docs/supervision-protocols/minimax-code.md.
+#   grok              Claude-Code-compatible CLI (documented in fm-harness.sh), so
+#                     the same extension.
+#   minimax-code      verified in docs/supervision-protocols/minimax-code.md.
+# Deliberately NOT listed, so NOT mandated:
+#   agy               the Antigravity/Gemini CLI. A dispatched agy crewmate was
+#                     observed asking to show a To-Do list it cannot produce
+#                     (2026-10-11), which is this gate's reason to exist.
+#   codex, opencode, kimi, and every unknown/raw-launch harness: no To-Do List
+#                     extension is verified for them anywhere in this repo.
+FM_HARNESS_TODO_LIST="claude grok minimax-code pi pi-signed"
+
+harness_supports_todo_list() {
+  case " $FM_HARNESS_TODO_LIST " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Which harness is this brief written for? An explicit --harness wins; otherwise
+# defer to bin/fm-harness.sh, the harness detection authority, using the same
+# crew resolution fm-spawn.sh applies to an unflagged crewmate spawn.
+BRIEF_HARNESS=$HARNESS_ARG
+if [ -z "$BRIEF_HARNESS" ]; then
+  BRIEF_HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew 2>/dev/null || true)
+  BRIEF_HARNESS=$(printf '%s' "$BRIEF_HARNESS" | tr -d '[:space:]')
+fi
+[ -n "$BRIEF_HARNESS" ] || BRIEF_HARNESS=unknown
+
+# Emit the mandatory task breakdown this harness can actually carry. Both variants
+# name the harness and say which requirement applies, so a reading agent is never
+# left guessing whether it owes a five-item To-Do tracker.
+emit_todo_breakdown() {
+  if harness_supports_todo_list "$BRIEF_HARNESS"; then
+    IFS= read -r -d '' TODO_BREAKDOWN <<EOF || true
+# Mandatory task breakdown
+This requirement applies to you because your harness (\`$BRIEF_HARNESS\`) provides the To-Do List extension.
+Before any investigation, edit, test, or other task action, use the harness's
+To-Do List extension and create an in-depth dependency-aware tracker with at
+least five checkable items: preflight, scoped discovery, bounded work/evidence,
+validation, and postflight/closeout. Keep it visible and update it at every
+phase change. Do not substitute prose or a filesystem TODO file. If the
+extension is unavailable or the tracker has fewer than five items, append
+\`blocked: To-Do List extension unavailable or incomplete\` to the status file and
+stop; firstmate must not treat the task as started.
+EOF
+  else
+    IFS= read -r -d '' TODO_BREAKDOWN <<EOF || true
+# Mandatory task breakdown
+This requirement applies to you because your harness (\`$BRIEF_HARNESS\`) has no To-Do List extension. The five-item To-Do tracker mandate does NOT apply to you: do not try to produce one, and do not report yourself blocked for lacking one.
+This is the equivalent discipline for your harness and it is mandatory. A stale plan is the same false statement to firstmate that a stale tracker is on a To-Do-capable harness.
+1. Before any investigation, edit, test, or other task action, write your plan in your first reply as at least five markdown checkbox items (\`- [ ] \`), one line each, in dependency order: preflight, scoped discovery, bounded work/evidence, validation, postflight/closeout. firstmate reads your pane, so that reply is where the plan has to be visible.
+2. Keep it true as you work: tick an item only once its work is actually complete, and add an item whenever scope changes. Never tick an item you have not finished.
+3. Report every phase change in band: append \`working: {plan item} - {one short line}\` to the status file as you enter each plan item, exactly as rule 4 requires for any material phase change, so firstmate sees the same five phases in the status record that a To-Do-capable harness shows on its board.
+EOF
+  fi
+  TODO_BREAKDOWN=${TODO_BREAKDOWN%$'\n'}
+}
+emit_todo_breakdown
 
 BRIEF="$DATA/$ID/brief.md"
 [ -e "$BRIEF" ] && { echo "error: $BRIEF already exists" >&2; exit 1; }
@@ -332,15 +418,7 @@ This is a SCOUT task: the deliverable is a written report, not a PR.
 The worktree is your laboratory - install, run, edit, and make scratch commits freely; all of it is discarded at teardown.
 The report is the only thing that survives, so anything worth keeping must be in it.
 
-# Mandatory task breakdown
-Before any investigation, edit, test, or other task action, use the harness's
-To-Do List extension and create an in-depth dependency-aware tracker with at
-least five checkable items: preflight, scoped discovery, bounded work/evidence,
-validation, and postflight/closeout. Keep it visible and update it at every
-phase change. Do not substitute prose or a filesystem TODO file. If the
-extension is unavailable or the tracker has fewer than five items, append
-\`blocked: To-Do List extension unavailable or incomplete\` to the status file and
-stop; firstmate must not treat the task as started.
+$TODO_BREAKDOWN
 
 # Rules
 1. Never push to any remote and never open a PR.
@@ -465,15 +543,7 @@ If the top-level path is the primary checkout or not the worktree you were launc
 
 1. First action: create your branch: \`git checkout -b fm/$ID\`$SETUP2
 
-# Mandatory task breakdown
-Before any investigation, edit, test, or other task action, use the harness's
-To-Do List extension and create an in-depth dependency-aware tracker with at
-least five checkable items: preflight, scoped discovery, bounded work/evidence,
-validation, and postflight/closeout. Keep it visible and update it at every
-phase change. Do not substitute prose or a filesystem TODO file. If the
-extension is unavailable or the tracker has fewer than five items, append
-\`blocked: To-Do List extension unavailable or incomplete\` to the status file and
-stop; firstmate must not treat the task as started.
+$TODO_BREAKDOWN
 
 # Rules
 $RULE1

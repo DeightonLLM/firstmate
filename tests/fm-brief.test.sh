@@ -201,7 +201,7 @@ test_ship_modes_generate_clean_briefs() {
   for id_proj in "brief-nomistakes-a1:no-registry-proj" "brief-directpr-a2:direct-proj" "brief-localonly-a3:local-proj"; do
     id=${id_proj%%:*}
     proj=${id_proj##*:}
-    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1; status=$?
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" --harness claude >/dev/null 2>&1; status=$?
     expect_code 0 "$status" "fm-brief.sh $id $proj should exit 0"
     brief="$home/data/$id/brief.md"
     assert_present "$brief" "$id: brief was not scaffolded"
@@ -618,7 +618,7 @@ test_scout_and_secondmate_load_decision_hold_policy() {
 test_scout_and_secondmate_scaffold() {
   local brief out status
   status=0
-  out=$(FM_HOME="$BRIEF_HOME" "$ROOT/bin/fm-brief.sh" brief-scout-q6 alpha --scout 2>&1) || status=$?
+  out=$(FM_HOME="$BRIEF_HOME" "$ROOT/bin/fm-brief.sh" brief-scout-q6 alpha --scout --harness claude 2>&1) || status=$?
   expect_code 0 "$status" "fm-brief.sh scout scaffold should exit zero"
   assert_not_contains "$out" "command not found" "scout scaffold evaluated literal status prose as a command"
   brief="$BRIEF_HOME/data/brief-scout-q6/brief.md"
@@ -638,6 +638,142 @@ test_scout_and_secondmate_scaffold() {
   pass "fm-brief: scout and secondmate code paths still scaffold well-formed briefs"
 }
 
+# The mandatory task breakdown must match the To-Do List support the target
+# harness actually has. A harness without the extension cannot produce a
+# five-item tracker, so mandating one wedges the crewmate on first contact; it
+# gets the equivalent in-band discipline instead. The supported-harness wording
+# must stay exactly as strict as it was.
+test_todo_breakdown_follows_harness_capability() {
+  local home brief h b
+  local list fns
+
+  # --- capability set, read out of the shipped script -------------------------
+  list=$(sed -n '/^FM_HARNESS_TODO_LIST="/s/^FM_HARNESS_TODO_LIST="\(.*\)"$/\1/p' \
+    "$ROOT/bin/fm-brief.sh")
+  [ -n "$list" ] || fail "fm-brief.sh declares no FM_HARNESS_TODO_LIST capability set"
+  for h in claude minimax-code pi pi-signed grok; do
+    case " $list " in
+      *" $h "*) ;;
+      *) fail "harness '$h' is documented as To-Do-capable but is absent from FM_HARNESS_TODO_LIST" ;;
+    esac
+  done
+  for h in agy codex opencode kimi; do
+    case " $list " in
+      *" $h "*) fail "unverified harness '$h' was added to FM_HARNESS_TODO_LIST without recorded evidence" ;;
+    esac
+  done
+  pass "fm-brief.sh: To-Do capability set is explicit and evidence-gated"
+
+  # --- the predicate itself, extracted from the shipped script ----------------
+  # Same convention as tests/fm-agy-harness.test.sh: exercise the real function
+  # out of the real script, never a copy. No agent CLI is launched here.
+  fns="$TMP_ROOT/todo-fn.sh"
+  awk '/^harness_supports_todo_list\(\) \{$/,/^\}$/' "$ROOT/bin/fm-brief.sh" > "$fns"
+  [ -s "$fns" ] || fail "could not extract harness_supports_todo_list from bin/fm-brief.sh"
+  # shellcheck source=/dev/null
+  ( . "$fns"
+    FM_HARNESS_TODO_LIST=$list
+    for h in claude grok minimax-code pi pi-signed; do
+      harness_supports_todo_list "$h" \
+        || { echo "harness_supports_todo_list wrongly denied $h" >&2; exit 1; }
+    done
+    for h in agy codex opencode kimi unknown ""; do
+      harness_supports_todo_list "$h" \
+        && { echo "harness_supports_todo_list wrongly granted '$h'" >&2; exit 1; }
+    done
+    # Explicit: a subshell inherits the last command's status, and the last call
+    # above is a deliberate denial, so the subshell must not exit non-zero here.
+    exit 0 ) || fail "harness_supports_todo_list disagrees with the shipped capability set"
+  pass "fm-brief.sh: harness_supports_todo_list gates exactly on the capability set"
+
+  # --- generated briefs: ship and scout, both harness classes ----------------
+  home="$TMP_ROOT/todo-capability-home"
+  mkdir -p "$home/data"
+  write_registry "$home"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" todo-strict-a1 no-registry-proj \
+    --harness claude >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold the To-Do-capable brief"
+  brief="$home/data/todo-strict-a1/brief.md"
+  assert_present "$brief" "To-Do-capable brief was not scaffolded"
+  assert_grep 'use the harness' "$brief" \
+    "To-Do-capable brief lost the strict five-item To-Do mandate"
+  assert_grep 'least five checkable items' "$brief" \
+    "To-Do-capable brief lost the five-item minimum"
+  assert_grep 'Do not substitute prose or a filesystem TODO file' "$brief" \
+    "To-Do-capable brief lost the no-substitute clause"
+  assert_grep 'blocked: To-Do List extension unavailable or incomplete' "$brief" \
+    "To-Do-capable brief lost the literal To-Do blocker example"
+  assert_grep 'your harness (`claude`) provides the To-Do List extension' "$brief" \
+    "To-Do-capable brief did not state which requirement applies"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" todo-fallback-a2 no-registry-proj \
+    --harness agy >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold the unsupported-harness brief"
+  brief="$home/data/todo-fallback-a2/brief.md"
+  assert_present "$brief" "unsupported-harness brief was not scaffolded"
+  # The impossible mandate is gone, and replaced by something checkable.
+  assert_no_grep 'blocked: To-Do List extension unavailable or incomplete' "$brief" \
+    "brief for a harness without To-Do support still mandates the To-Do extension"
+  assert_no_grep 'Do not substitute prose or a filesystem TODO file' "$brief" \
+    "brief for a harness without To-Do support still demands a To-Do tracker"
+  assert_no_grep 'firstmate must not treat the task as started' "$brief" \
+    "brief for a harness without To-Do support still refuses to start the task"
+  assert_grep 'your harness (`agy`) has no To-Do List extension' "$brief" \
+    "brief did not state which requirement applies to the unsupported harness"
+  assert_grep 'at least five markdown checkbox items' "$brief" \
+    "fallback discipline does not require a written five-item plan"
+  assert_grep 'tick an item only once its work is actually complete' "$brief" \
+    "fallback discipline does not require the plan to stay truthful"
+  assert_grep 'working: {plan item}' "$brief" \
+    "fallback discipline does not report progress in band to the status file"
+  pass "fm-brief.sh: the mandatory breakdown matches the target harness's capability"
+
+  # The same split must hold on the scout scaffold.
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" todo-scout-a3 sample --scout \
+    --harness agy >/dev/null 2>&1 || fail "scout scaffold failed for an unsupported harness"
+  brief="$home/data/todo-scout-a3/brief.md"
+  assert_no_grep 'blocked: To-Do List extension unavailable or incomplete' "$brief" \
+    "scout brief for a harness without To-Do support still mandates the extension"
+  assert_grep 'at least five markdown checkbox items' "$brief" \
+    "scout fallback discipline does not require a written five-item plan"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" todo-scout-a4 sample --scout \
+    --harness minimax-code >/dev/null 2>&1 || fail "scout scaffold failed for a supported harness"
+  brief="$home/data/todo-scout-a4/brief.md"
+  assert_grep 'least five checkable items' "$brief" \
+    "scout brief for a To-Do-capable harness lost the strict mandate"
+  pass "fm-brief.sh: scout briefs split on the same harness capability"
+
+  # With no --harness, the scaffold must defer to the configured crew harness
+  # rather than guess: config/crew-harness=agy produces the fallback discipline.
+  local cfg_home="$TMP_ROOT/todo-capability-cfg-home"
+  mkdir -p "$cfg_home/data" "$cfg_home/config"
+  write_registry "$cfg_home"
+  printf 'agy\n' > "$cfg_home/config/crew-harness"
+  FM_HOME="$cfg_home" "$ROOT/bin/fm-brief.sh" todo-cfg-a5 no-registry-proj \
+    >/dev/null 2>&1 || fail "scaffold failed with the harness resolved from config"
+  brief="$cfg_home/data/todo-cfg-a5/brief.md"
+  assert_grep 'your harness (`agy`) has no To-Do List extension' "$brief" \
+    "default resolution ignored config/crew-harness and mis-picked the requirement"
+  pass "fm-brief.sh: with no --harness the breakdown follows config/crew-harness"
+
+  # Internal consistency: no scaffold may carry both variants' obligations.
+  local strict_hits alt_hits
+  for b in "$home/data/todo-strict-a1/brief.md" "$home/data/todo-fallback-a2/brief.md" \
+           "$home/data/todo-scout-a3/brief.md" "$home/data/todo-scout-a4/brief.md"; do
+    strict_hits=$(grep -c 'firstmate must not treat the task as started' "$b" || true)
+    alt_hits=$(grep -c 'at least five markdown checkbox items' "$b" || true)
+    if [ "$strict_hits" -gt 0 ] && [ "$alt_hits" -gt 0 ]; then
+      fail "$b carries BOTH the strict To-Do mandate and the fallback discipline"
+    fi
+    if [ "$strict_hits" -eq 0 ] && [ "$alt_hits" -eq 0 ]; then
+      fail "$b carries NEITHER a strict nor a fallback task-breakdown discipline"
+    fi
+  done
+  pass "fm-brief.sh: every scaffold carries exactly one task-breakdown discipline"
+}
+
+test_todo_breakdown_follows_harness_capability
 test_script_parses
 test_no_heredoc_in_command_substitution
 test_help_includes_entire_header
