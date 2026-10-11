@@ -116,6 +116,68 @@ if [ "$NO_PROJECTS" -eq 1 ] && [ "$KIND" != secondmate ]; then
   exit 1
 fi
 
+# Append the deterministic fresh-agent baseline block that fm-session-start.sh
+# enforces and tests/fm-fresh-baseline.test.sh asserts. Without it the CANONICAL
+# brief generator produces briefs that fail the very contract the fleet gates on,
+# which forces firstmate to hand-write briefs and trips the intent guard.
+# Fail-closed: a missing required baseline file must abort brief generation.
+# Validate the baseline BEFORE any brief is written, so a missing required file
+# aborts generation instead of leaving a half-valid brief on disk.
+prepare_baseline() {
+  BASELINE_TMP="$(mktemp "${TMPDIR:-/tmp}/fm-brief-baseline.XXXXXX")" || return 2
+  emit_baseline_block
+}
+
+emit_baseline_block() {
+  local policy_file="/root/AGENTS.md"
+  local project_policy_file="/root/agent-work/AGENTS.md"
+  local routing_file="/root/docs/agent-policy/HERDR_AGENT_ROUTING.md"
+  local bounded_file="/root/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md"
+  local lean_ctx_file="/root/.codex/LEAN-CTX.md"
+  local warehouse_file warehouse_preflight_file baseline_root digest
+  local -a required hashes
+
+  baseline_root="${FM_BASELINE_ROOT:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
+  baseline_root="$(cd "$baseline_root" 2>/dev/null && pwd -P)" || {
+    printf 'brief: FAIL fresh-agent baseline root is unavailable\n' >&2
+    return 2
+  }
+  warehouse_file="$baseline_root/docs/system-context/INDEX.md"
+  warehouse_preflight_file="$baseline_root/bin/fm-context-preflight.sh"
+  required=(
+    "$policy_file" "$project_policy_file" "$routing_file" "$bounded_file"
+    "$lean_ctx_file" "$warehouse_file" "$warehouse_preflight_file"
+  )
+  hashes=()
+  for file in "${required[@]}"; do
+    if [ ! -f "$file" ]; then
+      printf 'brief: FAIL required fresh-agent baseline file is missing: %s\n' "$file" >&2
+      return 2
+    fi
+    digest="$(sha256sum "$file" 2>/dev/null | cut -d' ' -f1)" || {
+      printf 'brief: FAIL cannot hash required fresh-agent baseline file: %s\n' "$file" >&2
+      return 2
+    }
+    [ -n "$digest" ] || { printf 'brief: FAIL SHA-256 tool unavailable\n' >&2; return 2; }
+    hashes+=("sha256:$digest")
+  done
+
+  {
+    printf '# Fresh-agent baseline\n'
+    printf 'Baseline manifest: fresh-agent-baseline/v1\n'
+    printf 'policy=%s %s\n' "$policy_file" "${hashes[0]}"
+    printf 'project-policy=%s %s\n' "$project_policy_file" "${hashes[1]}"
+    printf 'routing=%s %s\n' "$routing_file" "${hashes[2]}"
+    printf 'bounded=%s %s\n' "$bounded_file" "${hashes[3]}"
+    printf 'lean-ctx=%s %s\n' "$lean_ctx_file" "${hashes[4]}"
+    printf 'warehouse=%s %s\n' "$warehouse_file" "${hashes[5]}"
+    printf 'warehouse-preflight=%s\n' "$warehouse_preflight_file"
+    printf 'goal-queue=%s/data/backlog.md\n' "$FM_HOME"
+    printf 'state-handoff=%s/state/.wake-queue\n' "$FM_HOME"
+    printf 'Read pointers and hashes above; do not paste or inherit prior conversation history.\n'
+  } > "$BASELINE_TMP"
+}
+
 BRIEF="$DATA/$ID/brief.md"
 [ -e "$BRIEF" ] && { echo "error: $BRIEF already exists" >&2; exit 1; }
 mkdir -p "$DATA/$ID"
@@ -149,6 +211,9 @@ else
   PROJECT_CLONES_BODY=$(printf '%s\n' "$SECONDMATE_PROJECTS" | tr ' ' '\n' | sed 's/^/- /')
   PROJECT_CLONES_NOTE="The projects above are local clones for work you supervise; they are not an exclusive ownership claim."
 fi
+
+
+prepare_baseline || exit 2
 cat > "$BRIEF" <<EOF
 You are a persistent second mate managed by the main firstmate. Work on your own; do not wait for a human.
 
@@ -206,8 +271,12 @@ An empty queue is a healthy resting state, not a cue to invent work: never spawn
 If this charter cannot be carried out, append \`blocked: {why}\` or \`failed: {why}\` to the main status file and stop.
 EOF
 if [ "$SECONDMATE_CHARTER" = "{TASK}" ]; then
+  cat "$BASELINE_TMP" >> "$BRIEF" || exit 2
+rm -f "$BASELINE_TMP"
   echo "scaffolded: $BRIEF (secondmate charter; replace {TASK})"
 else
+  cat "$BASELINE_TMP" >> "$BRIEF" || exit 2
+rm -f "$BASELINE_TMP"
   echo "scaffolded: $BRIEF (secondmate charter)"
 fi
 exit 0
@@ -248,6 +317,7 @@ HERDR_SECTION=${HERDR_SECTION%$'\n'}
 fi
 
 if [ "$KIND" = scout ]; then
+prepare_baseline || exit 2
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
 
@@ -301,6 +371,8 @@ Before reporting done, read and follow \`$FM_ROOT/.agents/skills/decision-hold-l
 When the report is complete, append \`done: {one-line conclusion}\` to the status file and stop.
 If your findings reveal work that should ship (e.g. you reproduced a bug and the fix is clear), say so in the report; firstmate may promote this task in place, and you would then receive mode-specific ship instructions as a follow-up message.
 EOF
+cat "$BASELINE_TMP" >> "$BRIEF" || exit 2
+rm -f "$BASELINE_TMP"
 echo "scaffolded: $BRIEF (scout; replace {TASK})"
 exit 0
 fi
@@ -367,6 +439,7 @@ esac
 # briefs stay byte-identical to the historical Bash 5 output.
 DOD=${DOD%$'\n'}
 
+prepare_baseline || exit 2
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
 
@@ -428,4 +501,6 @@ Keep it proportionate: skip \`AGENTS.md\` edits for trivial tasks that produced 
 
 $DOD
 EOF
+cat "$BASELINE_TMP" >> "$BRIEF" || exit 2
+rm -f "$BASELINE_TMP"
 echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK})"
