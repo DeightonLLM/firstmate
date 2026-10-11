@@ -1,0 +1,297 @@
+# Machine-readable mirror of PRD_TRACEABILITY.md. Generated from and validated against the Markdown.
+version: 1
+last_verified: 2026-09-19
+prd_items:
+  - id: elevate-site-live
+    prd_section: Elevate customer-facing site
+    scope: elevate
+    status: DELIVERED
+    blocker: NONE
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md Elevate row
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Working customer-facing release for the cited scope; PRD-wide acceptance not proven.
+  - id: elevate-ops-provider-adapter
+    prd_section: Elevate operations provider adapter
+    scope: elevate
+    status: BLOCKED
+    blocker: AUTHORIZATION
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/SOFTWARE_LANES.md
+    sources:
+      - SOFTWARE_LANES.md Lane 1
+      - PRD_DELIVERY_MAP.md BR-ELEVATE-OPS-001
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Local mock-test implementation only; live/provider authority remains separate.
+  - id: coredistro-source-runtime
+    prd_section: Core Distro production source and runtime
+    scope: core-distro
+    status: EVIDENCED
+    blocker: NONE
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md Core Distro row
+      - BR-AUD-002 report
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: PHP production, Next.js staging, MySQL/Percona, auth/lead-list, queue-like city jobs; deployment/hydration/auth gates still open.
+  - id: coredistro-route-qa
+    prd_section: Core Distro route QA
+    scope: core-distro
+    status: EVIDENCED
+    blocker: NONE
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md Core Distro row
+      - BR-CORE-001 PASS/FAIL/NOT_RUNTIME_VERIFIABLE
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Read-only route QA; deployment/hydration/auth gates still open.
+  - id: coredistro-canary
+    prd_section: Core Distro 1-job canary execution
+    scope: core-distro
+    status: BLOCKED
+    blocker: OPERATOR_INPUT
+    evidence_paths:
+      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+    sources:
+      - MINI_SPRINT_PREPARATION_REPORT.md section 3
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: leadlists.php SHA-256 6f91999dafae7f85951f31455e339c375030fb71eb6c1ad9f474bdf71bce83d3; backlog 36,823 jobs paused.
+  - id: cbd-data-source-and-audit
+    prd_section: CBD-Data source and audit
+    scope: cbd-data
+    status: EVIDENCED
+    blocker: NONE
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md CBD-Data row
+      - BR-AUD-005 report
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Local restore/backup documents and tests exist; no accepted end-to-end Hostinger to Hetzner chain.
+  - id: cbd-worker-canary
+    prd_section: CBD worker canary
+    scope: cbd-data
+    status: EVIDENCED
+    blocker: AUTHORIZATION
+    evidence_paths:
+      - data/cbd-worker-canary/report.md
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - cbd-worker-canary report
+      - PRD_DELIVERY_MAP.md unresolved area 2
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Live placement on AminoVPS is not the PRD-v3 target.
+  - id: cbd-data-enrichment-gap
+    prd_section: CBD-Data enrichment pipeline
+    scope: cbd-data
+    status: EVIDENCED
+    blocker: AUTHORIZATION
+    evidence_paths:
+      - ../BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/evidence.md
+      - ../BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/decision-and-rollback.md
+      - ../BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/tdd-evidence.md
+      - ../BR-CBD-LANE-B-20260918-GATE003-MUTATION-20260918/lane-b-local-adapter-checker.md
+    sources:
+      - Gate-CBD-ENRICH-003 bounded private broker acceptance
+      - CBD Lane B local status-helper TDD and independent checker
+      - Access Baseline Registry Gate-003 record
+    last_verified: 2026-09-18
+    freshness_days: 30
+    notes: Private RabbitMQ bootstrap and deterministic local status helper are evidenced; no publisher/consumer adapter, project_id, idempotency key, durable persistence/restore, or end-to-end Hostinger-to-Hetzner acceptance. Gate-004 and cutover remain unauthorized.
+  - id: whoosh-audit
+    prd_section: Whoosh audit
+    scope: whoosh
+    status: BLOCKED
+    blocker: DEPENDENCY
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 1
+      - BR-AUD-004 status BLOCKED_BY_DEPENDENCY
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Exact repository, hosting, runtime, and production IP required.
+  - id: whoosh-bot-routing
+    prd_section: Whoosh bot routing
+    scope: whoosh
+    status: UNKNOWN
+    blocker: DEPENDENCY
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 1
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Do not claim Brandon bot routing is complete without an accepted artifact.
+  - id: hub-host-install
+    prd_section: Brandon hub Stage 2-4 installation
+    scope: hub
+    status: EVIDENCED
+    blocker: NONE
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-HUB-006
+      - evidence/BR-HUB-006/stage2-4-migration.md
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Application deployment remains separately queued; DNS/TLS/real credentials remain gated.
+  - id: hub-application-deployment
+    prd_section: Brandon hub application deployment
+    scope: hub
+    status: BLOCKED
+    blocker: OPERATOR_INPUT
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 4
+      - BRANDON_HUB_TASKS.md task 9
+      - BRANDON_CAMPAIGN_CONTROL.md section 5
+    last_verified: 2026-09-19
+    freshness_days: 30
+    notes: AnythingLLM is named by the Brandon Hub task queue, not the canonical PRD by product name; app target is Hostinger srv1856614, compute/Qdrant belong on Hetzner brandon-compute. Existing HD2 llm.hd2.ai does not satisfy Brandon delivery. Approved secret store, backup/restore, embedding/vector backend, per-project isolation, and DNS/TLS gate remain open.
+  - id: brandon-compute-runtime
+    prd_section: Brandon compute runtime
+    scope: compute
+    status: EVIDENCED
+    blocker: NONE
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-COMPUTE-LLM-001
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Private brandon-compute llama.cpp/Qwen3.8:27B runner with deterministic smoke/benchmark and M3 review.
+  - id: brandon-compute-pi-1panel
+    prd_section: Brandon compute Pi/1Panel setup
+    scope: compute
+    status: EVIDENCED
+    blocker: NONE
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-COMPUTE-PI-1PANEL-001
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Private 1Panel/Pi setup; not exposed.
+  - id: gateway-spec
+    prd_section: Brandon gateway Phase 1 specification
+    scope: cross-project
+    status: EVIDENCED
+    blocker: NONE
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-COMPUTE-GATEWAY-SPEC-001
+      - evidence/BR-COMPUTE-GATEWAY-SPEC-001/M3_REVIEW.md
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Phase 2 live deployment deferred; 8 offline tests.
+  - id: platform-isolation
+    prd_section: Cross-project runtime isolation
+    scope: cross-project
+    status: UNKNOWN
+    blocker: UNKNOWN
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 3
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: No accepted evidence proves end-to-end project isolation.
+  - id: platform-release-controls
+    prd_section: Project CI/CD and release controls
+    scope: platform
+    status: UNKNOWN
+    blocker: UNKNOWN
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 5
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Local controls do not satisfy PRD per-project gates.
+  - id: backup-dr
+    prd_section: Backup/DR (PRD v3 backup/DR)
+    scope: platform
+    status: UNKNOWN
+    blocker: OPERATOR_INPUT
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 6
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: BR-HUB-010 BLOCKED_OPERATOR_INPUT for provider/account, retention, RPO/RTO, and key custody.
+  - id: observability
+    prd_section: Observability (metrics/logs/alerts)
+    scope: platform
+    status: UNKNOWN
+    blocker: UNKNOWN
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 7
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Inventory only; no complete four-project SLO/alert/restore-age implementation.
+  - id: platform-source-provenance
+    prd_section: Canonical source provenance
+    scope: platform
+    status: BLOCKED
+    blocker: DEPENDENCY
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 8
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Canonical PRD is present in the warehouse; recover the historical Git blob only if exact-byte provenance is required before final signoff.
+  - id: mattermost-instance
+    prd_section: Mattermost instance ownership and rebrand
+    scope: platform
+    status: BLOCKED
+    blocker: OPERATOR_INPUT
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 4
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Do not claim Mattermost rebranding is complete without an accepted artifact.
+  - id: jitsi-instance
+    prd_section: Jitsi instance ownership and rebrand
+    scope: platform
+    status: BLOCKED
+    blocker: OPERATOR_INPUT
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 4
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Do not claim Jitsi rebranding is complete without an accepted artifact.
+  - id: amino-elevate-live-placement
+    prd_section: Brandon live placement on Amino/Elevate legacy VPS
+    scope: platform
+    status: UNKNOWN
+    blocker: AUTHORIZATION
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 2
+    last_verified: 2026-09-15
+    freshness_days: 30
+    notes: Do not claim Amino/Elevate live placement is complete; current placements are legacy, not PRD-v3 target.

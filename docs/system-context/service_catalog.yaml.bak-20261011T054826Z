@@ -1,0 +1,368 @@
+# Machine-readable mirror of SERVICE_CATALOG.md. Generated from and validated against the Markdown.
+version: 1
+last_verified: 2026-09-15
+services:
+  - id: hd2-anythingllm
+    platform_owner: deightonllm
+    tenant_or_client: hd2
+    brand_or_domain: llm.hd2.ai
+    current_host: hd2stack
+    intended_host: UNKNOWN
+    runtime: container
+    allowed_actions:
+      - read
+    evidence_paths:
+      - docs/system-context/WAREHOUSE_BOUNDARIES.md
+    sources:
+      - BRANDON_HUB_COMPONENT_INVENTORY.md existing HD2 AnythingLLM inventory
+      - WAREHOUSE_BOUNDARIES.md
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: PARTIAL
+    notes: Historical inventory associates llm.hd2.ai with this host, but current DNS/origin was not checked. Do not infer that this instance serves Brandon or any Brandon project; no app route should resolve to HD2Stack per operator direction. Vector backend is unknown.
+  - id: brandon-anythingllm
+    platform_owner: brandon
+    tenant_or_client: brandon-hub
+    brand_or_domain: UNKNOWN
+    current_host: UNKNOWN
+    intended_host: srv1856614
+    runtime: container
+    allowed_actions:
+      - read
+      - mock-test
+    evidence_paths:
+      - docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md
+      - docs/system-context/WAREHOUSE_BOUNDARIES.md
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - BRANDON_HUB_TASKS.md task 9
+      - BRANDON_HUB_SERVICE_MATRIX.md section 3.5
+      - BRANDON_CAMPAIGN_CONTROL.md section 5
+    last_verified: 2026-09-19
+    freshness_days: 30
+    status: BLOCKED
+    notes: AnythingLLM is named by the Hub task queue, not the canonical PRD itself. Existing llm.hd2.ai is a separate HD2 service. Do not index Brandon documents until approved auth, backup/restore, backend, and per-project isolation are proven.
+  - id: litellm-gateway
+    platform_owner: brandon
+    tenant_or_client: brandon-hub
+    brand_or_domain: UNKNOWN
+    current_host: srv1856614
+    intended_host: srv1856614
+    runtime: container
+    allowed_actions:
+      - read
+      - mock-test
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-HUB-006
+      - BR-HUB-006 stage 2-4 migration evidence
+      - BRANDON_HUB_SERVICE_MATRIX.md section 3.4
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: PARTIAL
+    notes: Brandon staging instance is hub-only/private-bound; an older controller-host LiteLLM instance is separately recorded in BR-HUB-001 and its relation is unreconciled. Real model credentials, embedding route, and production secret store remain gated.
+  - id: openresty-onepanel-upstream
+    platform_owner: brandon
+    tenant_or_client: brandon-hub
+    brand_or_domain: UNKNOWN
+    current_host: srv1856614
+    intended_host: srv1856614
+    runtime: container
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-HUB-006
+      - BR-HUB-006 stage 2-4 migration evidence
+      - BRANDON_CAMPAIGN_CONTROL.md section 2
+      - BRANDON_HUB_SERVICE_MATRIX.md section 3.2
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: PARTIAL
+    notes: Hostinger hub only; HD2Stack vmi3238503 is separate in-house infrastructure and is not a Brandon proxy upstream target.
+  - id: brandon-postgres
+    platform_owner: brandon
+    tenant_or_client: brandon-hub
+    brand_or_domain: UNKNOWN
+    current_host: srv1856614
+    intended_host: srv1856614
+    runtime: container
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-HUB-006
+      - PRD_DELIVERY_MAP.md unresolved area 2
+      - BR-HUB-006 stage 2-4 migration evidence
+      - BRANDON_HUB_SERVICE_MATRIX.md section 3.8
+      - canonical PRD v3 section 8.1
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: PARTIAL
+    notes: Host placement matches the PRD's Hostinger hub role; project database/role isolation and the PgBouncer front end still need acceptance evidence.
+  - id: brandon-redis
+    platform_owner: brandon
+    tenant_or_client: brandon-hub
+    brand_or_domain: UNKNOWN
+    current_host: srv1856614
+    intended_host: srv1856614
+    runtime: container
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-HUB-006
+      - BR-HUB-006 stage 2-4 migration evidence
+      - BRANDON_HUB_SERVICE_MATRIX.md section 3.9
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: PARTIAL
+    notes: Installed on Hostinger hub; current service necessity and project-scoped namespace isolation are not accepted.
+  - id: brandon-qdrant
+    platform_owner: brandon
+    tenant_or_client: brandon-hub
+    brand_or_domain: UNKNOWN
+    current_host: srv1856614
+    intended_host: brandon-compute
+    runtime: container
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md BR-HUB-006
+      - PRD_DELIVERY_MAP.md unresolved area 3
+      - BR-HUB-006 stage 2-4 migration evidence
+      - BRANDON_HUB_SERVICE_MATRIX.md section 3.6
+      - canonical PRD v3 sections 6.1 and 7.2
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: PARTIAL
+    notes: Current staged Qdrant is on Hostinger, but PRD v3 assigns Qdrant and temporary work data to Hetzner compute; AnyLLM's internal vector backend is still unknown. Do not use HD2Stack or migrate data until target access, backup, and isolation gates are explicitly accepted.
+  - id: mattermost-instance
+    platform_owner: UNKNOWN
+    tenant_or_client: UNKNOWN
+    brand_or_domain: UNKNOWN
+    current_host: UNKNOWN
+    intended_host: UNKNOWN
+    runtime: UNKNOWN
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 4
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: BLOCKED
+    notes: Instance ownership and brand/domain relationship explicitly unresolved. Do not claim Mattermost rebranding is complete.
+  - id: jitsi-instance
+    platform_owner: UNKNOWN
+    tenant_or_client: UNKNOWN
+    brand_or_domain: UNKNOWN
+    current_host: UNKNOWN
+    intended_host: UNKNOWN
+    runtime: UNKNOWN
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 4
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: BLOCKED
+    notes: Instance ownership and brand/domain relationship explicitly unresolved. Do not claim Jitsi rebranding is complete.
+  - id: coredistro-staging
+    platform_owner: brandon
+    tenant_or_client: core-distro
+    brand_or_domain: core-distro.com
+    current_host: srv1137994-aminolifesciences
+    intended_host: srv1137994-aminolifesciences
+    runtime: node
+    allowed_actions:
+      - read
+      - local-build
+      - mock-test
+      - staging-deploy
+    evidence_paths:
+      - data/BR-INV-001/report.md
+    sources:
+      - BR-INV-001/report.md Host 1
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: Staging at 127.0.0.1:3113 active; production port 127.0.0.1:3117 registered but not started.
+  - id: coredistro-production
+    platform_owner: brandon
+    tenant_or_client: core-distro
+    brand_or_domain: core-distro.com
+    current_host: srv1137994-aminolifesciences
+    intended_host: UNKNOWN
+    runtime: php-fpm
+    allowed_actions:
+      - read
+      - mock-test
+    evidence_paths:
+      - data/BR-AUD-002/report.md
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - BR-AUD-002/report.md
+      - PRD_DELIVERY_MAP.md
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: PARTIAL
+    notes: PHP/MySQL running; deployment/hydration/auth gates still open; PRD-v3 architecture decision pending.
+  - id: cbd-worker
+    platform_owner: brandon
+    tenant_or_client: cbd-data
+    brand_or_domain: cbd-data.com
+    current_host: srv1137994-aminolifesciences
+    intended_host: hetzner-compute
+    runtime: systemd
+    allowed_actions:
+      - read
+      - local-build
+      - mock-test
+    evidence_paths:
+      - data/BR-INV-001/report.md
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - BR-INV-001/report.md Host 1
+      - PRD_DELIVERY_MAP.md
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: Active on AminoVPS; live placement on AminoVPS is not the PRD-v3 target.
+  - id: elevate-site
+    platform_owner: elevate
+    tenant_or_client: elevate
+    brand_or_domain: elevatesci.com
+    current_host: UNKNOWN
+    intended_host: UNKNOWN
+    runtime: static
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: EVIDENCED
+    notes: 84-file static SEO/schema/image changes; live apex/www state confirmed by accepted evidence.
+  - id: elevate-dashboard
+    platform_owner: elevate
+    tenant_or_client: elevate
+    brand_or_domain: agents.elevatesci.com
+    current_host: srv1137994-aminolifesciences
+    intended_host: UNKNOWN
+    runtime: static
+    allowed_actions:
+      - read
+    evidence_paths:
+      - docs/system-context/ELEVATE_NGINX_ROUTE_20260919.md
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - hosts.yaml
+      - PRD_DELIVERY_MAP.md
+      - ELEVATE_NGINX_ROUTE_20260919.md
+    last_verified: 2026-09-19
+    freshness_days: 30
+    status: PARTIAL
+    notes: >-
+      Static dashboard remains available through its redirect. Its /api/* route
+      now returns local 503 after removing the HD2Stack upstream; no local
+      Elevate API listener is present. Dashboard authentication and an
+      Elevate-owned backend remain unresolved.
+  - id: elevate-ops-adapter
+    platform_owner: elevate
+    tenant_or_client: elevate
+    brand_or_domain: elevatesci.com
+    current_host: UNKNOWN
+    intended_host: UNKNOWN
+    runtime: UNKNOWN
+    allowed_actions:
+      - read
+      - local-build
+      - mock-test
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/SOFTWARE_LANES.md
+    sources:
+      - SOFTWARE_LANES.md Lane 1
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: BLOCKED
+    notes: BLOCKED_AUTHORIZATION for live/provider work; local mock-test implementation only.
+  - id: music-metrics
+    platform_owner: deightonllm
+    tenant_or_client: music-metrics
+    brand_or_domain: UNKNOWN
+    current_host: retained-evidence
+    intended_host: UNKNOWN
+    runtime: php-fpm
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+    sources:
+      - MINI_SPRINT_PREPARATION_REPORT.md section 5
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: Music Metrics write-locked unless explicitly named.
+  - id: lawyer
+    platform_owner: deightonllm
+    tenant_or_client: lawyer
+    brand_or_domain: UNKNOWN
+    current_host: retained-evidence
+    intended_host: UNKNOWN
+    runtime: php-fpm
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+    sources:
+      - MINI_SPRINT_PREPARATION_REPORT.md section 5
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: Preserved byte-for-byte; read-only.
+  - id: whoosh-service
+    platform_owner: brandon
+    tenant_or_client: whoosh
+    brand_or_domain: UNKNOWN
+    current_host: whoosh-runtime
+    intended_host: UNKNOWN
+    runtime: UNKNOWN
+    allowed_actions:
+      - read
+    evidence_paths:
+      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+    sources:
+      - PRD_DELIVERY_MAP.md unresolved area 1
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: BLOCKED
+    notes: BR-AUD-004 is BLOCKED_BY_DEPENDENCY; do not claim live placement.
+  - id: hd2ai-edge
+    platform_owner: deightonllm
+    tenant_or_client: hd2
+    brand_or_domain: hd2.ai
+    current_host: srv797124
+    intended_host: srv797124
+    runtime: UNKNOWN
+    allowed_actions:
+      - read
+    evidence_paths:
+      - AGENTS.md
+    sources:
+      - AGENTS.md Management URL map
+    last_verified: 2026-09-15
+    freshness_days: 30
+    status: KNOWN
+    notes: Distinct from HD2Stack vmi3238503.
