@@ -32,7 +32,7 @@ extract_fn() {
 
 FUNCS="$TMP_ROOT/fns.sh"
 : > "$FUNCS"
-for fn in launch_template model_flag_for_harness effort_flag_for_harness shell_quote; do
+for fn in launch_template model_flag_for_harness effort_flag_for_harness shell_quote real_path_or_raw agy_pretrust_workspace; do
   body=$(extract_fn "$fn")
   [ -n "$body" ] || fail "could not extract $fn from fm-spawn.sh"
   printf '%s\n' "$body" >> "$FUNCS"
@@ -255,4 +255,149 @@ out=$(printf '' | "$FAKE_HOME/hook.sh" 2>/dev/null) || fail 'agy hook must exit 
 assert_contains "$out" '"decision":"stop"' 'agy hook must emit decision=stop on an empty payload'
 pass 'the agy turn-end hook always emits a valid Stop decision object'
 
-echo '1..17'
+# --- workspace trust pre-seeding ---------------------------------------------
+# fm-spawn creates a NEW uniquely-pathed worktree for every spawn, so no static
+# trustedWorkspaces list can ever cover them: agy would park on its interactive
+# "Do you trust the contents of this project?" prompt. agy_pretrust_workspace
+# must add the exact worktree path to the user's AGY trust store before launch.
+# Every case below runs against a temp HOME or an explicit path, so the real
+# ~/.gemini/antigravity-cli/settings.json on this host is never touched.
+
+# The trust store is $HOME/.gemini/antigravity-cli/settings.json - a DIFFERENT
+# subtree from $HOME/.gemini/config/, which only holds the shared-user
+# hooks.json. Writing trust into the hooks directory would be a silent no-op.
+pretrust_fn=$(extract_fn agy_pretrust_workspace)
+assert_contains "$pretrust_fn" 'antigravity-cli/settings.json' \
+  'trust must target agy real trust store antigravity-cli/settings.json'
+
+# The store must resolve from the environment, never a hardcoded home: the
+# Controller runs as root and Brandon Compute as hd2admin.
+case "$pretrust_fn" in
+  *'/root/'*) fail 'trust store path must not hardcode /root' ;;
+esac
+assert_contains "$pretrust_fn" 'HOME' 'trust store path must resolve from the environment'
+pass 'the agy trust store resolves from the environment, with no hardcoded home'
+
+# Spawn must call it before the agy launch command is sent to the pane.
+pretrust_call_line=$(grep -n '^  agy_pretrust_workspace "\$WT" || {$' "$SPAWN" | head -1 | cut -d: -f1)
+[ -n "$pretrust_call_line" ] || fail 'fm-spawn.sh never calls agy_pretrust_workspace unconditionally on its own line'
+launch_line=$(grep -n 'spawn_send_literal "\$T" "\$LAUNCH"' "$SPAWN" | head -1 | cut -d: -f1)
+[ -n "$launch_line" ] || fail 'could not locate the launch dispatch line in fm-spawn.sh'
+[ "$pretrust_call_line" -lt "$launch_line" ] || fail 'trust must be seeded BEFORE the agy launch command is sent'
+wt_line=$(grep -n 'WT="\$PROJ_ABS"\|WT="\$p"\|WT=\${rest' "$SPAWN" | tail -1 | cut -d: -f1)
+[ -n "$wt_line" ] || fail 'could not locate worktree assignment in fm-spawn.sh'
+[ "$pretrust_call_line" -gt "$wt_line" ] || fail 'trust must be seeded only after the worktree path is known'
+pass 'fm-spawn seeds agy workspace trust after the worktree exists and before launch'
+
+# The call must be agy-only: no other harness may be affected.
+pretrust_case=$(awk -v n="$pretrust_call_line" 'NR>=n-4 && NR<=n' "$SPAWN")
+assert_contains "$pretrust_case" 'agy' 'the trust pre-seed must be gated on the agy harness'
+case "$pretrust_case" in
+  *claude*|*codex*|*opencode*|*grok*|*kimi*|*pi-signed*) fail 'trust pre-seed must not affect other harnesses' ;;
+esac
+pass 'the workspace-trust pre-seed is gated to the agy harness only'
+
+assert_eq() {
+  [ "$1" = "$2" ] || fail "$3 (expected '$2', got '$1')"
+}
+
+# Case 1: an untrusted path gets added, into the real store location, with no
+# other keys disturbed.
+TRUST_HOME="$TMP_ROOT/trust-home"
+SETTINGS="$TRUST_HOME/.gemini/antigravity-cli/settings.json"
+WT_NEW="$TMP_ROOT/new-worktree"
+mkdir -p "$WT_NEW"
+mkdir -p "$(dirname "$SETTINGS")"
+printf '%s\n' '{"allowNonWorkspaceAccess":true,"permissions":{"allow":["command(ls)"],"deny":[]}}' > "$SETTINGS"
+before_other=$(jq -S '.permissions, .allowNonWorkspaceAccess' "$SETTINGS")
+( agy_pretrust_workspace "$WT_NEW" "$TRUST_HOME" ) || fail 'trust pre-seed failed on a well-formed store'
+jq -e . "$SETTINGS" >/dev/null 2>&1 || fail 'trust store did not parse after the merge'
+got=$(jq -r '.trustedWorkspaces | index("'"$WT_NEW"'") // "missing"' "$SETTINGS")
+assert_eq "$got" '0' 'the new worktree must be present in trustedWorkspaces'
+pass 'an untrusted worktree path is added to the AGY trust store'
+
+after_other=$(jq -S '.permissions, .allowNonWorkspaceAccess' "$SETTINGS")
+assert_eq "$after_other" "$before_other" 'permissions and allowNonWorkspaceAccess must survive byte-identically'
+pass 'other top-level keys (permissions, allowNonWorkspaceAccess) survive unchanged'
+
+# Case 2: every pre-existing trusted path is preserved exactly, including
+# entries with spaces, quotes, unicode, and JSON metacharacters.
+UNI="$TMP_ROOT/uni-home"
+mkdir -p "$UNI/.gemini/antigravity-cli"
+UNIS="$UNI/.gemini/antigravity-cli/settings.json"
+WEIRD=(
+  '/home/hd2admin'
+  '/home/hd2admin/firstmate baseline'
+  '/home/hd2admin/quote"and\backslash'
+  "/home/hd2admin/tab	and newline"
+  '/home/hd2admin/ünïcode-路径'
+  '/home/hd2admin/a[b]{c}*?'
+  "$WT_NEW"
+)
+jq -nc --args '{allowNonWorkspaceAccess:false, trustedWorkspaces:$ARGS.positional}' "${WEIRD[@]}" > "$UNIS"
+( agy_pretrust_workspace "$WT_NEW" "$UNI" ) || fail 'trust pre-seed failed on a store with unusual paths'
+for w in "${WEIRD[@]}"; do
+  jq -e --arg w "$w" '.trustedWorkspaces | index($w) != null' "$UNIS" >/dev/null 2>&1 \
+    || fail "pre-existing trusted path was dropped: $w"
+done
+assert_eq "$(jq -r '.trustedWorkspaces | length' "$UNIS")" "${#WEIRD[@]}" \
+  'an already-trusted path must not be duplicated'
+pass 'every pre-existing trusted path survives exactly, including unusual characters'
+
+# Case 3: idempotent - running twice must not duplicate the entry.
+( agy_pretrust_workspace "$WT_NEW" "$UNI" ) || fail 'trust pre-seed failed on the second run'
+assert_eq "$(jq -r '.trustedWorkspaces | length' "$UNIS")" "${#WEIRD[@]}" \
+  're-running trust pre-seed must be idempotent'
+pass 're-seeding an already-trusted path does not duplicate the entry'
+
+# Case 4: a missing settings.json is created rather than treated as fatal.
+FRESH_HOME="$TMP_ROOT/fresh-home"
+mkdir -p "$WT_NEW/child"
+( agy_pretrust_workspace "$WT_NEW" "$FRESH_HOME" ) || fail 'trust pre-seed must create a missing settings.json'
+FRESH_SETTINGS="$FRESH_HOME/.gemini/antigravity-cli/settings.json"
+[ -f "$FRESH_SETTINGS" ] || fail "a missing settings.json was not created at $FRESH_SETTINGS"
+jq -e . "$FRESH_SETTINGS" >/dev/null 2>&1 || fail 'the created settings.json is not valid JSON'
+assert_eq "$(jq -r '.trustedWorkspaces | length' "$FRESH_SETTINGS")" '1' \
+  'the created settings.json must contain just the new path'
+pass 'a missing settings.json is created containing just trustedWorkspaces'
+
+# Case 5: malformed JSON aborts with a clear message and is NOT overwritten.
+BAD_HOME="$TMP_ROOT/bad-home"
+mkdir -p "$BAD_HOME/.gemini/antigravity-cli"
+BADS="$BAD_HOME/.gemini/antigravity-cli/settings.json"
+BROKEN='{"trustedWorkspaces": ["/home/hd2admin",}'
+printf '%s\n' "$BROKEN" > "$BADS"
+err=$(agy_pretrust_workspace "$WT_NEW" "$BAD_HOME" 2>&1) && fail 'malformed settings.json must abort the trust pre-seed'
+assert_contains "$err" 'valid JSON' 'malformed settings.json must produce an actionable error'
+assert_contains "$err" "$BADS" 'the error must name the offending file'
+assert_eq "$(cat "$BADS")" "$BROKEN" 'malformed settings.json must be left byte-identical'
+pass 'malformed JSON aborts with a clear message and does not overwrite the file'
+
+# Case 6: a non-regular (symlinked) store fails closed rather than being followed.
+LINK_HOME="$TMP_ROOT/link-home"
+mkdir -p "$LINK_HOME/.gemini/antigravity-cli"
+REAL_S="$TMP_ROOT/link-target.json"
+printf '%s\n' '{"trustedWorkspaces":[]}' > "$REAL_S"
+ln -sf "$REAL_S" "$LINK_HOME/.gemini/antigravity-cli/settings.json"
+err=$(agy_pretrust_workspace "$WT_NEW" "$LINK_HOME" 2>&1) && fail 'a symlinked trust store must fail closed'
+assert_contains "$err" 'regular file' 'a symlinked store must produce an actionable error'
+assert_eq "$(cat "$REAL_S")" '{"trustedWorkspaces":[]}' 'the symlink target must be untouched'
+pass 'a symlinked trust store fails closed without touching its target'
+
+# Case 7: the written JSON always parses afterwards, and the merge never drops
+# the captain's key order-independent values.
+final=$(jq -cS . "$UNI/.gemini/antigravity-cli/settings.json") || fail 'final trust store does not parse'
+assert_contains "$final" 'allowNonWorkspaceAccess' 'the merged store must keep allowNonWorkspaceAccess'
+pass 'the written trust store parses afterwards with every key intact'
+
+# The store path must default to $HOME so a normal spawn needs no override.
+home_line=$(printf '%s' "$pretrust_fn" | grep -n 'HOME' | head -1)
+[ -n "$home_line" ] || fail 'agy_pretrust_workspace does not consult HOME at all'
+DEFAULT_HOME="$TMP_ROOT/default-home"
+mkdir -p "$WT_NEW/deep"
+( HOME="$DEFAULT_HOME" agy_pretrust_workspace "$WT_NEW" ) || fail 'trust pre-seed must work with no explicit override'
+[ -f "$DEFAULT_HOME/.gemini/antigravity-cli/settings.json" ] \
+  || fail 'agy_pretrust_workspace did not default to $HOME/.gemini/antigravity-cli/settings.json'
+pass 'with no override the store defaults to $HOME, independent of the invoking user'
+
+echo '1..26'

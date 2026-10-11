@@ -950,6 +950,92 @@ real_path_or_raw() {  # <path>
   fi
 }
 
+# agy refuses to start in a workspace absent from its trusted-workspaces list: it
+# parks on an interactive "Do you trust the contents of this project?" prompt
+# that no crewmate and no unattended supervisor can answer. fm-spawn creates a
+# NEW uniquely-pathed worktree for every spawn, so no static list can ever cover
+# them; the prompt has to be pre-empted by seeding the store at spawn time.
+#
+# The captain reviewed the earlier firstmate policy that refused to manufacture
+# agy trust state and explicitly authorised pre-seeding it. The seed is additive
+# and narrow: it adds exactly one absolute path, preserves every other key
+# (allowNonWorkspaceAccess, permissions, model, statusLine) and every existing
+# trusted path, and fails closed rather than rewriting a store it cannot parse.
+agy_pretrust_workspace() {  # <worktree-path> [home-dir]
+  local ws home dir settings merged
+  [ -n "${1:-}" ] || {
+    echo "error: cannot seed the agy workspace trust store: no workspace path was given" >&2
+    return 1
+  }
+  ws=$(real_path_or_raw "$1")
+  # Resolve the store from the environment or the invoking user. The Controller
+  # runs as root and Brandon Compute as hd2admin, so no home is hardcoded.
+  home=${2:-${HOME:-}}
+  if [ -z "$home" ]; then
+    echo "error: cannot seed the agy workspace trust store: HOME is unset and no home directory was given" >&2
+    return 1
+  fi
+  # agy's real trust store lives in its own antigravity-cli subtree; the
+  # sibling .gemini/config subtree only holds the shared-user hooks.json, so
+  # writing trust there would be a silent no-op.
+  settings="$home/.gemini/antigravity-cli/settings.json"
+  dir=${settings%/*}
+  command -v jq >/dev/null 2>&1 || {
+    echo "error: cannot seed the agy workspace trust store: jq is required" >&2
+    return 1
+  }
+  # Refuse rather than guess: a store we cannot parse could be mangled, and a
+  # non-regular file is never the captain's real settings.
+  if [ -e "$settings" ]; then
+    [ -f "$settings" ] && [ ! -L "$settings" ] || {
+      echo "error: cannot seed the agy workspace trust store: $settings is not a regular file" >&2
+      return 1
+    }
+    jq -e . "$settings" >/dev/null 2>&1 || {
+      echo "error: cannot seed the agy workspace trust store: $settings is not valid JSON; repair or move it aside by hand, firstmate will not overwrite it" >&2
+      return 1
+    }
+  fi
+  mkdir -p "$dir" 2>/dev/null || {
+    echo "error: cannot seed the agy workspace trust store: $dir could not be created" >&2
+    return 1
+  }
+  # Merge additively without -S, so the captain's key order is preserved
+  # byte-for-byte and an already-trusted path is left completely alone.
+  if [ -e "$settings" ]; then
+    merged=$(jq --arg ws "$ws" '
+      if (.trustedWorkspaces | type) == "array" then
+        if (.trustedWorkspaces | index($ws)) == null then
+          .trustedWorkspaces = (.trustedWorkspaces + [$ws])
+        else . end
+      else
+        .trustedWorkspaces = [$ws]
+      end
+    ' "$settings") || {
+      echo "error: cannot seed the agy workspace trust store: the merge into $settings failed" >&2
+      return 1
+    }
+  else
+    merged=$(jq -nc --arg ws "$ws" '{"trustedWorkspaces":[$ws]}')
+  fi
+  # Same non-clobbering temp-write, post-write validation, atomic replace the
+  # turn-end hook installer below uses, so a crash cannot leave agy a corrupt
+  # store that breaks the CLI entirely.
+  printf '%s\n' "$merged" > "$settings.tmp.$$" || {
+    echo "error: cannot seed the agy workspace trust store: $settings could not be written" >&2
+    return 1
+  }
+  jq -e . "$settings.tmp.$$" >/dev/null 2>&1 || {
+    echo "error: cannot seed the agy workspace trust store: the merged store did not validate" >&2
+    return 1
+  }
+  mv -f "$settings.tmp.$$" "$settings" || {
+    echo "error: cannot seed the agy workspace trust store: $settings could not be replaced" >&2
+    return 1
+  }
+  return 0
+}
+
 # Session-provider container-ensure + task creation. tmux stays exactly as P1
 # left it (same session-name / new-window sequence, see bin/backends/tmux.sh);
 # a herdr spawn goes through the version-gated, workspace-per-HOME,
@@ -1671,10 +1757,13 @@ EOF
       # single cwd), so the hook resolves the pointer from that array.
       #
       # agy workspace-local hooks (<workspace>/.agents/hooks.json) only load after
-      # a folder-trust grant, which firstmate will not manufacture by editing agy's
-      # managed trust state. Its SHARED USER hooks.json ($HOME/.gemini/config/hooks.json)
-      # is always loaded by the CLI, so the hook lives there - the same shape as
-      # grok's always-trusted global hook. It is one firstmate-owned NAMED hook block,
+      # a folder-trust grant. SUPERSEDED: firstmate previously declined to
+      # manufacture that grant; the captain has since explicitly authorised
+      # pre-seeding the trust store, which agy_pretrust_workspace() below now
+      # does for every spawn. The SHARED USER hooks.json
+      # ($HOME/.gemini/config/hooks.json) is still always loaded by the CLI, so
+      # the hook lives there - the same shape as grok's always-trusted global
+      # hook. It is one firstmate-owned NAMED hook block,
       # merged into the captain's existing hooks.json without touching any other key,
       # and it is a guarded no-op for every non-firstmate agy session: it fires only
       # when a workspace holds a .fm-agy-turnend pointer naming a token in the
@@ -1784,6 +1873,18 @@ AGY_HOOK_EOF
       fi
       ;;
   esac
+fi
+
+# agy parks on an interactive "Do you trust the contents of this project?"
+# prompt for any workspace missing from its trust store, and every spawn gets a
+# NEW uniquely-pathed worktree, so no static list can cover them. Seed the store
+# now that the worktree exists and before the launch command is dispatched, or
+# the crewmate would sit on a prompt no unattended session can answer.
+if [ "$HARNESS" = agy ] || [ "${HARNESS#agy-}" != "$HARNESS" ]; then
+  agy_pretrust_workspace "$WT" || {
+    echo "error: refusing agy spawn because the agy workspace trust store could not be seeded; agy would otherwise park on its interactive folder-trust prompt" >&2
+    exit 1
+  }
 fi
 
 # Per-project delivery mode + yolo flag (bin/fm-project-mode.sh; the project-management skill and AGENTS.md task lifecycle).
