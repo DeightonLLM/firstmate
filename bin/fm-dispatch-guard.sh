@@ -32,7 +32,19 @@ set -u
 
 HARNESS="${1:-}"
 MODEL="${2:-}"
-LOG="${FM_DISPATCH_GUARD_LOG:-/root/.config/dispatch-guard.log}"
+# Log location must resolve on ANY surface, not just the Controller where the
+# operator happens to be root. A hardcoded /root path printed a write failure on
+# Brandon Compute (operator hd2admin) on every guard invocation. Resolve the
+# user's own config dir, and only fall back to a /tmp path - never /root.
+if [ -n "${FM_DISPATCH_GUARD_LOG:-}" ]; then
+  LOG="$FM_DISPATCH_GUARD_LOG"
+elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+  LOG="${XDG_CONFIG_HOME}/dispatch-guard.log"
+elif [ -n "${HOME:-}" ] && [ -w "${HOME}" ]; then
+  LOG="${HOME}/.config/dispatch-guard.log"
+else
+  LOG="${TMPDIR:-/tmp}/fm-dispatch-guard.log"
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-backend.sh
