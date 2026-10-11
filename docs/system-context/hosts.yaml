@@ -50,8 +50,8 @@ hosts:
       - hd2
     evidence_paths:
       - AGENTS.md
-      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - AGENTS.md Management URL map
       - BRANDON_CAMPAIGN_CONTROL.md section 2 (HD2 infrastructure is outside client work)
@@ -90,7 +90,7 @@ hosts:
       - core-distro
       - cbd-data
     evidence_paths:
-      - data/BR-INV-001/report.md
+      - docs/system-context/evidence/data/BR-INV-001/report.md
     sources:
       - BR-INV-001/report.md Host 1
       - AMINOVPS_COORDINATE_MAP_20260711.md
@@ -110,7 +110,7 @@ hosts:
     tenants:
       - brandon-hub
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
       - docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md
     sources:
       - BRANDON_HUB_SERVICE_MATRIX.md sections 1 and 3
@@ -134,7 +134,7 @@ hosts:
     tenants:
       - brandon-compute
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
       - docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md
     sources:
       - BRANDON_VPS_COMPUTE_ROUTING_CONTRACT.md
@@ -157,7 +157,7 @@ hosts:
     tenants:
       - whoosh
     evidence_paths:
-      - data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
+      - docs/system-context/evidence/data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md
     sources:
       - PRD_DELIVERY_MAP.md unresolved area 1
     last_verified: 2026-09-15
@@ -179,7 +179,7 @@ hosts:
       - elevate
       - cbd-data
     evidence_paths:
-      - data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
+      - docs/system-context/evidence/data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md
     sources:
       - MINI_SPRINT_PREPARATION_REPORT.md section 5
     last_verified: 2026-09-15
