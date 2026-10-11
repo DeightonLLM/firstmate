@@ -124,6 +124,8 @@
 # On success prints: spawned <id> harness=<name> kind=<ship|scout|secondmate> mode=<mode> yolo=<on|off> window=<backend-target> worktree=<path>
 # mode/yolo are resolved per-project from data/projects.md for ship/scout tasks;
 # secondmate spawns record mode=secondmate, yolo=off, home=, and projects=.
+# Every spawn records spawned_at=<epoch>, the anchor bin/fm-crew-visibility.sh
+# measures a silent crew's first-report grace from.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -1754,6 +1756,11 @@ META_WINDOW=$T
 {
   echo "window=$META_WINDOW"
   echo "endpoint_task_id=$ID"
+  # spawned_at= is the crew-visibility anchor (bin/fm-crew-visibility.sh): the
+  # first-report grace is measured from spawn, not from the meta's mtime, so an
+  # unrelated later append (fm-pr-check records pr=, fm-x-link records x_request=)
+  # cannot rewind the clock on a crew that has in fact said nothing since launch.
+  echo "spawned_at=$(date +%s)"
   echo "worktree=$WT"
   echo "project=$PROJ_ABS"
   echo "harness=$HARNESS"

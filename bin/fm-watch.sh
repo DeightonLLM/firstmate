@@ -53,6 +53,11 @@
 #                          running a check or removing poll artifacts
 #   heartbeat              fleet-scan backstop found an unsurfaced captain-relevant
 #                          status, unless afk is active
+#   stale: <window> (crew-silent: <id> silent <N>s past the <G>s <bound>)
+#                          a LIVE lane that has gone silent past its reporting
+#                          bound, so the captain cannot see it working. Surfaced on
+#                          a bounded re-reminder cadence, never per poll; cleared
+#                          the moment the crew reports again.
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -1253,6 +1258,38 @@ EOF
       else
         [ -e "$pf" ] && clear_pause_tracking "$w"
       fi
+    fi
+    # Crew visibility (captain ruling 2026-10-11): a LIVE lane that has said
+    # nothing for longer than its reporting bound is not "working quietly", it is
+    # invisible, and the captain met exactly that as an agent he could not read.
+    # Placed at the END of the window body so every wedge/stale/pause timer above
+    # has already been updated first - a breach must be purely additive and must
+    # never leave another check's bookkeeping half-written. Reached ONLY because
+    # the backend read above succeeded, so a dead or torn-down meta (history, not
+    # an invisible agent) can never breach, and the check covers every harness
+    # because bin/fm-crew-visibility.sh names no adapter - registering a new one
+    # cannot fall outside it. Bounds: FM_CREW_VISIBILITY_GRACE_SEC (no report at
+    # all since spawn) and FM_CREW_VISIBILITY_STALE_SEC (heartbeat after a report).
+    viskey=$(printf '%s' "$w" | tr ':/.' '___')
+    vline=$("$SCRIPT_DIR/fm-crew-visibility.sh" "$task" "$STATE" 2>/dev/null || true)
+    if [ -n "$vline" ]; then
+      visnow=$(printf '%s\n' "$vline" | sed -n 's/.*silent \([0-9][0-9]*\)s.*/\1/p')
+      case "$visnow" in ''|*[!0-9]*) visnow=0 ;; esac
+      visstep=$(printf '%s\n' "$vline" | sed -n 's/.*past the \([0-9][0-9]*\)s.*/\1/p')
+      case "$visstep" in ''|*[!0-9]*) visstep=300 ;; esac
+      vislast=$(cat "$STATE/.vis-$viskey" 2>/dev/null || echo 0)
+      case "$vislast" in ''|*[!0-9]*) vislast=0 ;; esac
+      # Re-surface on a bounded cadence (one further bound of silence), never
+      # every poll: a persistent breach keeps reminding the captain instead of
+      # becoming a wake storm, and a crew that reports clears its marker below.
+      if [ "$visnow" -ge $((vislast + visstep)) ]; then
+        echo "$visnow" > "$STATE/.vis-$viskey"
+        reason="stale: $w ($vline)"
+        fm_wake_append stale "$w" "$reason" || exit 1
+        wake "$reason"
+      fi
+    else
+      rm -f "$STATE/.vis-$viskey" 2>/dev/null || true
     fi
   done < <(recorded_windows)
   _wphase per_window_loop

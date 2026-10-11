@@ -1213,6 +1213,14 @@ handle_wake() {  # <reason> <state>
               case "$arg" in *" ("*) stale_detail="${arg#*" ("}"; arg="${arg%% \(*}" ;; esac
               decision=$(classify_stale "$arg" "$state")
               case "$stale_detail" in
+                crew-silent:*)
+                  # A crew the captain cannot see is never a transient self-handle.
+                  # classify_stale reads an unreported crew as bare "no status" and
+                  # would bury it as a wedge-marker refresh, which is exactly the
+                  # invisible-agent failure this wake exists to prevent: away mode
+                  # must tell the captain, not absorb it. The watcher's own cadence
+                  # (.vis-<window>) bounds how often the escalation repeats.
+                  decision="escalate|crew silent - ${stale_detail#crew-silent: }" ;;
                 idle\ *s,\ possible\ wedge,\ escalation\ *)
                   decision="escalate|${reason#stale: }" ;;
               esac ;;

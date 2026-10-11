@@ -352,6 +352,14 @@ stop; firstmate must not treat the task as started.
    Each append wakes firstmate, so report sparingly: only phase changes a supervisor
    would act on and the needs-decision/blocked/paused/done/failed states. No step-by-step
    FYI progress lines; firstmate reads your pane for that.
+   Staying VISIBLE is enforced in code, not merely requested here: a live crewmate that has
+   appended nothing for longer than FM_CREW_VISIBILITY_STALE_SEC (default 1800s), or has never
+   appended anything within FM_CREW_VISIBILITY_GRACE_SEC (default 300s) of its spawn, raises a
+   \`crew-silent\` breach naming you and the elapsed silence straight to the captain
+   (bin/fm-crew-visibility.sh, checked by the watcher on every cycle). So re-append a \`working:\`
+   line whenever a phase runs long - the watcher absorbs those as benign, so they cost the
+   captain nothing, and they are exactly what keeps you readable. A declared \`$PAUSED_VERB: {why}\`
+   for an external wait ends that obligation; going quiet never does.
    Use \`$PAUSED_VERB: {why}\` - distinct from \`blocked:\` - ONLY when you are deliberately idling on a
    known external wait you expect to clear on its own (an upstream release, a rate-limit reset):
    firstmate then leaves your idle pane alone and rechecks it on a long cadence instead of
@@ -478,6 +486,14 @@ $RULE1
    would act on (setup done, bug reproduced, fix implemented, validation passed) and the
    needs-decision/blocked/paused/done/failed states. No step-by-step FYI progress lines;
    firstmate reads your pane for that.
+   Staying VISIBLE is enforced in code, not merely requested here: a live crewmate that has
+   appended nothing for longer than FM_CREW_VISIBILITY_STALE_SEC (default 1800s), or has never
+   appended anything within FM_CREW_VISIBILITY_GRACE_SEC (default 300s) of its spawn, raises a
+   \`crew-silent\` breach naming you and the elapsed silence straight to the captain
+   (bin/fm-crew-visibility.sh, checked by the watcher on every cycle). So re-append a \`working:\`
+   line whenever a phase runs long - the watcher absorbs those as benign, so they cost the
+   captain nothing, and they are exactly what keeps you readable. A declared \`$PAUSED_VERB: {why}\`
+   for an external wait ends that obligation; going quiet never does.
    A mid-task \`working:\` line (including setup complete) is nonterminal: do not end the
    turn after it; continue the same stage until a defined \`done:\` gate under Definition of done.
    Use \`$PAUSED_VERB: {why}\` - distinct from \`blocked:\` - ONLY when you are deliberately idling on a
