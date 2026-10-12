@@ -41,6 +41,7 @@ test_receive_publishes_wake_and_receipt() {
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" 2>&1) || {
     fail "scan exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
 
@@ -69,6 +70,7 @@ test_rescan_is_deduplicated() {
   FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" >/dev/null 2>&1 || {
     fail "first scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
   first_lines=$(wc -l <"$status")
@@ -78,6 +80,7 @@ test_rescan_is_deduplicated() {
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" 2>&1) || {
     fail "second scan exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
 
@@ -102,12 +105,14 @@ test_changed_content_is_a_new_receipt() {
   FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" >/dev/null 2>&1 || {
     fail "first scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
   write_report "$reports/reply-1.md" "From Hetz: parity audit REVERSED, blocked."
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" 2>&1) || {
     fail "rescan after content change exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
   assert_grep "REVERSED" "$status" \
@@ -130,6 +135,7 @@ test_corr_token_is_recorded() {
   FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" >/dev/null 2>&1 || {
     fail "scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
   assert_grep "corr=abc123def4567890" "$status" \
@@ -140,27 +146,32 @@ test_corr_token_is_recorded() {
 # Acknowledgment is a separate fact from receipt, and is idempotent: the first
 # handled call records it, repeats report already-handled and change nothing.
 test_handled_is_durable_and_idempotent() {
-  local home reports out second
+  local home reports review out second
   read -r home reports <<<"$(make_env handled)"
+  review="$TMP_ROOT/handled/review.md"
   write_report "$reports/reply-1.md" "From Hetz: parity audit complete."
+  printf '%s\n' "Controller review: parity audit result checked." >"$review"
 
   FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" >/dev/null 2>&1 || {
     fail "scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
 
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
-    "$INGEST" handled hetz-inbox reply-1.md 2>&1) || {
+    "$INGEST" handled hetz-inbox reply-1.md --review "$review" 2>&1) || {
     fail "handled exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
   assert_contains "$out" "handled: reply-1.md" \
     "the first acknowledgment is not recorded"
 
   second=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
-    "$INGEST" handled hetz-inbox reply-1.md 2>&1) || {
+    "$INGEST" handled hetz-inbox reply-1.md --review "$review" 2>&1) || {
     fail "repeat handled exited non-zero: $second"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
   assert_contains "$second" "already-handled: reply-1.md" \
@@ -177,6 +188,7 @@ test_handled_refuses_unreceived_reply() {
   FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" >/dev/null 2>&1 || {
     fail "scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
@@ -184,6 +196,7 @@ test_handled_refuses_unreceived_reply() {
   code=$?
   if [ "$code" -eq 0 ]; then
     fail "acknowledging a never-received reply was accepted (manufactured ack)"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   fi
   assert_contains "$out" "not-received" \
@@ -202,6 +215,7 @@ test_traversal_task_id_is_refused() {
   code=$?
   if [ "$code" -eq 0 ]; then
     fail "a traversing task id was accepted"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   fi
   assert_absent "$TMP_ROOT/traversal/escape.status" \
@@ -218,6 +232,7 @@ test_non_regular_entries_are_ignored() {
   out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$INGEST" scan hetz-inbox "$reports" 2>&1) || {
     fail "scan over a tree containing a subdirectory exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   }
   assert_contains "$out" "ingested: 0" \
@@ -235,11 +250,317 @@ test_missing_report_dir_fails_closed() {
   code=$?
   if [ "$code" -eq 0 ]; then
     fail "a missing report directory reported success"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   fi
   assert_contains "$out" "error:" \
     "a missing report directory does not explain itself"
   pass "a missing report directory fails closed instead of reading as healthy"
+}
+
+# --- the ACTUAL controller-replies channel --------------------------------
+#
+# Everything above exercises a single directory. The live channel did not:
+# real Hetz controller replies arrive in /home/hd2admin/controller-replies/ on
+# the remote host, and nothing consumed it. These tests pin that gap closed at
+# the consumer's public interface, using a local stand-in for the remote tree.
+
+# Build a throwaway home plus a stand-in for the remote reply folder. A fresh
+# subdirectory per reply keeps each test independent.
+remote_replies() {  # <name> -> echoes "<home> <reports>"
+  local home="$TMP_ROOT/$1/home"
+  mkdir -p "$home/state"
+  printf '%s %s\n' "$home" "$TMP_ROOT/$1/controller-replies"
+}
+
+# A reply sitting in the remote reply folder must become a status line and a
+# signal wake on the parent, exactly like a mirrored file-drop reply. This is
+# the pickup that was missing entirely.
+test_remote_reply_folder_is_consumed() {
+  local home replies status queue out
+  read -r home replies <<<"$(remote_replies remote)"
+  status="$home/state/hetzner-secondmate-20260927.status"
+  queue="$home/state/.wake-queue"
+  mkdir -p "$replies"
+  printf '%s\n' "From Hetz: reply awaiting pickup." >"$replies/reply-remote-1.md"
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" 2>&1) || {
+    fail "scanning the remote reply folder exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_grep "reply-remote-1.md" "$status" \
+    "a reply in the actual controller-replies folder produces no parent status line"
+  assert_grep "signal" "$queue" \
+    "a reply in the actual controller-replies folder produces no wake"
+  assert_contains "$out" "ingested: 1" \
+    "the remote reply folder is not reported as consumed"
+  pass "the actual controller-replies folder is an consumed source"
+}
+
+# The same reply arriving under both folder names is ONE reply. Without this a
+# dual-source channel would double-wake on every periodic re-sync.
+test_same_reply_from_two_sources_is_received_once() {
+  local home old remote status queue out
+  home="$TMP_ROOT/twosrc/home"
+  old="$TMP_ROOT/twosrc/from-brandon-compute"
+  remote="$TMP_ROOT/twosrc/controller-replies"
+  mkdir -p "$home/state" "$old" "$remote"
+  status="$home/state/hetzner-secondmate-20260927.status"
+  queue="$home/state/.wake-queue"
+  printf '%s\n' "From Hetz: the very same reply." >"$old/reply-same.md"
+  printf '%s\n' "From Hetz: the very same reply." >"$remote/reply-same.md"
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" "$INGEST" scan \
+    hetzner-secondmate-20260927 "$old" "$remote" 2>&1) || {
+    fail "dual-source scan exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_contains "$out" "ingested: 1" \
+    "one identical reply arriving through two sources was counted twice"
+  assert_contains "$(grep -c 'signal' "$queue" 2>/dev/null || echo 0)" "1" \
+    "one identical reply published a duplicate wake through the dual-source scan"
+  pass "an identical reply from two sources is received exactly once"
+}
+
+# A periodic re-sync re-presents every unchanged reply. It must not re-wake.
+test_resync_of_remote_folder_is_deduplicated() {
+  local home replies status queue out
+  read -r home replies <<<"$(remote_replies resync)"
+  status="$home/state/hetzner-secondmate-20260927.status"
+  queue="$home/state/.wake-queue"
+  mkdir -p "$replies"
+  printf '%s\n' "From Hetz: reply already picked up." >"$replies/reply-remote-1.md"
+
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" >/dev/null 2>&1 || {
+    fail "first remote scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  local first_wakes
+  first_wakes=$(grep -c 'signal' "$queue" 2>/dev/null || echo 0)
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" 2>&1) || {
+    fail "re-sync exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_contains "$out" "ingested: 0" \
+    "a re-synced unchanged remote reply is ingested a second time"
+  assert_contains "$(grep -c 'signal' "$queue" 2>/dev/null || echo 0)" "$first_wakes" \
+    "a re-synced unchanged remote reply published a second wake"
+  pass "a re-synced unchanged remote reply produces no second wake or receipt"
+}
+
+# Correlation must survive the real channel: a remote reply answering a specific
+# request keeps its corr token so the parent can match it to the right open
+# expectation rather than guessing from the folder it arrived in.
+test_remote_reply_keeps_task_correlation() {
+  local home replies status out
+  read -r home replies <<<"$(remote_replies remote-corr)"
+  status="$home/state/hetzner-secondmate-20260927.status"
+  mkdir -p "$replies"
+  printf '%s\n' "From Hetz: focused sprint reply. corr=req-9f2ab3cd77aa" \
+    >"$replies/2026-10-12-reply.md"
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" 2>&1) || {
+    fail "remote corr scan exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_grep "corr=req-9f2ab3cd77aa" "$status" \
+    "a remote reply loses its correlation token, so the parent cannot match the request"
+  pass "a remote reply's correlation token survives pickup"
+}
+
+# An uncorrelated reply is still received, but it must be REPORTED as
+# uncorrelated. Silently accepting it is how a reply goes unmatched forever.
+test_uncorrelated_remote_reply_is_reported() {
+  local home replies status out
+  read -r home replies <<<"$(remote_replies remote-uncorr)"
+  status="$home/state/hetzner-secondmate-20260927.status"
+  mkdir -p "$replies"
+  printf '%s\n' "From Hetz: an unsolicited note with no corr token." \
+    >"$replies/2026-10-12-note.md"
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" 2>&1) || {
+    fail "uncorrelated remote scan exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_contains "$out" "uncorrelated: 2026-10-12-note.md" \
+    "an uncorrelated remote reply is not reported, so it can never be matched"
+  assert_grep "2026-10-12-note.md" "$status" \
+    "an uncorrelated reply must still be received, not dropped"
+  pass "an uncorrelated remote reply is received and reported as uncorrelated"
+}
+
+# A reply whose name or content cannot be used must be reported as malformed
+# rather than skipped in silence, which is how a pickup failure hides.
+test_malformed_remote_reply_is_reported() {
+  local home replies out
+  read -r home replies <<<"$(remote_replies remote-malformed)"
+  mkdir -p "$replies"
+  # A name that can never be a reply name: it carries characters outside the
+  # receipt key's alphabet. Receiving it is impossible, so skipping it in
+  # silence is exactly how a pickup failure hides.
+  printf '%s\n' "From Hetz: an unusable reply entry." >"$replies/bad name!.md"
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" 2>&1) || {
+    fail "malformed-entry scan exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_contains "$out" "malformed: bad name!.md" \
+    "an unusable reply entry is skipped in silence instead of being reported"
+  assert_contains "$out" "ingested: 0" \
+    "an unusable reply entry was received as if it were a real reply"
+  pass "a malformed remote reply entry is reported, not silently swallowed"
+}
+
+# A receipt alone is not a decision. `handled` must require proof that a real
+# substantive controller review happened, and refuse a bare acknowledgement.
+test_handled_requires_substantive_review_evidence() {
+  local home replies out code
+  read -r home replies <<<"$(remote_replies remote-review)"
+  mkdir -p "$replies"
+  printf '%s\n' "From Hetz: a reply needing real controller review." \
+    >"$replies/reply-remote-1.md"
+
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" >/dev/null 2>&1 || {
+    fail "scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" handled hetzner-secondmate-20260927 reply-remote-1.md 2>&1)
+  code=$?
+  if [ "$code" -eq 0 ]; then
+    fail "a reply was marked handled with no substantive review evidence (rubber-stamp ack)"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  fi
+  assert_contains "$out" "review" \
+    "the refusal does not explain that a substantive review is required"
+  pass "a receipt alone cannot mark a reply handled; substantive review is required"
+}
+
+# Substantive review evidence does allow the acknowledgment, and it stays
+# idempotent so a paired external effect is never authorized twice.
+test_handled_accepts_substantive_review_evidence() {
+  local home replies review out second
+  read -r home replies <<<"$(remote_replies remote-review-ok)"
+  review="$TMP_ROOT/remote-review-ok/review.md"
+  mkdir -p "$replies"
+  printf '%s\n' "From Hetz: a reply needing real controller review." \
+    >"$replies/reply-remote-1.md"
+  printf '%s\n' \
+    "Controller review: verified the pickup path, the corr token, and the receipt." \
+    >"$review"
+
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" >/dev/null 2>&1 || {
+    fail "scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" handled hetzner-secondmate-20260927 reply-remote-1.md --review "$review" 2>&1) || {
+    fail "handled with real review evidence exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_contains "$out" "handled: reply-remote-1.md" \
+    "a genuinely reviewed reply is not acknowledged"
+
+  second=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" handled hetzner-secondmate-20260927 reply-remote-1.md --review "$review" 2>&1) || {
+    fail "repeat handled exited non-zero: $second"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_contains "$second" "already-handled: reply-remote-1.md" \
+    "a reviewed acknowledgment is not idempotent"
+  pass "substantive review evidence permits a durable, idempotent acknowledgment"
+}
+
+# An already-handled reply re-appearing on a later sync must say so, so a
+# duplicate acknowledgment is visible rather than looking like fresh work.
+test_already_handled_reply_is_reported_on_resync() {
+  local home replies review out
+  read -r home replies <<<"$(remote_replies remote-rehandled)"
+  review="$TMP_ROOT/remote-rehandled/review.md"
+  mkdir -p "$replies"
+  printf '%s\n' "From Hetz: a reply needing real controller review." \
+    >"$replies/reply-remote-1.md"
+  printf '%s\n' "Controller review: substantive review recorded." >"$review"
+
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" >/dev/null 2>&1 || {
+    fail "scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" handled hetzner-secondmate-20260927 reply-remote-1.md --review "$review" \
+    >/dev/null 2>&1 || {
+    fail "handled with review evidence failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" 2>&1) || {
+    fail "resync after handling exited non-zero: $out"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+  assert_contains "$out" "already-handled: reply-remote-1.md" \
+    "a re-synced reply that was already handled is not reported as such"
+  pass "an already-handled reply re-appearing on a later sync is reported"
+}
+
+# A review file that exists but says nothing must still be refused. Without
+# this, dropping the substantive floor would pass every other test: the
+# no-evidence case above fails earlier, at the missing --review operand, and
+# would leave the floor itself completely unenforced.
+test_handled_refuses_placeholder_review() {
+  local home replies review out code
+  read -r home replies <<<"$(remote_replies remote-thin-review)"
+  review="$TMP_ROOT/remote-thin-review/review.md"
+  mkdir -p "$replies"
+  printf '%s\n' "From Hetz: a reply needing real controller review." \
+    >"$replies/reply-remote-1.md"
+  printf '%s\n' "ok" >"$review"
+
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetzner-secondmate-20260927 "$replies" >/dev/null 2>&1 || {
+    fail "scan failed"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  }
+
+  out=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" handled hetzner-secondmate-20260927 reply-remote-1.md --review "$review" 2>&1)
+  code=$?
+  if [ "$code" -eq 0 ]; then
+    fail "a one-word placeholder review was accepted as a substantive controller review"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  fi
+  assert_contains "$out" "not substantive" \
+    "the refusal does not explain that the review evidence is not substantive"
+  pass "a placeholder review file is refused as non-substantive"
 }
 
 test_receive_publishes_wake_and_receipt
@@ -251,3 +572,13 @@ test_handled_refuses_unreceived_reply
 test_traversal_task_id_is_refused
 test_non_regular_entries_are_ignored
 test_missing_report_dir_fails_closed
+test_remote_reply_folder_is_consumed
+test_same_reply_from_two_sources_is_received_once
+test_resync_of_remote_folder_is_deduplicated
+test_remote_reply_keeps_task_correlation
+test_uncorrelated_remote_reply_is_reported
+test_malformed_remote_reply_is_reported
+test_handled_requires_substantive_review_evidence
+test_handled_refuses_placeholder_review
+test_handled_accepts_substantive_review_evidence
+test_already_handled_reply_is_reported_on_resync
