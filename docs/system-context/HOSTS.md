@@ -130,10 +130,13 @@ machine-readable mirror.
 | SSH path | `brandon-compute` as `hd2admin`, key-only over Tailscale | `m3-runtime-preparation.md` §1; `/root/.ssh/config` |
 | Role | Compute plane for Brandon local LLM/model testing, benchmarks, scraping, enrichment, Qdrant, and bounded worker preparation | `BRANDON_VPS_COMPUTE_ROUTING_CONTRACT.md`; `BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` §§6.1, 7.2 |
 | Tenants | `brandon-compute` only | `BRANDON_VPS_COMPUTE_ROUTING_CONTRACT.md` |
-| Status | `PARTIAL` — coordinates and prior route/capacity/runtime evidence are accepted; current live re-verification is blocked by Tailscale interactive re-auth | `BR-COMPUTE-PLACEMENT-RECHECK-20260918/report.md`; `BRANDON_CAMPAIGN_CONTROL.md` §2 |
-| Last verified | 2026-09-18 | `BR-COMPUTE-PLACEMENT-RECHECK-20260918/report.md` |
-| Freshness days | 30 | n/a |
-| Notes | Do not conflate this verified Hetzner host with Hostinger hub `srv1856614`; the historical BR-INV-001 “zero references” wording is stale. | `BRANDON_VPS_COMPUTE_ROUTING_CONTRACT.md`; `BR-INV-001` correction |
+| Status | `KNOWN` — hardware live-verified 2026-10-12 over Tailscale SSH; no interactive re-auth was required | live read `/proc/cpuinfo`, `free -h`, `df -h`, `uptime` |
+| Last verified | 2026-10-12 | live audit 2026-10-12 |
+| Freshness days | 0 | live verification |
+| Hardware (live 2026-10-12) | AMD Ryzen 7 PRO 8700GE; 8 cores / 16 threads; 61 GiB RAM; 437 GiB disk; 1-min load observed ~5–7 | `/proc/cpuinfo`, `free -h`, `df -h`, `uptime` |
+| Parallel capacity (live) | **Ceiling 7 concurrent firstmate lanes**, set by `config/dispatch-max-lanes` | `bin/fm-dispatch-guard.sh` `fm_dispatch_guard_lane_cap` |
+| Capacity constraint | **Per-minute provider rate limits, NOT compute.** A single 8-agent fan-out (one `gpt-6.1-sol` parent, `gpt-6-luna` + `minimax-m31-flash-preview` children) produced **664 HTTP 429 and 121 "rate limit" events** in one session. It appeared smooth only because the harness absorbed the retries. Raising this ceiling on compute reasoning buys retries, not throughput — more parallelism needs more provider quota or a second host. | session log analysis 2026-10-12; `data/captain.md` Hetz ceiling ruling |
+| Notes | Do not conflate this verified Hetzner host with Hostinger hub `srv1856614`; the historical BR-INV-001 "zero references" wording is stale. **A CPU percentage is NOT derivable from a Linux load average** — earlier drafts of this table stated "load ~5 (31% CPU)" on 16 threads, which is meaningless. Only record raw load average and raw core count. | `BRANDON_VPS_COMPUTE_ROUTING_CONTRACT.md`; `BR-INV-001` correction; corrected 2026-10-12 |
 
 ## `whoosh-runtime` — Whoosh project host
 
