@@ -33,6 +33,8 @@ STATE="${2:-${FM_STATE_OVERRIDE:-$FM_HOME/state}}"
 
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
+# shellcheck source=bin/fm-backend.sh
+. "$SCRIPT_DIR/fm-backend.sh"
 
 REAP_LOG="${FM_REAP_LOG:-$STATE/reap.log}"
 AGE_THRESHOLD=${FM_REAP_AGE_THRESHOLD_SECS:-300}
@@ -136,15 +138,68 @@ reap_single_task() {
     fi
   fi
 
-  # Check crew state: must not be working
-  local last_status=""
-  if [ -f "$log" ]; then
-    last_status=$(last_status_line "$log" 2>/dev/null || true)
+  # Check crew state: must have status evidence, endpoint must be dead/missing,
+  # and crew must not be working/parked.
+  # 1. Absent status file => REFUSE (absence of evidence is not evidence of absence).
+  if [ ! -f "$log" ]; then
+    log_decision "REFUSE" "$id" "no status evidence; cannot prove the crew is idle"
+    return 0
   fi
+
+  # 2. Check live endpoint state via backend reconciler.
+  # Only an endpoint positively reported dead/missing is reapable. Fail closed on alive/ambiguous/unverified/unreadable.
+  local endpoint_target
+  endpoint_target=$(fm_backend_target_of_meta "$meta")
+  if [ -n "$backend" ] && [ -n "$endpoint_target" ]; then
+    local agent_state
+    agent_state=$(fm_backend_agent_state "$backend" "$endpoint_target")
+    case "$agent_state" in
+      dead|missing)
+        ;;
+      alive)
+        log_decision "REFUSE" "$id" "endpoint is alive ($agent_state)"
+        return 0
+        ;;
+      ambiguous|unverified|unreadable|*)
+        log_decision "REFUSE" "$id" "endpoint state is not definitively dead ($agent_state)"
+        return 0
+        ;;
+    esac
+  elif [ -n "$backend" ] || [ -n "$endpoint_target" ]; then
+    log_decision "REFUSE" "$id" "endpoint metadata incomplete (backend=${backend:-none} target=${endpoint_target:-none})"
+    return 0
+  fi
+
+  # 3. Use the owning reconciler (bin/fm-crew-state.sh) to verify current state is not working.
+  local crew_state_bin="${FM_CREW_STATE_BIN:-$SCRIPT_DIR/fm-crew-state.sh}"
+  if [ -x "$crew_state_bin" ]; then
+    local crew_state_raw crew_state_val
+    crew_state_raw=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$state" \
+      FM_DATA_OVERRIDE="${FM_DATA_OVERRIDE:-$FM_HOME/data}" \
+      FM_CONFIG_OVERRIDE="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}" \
+      "$crew_state_bin" "$id" 2>/dev/null || true)
+    if [ -n "$crew_state_raw" ]; then
+      case "$crew_state_raw" in
+        state:\ *)
+          crew_state_val=${crew_state_raw#state: }
+          crew_state_val=${crew_state_val%% *}
+          if [ "$crew_state_val" = "working" ]; then
+            log_decision "REFUSE" "$id" "crew is currently working (reconciler: $crew_state_raw)"
+            return 0
+          fi
+          ;;
+      esac
+    fi
+  fi
+
+  # 4. Status log sanity check: last status line verb must not be working
+  local last_status=""
+  last_status=$(last_status_line "$log" 2>/dev/null || true)
   if [ -n "$last_status" ]; then
     local verb
     verb=$(status_line_verb "$last_status")
     if [ "$verb" = "working" ]; then
+      log_decision "REFUSE" "$id" "last status verb is working"
       return 0
     fi
   fi
