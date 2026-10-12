@@ -22,7 +22,7 @@
 #   FM_DISPATCH_GUARD_BYPASS=1        skip every bypassable check (logged)
 #   FM_DISPATCH_GUARD_LOAD_BYPASS=1   skip only the load ceiling (logged)
 #   FM_DISPATCH_GUARD_QUOTA_BYPASS=1  skip only the quota ceiling (logged)
-#   FM_DISPATCH_GUARD_MAX_LANES=<n>   live-lane ceiling (default 4)
+#   FM_DISPATCH_GUARD_MAX_LANES=<n>   live-lane ceiling; overrides config/dispatch-max-lanes (default 4)
 #   FM_DISPATCH_GUARD_LANE_BUDGET_S=<n>  wall-clock budget for the lane
 #                                        inventory (default 30)
 # Test seams (never set in production; they exist so the rules can be proven by
@@ -204,6 +204,20 @@ lane_target() {  # <backend> <target>
   esac
 }
 
+# fm_dispatch_guard_lane_cap: resolve the live-lane ceiling. Precedence:
+# FM_DISPATCH_GUARD_MAX_LANES, then the home-local gitignored
+# config/dispatch-max-lanes knob (same LOCAL-settings family as config/calm and
+# config/backend), then 4. A ceiling that only applied when firstmate remembered to
+# export an env var was never an enforced setting.
+fm_dispatch_guard_lane_cap() {
+  local cap="${FM_DISPATCH_GUARD_MAX_LANES:-}"
+  if [ -z "$cap" ] && [ -n "${FM_HOME:-}" ] && [ -r "${FM_HOME}/config/dispatch-max-lanes" ]; then
+    cap=$(tr -dc '0-9' < "${FM_HOME}/config/dispatch-max-lanes")
+  fi
+  case "$cap" in ''|*[!0-9]*) cap=4 ;; esac
+  printf '%s' "$cap"
+}
+
 if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   budget="${FM_DISPATCH_GUARD_LANE_BUDGET_S:-30}"
   case "$budget" in ''|*[!0-9]*) budget=30 ;; esac
@@ -234,7 +248,8 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   if [ "$incomplete" = 1 ]; then
     refuse "the live-lane inventory did not finish within ${budget}s (${live} lanes probed so far), so the ceiling cannot be proven clear. Free a lane, raise FM_DISPATCH_GUARD_LANE_BUDGET_S deliberately, or set FM_DISPATCH_GUARD_BYPASS=1 (logged)."
   fi
-  cap="${FM_DISPATCH_GUARD_MAX_LANES:-4}"
+  # Live-lane ceiling.
+  cap=$(fm_dispatch_guard_lane_cap)
   if [ "$live" -ge "$cap" ]; then
     refuse "${live} live crewmate lanes already exist, counted per window/pane rather than per session (cap ${cap}). Stop one, or raise FM_DISPATCH_GUARD_MAX_LANES deliberately. Do not fan out on one host."
   fi
