@@ -3,8 +3,8 @@
 # file-drop replies on the parent home.
 #
 # Usage:
-#   fm-comms-ingest.sh scan <secondmate-id> <report-dir>
-#   fm-comms-ingest.sh handled <secondmate-id> <report-name>
+#   fm-comms-ingest.sh scan <secondmate-id> <report-dir> [<report-dir>...]
+#   fm-comms-ingest.sh handled <secondmate-id> <report-name> --review <review-file>
 #   fm-comms-ingest.sh --help
 #
 # WHY THIS EXISTS. A secondmate normally answers by appending to the PARENT
@@ -18,14 +18,27 @@
 # "new/changed files: N", and no wake, receipt, or acknowledgment ever followed
 # - the reply simply disappeared. This command is that missing consumer.
 #
-# scan     Receive every not-yet-received regular file in <report-dir>. Each new
-#          file appends one typed no-verb signal line to the parent
-#          state/<secondmate-id>.status and publishes one `signal` wake keyed to
-#          that status file, so the ordinary watcher surfaces it. Prints
-#          "ingested: <n>" and one "received: <file>" line per file.
-# handled  Record that a received reply has been fully handled. Prints
-#          "handled: <name>" once and "already-handled: <name>" on every
-#          repeat, so a paired external effect is never authorized twice.
+# scan     Receive every not-yet-received regular file in EACH <report-dir>, in
+#          the order given. Each new file appends one typed no-verb signal line
+#          to the parent state/<secondmate-id>.status and publishes one
+#          `signal` wake keyed to that status file, so the ordinary watcher
+#          surfaces it. Prints "ingested: <n>" and one "received: <file>" line
+#          per file. One task id may name several source folders, because the
+#          same reply can be delivered through more than one mirror; dedup is
+#          keyed on CONTENT plus name across ALL of them, so a periodic re-sync
+#          of every folder still yields exactly one wake per distinct reply.
+#
+#          Nothing is swallowed. A file that cannot be used is reported as
+#          "malformed: <name>"; a received reply carrying no corr token is
+#          reported as "uncorrelated: <name>"; a reply already acknowledged is
+#          reported as "already-handled: <name>". A folder that is missing or
+#          is not a directory is a hard error, never a silent "ingested: 0".
+# handled  Record that a received reply has been fully handled, which REQUIRES
+#          --review <review-file>: a real, readable, substantive controller
+#          review of the reply. A bare acknowledgment is refused, because a
+#          receipt is delivery and only a reviewed decision is a result.
+#          Prints "handled: <name>" once and "already-handled: <name>" on
+#          every repeat, so a paired external effect is never authorized twice.
 #          Acknowledging a reply that was never received FAILS: this command
 #          never manufactures a receipt.
 #
@@ -60,7 +73,7 @@ STATE="${FM_STATE_OVERRIDE:-${STATE:-$FM_HOME/state}}"
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
 usage() {
-  sed -n '2,45p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,64p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -123,59 +136,89 @@ summary_of() {
 }
 
 cmd_scan() {
-  local id=${1-} dir=${2-}
-  [ -n "$id" ] && [ -n "$dir" ] || usage
+  local id=${1-}
+  [ -n "$id" ] || usage
+  shift
+  [ "$#" -ge 1 ] || usage
   valid_id "$id" || die "refusing task id that could escape the status channel: $id"
-  [ -d "$dir" ] || die "report directory does not exist: $dir"
 
-  local status_file lock receipts ingested=0 file name sha corr short_sha
+  local dir
+  for dir in "$@"; do
+    [ -d "$dir" ] || die "report directory does not exist: $dir"
+  done
+
+  local status_file lock receipts handled ingested=0 file name sha corr short_sha
   local summary bytes corr_part line
   base=$(receipts_dir "$id") || exit 1
   status_file="$STATE/$id.status"
   receipts="$base/receipts.tsv"
+  handled="$base/handled.tsv"
   mkdir -p "$base"
   lock="$base/.lock"
 
   fm_lock_acquire_wait "$lock" || die "cannot acquire the comms receipt lock for $id"
   fm_comms_lock_release_on_exit "$lock"
 
-  while IFS= read -r file; do
-    [ -n "$file" ] || continue
-    [ -f "$file" ] || continue
-    name=${file##*/}
-    valid_name "$name" || continue
-    sha=$(digest_of "$file")
-    case "$sha" in
-      [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
-      *) continue ;;
-    esac
+  # One pass per source folder, in the order given, against the SAME receipts
+  # ledger. Dedup is therefore cross-source by construction: the same reply
+  # delivered through two mirrors is still received exactly once.
+  for dir in "$@"; do
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+      [ -f "$file" ] || continue
+      name=${file##*/}
+      # An entry whose name cannot be a reply name is unusable, not invisible.
+      # Report it so a broken pickup cannot hide behind a clean exit status.
+      if ! valid_name "$name"; then
+        printf 'malformed: %s (unusable reply name)\n' "$name"
+        continue
+      fi
+      sha=$(digest_of "$file")
+      case "$sha" in
+        [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
+        *)
+          printf 'malformed: %s (unreadable content)\n' "$name"
+          continue
+          ;;
+      esac
 
-    # Content-keyed dedup: an unchanged file is already received.
-    if grep -qxF "$sha"$'\t'"$name" "$receipts" 2>/dev/null; then
-      continue
-    fi
+      # Content-keyed dedup: an unchanged file is already received. Say which
+      # of the two terminal states it is in, so a re-sync of an acknowledged
+      # reply is visibly acknowledged rather than silently dropped.
+      if grep -qxF "$sha"$'\t'"$name" "$receipts" 2>/dev/null; then
+        if grep -qF "$sha"$'\t'"$name"$'\t' "$handled" 2>/dev/null; then
+          printf 'already-handled: %s\n' "$name"
+        else
+          printf 'already-received: %s\n' "$name"
+        fi
+        continue
+      fi
 
-    corr=$(corr_of "$file")
-    summary=$(summary_of "$file")
-    bytes=$(wc -c <"$file" 2>/dev/null | tr -d ' ')
-    case "$bytes" in ''|*[!0-9]*) bytes=0 ;; esac
-    corr_part=''
-    [ -n "$corr" ] && corr_part=" $corr"
+      corr=$(corr_of "$file")
+      summary=$(summary_of "$file")
+      bytes=$(wc -c <"$file" 2>/dev/null | tr -d ' ')
+      case "$bytes" in ''|*[!0-9]*) bytes=0 ;; esac
+      corr_part=''
+      [ -n "$corr" ] && corr_part=" $corr"
 
-    # A typed no-verb signal line: no captain-relevant verb, so the watcher
-    # treats it as a signal to surface rather than a verdict to absorb.
-    short_sha=$(printf '%s' "$sha" | cut -c1-12)
-    line="comms-received: $id $name sha=$short_sha bytes=$bytes$corr_part | $summary"
-    printf '%s\n' "$line" >>"$status_file" || die "cannot write $status_file"
-    printf '%s\t%s\n' "$sha" "$name" >>"$receipts" || die "cannot write $receipts"
+      # A typed no-verb signal line: no captain-relevant verb, so the watcher
+      # treats it as a signal to surface rather than a verdict to absorb.
+      short_sha=$(printf '%s' "$sha" | cut -c1-12)
+      line="comms-received: $id $name sha=$short_sha bytes=$bytes$corr_part | $summary"
+      printf '%s\n' "$line" >>"$status_file" || die "cannot write $status_file"
+      printf '%s\t%s\n' "$sha" "$name" >>"$receipts" || die "cannot write $receipts"
 
-    ingested=$((ingested + 1))
-    printf 'received: %s\n' "$name"
+      ingested=$((ingested + 1))
+      printf 'received: %s\n' "$name"
+      # Received but unmatchable to a request. It is delivered, not dropped,
+      # and saying so is what stops it waiting forever for a match.
+      [ -n "$corr" ] || printf 'uncorrelated: %s\n' "$name"
 
-    fm_wake_append signal "$id.status" \
-      "comms received from $id: $name$corr_part" \
-      || die "cannot publish the comms wake for $id"
-  done < <(find "$dir" -maxdepth 1 -type f 2>/dev/null | LC_ALL=C sort)
+      fm_wake_append signal "$id.status" \
+        "comms received from $id: $name$corr_part" \
+        || die "cannot publish the comms wake for $id"
+    done < <(find "$dir" -maxdepth 1 -type f 2>/dev/null | LC_ALL=C sort)
+  done
 
   fm_comms_release "$lock"
 
@@ -183,11 +226,14 @@ cmd_scan() {
 }
 
 cmd_handled() {
-  local id=${1-} name=${2-}
+  local id=${1-} name=${2-} review='' review_words='' review_sha=''
   [ -n "$id" ] && [ -n "$name" ] || usage
   valid_id "$id" || die "refusing task id that could escape the status channel: $id"
   valid_name "$name" || die "invalid reply name: $name"
 
+  # Receipt first. Whether the reply was ever received is the more fundamental
+  # refusal: reporting "review evidence required" for a reply that was never
+  # received would send the caller looking for the wrong problem.
   local base receipts handled lock sha
   base=$(receipts_dir "$id") || exit 1
   receipts="$base/receipts.tsv"
@@ -203,6 +249,25 @@ cmd_handled() {
     die "not-received: $name (never received for $id; refusing to manufacture a receipt)"
   fi
 
+  # --review is mandatory: acknowledgment is a reviewed decision, and a
+  # receipt is only delivery.
+  if [ "${3-}" = "--review" ]; then
+    review=${4-}
+    [ -n "$review" ] || die "missing review evidence: --review needs a review file"
+  else
+    die "review evidence required: handled <id> <name> --review <review-file>"
+  fi
+  [ -f "$review" ] && [ -r "$review" ] \
+    || die "review evidence is not a readable file: $review"
+  # Substantive, not a placeholder. A review must actually state a decision, so
+  # the floor is on words rather than bytes: "ok", "done" or "reviewed" are one
+  # word and are refused, while a single honest sentence passes regardless of
+  # how long its words are.
+  review_words=$(awk '{print NF}' "$review" 2>/dev/null | tail -1)
+  case "$review_words" in ''|*[!0-9]*) review_words=0 ;; esac
+  [ "$review_words" -ge 5 ] \
+    || die "review evidence is not substantive ($review_words words, need 5): $review"
+
   # The ledger row carries a trailing timestamp, so this is a field-prefix
   # match on "<sha>\t<name>\t", not a whole-line match.
   if grep -qF "$sha"$'\t'"$name"$'\t' "$handled" 2>/dev/null; then
@@ -211,7 +276,13 @@ cmd_handled() {
     return 0
   fi
 
-  printf '%s\t%s\t%s\n' "$sha" "$name" "$(date +%s)" >>"$handled" \
+  review_sha=$(digest_of "$review")
+  case "$review_sha" in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) ;;
+    *) review_sha=unknown ;;
+  esac
+
+  printf '%s\t%s\t%s\treview=%s\n' "$sha" "$name" "$(date +%s)" "$review_sha" >>"$handled" \
     || die "cannot write the handled ledger"
   fm_comms_release "$lock"
   printf 'handled: %s\n' "$name"
