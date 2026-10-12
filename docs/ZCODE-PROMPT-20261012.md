@@ -27,6 +27,13 @@ DO NOT LAND: spawn-liveness-verification as-is — all three review concerns wer
 
 BLOCKED / NON-GOALS: whooshperformance.com (no coordinates exist anywhere; Captain supplies), elevatesci host ownership (spelling is closed — elevatesci.com canonical), music-metrics.com (Captain deferred "for another day"), core-distro architecture (ADR-first per Captain), cbd-data migration execution (intent authorised, execution NOT — needs written plan and separate explicit authorisation).
 
+THE SESSION LOCK - read before your first action:
+- Run bin/fm-session-start.sh FIRST. It acquires the per-home session lock.
+- The lock is currently held by the outgoing MiniMax session (pid-bound). The Captain said he will hand you the lock WHEN READY - that means he closes the old session, not that you take it.
+- If the lock is REFUSED: remain READ-ONLY. No spawning, steering, merging, wake-draining, supervision repair, checkout repair, or ANY fleet mutation. Report the exact diagnostic and wait.
+- Read-only time is not dead time: read the entry-point docs, run quota-axi, verify host state, plan. Those are all allowed.
+- NEVER break, delete, force, or work around the lock. It is the fleet's single-writer guarantee. Two writers on one home is how work gets destroyed.
+
 HARD RULES:
 - Never production-write without explicit Captain authorisation. Never bypass a production-write gate. Never disable the secret scanner to make a tool boot.
 - Never --force teardown. Never discard unlanded work.

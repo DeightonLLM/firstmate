@@ -114,6 +114,14 @@ Synced and at `4332670` on: Controller, HD2 (`root@100.71.95.76`), Brandon
 
 ---
 
+## The session lock — read before your first action
+
+- Run `bin/fm-session-start.sh` FIRST. It acquires the per-home session lock.
+- The lock is currently held by the outgoing MiniMax session (pid-bound). The Captain said he will hand you the lock **when ready** — that means he closes the old session, not that you take it.
+- If the lock is **refused: remain read-only**. No spawning, steering, merging, wake-draining, supervision repair, checkout repair, or any fleet mutation. Report the exact diagnostic and wait.
+- Read-only time is not dead time: read the entry-point docs, run `quota-axi`, verify host state, plan. Those are all allowed.
+- **Never break, delete, force, or work around the lock.** It is the fleet's single-writer guarantee. Two writers on one home is how work gets destroyed.
+
 ## Rules of the house
 
 - **TDD:** failing test first, shown RED, against a **fresh worktree** — not the primary
