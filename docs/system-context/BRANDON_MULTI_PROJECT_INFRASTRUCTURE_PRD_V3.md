@@ -28,7 +28,7 @@ The required division of responsibility is:
 The four projects are:
 
 1. [Core Distro](https://www.core-distro.com)
-2. [Elevate Life Sci](https://www.elevatelifesci.com)
+2. [Elevate Life Sci](https://www.elevatesci.com)
 3. [Whoosh Performance](https://www.whooshperformance.com)
 4. [CBD-Data](https://www.cbd-data.com)
 
@@ -84,7 +84,7 @@ The infrastructure must not assume that Core Distro processes protected health i
 
 ### 2.2 Elevate Life Sci
 
-**Domain:** `www.elevatelifesci.com`  
+**Domain:** `www.elevatesci.com`  
 **Project code:** `elevate`
 
 The exact application requirements are not yet proven by the materials available to this PRD. CrispR must treat this as a discovery-gated life-sciences project and must not invent product, patient, clinical, or compliance requirements.
@@ -424,7 +424,7 @@ flowchart TD
 | Project | Primary domain | Project code | Frontend service | API service | Files namespace |
 |---|---|---:|---|---|---|
 | Core Distro | `www.core-distro.com` | `core` | `core-web` | `core-api` | `core-files` |
-| Elevate Life Sci | `www.elevatelifesci.com` | `elevate` | `elevate-web` | `elevate-api` | `elevate-files` |
+| Elevate Life Sci | `www.elevatesci.com` | `elevate` | `elevate-web` | `elevate-api` | `elevate-files` |
 | Whoosh Performance | `www.whooshperformance.com` | `whoosh` | `whoosh-web` | `whoosh-api` | `whoosh-files` |
 | CBD-Data | `www.cbd-data.com` | `cbddata` | `cbddata-web` | `cbddata-api` | `cbddata-files` |
 
