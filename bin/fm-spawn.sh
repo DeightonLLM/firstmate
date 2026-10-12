@@ -503,6 +503,13 @@ launch_template() {
     # the launch command - it is a Stop hook installed below (global hooks.json +
     # per-task pointer), so the template is identical for ship/scout/secondmate.
     agy) printf '%s' 'agy __MODELFLAG____EFFORTFLAG__--dangerously-skip-permissions --prompt-interactive "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    # minimax-code (MiniMax Code / mcode): unlike the others, mcode takes the brief
+    # as a POSITIONAL prompt argument ("mcode [options] [prompt]"), not behind a
+    # flag. It accepts the shared -m/--model axis. It has NO autonomous-permission
+    # flag equivalent to claude's or agy's: permissions come from permissionMode in
+    # the user's own config.yaml, so none is added here. It exposes no effort axis,
+    # so __EFFORTFLAG__ is deliberately omitted rather than guessed.
+    minimax-code) printf '%s' 'mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -676,7 +683,7 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|agy)
+    claude|codex|opencode|pi|pi-signed|grok|kimi|agy|minimax-code)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
