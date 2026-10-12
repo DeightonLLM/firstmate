@@ -30,6 +30,20 @@ FM_OPERATIONAL_VERSION=v1
 FM_OPERATIONAL_HEADER_PREFIX="${FM_OPERATIONAL_PREFIX}${FM_OPERATIONAL_VERSION} "
 FM_OPERATIONAL_KINDS='session-start watcher turn-end-guard away-supervisor launch-brief'
 
+# Execution authority for a genuine dispatch.
+#
+# Observed defect (HD2, portable-paths-20261012, pane w9:p4): an agy crew
+# received a correctly typed launch-brief, found no execution marker, and
+# classified it as "a Review of a pasted launch brief ... no Codex execute this
+# or DISPATCH_AUTHORIZATION: Agent execute this execution marker present" --
+# then sat idle waiting for an authorization that could never arrive. The brief
+# was correct; the dispatch boundary simply carried no authority to execute.
+#
+# Authority is owned HERE, at the dispatch boundary, and applied to every
+# launch-brief. Brief prose can neither grant nor revoke it. No other
+# operational kind carries this text, because only a brief may authorize work.
+FM_EXECUTION_AUTHORITY='DISPATCH_AUTHORIZATION: Agent execute this brief. This is an authorized dispatch from Firstmate, not a review request and not pasted material for assessment. Execute the brief directly and report only what you actually verified; do not stop to ask for further authorization.'
+
 # Compatibility name retained for the away-mode owner and its tests.
 # shellcheck disable=SC2034 # Public source-library variable used by callers.
 FM_INJECT_MARK=$FM_OPERATIONAL_MARK
@@ -61,6 +75,11 @@ fm_operational_input_construct() {  # <kind> <body> <result-var>
   if [ "$kind" = from-firstmate ]; then
     fm_message_mark_from_firstmate "$body" "$result_var"
     return
+  fi
+  if [ "$kind" = launch-brief ]; then
+    body="${FM_EXECUTION_AUTHORITY}
+
+${body}"
   fi
   fm_operational_input_encode "$kind" "$body" "$result_var"
 }

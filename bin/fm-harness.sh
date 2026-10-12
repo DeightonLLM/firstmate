@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|agy|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -13,6 +13,9 @@
 #                                        config/secondmate-harness, or empty when absent.
 #        fm-harness.sh secondmate-effort   print the optional EFFORT token from
 #                                        config/secondmate-harness, or empty when absent.
+#        fm-harness.sh verified         print whitespace-separated list of verified harnesses
+#        fm-harness.sh verified-json    print JSON array of verified harnesses
+#        fm-harness.sh is-verified <h>  exit 0 if <h> is verified, exit 1 otherwise
 # config/secondmate-harness format: a single line "<harness> [<model>] [<effort>]",
 # whitespace-separated. A bare "<harness>" (today's format) behaves exactly as before:
 # harness only, no model/effort. Only the first non-empty, non-comment line is parsed.
@@ -21,6 +24,37 @@
 # Detection layers: verified environment markers first, then process ancestry.
 # Record each newly verified env marker here.
 set -u
+
+# Canonical list of verified harnesses. bin/fm-harness.sh is Firstmate's single
+# source of truth for verified agent harness adapters. Every other component
+# (fm-bootstrap.sh, fm-spawn.sh, etc.) defers to this definition.
+VERIFIED_HARNESSES=(claude codex opencode pi pi-signed grok kimi agy)
+
+is_verified() {
+  local h="${1:-}" v
+  for v in "${VERIFIED_HARNESSES[@]}"; do
+    [ "$v" = "$h" ] && return 0
+  done
+  return 1
+}
+
+verified_json() {
+  local json="[" first=1 v
+  for v in "${VERIFIED_HARNESSES[@]}"; do
+    if [ "$first" = 1 ]; then
+      first=0
+      json="$json\"$v\""
+    else
+      json="$json,\"$v\""
+    fi
+  done
+  json="$json]"
+  printf '%s\n' "$json"
+}
+
+verified_list() {
+  printf '%s\n' "${VERIFIED_HARNESSES[*]}"
+}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
@@ -44,6 +78,8 @@ detect_own() {
   # It does NOT set CLAUDECODE despite being Claude-Code-compatible, so this marker
   # is unambiguous when firstmate runs natively on grok.
   [ "${GROK_AGENT:-}" = "1" ] && { echo grok; return; }
+  # agy sets ANTIGRAVITY_AGENT=1 for its child/tool processes (verified, agy 1.3.3).
+  [ "${ANTIGRAVITY_AGENT:-}" = "1" ] && { echo agy; return; }
   # Layer 2: walk the parent chain and match the command name.
   # Walk depth matches the shared session-lock lib's ancestry walk so one
   # session cannot resolve as a verified harness for the lock while reporting
@@ -61,6 +97,7 @@ detect_own() {
       kimi) echo kimi; return ;;
       pi-signed) echo pi; return ;;
       pi) echo pi; return ;;
+      *agy*) echo agy; return ;;
       node*|python*)
         # Bare interpreter: match the harness name in its script path.
         args=$(ps -o args= -p "$pid" 2>/dev/null)
@@ -71,6 +108,7 @@ detect_own() {
           *grok*) echo grok; return ;;
           *minimax-code*) echo minimax-code; return ;;
           *" pi "*|*/pi) echo pi; return ;;
+          *agy*) echo agy; return ;;
         esac ;;
     esac
     pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
@@ -158,5 +196,8 @@ case "${1:-}" in
   secondmate) resolve_secondmate ;;
   secondmate-model) resolve_secondmate_model ;;
   secondmate-effort) resolve_secondmate_effort ;;
+  verified) verified_list ;;
+  verified-json) verified_json ;;
+  is-verified) is_verified "${2:-}" ;;
   *) detect_own ;;
 esac

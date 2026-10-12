@@ -11,6 +11,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/fm-agy-harness.XXXXXX")
 trap 'true' EXIT
+BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 
 fail() { printf 'not ok - %s\n' "$1" >&2; exit 1; }
 pass() { printf 'ok - %s\n' "$1"; }
@@ -400,4 +401,154 @@ mkdir -p "$WT_NEW/deep"
   || fail 'agy_pretrust_workspace did not default to $HOME/.gemini/antigravity-cli/settings.json'
 pass 'with no override the store defaults to $HOME, independent of the invoking user'
 
-echo '1..26'
+# --- agy harness detection in fm-harness.sh --------------------------------
+test_agy_detection_by_ancestry() {
+  local dir fakebin cfg out
+  dir="$TMP_ROOT/detect-ancestry"
+  fakebin="$dir/fakebin"
+  cfg="$dir/config"
+  mkdir -p "$fakebin" "$cfg"
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+field= pid= prev=
+for arg in "$@"; do
+  [ "$prev" = -o ] && field=$arg
+  [ "$prev" = -p ] && pid=$arg
+  prev=$arg
+done
+case "$field:$pid" in
+  comm=:4242) printf '/home/hd2admin/.local/bin/agy\n' ;;
+  comm=:*) printf '/bin/bash\n' ;;
+  ppid=:4242) printf '1\n' ;;
+  ppid=:*) printf '4242\n' ;;
+  args=:*) printf 'bash\n' ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+
+  out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u ANTIGRAVITY_AGENT \
+    PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
+  [ "$out" = agy ] || fail "agy ancestry detection returned '$out' (expected agy)"
+  pass 'fm-harness: agy is detected by process ancestry comm=agy'
+}
+
+test_agy_detection_by_bare_interpreter() {
+  local dir fakebin cfg out
+  dir="$TMP_ROOT/detect-interp"
+  fakebin="$dir/fakebin"
+  cfg="$dir/config"
+  mkdir -p "$fakebin" "$cfg"
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+field= pid= prev=
+for arg in "$@"; do
+  [ "$prev" = -o ] && field=$arg
+  [ "$prev" = -p ] && pid=$arg
+  prev=$arg
+done
+case "$field:$pid" in
+  comm=:4242) printf 'python3\n' ;;
+  comm=:*) printf '/bin/bash\n' ;;
+  ppid=:4242) printf '1\n' ;;
+  ppid=:*) printf '4242\n' ;;
+  args=:4242) printf 'python3 /usr/local/bin/agy --prompt-interactive test\n' ;;
+  args=:*) printf 'bash\n' ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+
+  out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u ANTIGRAVITY_AGENT \
+    PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
+  [ "$out" = agy ] || fail "agy bare interpreter detection returned '$out' (expected agy)"
+  pass 'fm-harness: agy is detected when invoked via bare interpreter script path'
+}
+
+test_agy_detection_by_env_marker() {
+  local dir fakebin cfg out
+  dir="$TMP_ROOT/detect-marker"
+  fakebin="$dir/fakebin"
+  cfg="$dir/config"
+  mkdir -p "$fakebin" "$cfg"
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+printf 'bash\n'
+SH
+  chmod +x "$fakebin/ps"
+
+  out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT \
+    ANTIGRAVITY_AGENT=1 PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh")
+  [ "$out" = agy ] || fail "agy env marker detection returned '$out' (expected agy)"
+  pass 'fm-harness: agy is detected via verified ANTIGRAVITY_AGENT=1 marker'
+}
+
+test_agy_crew_resolution_defaults_to_own() {
+  local dir fakebin cfg out
+  dir="$TMP_ROOT/detect-crew"
+  fakebin="$dir/fakebin"
+  cfg="$dir/config"
+  mkdir -p "$fakebin" "$cfg"
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+set -u
+field= pid= prev=
+for arg in "$@"; do
+  [ "$prev" = -o ] && field=$arg
+  [ "$prev" = -p ] && pid=$arg
+  prev=$arg
+done
+case "$field:$pid" in
+  comm=:4242) printf 'agy\n' ;;
+  comm=:*) printf '/bin/bash\n' ;;
+  ppid=:4242) printf '1\n' ;;
+  ppid=:*) printf '4242\n' ;;
+  args=:*) printf 'bash\n' ;;
+esac
+SH
+  chmod +x "$fakebin/ps"
+
+  out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u ANTIGRAVITY_AGENT \
+    PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" crew)
+  [ "$out" = agy ] || fail "fm-harness crew fallback returned '$out' (expected agy)"
+
+  printf 'default\n' > "$cfg/crew-harness"
+  out=$(env -u CLAUDECODE -u PI_CODING_AGENT -u GROK_AGENT -u ANTIGRAVITY_AGENT \
+    PATH="$fakebin:$BASE_PATH" FM_CONFIG_OVERRIDE="$cfg" "$ROOT/bin/fm-harness.sh" crew)
+  [ "$out" = agy ] || fail "fm-harness crew=default returned '$out' (expected agy)"
+  pass 'fm-harness: crew mode resolves agy when config/crew-harness is absent or default'
+}
+
+test_agy_session_lock_identity() {
+  local fakebin out
+  fakebin="$TMP_ROOT/detect-lock/fakebin"
+  mkdir -p "$fakebin"
+  cat > "$fakebin/ps" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  *"comm="*) printf '%s\n' '/home/hd2admin/.local/bin/agy'; exit 0 ;;
+  *"args="*) printf '%s\n' 'agy'; exit 0 ;;
+  *"ppid="*) printf '%s\n' '1'; exit 0 ;;
+esac
+exit 1
+SH
+  chmod +x "$fakebin/ps"
+
+  out=$(PATH="$fakebin:$BASE_PATH" bash -c \
+    '. "$0/bin/fm-session-lock-lib.sh"; fm_harness_ancestry_pid' "$ROOT")
+  [ -n "$out" ] || fail 'session-lock ancestry failed to detect agy pid'
+
+  PATH="$fakebin:$BASE_PATH" bash -c \
+    '. "$0/bin/fm-session-lock-lib.sh"; kill() { return 0; }; fm_harness_pid_alive 4242' "$ROOT" \
+    || fail 'session-lock liveness rejected agy process holder'
+  pass 'fm-session-lock-lib: recognizes agy ancestry and live lock holders'
+}
+
+test_agy_detection_by_ancestry
+test_agy_detection_by_bare_interpreter
+test_agy_detection_by_env_marker
+test_agy_crew_resolution_defaults_to_own
+test_agy_session_lock_identity
+
+echo '1..31'

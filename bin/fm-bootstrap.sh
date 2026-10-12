@@ -449,12 +449,10 @@ secondmate_liveness_sweep() {
     target=$(fm_backend_target_of_meta "$meta")
     [ -n "$target" ] || target="$window"
     agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null) || agent_state=unreadable
-    case "$harness" in
-      claude|codex|opencode|pi|pi-signed|grok|kimi) ;;
-      *)
-        case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
-        ;;
-    esac
+    # Harness verification defers to bin/fm-harness.sh as single source of truth.
+    if ! "$SCRIPT_DIR/fm-harness.sh" is-verified "$harness" 2>/dev/null; then
+      case "$agent_state" in dead|missing) agent_state=unverified-harness ;; esac
+    fi
     case "$agent_state" in
       alive)
         if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
@@ -733,15 +731,18 @@ crew_dispatch_validate() {
     echo "CREW_DISPATCH: invalid config/crew-dispatch.json - malformed JSON"
     return 0
   fi
-  err=$(jq -r '
-    def verified($h): ["claude","codex","opencode","pi","pi-signed","grok","kimi"] | index($h);
+  local verified_json
+  # Harness verification defers to bin/fm-harness.sh as single source of truth.
+  verified_json=$("$SCRIPT_DIR/fm-harness.sh" verified-json 2>/dev/null || printf '["claude","codex","opencode","pi","pi-signed","grok","kimi","agy"]')
+  err=$(jq -r --argjson verified_harnesses "$verified_json" '
+    def verified($h): $verified_harnesses | index($h);
     def effort_ok($h; $e):
       if $e == null then true
       elif ($e | type) != "string" then false
       elif $h == "claude" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "codex" then (["low","medium","high","xhigh"] | index($e))
       elif $h == "grok" then (["low","medium","high"] | index($e))
-      elif $h == "pi" or $h == "pi-signed" then (["low","medium","high","xhigh","max"] | index($e))
+      elif $h == "pi" or $h == "pi-signed" or $h == "agy" then (["low","medium","high","xhigh","max"] | index($e))
       elif $h == "opencode" or $h == "kimi" then false
       else true
       end;
