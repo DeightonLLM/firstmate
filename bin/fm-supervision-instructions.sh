@@ -210,6 +210,21 @@ else
   printf '%s\n' '- X mode: inactive; use the default watcher cadence.'
 fi
 ordinary_wake_line
+
+# Gated-shell admission contract. This is the single owner of the rule for every
+# harness: a gated coding shell permanently denies an interpreter carrying inline
+# code (`bash -c`, `sh -c`, `python3 -c`, `node -e`, `perl -e`) and any `eval`,
+# `exec`, `source`, or command-position `$(...)`/backtick substitution in a
+# firstmate command. A denial is final and must not be retried, so an agent that
+# improvises a drain into one of those shapes stops instead of handling the wake.
+# The harness snippets stay script-file form; only this standing line states the
+# rule, so it is not restated per harness.
+gated_shell_lines() {
+  printf '%s\n' '- Gated shell: run firstmate scripts as a direct script-file command, never wrapped in an inline interpreter flag (`bash -c`, `sh -c`, `python3 -c`, `node -e`, `perl -e`).'
+  printf '%s\n' '- A gated shell permanently denies `eval`, `exec`, `source`, and command-position `$(...)` or backtick substitution inside a firstmate command, so a denial is final: change the invocation form instead of retrying it.'
+}
+
+gated_shell_lines
 printf '\n'
 render_snippet
 printf '\n'
