@@ -163,7 +163,7 @@ A silent bootstrap section needs no action; for any printed actionable diagnosti
 ## 4. Harness and runtime dispatch
 
 Load `harness-adapters` before every spawn or recovery and before trust handling, skill invocation, interrupt, exit, resume, or adapter verification.
-The verified harnesses are `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, and `agy`; never dispatch on an unverified adapter.
+The verified harnesses are `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, `agy`, and `minimax-code`; never dispatch on an unverified adapter.
 If static `config/crew-harness` or `config/secondmate-harness` names an unverified adapter, report it and fall back only to a verified adapter rather than launching it.
 
 `docs/configuration.md` owns dispatch-profile and runtime-backend schemas, `bin/fm-harness.sh` owns static resolution, and `bin/fm-spawn.sh` owns launch flags and fail-closed validation.
@@ -566,3 +566,12 @@ When updating this file, preserve every safety boundary and keep the always-load
 ## War-room rule (captain directive 2026-09-26)
 - ONE consolidated view per host: all active lane panes/windows live in the host's default tmux server under a 'war-room' session (or the primary agent TUI layout). Per-task tmux servers are torn down on task close — never leave stale sockets (verify with: for s in /tmp/tmux-*; do tmux -S $s list-sessions; done).
 - The captain must be able to see every running lane in one place; if a lane is invisible, that is a defect — fix visibility before adding work.
+- Working lanes per host: **2x2 grid MAX, equal splits** (captain directive 2026-10-05). A fifth worker pane or unequal split ratios is a defect; finished lanes get the next ticket in place (warm-pane re-feed), never a new pane while a 2x2 slot exists.
+
+## Mechanical lane protocol (captain directive 2026-10-05 — supersedes looser habits, always applied)
+1. STUDY the real queue first: reconcile BOARD.md, CONTROLLER_STATE.md, the backlog, staged tickets, live panes, and available code surfaces. Classify every task as done, blocked, duplicated, or eligible; invent no filler work.
+2. PLOT every eligible task with: bounded deliverable, owner, host, write boundary, dependency, and evidence path. Dispatch independent, non-overlapping tasks in parallel to verified worker panes within the pane cap. The controller coordinates and reviews; workers implement.
+3. CONFIRM a task was received AND is running before counting it started: typed text, a delivery log line, or a pane label alone is not proof — require converging evidence (pane transcript, context consumption, artifact progress) and record which signals were checked.
+4. HOLDS survive replans: keep standing holds on retries, tasks dependent on an unverified send path, and unresolved safety findings. The first dispatch under a fresh hold is a bounded diagnosis of the blocked mechanism itself (message submission, permission matching); never auto-approve commands or assume wildcard rules work. Lift a blocker only on evidence, never to keep agents busy.
+5. POLL and CLOSE: poll lanes, inspect artifacts and verdicts, obtain an independent check for multi-lane work, and report a compact lane map — running; queued with dependency; blocked with exact recovery condition; completed with evidence.
+6. Stop at spending, credential, production, destructive, or expanded-scope boundaries for the captain's decision.
