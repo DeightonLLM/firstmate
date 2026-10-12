@@ -1909,6 +1909,16 @@ $("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME")
 EOF
 fi
 
+# Quota admission gate (captain ruling 2026-10-13): quota-axi is ENFORCED in
+# code before any endpoint, pane, or task record exists. Crewmate and scout
+# spawns only; a --secondmate launch stands up its own home and is not a fresh
+# worker dispatch. Refusal here is terminal for this spawn attempt: exit 3 =
+# measured exhaustion, exit 4 = spend surface unmeasurable. There is no bypass
+# flag by design; the thresholds live in the gate's own header contract.
+if [ "$KIND" != secondmate ]; then
+  "$FM_ROOT/bin/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" || exit $?
+fi
+
 META_WINDOW=$T
 [ "$BACKEND" = orca ] && META_WINDOW=$W
 {
