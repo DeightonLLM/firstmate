@@ -37,9 +37,9 @@ prd_items:
     sources:
       - PRD_DELIVERY_MAP.md Core Distro row
       - BR-AUD-002 report
-    last_verified: 2026-09-15
+    last_verified: 2026-10-12
     freshness_days: 30
-    notes: PHP production, Next.js staging, MySQL/Percona, auth/lead-list, queue-like city jobs; deployment/hydration/auth gates still open.
+    notes: PHP production, Next.js staging; coordinates verified 2026-10-12 (Namecheap 66.29.153.174, Contabo 161.97.120.4); /etc/hosts trap noted; PRD target conflict pending ADR.
   - id: coredistro-route-qa
     prd_section: Core Distro route QA
     scope: core-distro

@@ -82,6 +82,13 @@ Expected application patterns may include:
 
 The infrastructure must not assume that Core Distro processes protected health information. If PHI, prescription data, or regulated patient data is later introduced, the project must stop and receive a separate compliance and security architecture review.
 
+> **Production reality gap (verified 2026-10-12):** While this PRD implies a Hostinger public/control plane and Hetzner compute plane target (§§7.1–7.2), production is demonstrably running on **Namecheap / PHP 8.2** and **Contabo**.
+> Verified coordinates: `core-distro.com` and `data.core-distro.com` at `66.29.153.174` (AS22612 Namecheap, Inc.; HTTPS HEAD 200, `x-powered-by: PHP/8.2.34`, `server: LiteSpeed`); `agents.core-distro.com` at `161.97.120.4` (AS51167 Contabo GmbH; HTTPS HEAD 401 Basic Auth, `server: nginx/1.24.0 (Ubuntu)`).
+> **Resolution trap:** Controller `/etc/hosts` contains `127.0.0.1 agents.core-distro.com`; checks without external DNS bypass hit local Controller services rather than production.
+> Future verification must bypass local resolution via `dig @1.1.1.1` or `curl --resolve`.
+> Automated drift enforcement is provided by `bin/fm-coord-drift-check.sh`.
+> This architecture gap is recorded factually and is not resolved here; the Captain ordered an ADR first for Core Distro before any architecture or migration decisions are made.
+
 ### 2.2 Elevate Life Sci
 
 **Domain:** `www.elevatesci.com`  
@@ -439,12 +446,19 @@ Reserve, but do not create until required:
 
 Admin and staging endpoints must be protected by Tailscale or Cloudflare Access and must never be publicly open merely because DNS exists.
 
+> **Core Distro public routing reality gap (verified 2026-10-12):** Core Distro public routing (`core-distro.com`, `data.core-distro.com`) is demonstrably hosted on Namecheap (`66.29.153.174`, PHP 8.2.34, LiteSpeed) and `agents.core-distro.com` on Contabo (`161.97.120.4`), not Hostinger KVM8.
+> The Controller's `/etc/hosts` contains a localhost trap for `agents.core-distro.com` requiring external DNS bypass.
+> Resolution of this hosting divergence is deferred pending the Captain's ordered ADR for Core Distro.
+
 ---
 
 ## 7.2 Hetzner Dedicated Server — Compute Plane
 
 **Existing hostname:** retain `brandon-prod` if already configured, or document an approved change to `bdn-compute-01`.  
 **Purpose:** high-load compute, queues, browser automation, enrichment, AI execution, temporary processing data, and worker observability.
+
+> **Core Distro compute plane gap note (verified 2026-10-12):** Core Distro compute, enrichment, and background workflows currently execute on the existing production stack (Namecheap / RapidAPI / Contabo) rather than Hetzner.
+> This target architecture gap is documented factually and is not resolved here; the Captain ordered an ADR first for Core Distro.
 
 ### Existing Foundation to Preserve
 

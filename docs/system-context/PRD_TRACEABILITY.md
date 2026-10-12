@@ -63,10 +63,10 @@ evidenced use `BLOCKED` or `UNKNOWN` instead of guessing.
 | Scope | `core-distro` | `PRD_DELIVERY_MAP.md` |
 | Status | `EVIDENCED` | `PRD_DELIVERY_MAP.md` Core Distro row |
 | Blocker | NONE | n/a |
-| Evidence | `BR-AUD-002` (PHP production, Next.js staging, MySQL/Percona, auth/lead-list, queue-like city jobs), manifest line 28 | `PRD_DELIVERY_MAP.md` |
-| Last verified | 2026-09-15 | n/a |
+| Evidence | `BR-AUD-002` (PHP production, Next.js staging, MySQL/Percona, auth/lead-list, queue-like city jobs), manifest line 28, live 2026-10-12 DNS/HEAD coordinates check (`bin/fm-coord-drift-check.sh`) | `PRD_DELIVERY_MAP.md`, `bin/fm-coord-drift-check.sh` |
+| Last verified | 2026-10-12 | `bin/fm-coord-drift-check.sh` |
 | Freshness days | 30 | n/a |
-| Notes | Deployment/hydration/auth gates still open; PRD-v3 application architecture decision pending | `PRD_DELIVERY_MAP.md` |
+| Notes | Coordinates verified 2026-10-12: Namecheap `66.29.153.174` (PHP 8.2) and Contabo `161.97.120.4` (agents 401 Basic Auth); Controller `/etc/hosts` localhost trap noted; deployment/hydration/auth gates still open; PRD-v3 architecture conflict pending Captain-ordered ADR | `PRD_DELIVERY_MAP.md`, `bin/fm-coord-drift-check.sh` |
 
 ### `coredistro-route-qa` — Core Distro route QA
 
