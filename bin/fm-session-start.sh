@@ -338,6 +338,7 @@ if [ "$READ_ONLY" -eq 1 ]; then
 else
   BOOT_OUT=$(
     "$SCRIPT_DIR/fm-herdr-session-cleanup.sh" 2>&1 || true
+    "$SCRIPT_DIR/fm-reap-gate.sh" --sweep 2>&1 || true
     "$SCRIPT_DIR/fm-bootstrap.sh" 2>&1
   )
 fi

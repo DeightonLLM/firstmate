@@ -1291,6 +1291,11 @@ EOF
     else
       rm -f "$STATE/.vis-$viskey" 2>/dev/null || true
     fi
+
+    # Automatic reap gate: check if idle/done crew past bounded threshold can be reaped
+    if [ "$kind" != secondmate ]; then
+      "$SCRIPT_DIR/fm-reap-gate.sh" "$task" "$STATE" >/dev/null 2>&1 || true
+    fi
   done < <(recorded_windows)
   _wphase per_window_loop
 
