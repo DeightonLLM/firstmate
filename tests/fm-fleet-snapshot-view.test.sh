@@ -151,6 +151,30 @@ test_empty_fleet_json() {
   pass "empty fleet snapshot and view use explicit absence markers"
 }
 
+test_large_backlog_snapshot_json() {
+  local home out summary backlog_bytes expected_records=12000 actual_records
+  home=$(make_home large-backlog)
+  {
+    printf '## Done\n'
+    for i in $(seq 1 "$expected_records"); do
+      printf -- '- [x] task-%05d - Synthetic item with an intentionally long title to amplify JSON payload size (repo: alpha) (kind: ship) (done 2026-10-13)\n' "$i"
+    done
+    printf '\n## Queued\n\n## Done\n'
+  } > "$home/data/backlog.md"
+  backlog_bytes=$(wc -c < "$home/data/backlog.md" | tr -d ' ')
+  [ "$backlog_bytes" -gt 1048576 ] || fail "large backlog fixture must exceed 1 MiB, got $backlog_bytes bytes"
+  out=$(FM_HOME="$home" FM_SNAPSHOT_NOW='2026-10-13T00:00:00Z' "$SNAPSHOT" --json) \
+    || fail "snapshot must accept a $backlog_bytes-byte backlog"
+  printf '%s' "$out" | jq -e '.schema == "fm-fleet-snapshot.v1" and .main_inventory.valid == true' >/dev/null \
+    || fail "large snapshot JSON shape or inventory validity was wrong"
+  actual_records=$(printf '%s' "$out" | jq '.backlog.records | length')
+  [ "$actual_records" = "$expected_records" ] \
+    || fail "large snapshot lost backlog rows: expected $expected_records, got $actual_records"
+  summary=$(FM_HOME="$home" FM_SNAPSHOT_NOW='2026-10-13T00:00:00Z' "$SNAPSHOT" --secondmate-home-summary) || fail "secondmate summary must accept a $backlog_bytes-byte backlog"
+  printf '%s' "$summary" | jq -e '.schema == "fm-secondmate-home-summary.v1" and .valid == true' >/dev/null || fail "large secondmate summary JSON shape or inventory validity was wrong"
+  pass "snapshot and secondmate summary preserve $actual_records records from a $backlog_bytes-byte backlog"
+}
+
 test_fixture_snapshot_json() {
   local home fakebin out ids
   home=$(make_home fixture)
@@ -780,6 +804,7 @@ test_parked_scout_decision_stays_pending() {
 }
 
 test_empty_fleet_json
+test_large_backlog_snapshot_json
 test_fixture_snapshot_json
 test_main_inventory_orphan_and_unstructured_disclosure
 test_normalized_roles_and_plural_blocker_readiness
