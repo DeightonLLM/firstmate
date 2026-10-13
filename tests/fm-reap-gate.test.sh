@@ -350,11 +350,231 @@ EOF
   fi
 }
 
+# -----------------------------------------------------------------------------
+# Test 6: Fresh meta, absent status file, live/working crew => MUST REFUSE
+# (Exact reproduction of 2026-10-12 data-loss defect)
+# -----------------------------------------------------------------------------
+test_live_crew_with_absent_status_refuses() {
+  local case_dir="$TMP_ROOT/test6"
+  local task_id="task-live-no-status"
+  setup_task_repo "$case_dir" "$task_id"
+
+  # Mock tmux to report an active harness agent
+  cat > "$case_dir/fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  list-windows)
+    echo "fm-task-live-no-status"
+    exit 0
+    ;;
+  display-message)
+    echo "claude"
+    exit 0
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$case_dir/fakebin/tmux"
+
+  cat > "$case_dir/state/$task_id.meta" <<EOF
+window=firstmate:fm-$task_id
+endpoint_task_id=$task_id
+worktree=$case_dir/wt
+project=$case_dir/project
+kind=ship
+mode=no-mistakes
+backend=tmux
+spawned_at=$(($(date +%s) - 3600))
+EOF
+
+  # NO status file exists! Freshly dispatched or not yet written.
+  rm -f "$case_dir/state/$task_id.status"
+
+  local log="$case_dir/state/reap.log"
+  local out rc=0
+  out=$(PATH="$case_dir/fakebin:$PATH" FM_HOME="$case_dir" FM_STATE_OVERRIDE="$case_dir/state" \
+        FM_DATA_OVERRIDE="$case_dir/data" FM_CONFIG_OVERRIDE="$case_dir/config" \
+        FM_REAP_AGE_THRESHOLD_SECS=0 \
+        "$REAP_GATE" "$task_id" "$case_dir/state" 2>&1) || rc=$?
+
+  if [ -f "$case_dir/state/$task_id.meta" ] && [ -d "$case_dir/wt" ]; then
+    ok "live crew with absent status file is preserved"
+  else
+    bad "live crew with absent status file was destroyed!"
+  fi
+
+  if [ -f "$log" ] && grep -q "REFUSE: $task_id" "$log"; then
+    ok "refusal of live crew with absent status was logged"
+  else
+    bad "refusal was not logged in $log"
+  fi
+}
+
+# -----------------------------------------------------------------------------
+# Test 7: Live endpoint + stale status file => MUST REFUSE
+# -----------------------------------------------------------------------------
+test_live_endpoint_with_stale_status_refuses() {
+  local case_dir="$TMP_ROOT/test7"
+  local task_id="task-live-stale-status"
+  setup_task_repo "$case_dir" "$task_id"
+
+  cat > "$case_dir/fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  list-windows)
+    echo "fm-task-live-stale-status"
+    exit 0
+    ;;
+  display-message)
+    echo "claude"
+    exit 0
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$case_dir/fakebin/tmux"
+
+  cat > "$case_dir/state/$task_id.meta" <<EOF
+window=firstmate:fm-$task_id
+endpoint_task_id=$task_id
+worktree=$case_dir/wt
+project=$case_dir/project
+kind=ship
+mode=no-mistakes
+backend=tmux
+spawned_at=$(($(date +%s) - 3600))
+EOF
+
+  # Stale status file (e.g. paused or needs-decision or done, but endpoint is ALIVE)
+  echo "paused: waiting on external" > "$case_dir/state/$task_id.status"
+
+  local log="$case_dir/state/reap.log"
+  local out rc=0
+  out=$(PATH="$case_dir/fakebin:$PATH" FM_HOME="$case_dir" FM_STATE_OVERRIDE="$case_dir/state" \
+        FM_DATA_OVERRIDE="$case_dir/data" FM_CONFIG_OVERRIDE="$case_dir/config" \
+        FM_REAP_AGE_THRESHOLD_SECS=0 \
+        "$REAP_GATE" "$task_id" "$case_dir/state" 2>&1) || rc=$?
+
+  if [ -f "$case_dir/state/$task_id.meta" ] && [ -d "$case_dir/wt" ]; then
+    ok "live endpoint with stale status is preserved"
+  else
+    bad "live endpoint with stale status was destroyed!"
+  fi
+
+  if [ -f "$log" ] && grep -q "REFUSE: $task_id" "$log"; then
+    ok "refusal of live endpoint with stale status was logged"
+  else
+    bad "refusal was not logged in $log"
+  fi
+}
+
+# -----------------------------------------------------------------------------
+# Test 8: Ambiguous endpoint => MUST REFUSE
+# -----------------------------------------------------------------------------
+test_ambiguous_endpoint_refuses() {
+  local case_dir="$TMP_ROOT/test8"
+  local task_id="task-ambiguous"
+  setup_task_repo "$case_dir" "$task_id"
+
+  cat > "$case_dir/fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+case "${1:-}" in
+  list-windows)
+    echo "fm-task-ambiguous"
+    exit 0
+    ;;
+  display-message)
+    echo "python3"
+    exit 0
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$case_dir/fakebin/tmux"
+
+  cat > "$case_dir/state/$task_id.meta" <<EOF
+window=firstmate:fm-$task_id
+endpoint_task_id=$task_id
+worktree=$case_dir/wt
+project=$case_dir/project
+kind=ship
+mode=no-mistakes
+backend=tmux
+spawned_at=$(($(date +%s) - 3600))
+EOF
+
+  echo "done: landed" > "$case_dir/state/$task_id.status"
+
+  local log="$case_dir/state/reap.log"
+  local out rc=0
+  out=$(PATH="$case_dir/fakebin:$PATH" FM_HOME="$case_dir" FM_STATE_OVERRIDE="$case_dir/state" \
+        FM_DATA_OVERRIDE="$case_dir/data" FM_CONFIG_OVERRIDE="$case_dir/config" \
+        FM_REAP_AGE_THRESHOLD_SECS=0 \
+        "$REAP_GATE" "$task_id" "$case_dir/state" 2>&1) || rc=$?
+
+  if [ -f "$case_dir/state/$task_id.meta" ] && [ -d "$case_dir/wt" ]; then
+    ok "ambiguous endpoint is preserved"
+  else
+    bad "ambiguous endpoint was destroyed!"
+  fi
+
+  if [ -f "$log" ] && grep -q "REFUSE: $task_id" "$log"; then
+    ok "refusal of ambiguous endpoint was logged"
+  else
+    bad "refusal was not logged in $log"
+  fi
+}
+
+# -----------------------------------------------------------------------------
+# Test 9: Unverified endpoint => MUST REFUSE
+# -----------------------------------------------------------------------------
+test_unverified_endpoint_refuses() {
+  local case_dir="$TMP_ROOT/test9"
+  local task_id="task-unverified"
+  setup_task_repo "$case_dir" "$task_id"
+
+  cat > "$case_dir/state/$task_id.meta" <<EOF
+window=unknown-window
+endpoint_task_id=$task_id
+worktree=$case_dir/wt
+project=$case_dir/project
+kind=ship
+mode=no-mistakes
+backend=unknownbackend
+spawned_at=$(($(date +%s) - 3600))
+EOF
+
+  echo "done: landed" > "$case_dir/state/$task_id.status"
+
+  local log="$case_dir/state/reap.log"
+  local out rc=0
+  out=$(PATH="$case_dir/fakebin:$PATH" FM_HOME="$case_dir" FM_STATE_OVERRIDE="$case_dir/state" \
+        FM_DATA_OVERRIDE="$case_dir/data" FM_CONFIG_OVERRIDE="$case_dir/config" \
+        FM_REAP_AGE_THRESHOLD_SECS=0 \
+        "$REAP_GATE" "$task_id" "$case_dir/state" 2>&1) || rc=$?
+
+  if [ -f "$case_dir/state/$task_id.meta" ] && [ -d "$case_dir/wt" ]; then
+    ok "unverified endpoint is preserved"
+  else
+    bad "unverified endpoint was destroyed!"
+  fi
+
+  if [ -f "$log" ] && grep -q "REFUSE: $task_id" "$log"; then
+    ok "refusal of unverified endpoint was logged"
+  else
+    bad "refusal was not logged in $log"
+  fi
+}
+
 test_verified_landed_is_reaped
 test_unlanded_work_is_preserved_and_logged
 test_crisp_r_pane_is_never_touched
 test_undeterminable_state_preserves
 test_sweep_mode
+test_live_crew_with_absent_status_refuses
+test_live_endpoint_with_stale_status_refuses
+test_ambiguous_endpoint_refuses
+test_unverified_endpoint_refuses
 
 printf '\nPASS=%d FAIL=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
