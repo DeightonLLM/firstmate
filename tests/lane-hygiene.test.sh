@@ -34,6 +34,8 @@ SH
   cp "$ROOT/bin/fm-wake-lib.sh" "$root/bin/"
   cp "$ROOT/bin/fm-secondmate-registry-lib.sh" "$root/bin/"
   cp "$ROOT/bin/fm-backend.sh" "$root/bin/"
+  cp "$ROOT/bin/fm-composer-lib.sh" "$root/bin/" 2>/dev/null || true
+  cp "$ROOT/bin/fm-transition-lib.sh" "$root/bin/" 2>/dev/null || true
   cp "$ROOT/bin/fm-project-capacity-lib.sh" "$root/bin/"
   mkdir -p "$root/bin/backends"
   cp "$ROOT/bin/backends/"*.sh "$root/bin/backends/" 2>/dev/null || true
@@ -256,6 +258,57 @@ test_fail_closed_on_error() {
   pass "fail-closed: error during inspection is a finding, never a silent pass"
 }
 
+test_live_agents_counted_not_meta_records() {
+  local env wt meta out rc fakebin
+  env=$(make_test_env live-count-herdr)
+
+  # Project capacity = 4
+  printf 'testproj 4\n' > "$env/config/project-capacity"
+
+  # 3 meta records
+  for i in 1 2 3; do
+    wt="$env/worktree-$i"
+    fm_git_init_commit "$wt"
+    meta="$env/state/task-$i.meta"
+    fm_write_meta "$meta" \
+      "window=default:wA:p$i" \
+      "worktree=$wt" \
+      "project=$env/projects/testproj" \
+      "backend=herdr" \
+      "kind=ship" \
+      "mode=local-only"
+  done
+
+  # Fake herdr: 1 working pane, 1 idle pane, 1 done pane
+  fakebin=$(fm_fakebin "$env")
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = "pane" ] && [ "${2:-}" = "list" ]; then
+  cat <<'JSON'
+{"id":"cli:pane:list","result":{"panes":[{"pane_id":"wA:p1","agent":"agy","agent_status":"working"},{"pane_id":"wA:p2","agent":"pi","agent_status":"idle"},{"pane_id":"wA:p3","agent":"codex","agent_status":"done"}]},"type":"pane_list"}
+JSON
+  exit 0
+fi
+exit 0
+SH
+  chmod +x "$fakebin/herdr"
+
+  out=$(PATH="$fakebin:$PATH" \
+    FM_ROOT_OVERRIDE="$env" \
+    FM_HOME="$env" \
+    FM_CONFIG_OVERRIDE="$env/config" \
+    FM_STATE_OVERRIDE="$env/state" \
+    FM_PROJECT_NAME="testproj" \
+    HERDR_CAP_CHECK_SKIP=1 \
+    bash "$LANE_HYGIENE" 2>&1) || rc=$?
+  rc=${rc:-0}
+
+  # With 3 meta records but only 1 working pane in herdr pane list, running count must be 1/4, not 3/4
+  assert_contains "$out" "running/total = 1/4" "running count must reflect live working agent count (1), not meta records (3)"
+  assert_contains "$out" "3 meta record(s)" "in-flight task records must be listed as a separate number"
+  pass "live agents counted from herdr pane list, not meta records (1 working of 3 meta records)"
+}
+
 test_phantom_record_detected
 test_live_worker_not_phantom
 test_idle_capacity_reported
@@ -263,3 +316,4 @@ test_healthy_host_exits_0_and_announces
 test_stale_watcher_detected
 test_broken_gate_detected
 test_fail_closed_on_error
+test_live_agents_counted_not_meta_records

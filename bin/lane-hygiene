@@ -204,26 +204,47 @@ else
   FM_PROJECT_CAPACITY=""
 fi
 
-# Count live workers
+# Count live workers from backend truth: herdr pane list counting working panes
 live_workers=0
+herdr_bin=$(command -v herdr 2>/dev/null || echo "/usr/local/bin/herdr")
+if [ -x "$herdr_bin" ] && timeout 5s "$herdr_bin" workspace list >/dev/null 2>&1; then
+  pane_json=$(timeout 8s "$herdr_bin" pane list 2>/dev/null || true)
+  if [ -n "$pane_json" ]; then
+    live_workers=$(printf '%s' "$pane_json" | jq -r '[.result.panes // .panes // [] | .[] | select(.agent_status == "working")] | length' 2>/dev/null || echo 0)
+  fi
+else
+  # Non-herdr fallback (e.g. tmux test environments)
+  if [ -d "$STATE" ]; then
+    for meta in "$STATE"/*.meta; do
+      [ -f "$meta" ] || continue
+      kind=$(fm_meta_get "$meta" kind 2>/dev/null || true)
+      [ "$kind" != "secondmate" ] || continue
+      window=$(fm_meta_get "$meta" window 2>/dev/null || true)
+      [ -n "$window" ] || continue
+      target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
+      backend=$(fm_backend_of_meta "$meta" 2>/dev/null || true)
+      [ -n "$backend" ] || backend="tmux"
+      id=$(basename "$meta" .meta)
+      if command -v fm_backend_target_exists >/dev/null 2>&1; then
+        if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
+          live_workers=$((live_workers + 1))
+        fi
+      fi
+    done
+  fi
+fi
+
+# Count in-flight task records (separate number from live agents)
+meta_records=0
 if [ -d "$STATE" ]; then
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] || continue
     kind=$(fm_meta_get "$meta" kind 2>/dev/null || true)
     [ "$kind" != "secondmate" ] || continue
-    window=$(fm_meta_get "$meta" window 2>/dev/null || true)
-    [ -n "$window" ] || continue
-    target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
-    backend=$(fm_backend_of_meta "$meta" 2>/dev/null || true)
-    [ -n "$backend" ] || backend="tmux"
-    id=$(basename "$meta" .meta)
-    if command -v fm_backend_target_exists >/dev/null 2>&1; then
-      if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
-        live_workers=$((live_workers + 1))
-      fi
-    fi
+    meta_records=$((meta_records + 1))
   done
 fi
+echo "Task records: $meta_records meta record(s) in state"
 
 if [ -n "${FM_PROJECT_CAPACITY:-}" ]; then
   total_cap="$FM_PROJECT_CAPACITY"
@@ -253,8 +274,12 @@ else
   cap_check_bin="${HERDR_CAP_CHECK_BIN:-/root/bin/herdr-subagent-cap-check}"
   if [ -x "$cap_check_bin" ]; then
     if [ "$herdr_up" -eq 1 ]; then
+      ws_arg="${HERDR_WORKSPACE_ID:-}"
+      if [ -z "$ws_arg" ]; then
+        ws_arg=$(timeout 5s "$herdr_bin" workspace list 2>/dev/null | jq -r '.result.workspaces[0].workspace_id // empty' 2>/dev/null || true)
+      fi
       cap_rc=0
-      cap_out=$(timeout 8s "$cap_check_bin" 2>&1) || cap_rc=$?
+      cap_out=$(timeout 8s "$cap_check_bin" ${ws_arg:+"$ws_arg"} 2>&1) || cap_rc=$?
       cap_rc=${cap_rc:-0}
       if [ "$cap_rc" -eq 3 ]; then
         echo "BROKEN GATE: $cap_check_bin reported failure (exit 3: server unavailable) while herdr service is plainly up!"
