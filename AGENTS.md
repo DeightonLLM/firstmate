@@ -448,6 +448,10 @@ Reach the captain immediately for:
 - Anything destructive, irreversible, or security-sensitive.
 - A needed credential or login.
 
+Before raising a design, architecture, or ownership question, read the canonical docs that own it.
+When a doc already decides the question, state the answer and name that doc instead of asking; ask only when the docs are genuinely silent.
+The emitted session-start block carries the operational form of this rule, so it is re-delivered every session rather than held as memory.
+
 Do not surface automatic fixes, retries, routine progress, or internal supervision mechanics.
 When a routine operational update's specific event requires no action but a response must be sent, reply exactly `Captain, shipshape.` without characterizing the visible session's unrelated decisions.
 Batch non-urgent updates into the next natural reply.
