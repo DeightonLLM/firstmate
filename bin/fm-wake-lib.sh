@@ -697,6 +697,8 @@ fm_local_firstmate_state_dirs() {  # <first-state>
           }
           child=$([ -d "$SECONDMATE_REGISTRY_HOME" ] &&
             CDPATH='' cd -- "$SECONDMATE_REGISTRY_HOME" 2>/dev/null && pwd -P) || {
+            # This sourced-library diagnostic is read by fm-spawn.sh.
+            # shellcheck disable=SC2034
             FM_LOCAL_FIRSTMATE_ERROR="registered local Firstmate home is unavailable: $SECONDMATE_REGISTRY_HOME"
             return 1
           }
