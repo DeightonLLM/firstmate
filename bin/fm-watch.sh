@@ -40,6 +40,14 @@
 #                          count, and demand-deep-inspection marker, for human
 #                          inspection only - never an automatic interrupt,
 #                          signal, or restart of the worker or its tool process.
+#   gate: <window> harness=<h> blocked on an interactive approval gate awaiting
+#                          the CAPTAIN. A pane parked on an approval dialog reads as
+#                          idle to every backend, exactly like a finished pane, so this
+#                          is the one path that separates them. Surfaced once per
+#                          distinct rendered capture, never absorbed: answering it is
+#                          the captain's decision alone and this watcher never sends a
+#                          key, accepts, or dismisses a gate (captain stall policy,
+#                          docs/watcher-continuity.md "Stall policy").
 #   check: <script>: <out> authenticated check output, always actionable
 #   check: process-event result captured: <keys>
 #                          a durably captured process-to-event result is queued
@@ -87,6 +95,8 @@ mkdir -p "$STATE"
 . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
+# shellcheck source=bin/fm-gate-lib.sh
+. "$SCRIPT_DIR/fm-gate-lib.sh"
 
 WATCH_LOCK="$STATE/.watch.lock"
 WATCH_PATH="$SCRIPT_DIR/fm-watch.sh"
@@ -508,6 +518,24 @@ pause_state_class() {  # <window> <task>
     *) rm -f "$recheck_file" ;;
   esac
   printf '%s' "$class"
+}
+
+# A pane parked on an interactive human gate gets its OWN typed wake instead of a
+# generic stale one, so the captain sees the pane, the harness, and the reason
+# without opening anything. Deduped by the shared .stale-<key> marker exactly like
+# surface_nonterminal_stale, so a persistent gate re-surfaces once per distinct
+# rendered capture rather than every poll. It never starts a wedge timer: the
+# captain is being told, not nagged. DETECTION ONLY - nothing here answers the gate.
+surface_human_gate() {  # <window> <hash> <harness>
+  local win=$1 h=$2 harness=$3 key task
+  key=$(printf '%s' "$win" | tr ':/.' '___')
+  task=$(winmeta_task "$win")
+  fm_wake_append gate "$win" "gate: $win harness=${harness:-unknown} blocked on an interactive approval gate; awaiting captain decision (never auto-answered)" || exit 1
+  printf '%s' "$h" > "$STATE/.stale-$key"
+  rm -f "$STATE/.stale-since-$key" "$STATE/.paused-$key" \
+        "$STATE/.paused-rechecked-$key" "$STATE/.paused-resurfaced-$key"
+  [ -n "$task" ] && mark_surfaced "$STATE/$task.status"
+  wake "gate: $win harness=${harness:-unknown} blocked on an interactive approval gate; awaiting captain decision (never auto-answered)"
 }
 
 surface_nonterminal_stale() {  # <window> <hash>
@@ -1126,13 +1154,23 @@ EOF
     # content cannot suppress stale detection. Read once per window per poll and
     # reused below so a busy verdict is consistent within one cycle.
     if window_is_busy "$w" "$tail40"; then busy_now=0; else busy_now=1; fi
+    # A gate renders as idle to every backend, so it is decided from the capture
+    # already read above - never from an extra backend call - and only when the
+    # pane is not provably busy (a live turn cannot be parked at a dialog).
+    gate_now=0
+    if [ "$busy_now" -ne 0 ] && fm_gate_pane_awaiting_human "$tail40"; then gate_now=1; fi
     if [ "$h" = "$prev" ]; then
       n=$(( $(cat "$cf" 2>/dev/null || echo 0) + 1 ))
       echo "$n" > "$cf"
       if [ "$n" -ge 2 ] && [ "$busy_now" -ne 0 ]; then
         # The pane is idle/stale at hash $h. Triage decides whether this wakes
         # firstmate. Detection itself is unchanged from above.
-        if [ "$kind" = secondmate ]; then
+        if [ "$gate_now" -eq 1 ]; then
+          # Checked before every absorb class below: a human gate must never be
+          # hidden behind a stale captain-relevant log line or a provably-working
+          # override, and it is never resolved by this watcher.
+          surface_human_gate "$w" "$h" "$(window_harness "$w")"
+        elif [ "$kind" = secondmate ]; then
           case "$(pause_state_class "$w" "$task")" in
             paused) handle_paused_stale "$w" "$task" "$h" ;;
             *)      clear_pause_tracking "$w" ;;

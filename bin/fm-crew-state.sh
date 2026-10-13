@@ -43,6 +43,14 @@
 #      recorded backend's pane busy state, then the status log's last line only
 #      when its verb maps to a recognized run-state. Decision-only events such as
 #      `resolved` never become current state or detail.
+#   4a. A pane parked on an interactive approval gate is NOT an idle finished
+#       crew: the backend renders BOTH as idle (herdr `agent_status: idle`),
+#       so before trusting an idle verdict or the status log this path reads
+#       the bounded pane capture through bin/fm-gate-lib.sh and reports
+#       `blocked` when it positively renders a human gate. DETECTION ONLY:
+#       nothing here answers, accepts, or dismisses a gate (captain stall
+#       policy, docs/watcher-continuity.md "Stall policy"). The run-step above
+#       stays authoritative when a run exists, since a live run is not idle.
 #   5. Missing meta or torn-down worktree: report unknown · none. If no run is
 #      attributed to this crew, a dead endpoint also reports unknown · none rather
 #      than trusting a stale status log.
@@ -64,6 +72,8 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-classify-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
+# shellcheck source=bin/fm-gate-lib.sh
+. "$SCRIPT_DIR/fm-gate-lib.sh"
 
 ID=${1:-}
 [ -n "$ID" ] || { echo "usage: fm-crew-state.sh <id>" >&2; exit 2; }
@@ -578,6 +588,17 @@ fi
 # unknown rather than trusting a possibly-stale status log as the current state.
 [ -n "$BACKEND_TARGET" ] || emit unknown none "no backend target recorded"
 pane_readable "$BACKEND_TARGET" || emit unknown none "backend target gone: $BACKEND_TARGET"
+
+# A pane parked on an interactive approval gate is not an idle finished crew:
+# the backend answers `idle` for both, so the two are indistinguishable until
+# the capture itself is read. Check it BEFORE the busy verdict and before the
+# status log, so neither an idle verdict nor a stale `done:` line can mask a
+# live gate. This is DETECTION ONLY - it reports `blocked` and stops; it never
+# sends a key, accepts, or dismisses anything (captain stall policy).
+GATE_CAPTURE=$(fm_backend_capture "$TASK_BACKEND" "$BACKEND_TARGET" 40 "$EXPECTED_LABEL" 2>/dev/null) || GATE_CAPTURE=''
+if [ -n "$GATE_CAPTURE" ] && fm_gate_pane_awaiting_human "$GATE_CAPTURE"; then
+  emit blocked pane "awaiting interactive approval gate (harness=${HARNESS:-unknown}, target=$BACKEND_TARGET; captain decision required, never auto-answered)"
+fi
 
 # Secondmates idle on their own watcher (idle pane = healthy), so the busy
 # state is not meaningful for them; read their state from the status log only.

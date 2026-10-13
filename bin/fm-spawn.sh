@@ -112,6 +112,8 @@
 #                  written by this script; outside the worktree to avoid pi's trust gate)
 #     __PITURNEND__ absolute path to .pi/extensions/fm-primary-turnend-guard.ts in a pi secondmate home
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
+#     __MCODEDIR__  absolute path to /tmp/fm-<task-id>/mcode (isolated runtime config
+#                   dir with permissionMode: bypassPermissions so mcode never parks on gates)
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
 # Kimi uses one surgically installed Firstmate region in $HOME/.kimi-code/config.toml,
@@ -520,11 +522,11 @@ launch_template() {
     agy) printf '%s' 'agy __MODELFLAG____EFFORTFLAG__--dangerously-skip-permissions --prompt-interactive "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     # minimax-code (MiniMax Code / mcode): unlike the others, mcode takes the brief
     # as a POSITIONAL prompt argument ("mcode [options] [prompt]"), not behind a
-    # flag. It accepts the shared -m/--model axis. It has NO autonomous-permission
-    # flag equivalent to claude's or agy's: permissions come from permissionMode in
-    # the user's own config.yaml, so none is added here. It exposes no effort axis,
-    # so __EFFORTFLAG__ is deliberately omitted rather than guessed.
-    minimax-code) printf '%s' 'mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    # flag. It accepts the shared -m/--model axis. It has no autonomous CLI flag,
+    # so permissions are structurally disabled by launching with a per-task config
+    # directory (__MCODEDIR__) where permissionMode is set to bypassPermissions.
+    # It exposes no effort axis, so __EFFORTFLAG__ is omitted.
+    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MCODEDIR__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -1579,6 +1581,33 @@ fi
 TASK_TMP="/tmp/fm-$ID"
 mkdir -p "$TASK_TMP/gotmp"
 
+# Per-task minimax-code runtime config dir with permissionMode=bypassPermissions
+# so unattended dispatched mcode lanes structurally cannot park on an interactive gate.
+if [ "$HARNESS" = minimax-code ]; then
+  MCODE_TASK_DIR="$TASK_TMP/mcode"
+  mkdir -p "$MCODE_TASK_DIR"
+  base_dir="${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}"
+  base_cfg="$base_dir/config.yaml"
+  if [ -f "$base_cfg" ]; then
+    if grep -qE '^[[:space:]]*permissionMode:' "$base_cfg"; then
+      sed -e 's/^[[:space:]]*permissionMode:.*/permissionMode: bypassPermissions/' "$base_cfg" > "$MCODE_TASK_DIR/config.yaml"
+    else
+      cp "$base_cfg" "$MCODE_TASK_DIR/config.yaml"
+      printf '\npermissionMode: bypassPermissions\n' >> "$MCODE_TASK_DIR/config.yaml"
+    fi
+  else
+    printf 'permissionMode: bypassPermissions\n' > "$MCODE_TASK_DIR/config.yaml"
+  fi
+  if [ -d "$base_dir" ]; then
+    for item in "$base_dir"/*; do
+      [ -e "$item" ] || continue
+      b=$(basename "$item")
+      [ "$b" = "config.yaml" ] && continue
+      ln -s "$item" "$MCODE_TASK_DIR/$b" 2>/dev/null || true
+    done
+  fi
+fi
+
 # Per-harness turn-end hook where enabled: a file that touches
 # state/<id>.turn-ended when the agent finishes a turn. Worktree-resident hooks
 # and token pointers stay out of git's view so they never block teardown's dirty
@@ -2044,6 +2073,8 @@ LAUNCH=${LAUNCH//__PIEXT__/$sq_piext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
+sq_mcodedir=$(shell_quote "$TASK_TMP/mcode")
+LAUNCH=${LAUNCH//__MCODEDIR__/$sq_mcodedir}
 # Crewmate panes are created by a long-lived tmux/herdr daemon that does not
 # inherit firstmate's current environment, so a bare `claude` in the pane falls
 # back to the default ~/.claude store even when firstmate itself runs under a
@@ -2063,6 +2094,9 @@ fi
 # process (go build, go test, ...) inherit it. Sent before the launch command so
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
+if [ "$HARNESS" = minimax-code ]; then
+  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_mcodedir MCODE_CONFIG_DIR=$sq_mcodedir"
+fi
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
 sleep 0.3
