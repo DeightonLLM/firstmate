@@ -106,4 +106,3 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-public-followup.sh`  | Reconcile typed terminal work results into a public commitment and deliver its final reply once |
 | `fm-public-followup-emit.sh` | Report one typed terminal work result into the home that owes the public reply    |
 | `lane-todo-dash.sh` | Render the interactive lane and ticket dashboard as a self-contained artifact; `serve` hosts it on Tailscale with a local feedback inbox, and `review`/`reply`/`end` run its Lavish chat-back through `fm-procevent-lavish.sh` so board feedback returns as a registered process-to-event wake |
-| `fm-lavish-enforcement.sh` | Render, review, or inspect the offline Lavish enforcement surface, truthful capacity holder defect counts, and machine-readable guard inventory |

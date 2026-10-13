@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fleet ticket dashboard</title>
+<style>
+:root{color-scheme:dark;--bg:#101820;--panel:#192630;--line:#30434e;--ink:#e9f0f2;--muted:#a8b9c1;--accent:#75d4c3;--warn:#ffd27a;--dim:var(--muted);--ok:var(--accent);--bad:#ff9c91}
+*{box-sizing:border-box}body{margin:0;padding:28px;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;justify-content:space-between;align-items:end;gap:16px;margin:0 auto 22px;max-width:1400px}h1{margin:0;font-size:clamp(1.6rem,3vw,2.4rem)}h2{margin:0 0 14px;font-size:1.15rem}small,.muted{color:var(--muted)}main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;max-width:1400px;margin:auto}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}.wide{grid-column:1/-1}.capacity{font-size:1.3rem;color:var(--accent);font-weight:700}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}td{overflow-wrap:anywhere}.state{font-weight:700;color:var(--accent)}.ticket{white-space:normal}.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#263b47;color:var(--accent)}.blocker{color:var(--warn)}.empty{color:var(--muted);font-style:italic}.receipt{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}.gate{font-family:ui-monospace,monospace}.status-pass{color:var(--accent)}.status-fail{color:#ff9c91}button,select,textarea{font:inherit;color:var(--ink);background:#1e303a;border:1px solid var(--line);border-radius:7px;padding:7px 10px}button{cursor:pointer}button:hover{border-color:var(--accent)}.filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}.filters label{display:grid;gap:3px;color:var(--muted);font-size:.85rem}details summary{cursor:pointer;color:var(--accent);font-weight:650}details[open] summary{margin-bottom:8px}.lane-detail,.ticket-detail{padding:8px;border-left:2px solid var(--line);overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;color:var(--muted);margin:6px 0}.feedback-form{display:grid;gap:8px;margin-top:10px;max-width:680px}.feedback-form textarea{min-height:90px;resize:vertical}.feedback-status{min-height:1.4em;color:var(--accent)}.dashboard-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+@media(max-width:800px){body{padding:14px}main{grid-template-columns:1fr}.wide{grid-column:auto}header{align-items:start;flex-direction:column}table{font-size:.9rem}th,td{padding:7px 4px}}
+.none{color:var(--dim);font-style:italic}
+#pill{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:60;background:var(--panel);border:1px solid var(--line);border-right:none;border-radius:10px 0 0 10px;padding:10px 8px;width:46px;box-shadow:-4px 0 18px rgba(0,0,0,.5);cursor:pointer;transition:width .25s ease,padding .25s ease;overflow:hidden}
+#pill:hover{width:252px;padding:12px 14px}
+#pill .pnum{font-size:14px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+#pill .ptrack{height:4px;background:#010409;border-radius:3px;margin-top:7px;overflow:hidden}
+#pill .pfill{height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,#a371f7,#58a6ff,#3fb950);transition:width .6s ease}
+#pill .detail{display:none}
+#pill:hover .pnum,#pill:hover .ptrack{display:none}
+#pill:hover .detail{display:block}
+#pill .drow{display:flex;justify-content:space-between;gap:12px;font-size:11.5px;line-height:1.75}
+#pill .dk{color:var(--dim)}
+#pill .dv{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+#pill .dhead{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);font-weight:600;margin-bottom:7px}
+#pill .deta{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:12px;font-weight:600}
+#pill .warn{color:var(--warn)} #pill .ok{color:var(--ok)} #pill .bad{color:var(--bad)}
+@media(max-width:860px){#pill{display:none}}
+</style></head><body><header><div><h1>Fleet ticket dashboard</h1><small>Local snapshot · no external resources</small></div><div class="dashboard-tools"><small>Generated <time datetime="2026-10-13T21:16:33Z">2026-10-13T21:16:33Z</time></small><form action="/" method="get"><button type="submit">Refresh snapshot</button></form></div></header><main>
+<section class="card wide"><h2>Filters</h2><div class="filters"><label>State<select id="state-filter"><option value="">All states</option></select></label><label>Priority<select id="priority-filter"><option value="">All priorities</option></select></label><label>Host<select id="host-filter"><option value="">All hosts</option></select></label></div></section>
+<section class="card wide"><h2>Lane activity</h2><table><thead><tr><th>Lane / model</th><th>Surface / host</th><th>Task</th><th>State</th><th>Last activity</th></tr></thead><tbody>
+<tr class="lane-row" data-state="unknown" data-host="unknown">
+<td><details><summary>lane-a</summary><div class="lane-detail"><p><strong>Task:</strong> lane-a<br><strong>Model:</strong> unknown<br><strong>Host:</strong> unknown<br><strong>Surface:</strong> unknown</p><strong>Latest status events</strong><pre>(no status events)</pre><strong>To-Do</strong><pre>(no todo file)</pre></div></details></td>
+<td>unknown</td><td>unknown</td><td>lane-a</td><td class="state">unknown</td><td>(none)</td></tr>
+<tr class="lane-row" data-state="unknown" data-host="unknown">
+<td><details><summary>lane-b</summary><div class="lane-detail"><p><strong>Task:</strong> lane-b<br><strong>Model:</strong> unknown<br><strong>Host:</strong> unknown<br><strong>Surface:</strong> unknown</p><strong>Latest status events</strong><pre>(no status events)</pre><strong>To-Do</strong><pre>(no todo file)</pre></div></details></td>
+<td>unknown</td><td>unknown</td><td>lane-b</td><td class="state">unknown</td><td>(none)</td></tr>
+<tr class="lane-row" data-state="unknown" data-host="unknown">
+<td><details><summary>lane-c</summary><div class="lane-detail"><p><strong>Task:</strong> lane-c<br><strong>Model:</strong> unknown<br><strong>Host:</strong> unknown<br><strong>Surface:</strong> unknown</p><strong>Latest status events</strong><pre>(no status events)</pre><strong>To-Do</strong><pre>(no todo file)</pre></div></details></td>
+<td>unknown</td><td>unknown</td><td>lane-c</td><td class="state">unknown</td><td>(none)</td></tr>
+<tr class="lane-row" data-state="unknown" data-host="unknown">
+<td><details><summary>lane-d</summary><div class="lane-detail"><p><strong>Task:</strong> lane-d<br><strong>Model:</strong> unknown<br><strong>Host:</strong> unknown<br><strong>Surface:</strong> unknown</p><strong>Latest status events</strong><pre>(no status events)</pre><strong>To-Do</strong><pre>(no todo file)</pre></div></details></td>
+<td>unknown</td><td>unknown</td><td>lane-d</td><td class="state">unknown</td><td>(none)</td></tr>
+</tbody></table></section>
+<section class="card wide"><h2>Tickets by priority</h2><table><thead><tr><th>Priority</th><th>Ticket</th><th>Claim</th><th>Blocker</th></tr></thead><tbody>
+<tr><td colspan="4" class="empty">No backlog tickets found</td></tr>
+</tbody></table></section>
+<aside id="pill" aria-label="Fleet metrics: tickets done —"><div class="pnum">—</div><div class="ptrack" role="progressbar" aria-label="Tickets done" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="pfill" style="width:0%"></div></div><div class="detail"><div class="dhead">Fleet metrics</div><div class="drow"><span class="dk">Capacity used</span><span class="dv ok">—</span></div><div class="drow"><span class="dk">Tickets done</span><span class="dv">0 / 0 · —</span></div><div class="drow"><span class="dk">Compaction headroom</span><span class="dv warn">—</span></div><div class="deta">0 running · 0 declared capacity</div><div class="none">No live context reading reported</div></div></aside>
+<section class="card wide"><h2>General feedback</h2><p class="muted">Feedback is saved in state/dash-feedback for agent intake.</p><form class="feedback-form" action="/feedback" method="post"><input type="hidden" name="ticket" value="General feedback"><label>Comment<textarea name="comment" maxlength="8000" required></textarea></label><button type="submit">Send feedback</button><span class="feedback-status" aria-live="polite"></span></form></section>
+<section class="card"><h2>Hetz comms receipts</h2>
+<div class="receipt"><span>inbound</span><span class="empty">no receipt</span></div>
+<div class="receipt"><span>outbound</span><span class="empty">no receipt</span></div>
+</section>
+<section class="card"><h2>Capacity</h2><div class="capacity">Declared 0 · Running 0</div><small>Running counts working panes from Herdr pane list.</small></section>
+<section class="card wide"><h2>Latest gate status</h2><table><thead><tr><th>Gate</th><th>Status</th></tr></thead><tbody>
+<tr><td colspan="2" class="empty">No gate status events</td></tr>
+</tbody></table></section></main>
+<script>
+(() => {
+  const filters = {
+    state: document.querySelector('#state-filter'),
+    priority: document.querySelector('#priority-filter'),
+    host: document.querySelector('#host-filter')
+  };
+  const rows = [...document.querySelectorAll('.lane-row, .ticket-row')];
+  const options = {state: new Set(), priority: new Set(), host: new Set()};
+  for (const row of rows) {
+    if (row.dataset.state) options.state.add(row.dataset.state);
+    if (row.dataset.priority) options.priority.add(row.dataset.priority);
+    if (row.dataset.host && row.dataset.host !== 'all') options.host.add(row.dataset.host);
+  }
+  for (const name of Object.keys(filters)) {
+    for (const value of [...options[name]].sort()) {
+      const option = document.createElement('option'); option.value = value; option.textContent = value;
+      filters[name].append(option);
+    }
+  }
+  const applyFilters = () => {
+    for (const row of rows) {
+      const visible = (!filters.state.value || row.dataset.state === filters.state.value)
+        && (!filters.priority.value || !row.classList.contains('ticket-row') || row.dataset.priority === filters.priority.value)
+        && (!filters.host.value || row.dataset.host === 'all' || row.dataset.host === filters.host.value);
+      row.hidden = !visible;
+    }
+  };
+  Object.values(filters).forEach(filter => filter.addEventListener('change', applyFilters));
+  document.querySelectorAll('.feedback-form').forEach(form => form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const message = form.querySelector('.feedback-status');
+    try {
+      const response = await fetch(form.action, {method: 'POST', body: new FormData(form)});
+      const result = await response.text();
+      if (!response.ok) throw new Error(result || `HTTP ${response.status}`);
+      message.textContent = result;
+      form.reset();
+    } catch (error) { message.textContent = `Could not send feedback: ${error.message}`; }
+  }));
+})();
+</script></body></html>
