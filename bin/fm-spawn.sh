@@ -178,6 +178,12 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-gate-refuse-lib.sh
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
+# shellcheck source=bin/fm-lease-lib.sh
+. "$SCRIPT_DIR/fm-lease-lib.sh"
+# shellcheck source=bin/fm-secondmate-registry-lib.sh
+. "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
+# shellcheck source=bin/fm-project-capacity-lib.sh
+. "$SCRIPT_DIR/fm-project-capacity-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
@@ -274,6 +280,8 @@ HERDR_PRESENTATION_ORDER_LOCK=
 HERDR_PRESENTATION_ORDER_LOCK_HELD=0
 SPAWN_TASK_LOCK=
 SPAWN_TASK_LOCK_HELD=0
+SPAWN_TREEHOUSE_PROJECT_LOCK=
+SPAWN_TREEHOUSE_PROJECT_LOCK_HELD=0
 CONFIG_INHERIT_LOCK=
 CONFIG_INHERIT_LOCK_HELD=0
 
@@ -345,6 +353,10 @@ spawn_abort_cleanup() {
   if [ "$SPAWN_TASK_LOCK_HELD" = 1 ]; then
     SPAWN_TASK_LOCK_HELD=0
     fm_lock_release "$SPAWN_TASK_LOCK" || true
+  fi
+  if [ "$SPAWN_TREEHOUSE_PROJECT_LOCK_HELD" = 1 ]; then
+    SPAWN_TREEHOUSE_PROJECT_LOCK_HELD=0
+    fm_lock_release "$SPAWN_TREEHOUSE_PROJECT_LOCK" || true
   fi
   if [ "$CONFIG_INHERIT_LOCK_HELD" = 1 ]; then
     CONFIG_INHERIT_LOCK_HELD=0
@@ -418,6 +430,9 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
 fi
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
+# Spawning a worker is a main-owned action. The supervision branch may report
+# queued work but cannot create a worker from its own pane.
+fm_lease_forbid_branch "new-task spawn (fm-spawn)"
 SPAWN_TASK_LOCK="$STATE/.spawn-$ID.lock"
 if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
   echo "error: another spawn is already creating task $ID" >&2
@@ -931,6 +946,46 @@ else
   PROJ_ABS="$(cd "$(resolve_project_dir_arg "$PROJ")" && pwd)"
   WT=""
   BRIEF="$DATA/$ID/brief.md"
+fi
+# Project capacity is declared in the root Firstmate home and admitted while
+# holding the same project lock used by Treehouse allocation and return. Keep
+# that lock through task-record publication so concurrent spawns cannot both
+# claim the final place.
+SPAWN_PROJECT_CAPACITY=
+SPAWN_PROJECT_CAPACITY_ANY=
+if [ "$KIND" != secondmate ]; then
+  SPAWN_CAPACITY_CONFIG=$(fm_project_capacity_config_dir "$FM_HOME" "$CONFIG") || {
+    echo "error: could not resolve the root Firstmate home that declares project capacity for $PROJ_ABS" >&2
+    exit 1
+  }
+  if ! fm_project_capacity_lookup "$SPAWN_CAPACITY_CONFIG" "$(basename "$PROJ_ABS")"; then
+    echo "error: spawn refused: the project capacity declaration is unreadable ($FM_PROJECT_CAPACITY_ERROR); fix it so the captain's worker limits are known (docs/configuration.md \"Project capacity\")" >&2
+    exit 1
+  fi
+  SPAWN_PROJECT_CAPACITY=$FM_PROJECT_CAPACITY
+  SPAWN_PROJECT_CAPACITY_ANY=$FM_PROJECT_CAPACITY_ANY
+fi
+if [ "$KIND" != secondmate ] &&
+  { [ "$BACKEND" != orca ] || [ -n "$SPAWN_PROJECT_CAPACITY_ANY" ]; }; then
+  SPAWN_TREEHOUSE_PROJECT_LOCK=$(fm_treehouse_project_lock_path "$PROJ_ABS") || {
+    echo "error: could not resolve the shared Treehouse project lock for $PROJ_ABS" >&2
+    exit 1
+  }
+  if ! fm_lock_try_acquire "$SPAWN_TREEHOUSE_PROJECT_LOCK"; then
+    echo "error: another spawn or cleanup holds the shared project lock for $PROJ_ABS; refusing to race its capacity admission" >&2
+    exit 1
+  fi
+  SPAWN_TREEHOUSE_PROJECT_LOCK_HELD=1
+fi
+if [ -n "$SPAWN_PROJECT_CAPACITY" ]; then
+  if ! fm_project_capacity_occupants "$SPAWN_TREEHOUSE_PROJECT_LOCK" "$PROJ_ABS" "$STATE" "$ID"; then
+    echo "error: spawn refused: project $(basename "$PROJ_ABS") declares a capacity of $SPAWN_PROJECT_CAPACITY, but this machine's task records cannot all be read to count it ($FM_PROJECT_CAPACITY_ERROR)" >&2
+    exit 1
+  fi
+  if [ "$FM_PROJECT_CAPACITY_OCCUPANTS" -ge "$SPAWN_PROJECT_CAPACITY" ]; then
+    echo "deferred: project $(basename "$PROJ_ABS") admits $SPAWN_PROJECT_CAPACITY worker(s) at once on this machine ($FM_PROJECT_CAPACITY_FILE) and $FM_PROJECT_CAPACITY_OCCUPANTS already hold a place ($FM_PROJECT_CAPACITY_OCCUPANT_IDS); task $ID was not launched and its backlog item stays queued - dispatch it again once one of them records its ready PR or is cleaned up" >&2
+    exit "$FM_PROJECT_CAPACITY_DEFER_EXIT"
+  fi
 fi
 [ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)
@@ -1967,6 +2022,10 @@ META_WINDOW=$T
     echo "projects=$SECONDMATE_PROJECTS"
   fi
 } > "$STATE/$ID.meta"
+if [ "$SPAWN_TREEHOUSE_PROJECT_LOCK_HELD" = 1 ]; then
+  SPAWN_TREEHOUSE_PROJECT_LOCK_HELD=0
+  fm_lock_release "$SPAWN_TREEHOUSE_PROJECT_LOCK" || true
+fi
 [ "$BACKEND" = orca ] && ORCA_ABORT_CLEANUP=0
 
 sq_brief=$(shell_quote "$BRIEF")
