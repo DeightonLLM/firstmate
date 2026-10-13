@@ -15,6 +15,42 @@ A numeric session-lock owner that fails the shared `fm_harness_pid_alive` predic
 The stale-owner claim occurs only after the existing AFK and supervision-need gates pass.
 While supervision is still needed and away mode remains inactive, an actionable close or typed failure wakes the idle session through exit 2.
 
+## Stall policy: surface, never auto-approve
+
+A pane parked on an interactive approval gate is indistinguishable from a finished
+pane at the backend layer: herdr reports `agent_status: idle`, the semantic busy
+contract answers `idle`, and an unattended lane then burns a slot with no alarm. That
+is the 2026-10-13 silent stall.
+
+The response is **surface, never resolve**.
+
+- `bin/fm-gate-lib.sh` is the single owner of gate detection: a positive, structural,
+  harness-agnostic read of a bounded pane capture. It matches the shape of an
+  interactive choice, not any one runtime's chrome, so a new harness inherits it.
+- `bin/fm-crew-state.sh` reports such a lane as `blocked · source: pane`, ahead of
+  both the idle verdict and the status log, so a stale `done:` line cannot mask it.
+- `bin/fm-watch.sh` raises it as its own typed `gate: <window> harness=<h>` wake
+  naming the pane, the harness, and that the captain's decision is required. It is
+  surfaced once per distinct rendered capture and never starts a wedge timer: the
+  captain is being told, not nagged.
+- `bin/fm-supervise-daemon.sh` escalates a `gate:` wake unconditionally; it is never
+  self-handled, and injection into a pane parked on a gate is refused outright.
+
+**No unattended path may answer a gate.** Not auto-Yes, not auto-Enter, not a
+default-accept, not scripted send-keys, not an away-mode injection into the dialog.
+A human-supervised lane answering one is a human decision made in the moment, and
+must never become an automated behaviour. Auto-approval is forbidden fleet-wide.
+Pinned by `tests/fm-gate-lib.test.sh` (the owner carries no answering primitive),
+`tests/fm-crew-state.test.sh` (a key-recording fakebin stays empty), and
+`tests/fm-watch-triage.test.sh` (a real watcher run over a gated pane records zero
+keystrokes).
+
+Prevention remains complementary: where a harness offers a non-interactive or
+approval-bypass mode, firstmate launches unattended lanes in it, so a gate should
+never appear at all. See [`helper-permissions.md`](helper-permissions.md)
+"Unattended-Lane Permission Policy". Detection is what makes the guarantee hold for
+harnesses that cannot be configured, and for any future harness that prompts.
+
 ## Actionable wake ordering
 
 After an actionable Pi or OpenCode child close, the adapter starts and verifies one singleton successor before it delivers the original wake.
