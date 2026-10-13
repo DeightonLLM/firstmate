@@ -2105,4 +2105,62 @@ if [ "$KIND" = secondmate ]; then
   fi
 fi
 
+# Agent liveness verification (honest spawn verification).
+# Assert the agent process is genuinely running in the pane it was given before
+# reporting success. A pane sitting at a bare shell prompt (observed state: dead)
+# or an unverifiable/missing endpoint is a typed nonzero failure.
+case "${OSTYPE:-}" in
+  msys*|mingw*|cygwin*) SPAWN_VERIFY_DEFAULT=45 ;;
+  *) SPAWN_VERIFY_DEFAULT=30 ;;
+esac
+SPAWN_VERIFY_TIMEOUT=${FM_SPAWN_VERIFY_TIMEOUT:-$SPAWN_VERIFY_DEFAULT}
+deadline=$(( $(date +%s) + SPAWN_VERIFY_TIMEOUT + 1 ))
+agent_state="unknown"
+
+while :; do
+  agent_state=$(fm_backend_agent_state "$BACKEND" "$T")
+  if [ "$agent_state" = alive ]; then
+    # Settle verification: confirm the agent survived launch and did not exit immediately
+    sleep 0.5
+    agent_state=$(fm_backend_agent_state "$BACKEND" "$T")
+    if [ "$agent_state" = alive ]; then
+      break
+    fi
+  fi
+  if [ "$agent_state" = unverified ]; then
+    break
+  fi
+  [ "$(date +%s)" -ge "$deadline" ] && break
+  sleep 0.2
+done
+
+if [ "$agent_state" != alive ]; then
+  # Retain explicit failure custody: record failure wake event in status log and retain
+  # metadata so resources are not orphaned and the failure is clearly attributed and auditable.
+  failure_detail="spawned agent not alive in window $META_WINDOW (observed state: ${agent_state:-unknown})"
+  case "$agent_state" in
+    dead)
+      failure_detail="spawned agent not alive in window $META_WINDOW (observed state: dead)"
+      ;;
+    unverified)
+      failure_detail="spawned agent liveness cannot be verified in window $META_WINDOW (observed state: unverified)"
+      ;;
+    missing)
+      failure_detail="spawned agent endpoint missing in window $META_WINDOW (observed state: missing)"
+      ;;
+    ambiguous)
+      failure_detail="spawned agent process ambiguous in window $META_WINDOW (observed state: ambiguous)"
+      ;;
+    unreadable)
+      failure_detail="spawned agent endpoint unreadable in window $META_WINDOW (observed state: unreadable)"
+      ;;
+    *)
+      failure_detail="spawned agent readiness timed out in window $META_WINDOW (observed state: ${agent_state:-unknown})"
+      ;;
+  esac
+  printf 'failed: %s\n' "$failure_detail" >> "$STATE/$ID.status"
+  echo "error: $failure_detail; inspect window $META_WINDOW" >&2
+  exit 1
+fi
+
 echo "spawned $ID harness=$HARNESS kind=$KIND mode=$MODE yolo=$YOLO window=$META_WINDOW worktree=$WT"
