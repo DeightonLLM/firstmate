@@ -14,6 +14,7 @@ set -u
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOARD="$SELF_DIR/lane-todo-board.sh"
+DASH="$SELF_DIR/lane-todo-dash.sh"
 
 TMP_ROOT=""
 CASES_RUN=0
@@ -145,6 +146,12 @@ run_board() {  # <home> [args...] -> sets OUT and RC
   local home="$1"
   shift
   OUT=$(FM_HOME="$home" bash "$BOARD" "$@" 2>&1)
+  RC=$?
+}
+
+run_dash() {  # <home> <output> -> sets OUT and RC
+  local home="$1" output="$2"
+  OUT=$(FM_HOME="$home" HERDR_PANE_LIST_FILE="$home/herdr-panes.txt" bash "$DASH" "$output" 2>&1)
   RC=$?
 }
 
@@ -528,6 +535,50 @@ assert_has "combo-lane" "--init-lane should report the lane it scaffolded"
 end_case
 
 # --- summary ---------------------------------------------------------------
+
+start_case "the offline HTML dashboard renders lanes, tickets, comms, capacity, and gates"
+home=$(new_home dash)
+mkdir -p "$home/state/lanes" "$home/data" "$home/config" "$home/BRANDON-COMPUTE-COMMS/Hetz/inbound" "$home/BRANDON-COMPUTE-COMMS/Hetz/outbound"
+cat > "$home/state/lanes/lane-alpha.lane" <<'LANE'
+task=task-alpha
+model=glm-5.3-flash
+surface=controller
+LANE
+printf 'working: compiling\n' > "$home/state/task-alpha.status"
+cat > "$home/data/backlog.md" <<'BACKLOG'
+## P1
+- [ ] T-100 Offline dashboard
+  claim: lane-alpha
+  blocker: waiting for fixture review
+BACKLOG
+printf 'controller=4\n' > "$home/config/project-capacity"
+printf 'w1:p9 working pane alpha\n' > "$home/herdr-panes.txt"
+printf 'inbound receipt\n' > "$home/BRANDON-COMPUTE-COMMS/Hetz/inbound/20261013-hello.receipt"
+printf 'outbound receipt\n' > "$home/BRANDON-COMPUTE-COMMS/Hetz/outbound/20261013-ack.receipt"
+touch -d '2 minutes ago' "$home/BRANDON-COMPUTE-COMMS/Hetz/inbound/20261013-hello.receipt" "$home/BRANDON-COMPUTE-COMMS/Hetz/outbound/20261013-ack.receipt"
+printf 'GATE G-7 PASS: local fixture\n' > "$home/state/task-gate.status"
+run_dash "$home" "$home/index.html"
+assert_status 0 "dashboard generation must succeed"
+assert_file "$home/index.html" "dashboard output must exist"
+OUT=$(cat "$home/index.html")
+assert_has "glm-5.3-flash" "lane model row missing"
+assert_has "lane-alpha" "lane row missing"
+assert_has "task-alpha" "lane task field missing"
+assert_has "working" "lane state missing"
+assert_has "T-100 Offline dashboard" "ticket row missing"
+assert_has "waiting for fixture review" "ticket blocker missing"
+assert_has "2m ago" "comms age line missing"
+assert_has "Declared 4" "capacity line missing"
+assert_has "Running 1" "running pane count missing"
+assert_has "G-7" "gate line missing"
+assert_has "Generated <time>" "generated-at timestamp missing"
+assert_lacks "https://" "offline dashboard must contain no external URLs"
+run_dash "$home" "$home/index.html"
+OUT=$(cat "$home/index.html")
+count=$(printf '%s\n' "$OUT" | grep -o '<main>' | wc -l | tr -d '[:space:]')
+assert_eq "$count" "1" "regeneration must replace the snapshot without duplicating markup"
+assert_lacks "http://" "offline dashboard must contain no external URLs"
+end_case
 
 printf '1..%d\n' "$CASES_RUN"
 printf '# lane-todo-board: %d cases, %d assertions, %d failed\n' \
