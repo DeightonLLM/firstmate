@@ -611,3 +611,10 @@ Only after those retries exhaust does it remove the lock, and only when it is pr
 A live lock, a missing `lsof`, any failed check, or any other fetch failure keeps today's behavior.
 Every wait, retry, and removal is printed to stderr, and a successful recovery also prints one `recovered:` summary line to stdout so a session-start refresh - which discards fleet-sync stderr and relays only stdout - still surfaces it.
 The shared staleness proof lives in `bin/fm-lock-lib.sh`, which both `fm-teardown.sh` and `fm-fleet-sync.sh` use.
+
+## Helper permission rules and containment
+
+The host enforces containment and helper permissions for Firstmate worker lanes, toolchains, and background agents across `/root/.config/lean-ctx/config.toml`, `/root/.config/lean-ctx-contabo/config.toml`, `/root/.minimax/permission.json`, and `/root/.pi/rules/lean-ctx.md`.
+The canonical rules, what is admitted and why, and the zero-secret boundaries are documented in [`docs/helper-permissions.md`](helper-permissions.md) and tracked in [`docs/helper-permissions.json`](helper-permissions.json).
+Drift between the live host configurations and the tracked definitions is audited by [`bin/fm-helper-permissions-check.sh`](../bin/fm-helper-permissions-check.sh) and tested by [`tests/fm-helper-permissions.test.sh`](../tests/fm-helper-permissions.test.sh).
+

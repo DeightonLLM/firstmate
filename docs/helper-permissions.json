@@ -1,0 +1,192 @@
+{
+  "$schema": "docs/schemas/helper-permissions.v1.json",
+  "version": 1,
+  "description": "Helper permission rules and containment definitions for Firstmate host",
+  "live_files": [
+    "/root/.config/lean-ctx/config.toml",
+    "/root/.config/lean-ctx-contabo/config.toml",
+    "/root/.minimax/permission.json",
+    "/root/.pi/rules/lean-ctx.md"
+  ],
+  "bash_policy": {
+    "admitted_form": "script-file",
+    "admitted_why": "Direct script-file execution allows leaf command auditing and avoids shell-wrapping vulnerabilities",
+    "denied_inline_interpreters": [
+      "bash -c",
+      "sh -c",
+      "python3 -c",
+      "node -e",
+      "perl -e"
+    ],
+    "denied_substitution_patterns": [
+      "eval",
+      "exec",
+      "source",
+      "$(...)",
+      "`...`"
+    ],
+    "denied_why": "Inline code execution flags and command-position substitutions permit uninspected arbitrary execution"
+  },
+  "allowlist_categories": {
+    "system_telemetry": {
+      "commands": [
+        "df",
+        "free",
+        "uptime",
+        "nproc",
+        "ps",
+        "ls",
+        "cat"
+      ],
+      "why": "Read-only inspection of host RAM, CPU, disk, process list, and files for health and lane hygiene sweeps"
+    },
+    "version_control": {
+      "commands": [
+        "git",
+        "read"
+      ],
+      "why": "Repository status, worktree creation, commit history, and diff inspection for agent tasks"
+    },
+    "agent_toolchain": {
+      "commands": [
+        "pi",
+        "quota-axi",
+        "agent-secret-scan",
+        "npm",
+        "node",
+        "ssh",
+        "chmod",
+        "command",
+        "xargs"
+      ],
+      "why": "Inter-agent CLI execution, provider quota checks, secret detection, package operations, and remote host checks"
+    },
+    "firstmate_lifecycle": {
+      "commands": [
+        "bin/fm-session-start.sh",
+        "fm-session-start.sh",
+        "fm-test-run.sh",
+        "fm-lint.sh",
+        "fm-install-shellcheck.sh"
+      ],
+      "why": "Session initialization, automated test execution, ShellCheck installation, and linting"
+    },
+    "lean_ctx_builtins": {
+      "commands": [
+        "ctx_session",
+        "ctx_tree",
+        "ctx_read",
+        "ctx_search"
+      ],
+      "why": "Core context-reduction engine primitives for compressed file reads, AST searches, and session status"
+    }
+  },
+  "lean_ctx": {
+    "config_path": "/root/.config/lean-ctx/config.toml",
+    "shell_allowlist_extra": [
+      "bin/fm-session-start.sh",
+      "df",
+      "free",
+      "git",
+      "nproc",
+      "pi",
+      "quota-axi",
+      "read",
+      "uptime"
+    ]
+  },
+  "lean_ctx_contabo": {
+    "config_path": "/root/.config/lean-ctx-contabo/config.toml",
+    "tool_profile": "minimal",
+    "memory_profile": "balanced",
+    "exclude_paths": [
+      "/root/.bash_history",
+      "/root/.codex/auth.json",
+      "/root/.gemini/antigravity-ide",
+      "/root/.gemini/brain",
+      "/root/.pi/sessions",
+      "/root/.secrets",
+      "/root/.ssh",
+      "/root/secret-quarantine"
+    ],
+    "shell_allowlist_extra": [
+      "agent-secret-scan",
+      "bash",
+      "cat",
+      "chmod",
+      "command",
+      "ctx_read",
+      "ctx_search",
+      "ctx_session",
+      "ctx_tree",
+      "df",
+      "fm-install-shellcheck.sh",
+      "fm-lint.sh",
+      "fm-session-start.sh",
+      "fm-test-run.sh",
+      "free",
+      "ls",
+      "node",
+      "npm",
+      "ssh",
+      "uptime",
+      "xargs"
+    ]
+  },
+  "minimax": {
+    "config_path": "/root/.minimax/permission.json",
+    "version": 2,
+    "tools": [
+      "bash",
+      "fs",
+      "read",
+      "web_fetch"
+    ],
+    "read_roots": [
+      "/etc/**",
+      "/root/.agent-work/handoff/**",
+      "/root/.cache/quota-axi/**",
+      "/root/.config/herdr/**",
+      "/root/.gemini/**",
+      "/root/.local/bin/zcode --version 2>&1",
+      "/root/.local/bin/zcode doctor:*",
+      "/root/.pi/agent/**",
+      "/root/.ssh/**",
+      "/root/.zcode/cli/rollout/**",
+      "/root/bin/**",
+      "/root/firstmate-hd2stack/firstmate/**",
+      "/root/tools/pi-agent/node_modules/.bin/pi --version 2>&1",
+      "/usr/lib/node_modules/@minimax-ai/code/**",
+      "/usr/local/bin/**",
+      "/var/log/**"
+    ],
+    "write_roots": [
+      "/etc/cron.d/**",
+      "/root/.cache/quota-axi/**",
+      "/root/.local/bin/zcode --version 2>&1",
+      "/root/.local/bin/zcode doctor:*",
+      "/root/bin/**",
+      "/root/firstmate-hd2stack/firstmate/**",
+      "/root/tools/pi-agent/node_modules/.bin/pi --version 2>&1",
+      "/tmp/**",
+      "/usr/local/bin/**"
+    ],
+    "prohibited_secret_roots": [
+      "/root/.ssh/id_*",
+      "/root/.secrets/**",
+      "/root/secret-quarantine/**",
+      "/root/.codex/auth.json",
+      "/root/.pi/sessions/**",
+      "/root/.bash_history"
+    ]
+  },
+  "pi": {
+    "rules_path": "/root/.pi/rules/lean-ctx.md",
+    "agent_root": "/root/.pi/agent/**",
+    "why": "Extension loading and npm package resolution in agent directory",
+    "excluded_secrets": [
+      "/root/.pi/agent/auth.json",
+      "/root/.pi/sessions/**"
+    ]
+  }
+}
