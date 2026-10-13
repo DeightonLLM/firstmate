@@ -6,7 +6,7 @@
 # description, acceptance criteria, and context, and may adjust other sections
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> [--scout] [--herdr-lab] [--harness <name>]
+# Usage: fm-brief.sh <task-id> <repo-name> [--scout] [--herdr-lab] [--harness <name>] [--worklocation <absolute-path>]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
@@ -21,6 +21,9 @@
 #   omitting both still fails loudly so an accidental omission is never silent.
 #   Set FM_SECONDMATE_CHARTER='<charter>' to fill the charter text.
 #   Set FM_SECONDMATE_SCOPE='<scope>' to write a routing scope distinct from the charter text.
+#   --worklocation <absolute-path> explicitly authorizes a ship or scout brief to
+#   operate in an existing external directory, amending only its normal location
+#   assertion; the brief names that directory and keeps every other boundary.
 #   --herdr-lab is mandatory when the task will issue Herdr lifecycle commands.
 #   It adds the hard isolation contract backed by bin/fm-herdr-lab.sh.
 #   The flag must be explicit because {TASK} is filled after scaffolding and the
@@ -102,6 +105,7 @@ KIND=ship
 HERDR_LAB=0
 NO_PROJECTS=0
 HARNESS_ARG=""
+WORKLOCATION_ARG=""
 POS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -109,6 +113,9 @@ while [ "$#" -gt 0 ]; do
     --secondmate) KIND=secondmate ;;
     --herdr-lab) HERDR_LAB=1 ;;
     --no-projects) NO_PROJECTS=1 ;;
+    --worklocation)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "error: --worklocation requires an absolute directory path" >&2; exit 1; }
+      WORKLOCATION_ARG=$2; shift ;;
     --harness)
       [ "$#" -ge 2 ] || { echo "error: --harness requires a value" >&2; exit 1; }
       HARNESS_ARG=$2; shift ;;
@@ -118,6 +125,22 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 ID=${POS[0]}
+
+if [ -n "$WORKLOCATION_ARG" ]; then
+  case "$WORKLOCATION_ARG" in
+    /*) ;;
+    *) echo "error: --worklocation requires an absolute directory path" >&2; exit 1 ;;
+  esac
+  [ -d "$WORKLOCATION_ARG" ] || { echo "error: --worklocation directory does not exist: $WORKLOCATION_ARG" >&2; exit 1; }
+  WORKLOCATION=$(resolve_directory_input worklocation "$WORKLOCATION_ARG") || exit 1
+else
+  WORKLOCATION=""
+fi
+
+if [ "$KIND" = secondmate ] && [ -n "$WORKLOCATION" ]; then
+  echo "error: --worklocation applies only to crewmate ship or scout briefs" >&2
+  exit 1
+fi
 
 if [ "$KIND" = secondmate ] && [ "$HERDR_LAB" -eq 1 ]; then
   echo "error: --herdr-lab applies only to crewmate ship or scout briefs" >&2
@@ -275,6 +298,38 @@ shell_quote() {
 }
 
 STATUS_FILE=$(shell_quote "$STATE/$ID.status")
+if [ -n "$WORKLOCATION" ]; then
+  IFS= read -r -d '' SHIP_LOCATION_SETUP <<EOF || true
+You are authorized to operate in the external worklocation at \`$WORKLOCATION\` instead of the disposable task worktree.
+
+This authorization amends only the ordinary worktree-location/isolation assertion: begin task actions in \`$WORKLOCATION\` and operate only there. It does not authorize any other path, scope, or exception; every other boundary in this brief remains in force.
+EOF
+  IFS= read -r -d '' SCOUT_LOCATION_SETUP <<EOF || true
+You are authorized to operate in the external worklocation at \`$WORKLOCATION\` instead of the disposable task worktree.
+
+This authorization amends only the ordinary worktree-location/isolation requirement: begin task actions in \`$WORKLOCATION\` and operate only there. It does not authorize any other path, scope, or exception; every other boundary in this brief remains in force.
+EOF
+  SHIP_RULE2="Stay inside the authorized worklocation at \`$WORKLOCATION\`; modify nothing outside it."
+  SCOUT_RULE2="Stay inside the authorized worklocation at \`$WORKLOCATION\`; the only files you may write elsewhere are the report and status file below."
+else
+  IFS= read -r -d '' SHIP_LOCATION_SETUP <<'EOF' || true
+You are in a disposable git worktree of @REPO@, at a detached HEAD on a clean default branch.
+
+**Verify isolation before anything else.** Run `pwd -P` and `git rev-parse --show-toplevel`; both must resolve to the disposable task worktree you were launched in, such as a treehouse pool path or an Orca-managed worktree, not the primary checkout firstmate operates from.
+The path check is authoritative: `git rev-parse --git-dir` and `git rev-parse --git-common-dir` can help inspect the repo, but they do not prove you are outside the primary checkout.
+If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append `blocked: launched in primary checkout, not an isolated worktree` to the status file and stop.
+EOF
+  IFS= read -r -d '' SCOUT_LOCATION_SETUP <<'EOF' || true
+You are in a disposable git worktree of @REPO@, at a detached HEAD on a clean default branch.
+This is a SCOUT task: the deliverable is a written report, not a PR.
+The worktree is your laboratory - install, run, edit, and make scratch commits freely; all of it is discarded at teardown.
+The report is the only thing that survives, so anything worth keeping must be in it.
+EOF
+  SHIP_RULE2="Stay inside this worktree; modify nothing outside it."
+  SCOUT_RULE2="Stay inside this worktree; the only files you may write outside it are the report and the status file below."
+fi
+SHIP_LOCATION_SETUP=${SHIP_LOCATION_SETUP%$'\n'}
+SCOUT_LOCATION_SETUP=${SCOUT_LOCATION_SETUP%$'\n'}
 
 if [ "$KIND" = secondmate ]; then
 SECONDMATE_PROJECTS=""
@@ -369,6 +424,8 @@ exit 0
 fi
 
 REPO=${POS[1]}
+SHIP_LOCATION_SETUP=${SHIP_LOCATION_SETUP//@REPO@/$REPO}
+SCOUT_LOCATION_SETUP=${SCOUT_LOCATION_SETUP//@REPO@/$REPO}
 
 if [ "$HERDR_LAB" -eq 1 ]; then
 HERDR_LAB_HELPER=$(shell_quote "$FM_ROOT/bin/fm-herdr-lab.sh")
@@ -413,16 +470,13 @@ You are a crewmate: an autonomous worker agent managed by firstmate. Work on you
 $HERDR_SECTION
 
 # Setup
-You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
-This is a SCOUT task: the deliverable is a written report, not a PR.
-The worktree is your laboratory - install, run, edit, and make scratch commits freely; all of it is discarded at teardown.
-The report is the only thing that survives, so anything worth keeping must be in it.
+$SCOUT_LOCATION_SETUP
 
 $TODO_BREAKDOWN
 
 # Rules
 1. Never push to any remote and never open a PR.
-2. Stay inside this worktree; the only files you may write outside it are the report and the status file below.
+2. $SCOUT_RULE2
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
@@ -535,11 +589,7 @@ You are a crewmate: an autonomous worker agent managed by firstmate. Work on you
 $HERDR_SECTION
 
 # Setup
-You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
-
-**Verify isolation before anything else.** Run \`pwd -P\` and \`git rev-parse --show-toplevel\`; both must resolve to the disposable task worktree you were launched in, such as a treehouse pool path or an Orca-managed worktree, not the primary checkout firstmate operates from.
-The path check is authoritative: \`git rev-parse --git-dir\` and \`git rev-parse --git-common-dir\` can help inspect the repo, but they do not prove you are outside the primary checkout.
-If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append \`blocked: launched in primary checkout, not an isolated worktree\` to the status file and stop.
+$SHIP_LOCATION_SETUP
 
 1. First action: create your branch: \`git checkout -b fm/$ID\`$SETUP2
 
@@ -547,7 +597,7 @@ $TODO_BREAKDOWN
 
 # Rules
 $RULE1
-2. Stay inside this worktree; modify nothing outside it.
+2. $SHIP_RULE2
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
