@@ -132,6 +132,39 @@ assert_grep_file() {  # <path> <regex> <why>
   fi
 }
 
+assert_file_has() {  # <path> <literal> <why>
+  if [ -f "$1" ] && grep -qF -- "$2" "$1"; then
+    pass
+  else
+    fail "${3:-expected literal missing from $1: $2}"
+  fi
+}
+
+# A stub lavish-axi records every invocation as one tab-separated CALL line, so a
+# test can assert on the exact argv the dashboard hands to Lavish. The real
+# adapter and the real runner still execute, so the registration under test is
+# the genuine one the sanctioned owner writes.
+write_lavish_stub() {  # <home>
+  local home="$1"
+  mkdir -p "$home/fakebin"
+  cat > "$home/fakebin/lavish-axi" <<'STUB'
+#!/usr/bin/env bash
+{ printf 'CALL'; printf '\t%s' "$@"; printf '\n'; } >> "${LAVISH_STUB_LOG:?}"
+exit 0
+STUB
+  chmod +x "$home/fakebin/lavish-axi"
+}
+
+run_dash_cmd() {  # <home> [args...] -> sets OUT and RC
+  local home="$1"
+  shift
+  OUT=$(cd "$home" && FM_HOME="$home" HERDR_PANE_LIST_FILE="$home/herdr-panes.txt" \
+        LAVISH_STUB_LOG="$home/lavish-calls.log" PATH="$home/fakebin:$PATH" \
+        bash "$DASH" "$@" 2>&1)
+  RC=$?
+}
+
+
 # Extract the board region between two sentinel todo lines and require it to be
 # byte-identical to the todo file: that is what "rendered verbatim" means.
 assert_verbatim() {  # <todo file> <first sentinel> <last sentinel> <why>
@@ -674,6 +707,75 @@ assert_has "T-101 Added after first request" "a fresh GET should rerun the gener
 kill "$SERVER_PID" 2>/dev/null || true
 wait "$SERVER_PID" 2>/dev/null || true
 SERVER_PID=""
+end_case
+
+start_case "review opens the artifact as a Lavish session and arms the registered chat-back source"
+home=$(new_home review)
+write_lavish_stub "$home"
+mkdir -p "$home/data"
+cat > "$home/data/backlog.md" <<'BACKLOG'
+## P1
+- [ ] T-100 Offline dashboard
+BACKLOG
+run_dash_cmd "$home" review
+assert_status 0 "review must succeed"
+review_out="$OUT"
+artifact="$home/.lavish/LANE-TODO-DASH.html"
+artifact_real="$(cd "$(dirname "$artifact")" && pwd)/$(basename "$artifact")"
+assert_file "$artifact" "review must regenerate the artifact at its stable path"
+assert_no_file "$home/index.html" "review must not fall through and regenerate the default artifact"
+OUT=$(cat "$artifact")
+assert_has "T-100 Offline dashboard" "the artifact must still carry this script's own ticket data"
+OUT="$review_out"
+source_id=$(bash "$SELF_DIR/fm-procevent-lavish.sh" source-id "$artifact" 2>&1)
+assert_has "lavish-" "source identity must come from the sanctioned adapter"
+assert_file "$home/state/procevent/$source_id.source" "review must register the source with the runner"
+assert_grep_file "$home/state/procevent/$source_id.source" '^adapter=lavish$' "the registered adapter must be lavish"
+assert_grep_file "$home/state/procevent/$source_id.source" '^argv:$' "the registration must store a poll argv"
+assert_file_has "$home/state/procevent/$source_id.source" "poll" "the registered argv must poll"
+assert_file_has "$home/state/procevent/$source_id.source" "$artifact_real" "the poll argv must name the artifact realpath"
+assert_has "armed: $source_id" "review must report the armed source id"
+OUT=$(cat "$home/lavish-calls.log")
+assert_has "CALL"$'\t'"$artifact" "review must open the artifact as a Lavish session"
+assert_lacks $'\t'"share" "review must never publish to a third-party host"
+end_case
+
+start_case "reply and end drive the agent-to-human half and retire the source"
+home=$(new_home reply)
+write_lavish_stub "$home"
+mkdir -p "$home/data"
+cat > "$home/data/backlog.md" <<'BACKLOG'
+## P1
+- [ ] T-100 Offline dashboard
+BACKLOG
+run_dash_cmd "$home" review
+assert_status 0 "review must succeed"
+artifact="$home/.lavish/LANE-TODO-DASH.html"
+source_id=$(bash "$SELF_DIR/fm-procevent-lavish.sh" source-id "$artifact" 2>&1)
+assert_file "$home/state/procevent/$source_id.source" "review must register the source before it can be retired"
+: > "$home/lavish-calls.log"
+run_dash_cmd "$home" reply "Applied: the blocker stays visible"
+assert_status 0 "reply must succeed"
+OUT=$(cat "$home/lavish-calls.log")
+assert_has "CALL"$'\t'"reply"$'\t'"$artifact"$'\t'"--agent-reply"$'\t'"Applied: the blocker stays visible" "reply must send the agent message into the board"
+run_dash_cmd "$home" end
+assert_status 0 "end must succeed"
+OUT=$(cat "$home/lavish-calls.log")
+assert_has "CALL"$'\t'"end"$'\t'"$artifact" "end must end the Lavish session"
+assert_no_file "$home/state/procevent/$source_id.source" "end must retire the registered source"
+end_case
+
+start_case "reply and end refuse before a dashboard artifact exists"
+home=$(new_home bare)
+write_lavish_stub "$home"
+run_dash_cmd "$home" reply "too early"
+assert_status 1 "reply must refuse without an artifact"
+assert_has "run review first" "reply must say which command to run"
+run_dash_cmd "$home" end
+assert_status 1 "end must refuse without an artifact"
+assert_has "run review first" "end must say which command to run"
+run_dash_cmd "$home" reply
+assert_status 1 "reply must refuse an empty message"
 end_case
 
 printf '1..%d\n' "$CASES_RUN"

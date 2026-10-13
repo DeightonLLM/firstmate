@@ -5,9 +5,20 @@
 # status events; the remaining inputs are documented local records under FM_HOME.
 # It never reads comms receipt contents, pane screens, or remote resources.
 #
-# Usage: lane-todo-dash.sh [OUTPUT] | serve [PORT] | --help
+# Usage: lane-todo-dash.sh [OUTPUT] | serve [PORT] | review [ARTIFACT]
+#        | reply MESSAGE | end | --help
 # OUTPUT defaults to ./index.html. `serve` binds only the IPv4 returned by
-# `tailscale ip -4` and writes feedback to state/dash-feedback. Herdr pane counts
+# `tailscale ip -4` and writes feedback to state/dash-feedback.
+#
+# The dashboard artifact and every data source it reads are this script's own.
+# Lavish supplies the interactivity layer on top of that artifact: `review`
+# opens the artifact as a Lavish session and arms its chat-back poll through
+# bin/fm-procevent-lavish.sh, so a comment the captain makes in the Lavish
+# Conversation panel returns to the agent as a
+# `procevent lavish <source-id> <sequence>` wake. `reply` is the agent-to-human
+# half and `end` retires the source. This script owns only the artifact; poll
+# lifecycle, durable capture, and wake publication belong to bin/fm-procevent.sh.
+# Herdr pane counts
 # come from `herdr pane list` or HERDR_PANE_LIST_FILE; no pane screen is inspected.
 # Optional `compaction_headroom_pct=<integer 0-100>` on a lane or linked task meta
 # record supplies its live headroom; the pill shows the lowest valid lane value.
@@ -19,9 +30,31 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   cat <<USAGE
-lane-todo-dash.sh - interactive offline fleet ticket dashboard
+lane-todo-dash.sh - interactive fleet ticket dashboard
 
 Usage:
+  lane-todo-dash.sh [OUTPUT]           regenerate a self-contained HTML snapshot
+  lane-todo-dash.sh review [ARTIFACT]  regenerate the artifact, open it as a
+                                       Lavish session, and arm the chat-back poll
+  lane-todo-dash.sh reply MESSAGE      send an agent reply into the board
+  lane-todo-dash.sh end                end the session and retire the poll source
+
+The artifact and its data sources are this script's own; Lavish layers the
+Conversation panel, element annotation, and queued prompts on top of it.
+
+  review  regenerates the artifact, runs lavish-axi on it to open or resume the
+          session, then runs bin/fm-procevent-lavish.sh arm, which registers
+          'lavish-axi poll <artifact>' with bin/fm-procevent.sh. Feedback comes
+          back to the agent as a 'procevent lavish <id> <sequence>' wake.
+  reply   runs lavish-axi reply, which exits 0 once the board accepts it.
+  end     runs lavish-axi end, then retires the registered source.
+
+ARTIFACT defaults to <FM_HOME>/.lavish/LANE-TODO-DASH.html and must keep a stable
+path, because the source id is derived from its realpath; set
+LANE_TODO_DASH_ARTIFACT to override it. Lavish binds 127.0.0.1 plus this host's
+Tailscale IPv4 and never binds a wildcard address. Nothing is published to a
+third-party host: do not use 'lavish-axi share'.
+
   lane-todo-dash.sh [OUTPUT]   regenerate a self-contained HTML snapshot
   lane-todo-dash.sh serve [PORT]  serve on the IPv4 address from 'tailscale ip -4'
                                  (default port: 8765)
@@ -37,6 +70,70 @@ address. Set LANE_TODO_DASH_PORT to override the default port.
 USAGE
   exit 0
 fi
+DASH_ARTIFACT="${LANE_TODO_DASH_ARTIFACT:-$FM_HOME/.lavish/LANE-TODO-DASH.html}"
+LAVISH_ADAPTER="$SELF_DIR/fm-procevent-lavish.sh"
+
+require_lavish() {
+  command -v lavish-axi >/dev/null 2>&1 || {
+    printf 'error: lavish-axi is not installed\n' >&2
+    exit 1
+  }
+}
+
+require_adapter() {
+  [ -f "$LAVISH_ADAPTER" ] && [ ! -L "$LAVISH_ADAPTER" ] || {
+    printf 'error: missing Lavish process-to-event adapter: %s\n' "$LAVISH_ADAPTER" >&2
+    exit 1
+  }
+}
+
+require_artifact() {
+  [ -f "$DASH_ARTIFACT" ] || {
+    printf 'error: no dashboard artifact at %s; run review first\n' "$DASH_ARTIFACT" >&2
+    exit 1
+  }
+}
+
+# Open the artifact as a Lavish session and arm the one sanctioned chat-back
+# loop. This script owns the artifact only; the poll's lifecycle belongs to
+# bin/fm-procevent.sh, and this must never become a detached fire-and-forget
+# process.
+cmd_review() {
+  local artifact="${1:-$DASH_ARTIFACT}"
+  case "$artifact" in
+    -*) printf 'usage error: artifact path must not start with a dash\n' >&2; exit 1 ;;
+  esac
+  require_lavish
+  require_adapter
+  bash "$SELF_DIR/lane-todo-dash.sh" "$artifact" >/dev/null || exit 1
+  lavish-axi "$artifact"
+  "$LAVISH_ADAPTER" arm "$artifact"
+  exit 0
+}
+
+cmd_reply() {
+  require_lavish
+  [ "$#" -ge 1 ] || { printf 'usage error: reply needs a message\n' >&2; exit 1; }
+  require_artifact
+  lavish-axi reply "$DASH_ARTIFACT" --agent-reply "$*"
+  exit 0
+}
+
+cmd_end() {
+  require_lavish
+  require_adapter
+  require_artifact
+  lavish-axi end "$DASH_ARTIFACT"
+  "$LAVISH_ADAPTER" retire "$DASH_ARTIFACT"
+  exit 0
+}
+
+case "${1:-}" in
+  review) shift; cmd_review "$@" ;;
+  reply)  shift; cmd_reply "$@" ;;
+  end)    shift; cmd_end "$@" ;;
+esac
+
 if [ "${1:-}" = "serve" ]; then
   shift
   if [ "$#" -gt 1 ]; then
