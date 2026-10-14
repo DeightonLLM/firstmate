@@ -175,10 +175,12 @@ fi
 #
 # Only `dead` and `missing` are proofs of absence, exactly as fm-backend.sh's
 # contract states; `ambiguous` and `unreadable` count as live so a transient
-# endpoint problem can never silently under-count the cap. A lane the classifier
-# cannot place at all (`unverified`) is disclosed in the log rather than counted,
-# because counting unplaceable history forever is the wedge this rule must not
-# recreate.
+# endpoint problem can never silently under-count the cap. Unknown backend
+# activity also counts as working. Herdr's native busy-state is the only signal
+# that can prove a live lane idle; other backends return unknown and stay counted.
+# Idle releases a slot only for this inventory: the next spawn re-reads current
+# state, so a lane that resumes working consumes its slot again. A meta with an
+# unresolved target is unknown, not absent, and therefore counts against the cap.
 #
 # Per-lane classification costs a subprocess per meta (~10ms tmux, ~80ms
 # herdr), so the inventory runs under a wall-clock budget. An inventory that
@@ -204,6 +206,25 @@ lane_target() {  # <backend> <target>
   esac
 }
 
+# fm_dispatch_guard_lane_classify: classify one recorded lane as absent, idle,
+# or working. Only a positive native idle verdict releases capacity; every
+# unknown/unreadable verdict counts as working.
+fm_dispatch_guard_lane_classify() {  # <backend> <target>
+  local backend=$1 target=$2 presence activity
+  presence=$(fm_backend_agent_state "$backend" "$target")
+  case "$presence" in
+    dead|missing) printf 'absent'; return 0 ;;
+  esac
+  activity=$(fm_backend_busy_state "$backend" "$target")
+  if [ "$activity" = idle ]; then
+    printf 'idle'
+  elif [ "$presence" = unverified ]; then
+    printf 'unverified'
+  else
+    printf 'working'
+  fi
+}
+
 # fm_dispatch_guard_lane_cap: resolve the live-lane ceiling. Precedence:
 # FM_DISPATCH_GUARD_MAX_LANES, then the home-local gitignored
 # config/dispatch-max-lanes knob (same LOCAL-settings family as config/calm and
@@ -223,6 +244,7 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   case "$budget" in ''|*[!0-9]*) budget=30 ;; esac
   started=$SECONDS
   live=0
+  idle=0
   incomplete=0
   for meta in "${FM_HOME}"/state/*.meta; do
     [ -e "$meta" ] || continue
@@ -230,19 +252,22 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
     raw_target="$(fm_backend_target_of_meta "$meta")"
     target="$(lane_target "$backend" "$raw_target")"
     if [ -z "$target" ]; then
-      # A meta with no resolvable endpoint is not a lane this guard can place.
-      # Disclosed rather than silently dropped.
+      # A meta with no resolvable endpoint is unknown and must not free a slot.
       log_event "LANE_UNRESOLVED meta=$(basename "$meta")"
+      live=$((live + 1))
       continue
     fi
     if [ $((SECONDS - started)) -ge "$budget" ]; then
       incomplete=1
       break
     fi
-    case "$(fm_backend_agent_state "$backend" "$target")" in
-      dead|missing) : ;;                       # proven gone
-      unverified) log_event "LANE_UNVERIFIED meta=$(basename "$meta") backend=${backend}" ;;
-      *) live=$((live + 1)) ;;                 # alive, ambiguous, or unreadable
+    case "$(fm_dispatch_guard_lane_classify "$backend" "$target")" in
+      absent) : ;;                             # proven gone
+      idle) idle=$((idle + 1)) ;;
+      unverified)
+        log_event "LANE_UNVERIFIED meta=$(basename "$meta") backend=${backend}"
+        live=$((live + 1)) ;;
+      *) live=$((live + 1)) ;;                 # working, ambiguous, or unknown
     esac
   done
   if [ "$incomplete" = 1 ]; then
@@ -251,7 +276,7 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   # Live-lane ceiling.
   cap=$(fm_dispatch_guard_lane_cap)
   if [ "$live" -ge "$cap" ]; then
-    refuse "${live} live crewmate lanes already exist, counted per window/pane rather than per session (cap ${cap}). Stop one, or raise FM_DISPATCH_GUARD_MAX_LANES deliberately. Do not fan out on one host."
+    refuse "${live} working or unknown crewmate lanes and ${idle} idle lanes exist, counted per window/pane rather than per session (cap ${cap}). Stop one, or raise FM_DISPATCH_GUARD_MAX_LANES deliberately. Do not fan out on one host."
   fi
 fi
 

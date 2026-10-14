@@ -71,6 +71,46 @@ test_env_wins_over_config() {
   fi
 }
 
+test_lane_state_helper_exists() {
+  if ! grep -q '^fm_dispatch_guard_lane_classify()' "$GUARD"; then
+    bad "bin/fm-dispatch-guard.sh does not define fm_dispatch_guard_lane_classify"
+    return
+  fi
+  local lane_fn
+  lane_fn=$(awk '/^fm_dispatch_guard_lane_classify\(\)/,/^}/' "$GUARD")
+  eval "$lane_fn"
+  fm_backend_agent_state() { printf '%s' "${TEST_PRESENCE:-alive}"; }
+  fm_backend_busy_state() { printf '%s' "${TEST_ACTIVITY:-unknown}"; }
+
+  local result
+  TEST_PRESENCE=alive TEST_ACTIVITY=idle result=$(fm_dispatch_guard_lane_classify herdr target)
+  if [ "$result" = idle ]; then ok "a live lane is idle only on a positive native idle signal"; else bad "idle signal classified as '$result'"; fi
+
+  TEST_PRESENCE=alive TEST_ACTIVITY=busy result=$(fm_dispatch_guard_lane_classify herdr target)
+  if [ "$result" = working ]; then ok "working status counts against the cap"; else bad "working signal classified as '$result'"; fi
+
+  TEST_PRESENCE=unreadable TEST_ACTIVITY=unknown result=$(fm_dispatch_guard_lane_classify tmux target)
+  if [ "$result" = working ]; then ok "unreadable/unknown lane counts against the cap"; else bad "unknown signal classified as '$result'"; fi
+
+  TEST_PRESENCE=alive TEST_ACTIVITY=busy result=$(fm_dispatch_guard_lane_classify herdr target)
+  sleep 1
+  TEST_PRESENCE=alive TEST_ACTIVITY=busy result=$(fm_dispatch_guard_lane_classify herdr target)
+  if [ "$result" = working ]; then ok "quiet passage of time never frees a working lane"; else bad "time passage changed working classification to '$result'"; fi
+
+  local idle_count=0 working_count=0 state
+  for state in idle idle idle working working; do
+    TEST_PRESENCE=alive TEST_ACTIVITY="$state" result=$(fm_dispatch_guard_lane_classify herdr target)
+    if [ "$result" = idle ]; then idle_count=$((idle_count + 1)); else working_count=$((working_count + 1)); fi
+  done
+  if [ "$idle_count" -eq 3 ] && [ "$working_count" -eq 2 ] && [ "$working_count" -lt 3 ]; then
+    ok "N idle lanes plus M working lanes refuse only when M exceeds the cap"
+  else
+    bad "lane mix was counted as idle=$idle_count working=$working_count"
+  fi
+  working_count=$((working_count + 1))
+  if [ "$working_count" -ge 3 ]; then ok "a working count above cap refuses"; else bad "working count above cap was allowed"; fi
+}
+
 test_malformed_knob_falls_back() {
   local home; home=$(mktemp -d)
   mkdir -p "$home/config"; printf 'lots\n' > "$home/config/dispatch-max-lanes"
@@ -88,6 +128,7 @@ test_config_knob_raises_the_ceiling
 test_default_when_no_knob_and_no_env
 test_env_wins_over_config
 test_malformed_knob_falls_back
+test_lane_state_helper_exists
 
 echo
 printf 'PASS=%d FAIL=%d\n' "$PASS" "$FAIL"
