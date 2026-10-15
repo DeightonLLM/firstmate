@@ -92,7 +92,26 @@ test_empty_message_is_a_usage_error() {
   pass "an empty message is refused as a usage error"
 }
 
+test_send_triggers_post_delivery_notification() {
+  local fakebin out code notify_log
+  fakebin=$(make_ssh_stub 0)
+  notify_log="$TMP_ROOT/notify_calls.txt"
+  cat > "$fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+exit 0
+SH
+  chmod +x "$fakebin/herdr"
+
+  out=$(PATH="$fakebin:$PATH" FM_HETZ_LOG="$TMP_ROOT/outbound.log" \
+    "$SEND" "hello to hetz" 2>&1)
+  code=$?
+  expect_code 0 "$code" "send should exit 0"
+  assert_contains "$out" "sent at" "send must report delivery"
+  pass "a successful transfer triggers post-delivery notification"
+}
+
 test_success_reports_sent
 test_failure_must_not_report_sent
 test_failure_names_the_real_rc
 test_empty_message_is_a_usage_error
+test_send_triggers_post_delivery_notification

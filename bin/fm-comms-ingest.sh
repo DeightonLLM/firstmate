@@ -217,6 +217,19 @@ cmd_scan() {
       fm_wake_append signal "$id.status" \
         "comms received from $id: $name$corr_part" \
         || die "cannot publish the comms wake for $id"
+
+      if [ "${FM_COMMS_NO_NOTIFY:-0}" != 1 ] && [ -x "$SCRIPT_DIR/fm-comms-notify.sh" ]; then
+        NOTIFY_ARGS=(
+          notify
+          --route controller
+          --file "$name"
+          --sha "$sha"
+        )
+        [ -z "$summary" ] || NOTIFY_ARGS+=(--summary "$summary")
+        [ -z "$corr" ] || NOTIFY_ARGS+=(--corr "$corr")
+        FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
+          "$SCRIPT_DIR/fm-comms-notify.sh" "${NOTIFY_ARGS[@]}" >/dev/null 2>&1 || true
+      fi
     done < <(find "$dir" -maxdepth 1 -type f 2>/dev/null | LC_ALL=C sort)
   done
 
