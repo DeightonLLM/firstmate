@@ -191,6 +191,17 @@ The full zellij home label also includes a short hash of the resolved `FM_ROOT` 
 For the cmux backend, `FM_CONFIG_OVERRIDE` overrides where `config/cmux-socket-password` is read from, while `FM_HOME` determines the default config path and readable home prefix embedded in workspace titles.
 The full cmux home label also includes a short hash of the resolved `FM_ROOT` path, and there is no per-home container split.
 
+## Fresh-agent baseline resolution (FM_BASELINE_*)
+
+Every fresh agent and every generated brief begins with the `fresh-agent-baseline/v1` pointer manifest, whose policy-family roles resolve from the home rather than from any fixed absolute path.
+Each role resolves in order: that role's override variable, then `$FM_HOME`, then the operator's account home `$HOME`.
+A candidate must be a readable regular file; anything else is skipped so resolution falls through to the next home.
+`FM_BASELINE_POLICY`, `FM_BASELINE_PROJECT_POLICY`, `FM_BASELINE_ROUTING`, `FM_BASELINE_BOUNDED`, and `FM_BASELINE_LEAN_CTX` each pin one role to an explicit path, for a home that keeps that document somewhere the defaults do not reach.
+An override that names an unreadable path leaves the role unresolved rather than falling through, so a bad override is never silently masked by a default.
+A role with no readable candidate is emitted as `<role>=unavailable (no home-local file on this host)`: the role keeps its line, and the line carries no path and no digest, so a missing contract is visible to the fresh agent instead of being dropped or pointed at another host's file.
+The `warehouse` and `warehouse-preflight` pointers stay fail-closed: `FM_BASELINE_ROOT` still selects their root, and a missing one aborts manifest emission rather than emitting a partial baseline.
+`bin/fm-baseline-lib.sh` owns the candidate order and the unavailable marker for both emitters.
+
 ## Harness support
 
 claude, codex, opencode, pi, pi-signed, grok, and kimi are empirically verified for crewmate and secondmate launches; [README requirements](../README.md#requirements) own the set supported for the primary session.

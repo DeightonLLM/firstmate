@@ -71,6 +71,8 @@ esac
 . "$SCRIPT_DIR/fm-marker-lib.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
+# shellcheck source=bin/fm-baseline-lib.sh
+. "$SCRIPT_DIR/fm-baseline-lib.sh"
 PAUSED_VERB=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
 
 
@@ -142,13 +144,9 @@ prepare_baseline() {
 }
 
 emit_baseline_block() {
-  local policy_file="/root/AGENTS.md"
-  local project_policy_file="/root/agent-work/AGENTS.md"
-  local routing_file="/root/docs/agent-policy/HERDR_AGENT_ROUTING.md"
-  local bounded_file="/root/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md"
-  local lean_ctx_file="/root/.codex/LEAN-CTX.md"
-  local warehouse_file warehouse_preflight_file baseline_root digest
-  local -a required hashes
+  local file digest role resolved
+  local warehouse_file warehouse_preflight_file baseline_root warehouse_digest
+  local -a required
 
   baseline_root="${FM_BASELINE_ROOT:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
   baseline_root="$(cd "$baseline_root" 2>/dev/null && pwd -P)" || {
@@ -157,11 +155,7 @@ emit_baseline_block() {
   }
   warehouse_file="$baseline_root/docs/system-context/INDEX.md"
   warehouse_preflight_file="$baseline_root/bin/fm-context-preflight.sh"
-  required=(
-    "$policy_file" "$project_policy_file" "$routing_file" "$bounded_file"
-    "$lean_ctx_file" "$warehouse_file" "$warehouse_preflight_file"
-  )
-  hashes=()
+  required=("$warehouse_file" "$warehouse_preflight_file")
   for file in "${required[@]}"; do
     if [ ! -f "$file" ]; then
       printf 'brief: FAIL required fresh-agent baseline file is missing: %s\n' "$file" >&2
@@ -172,18 +166,30 @@ emit_baseline_block() {
       return 2
     }
     [ -n "$digest" ] || { printf 'brief: FAIL SHA-256 tool unavailable\n' >&2; return 2; }
-    hashes+=("sha256:$digest")
+    if [ "$file" = "$warehouse_file" ]; then
+      warehouse_digest="sha256:$digest"
+    fi
   done
 
   {
     printf '# Fresh-agent baseline\n'
     printf 'Baseline manifest: fresh-agent-baseline/v1\n'
-    printf 'policy=%s %s\n' "$policy_file" "${hashes[0]}"
-    printf 'project-policy=%s %s\n' "$project_policy_file" "${hashes[1]}"
-    printf 'routing=%s %s\n' "$routing_file" "${hashes[2]}"
-    printf 'bounded=%s %s\n' "$bounded_file" "${hashes[3]}"
-    printf 'lean-ctx=%s %s\n' "$lean_ctx_file" "${hashes[4]}"
-    printf 'warehouse=%s %s\n' "$warehouse_file" "${hashes[5]}"
+    # The policy-family roles resolve from this home, so a brief is never
+    # pointed at another host's account home. A role with no readable home-local
+    # file is declared unavailable instead of being dropped or mislabeled.
+    for role in policy project-policy routing bounded lean-ctx; do
+      if ! resolved="$(fm_baseline_resolve_role "$role")"; then
+        fm_baseline_unavailable_line "$role"
+        continue
+      fi
+      digest="$(sha256sum "$resolved" 2>/dev/null | cut -d' ' -f1)" || {
+        printf 'brief: FAIL cannot hash required fresh-agent baseline file: %s\n' "$resolved" >&2
+        return 2
+      }
+      [ -n "$digest" ] || { printf 'brief: FAIL SHA-256 tool unavailable\n' >&2; return 2; }
+      printf '%s=%s sha256:%s\n' "$role" "$resolved" "$digest"
+    done
+    printf 'warehouse=%s %s\n' "$warehouse_file" "$warehouse_digest"
     printf 'warehouse-preflight=%s\n' "$warehouse_preflight_file"
     printf 'goal-queue=%s/data/backlog.md\n' "$FM_HOME"
     printf 'state-handoff=%s/state/.wake-queue\n' "$FM_HOME"
