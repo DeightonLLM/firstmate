@@ -147,7 +147,7 @@ test_empty_fleet_json() {
   ' >/dev/null \
     || fail "empty snapshot schema or absence markers wrong: $out"
   view=$(FM_HOME="$home" "$VIEW")
-  assert_contains "$view" "No live task metadata found." "empty fleet view should say no live metadata"
+  assert_contains "$view" "No live tasks found." "empty fleet view should say no live tasks"
   pass "empty fleet snapshot and view use explicit absence markers"
 }
 
@@ -621,9 +621,9 @@ test_view_renders_dead_secondmate_agent_status() {
   printf 'working: watching delegated scope\n' > "$home/state/dead-secondmate.status"
   fakebin=$(make_fakebin "$home")
   view=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$VIEW")
-  assert_contains "$view" "| dead-secondmate | unknown / none | secondmate | $home/secondmate-home | tmux | present / dead |" \
-    "view should distinguish a present secondmate endpoint from a dead agent"
-  assert_contains "$view" "| dead-secondmate | unknown / none | secondmate | $home/secondmate-home | tmux | present / dead | - | $home/secondmate-home (absent) |" \
+  assert_contains "$view" "| dead-secondmate | unknown / none | secondmate | $home/secondmate-home | tmux | absent / dead |" \
+    "view should not render a dead agent as a present live endpoint"
+  assert_contains "$view" "| dead-secondmate | unknown / none | secondmate | $home/secondmate-home | tmux | absent / dead | - | $home/secondmate-home (absent) |" \
     "view should show a recorded missing secondmate home path"
   pass "fleet view renders secondmate agent liveness"
 }

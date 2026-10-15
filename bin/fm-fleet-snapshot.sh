@@ -22,8 +22,11 @@
 #     resolves only when its structured record is Done, and missing ids stay open.
 #   tasks[]: one row per non-Done state/<id>.meta, sorted by id.
 #     Metadata for a structured task already marked Done is excluded even when a
-#     close path left its state files behind; current_state is parsed from
-#     bin/fm-crew-state.sh <id> and preserves
+#     close path left its state files behind.
+#     Each row also carries an additive liveness classification (live, stale, or
+#     unknown) derived from the backend agent probe, never from metadata
+#     presence alone.
+#     current_state is parsed from bin/fm-crew-state.sh <id> and preserves
 #     state, source, detail, and raw line separately.
 #     paths.status_log.last_event is historical wake-event data only, never
 #     current state.
@@ -399,7 +402,7 @@ backlog_json() {  # [<backlog-path>] - defaults to this home's $BACKLOG
 
 task_json_lines() {
   local meta id kind harness mode yolo project worktree home projects backend target status_log report_path
-  local pr pr_source event_json current_json endpoint_exists agent_alive meta_json status_json report_json worktree_json home_json
+  local pr pr_source event_json current_json endpoint_exists endpoint_probe agent_alive agent_state liveness_status liveness_reason meta_json status_json report_json worktree_json home_json
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
   local open_decisions_tsv open_decisions_json
 
@@ -468,16 +471,54 @@ task_json_lines() {
     blocked_event=$(printf '%s' "$open_decisions_json" | jq 'if any(.[]; .verb == "blocked") then 1 else 0 end')
 
     endpoint_exists=null
+    endpoint_probe=unknown
+    agent_state=unverified
+    liveness_status=unknown
+    liveness_reason="no recorded endpoint"
+    agent_alive=not_checked
     if [ -n "$target" ]; then
       if fm_backend_target_exists "$backend" "$target" "fm-$id" >/dev/null 2>&1; then
-        endpoint_exists=true
+        endpoint_probe=present
       else
-        endpoint_exists=false
+        endpoint_probe=unavailable
       fi
-    fi
-    agent_alive=not_checked
-    if [ "$kind" = secondmate ] && [ -n "$target" ]; then
-      agent_alive=$(fm_backend_agent_alive "$backend" "$target" 2>/dev/null || printf unknown)
+      agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || printf unreadable)
+      case "$agent_state" in
+        alive)
+          endpoint_exists=true
+          liveness_status=live
+          liveness_reason="endpoint present and agent alive"
+          ;;
+        dead)
+          endpoint_exists=true
+          liveness_status=stale
+          liveness_reason="endpoint present but agent is not alive"
+          ;;
+        missing)
+          if [ "$endpoint_probe" = present ]; then
+            endpoint_exists=true
+            liveness_status=unknown
+            liveness_reason="endpoint probes disagree about presence"
+            agent_state=unreadable
+          else
+            endpoint_exists=false
+            liveness_status=stale
+            liveness_reason="endpoint absent"
+          fi
+          ;;
+        *)
+          if [ "$endpoint_probe" = present ]; then endpoint_exists=true; fi
+          liveness_status=unknown
+          liveness_reason="endpoint or agent probe could not determine liveness ($agent_state)"
+          ;;
+      esac
+      if [ "$kind" = secondmate ]; then
+        case "$agent_state" in
+          alive) agent_alive=alive ;;
+          dead|missing) agent_alive=dead ;;
+          *) agent_alive=unknown ;;
+        esac
+      fi
     fi
 
     [ -f "$report_path" ] && report_present=1 || report_present=0
@@ -506,6 +547,9 @@ task_json_lines() {
       --arg pr "$pr" \
       --arg pr_source "$pr_source" \
       --arg agent_alive "$agent_alive" \
+      --arg agent_state "$agent_state" \
+      --arg liveness_status "$liveness_status" \
+      --arg liveness_reason "$liveness_reason" \
       --arg observed_at "$SNAPSHOT_NOW" \
       '.[0] as $current_state | .[1] as $meta_path | .[2] as $status_log | .[3] as $report
        | .[4] as $worktree_path | .[5] as $home_path | .[6] as $endpoint_exists
@@ -529,10 +573,12 @@ task_json_lines() {
         secondmate_projects:($projects | if . == "" then [] else split(",") | map(gsub("^[[:space:]]+|[[:space:]]+$"; "")) | map(select(. != "")) end),
         current_state:($current_state + {observed_at:$observed_at,freshness:"fresh"}),
         endpoint:{target:($target | if . == "" then null else . end),exists:$endpoint_exists,agent_alive:$agent_alive,
+          agent_state:$agent_state,
           status:(if $endpoint_exists == false then "absent"
                   elif $agent_alive == "alive" or $agent_alive == "dead" then $agent_alive
                   else "unknown" end),
           observed_at:$observed_at,freshness:"fresh"},
+        liveness:{status:$liveness_status,reason:$liveness_reason,observed_at:$observed_at},
         pr:{url:($pr | if . == "" then null else . end),source:$pr_source},
         hints:{
           pending_decision:$pending_decision,
