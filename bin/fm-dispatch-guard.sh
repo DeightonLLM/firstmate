@@ -23,6 +23,7 @@
 #   FM_DISPATCH_GUARD_LOAD_BYPASS=1   skip only the load ceiling (logged)
 #   FM_DISPATCH_GUARD_QUOTA_BYPASS=1  skip only the quota ceiling (logged)
 #   FM_DISPATCH_GUARD_MAX_LANES=<n>   live-lane ceiling; overrides config/dispatch-max-lanes (default 4)
+#   FM_DISPATCH_GUARD_MAX_PROVIDER_LANES=<n>  per-provider ceiling; overrides config/dispatch-max-provider-lanes (default: global ceiling)
 #   FM_DISPATCH_GUARD_LANE_BUDGET_S=<n>  wall-clock budget for the lane
 #                                        inventory (default 30)
 # Test seams (never set in production; they exist so the rules can be proven by
@@ -239,6 +240,27 @@ fm_dispatch_guard_lane_cap() {
   printf '%s' "$cap"
 }
 
+# Resolve the provider from the recorded model's provider prefix where present,
+# otherwise use the recorded harness as the provider identity.
+fm_dispatch_guard_provider_of_meta() {  # <meta-file>
+  local harness model
+  harness="$(sed -n 's/^harness=//p' "$1" | head -n 1)"
+  model="$(sed -n 's/^model=//p' "$1" | head -n 1)"
+  case "$model" in
+    */*) printf '%s' "${model%%/*}" ;;
+    *) printf '%s' "${harness:-unknown}" ;;
+  esac
+}
+
+fm_dispatch_guard_provider_cap() {
+  local cap="${FM_DISPATCH_GUARD_MAX_PROVIDER_LANES:-}"
+  if [ -z "$cap" ] && [ -n "${FM_HOME:-}" ] && [ -r "${FM_HOME}/config/dispatch-max-provider-lanes" ]; then
+    cap=$(tr -dc '0-9' < "${FM_HOME}/config/dispatch-max-provider-lanes")
+  fi
+  case "$cap" in ''|*[!0-9]*) cap="$(fm_dispatch_guard_lane_cap)" ;; esac
+  printf '%s' "$cap"
+}
+
 if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   budget="${FM_DISPATCH_GUARD_LANE_BUDGET_S:-30}"
   case "$budget" in ''|*[!0-9]*) budget=30 ;; esac
@@ -246,15 +268,19 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   live=0
   idle=0
   incomplete=0
+  declare -A provider_live=()
+  declare -A provider_idle=()
   for meta in "${FM_HOME}"/state/*.meta; do
     [ -e "$meta" ] || continue
     backend="$(fm_backend_of_meta "$meta")"
     raw_target="$(fm_backend_target_of_meta "$meta")"
     target="$(lane_target "$backend" "$raw_target")"
+    provider="$(fm_dispatch_guard_provider_of_meta "$meta")"
     if [ -z "$target" ]; then
       # A meta with no resolvable endpoint is unknown and must not free a slot.
       log_event "LANE_UNRESOLVED meta=$(basename "$meta")"
       live=$((live + 1))
+      provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 ))
       continue
     fi
     if [ $((SECONDS - started)) -ge "$budget" ]; then
@@ -263,11 +289,16 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
     fi
     case "$(fm_dispatch_guard_lane_classify "$backend" "$target")" in
       absent) : ;;                             # proven gone
-      idle) idle=$((idle + 1)) ;;
+      idle)
+        idle=$((idle + 1))
+        provider_idle["$provider"]=$(( ${provider_idle["$provider"]:-0} + 1 )) ;;
       unverified)
         log_event "LANE_UNVERIFIED meta=$(basename "$meta") backend=${backend}"
-        live=$((live + 1)) ;;
-      *) live=$((live + 1)) ;;                 # working, ambiguous, or unknown
+        live=$((live + 1))
+        provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 )) ;;
+      *)
+        live=$((live + 1))
+        provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 )) ;; # working, ambiguous, or unknown
     esac
   done
   if [ "$incomplete" = 1 ]; then
@@ -278,6 +309,12 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   if [ "$live" -ge "$cap" ]; then
     refuse "${live} working or unknown crewmate lanes and ${idle} idle lanes exist, counted per window/pane rather than per session (cap ${cap}). Stop one, or raise FM_DISPATCH_GUARD_MAX_LANES deliberately. Do not fan out on one host."
   fi
+  provider_cap="$(fm_dispatch_guard_provider_cap)"
+  for provider in "${!provider_live[@]}"; do
+    if [ "${provider_live[$provider]}" -ge "$provider_cap" ]; then
+      refuse "${provider_live[$provider]} working or unknown lanes occupy provider '${provider}' (cap ${provider_cap}); stop one or raise FM_DISPATCH_GUARD_MAX_PROVIDER_LANES deliberately."
+    fi
+  done
 fi
 
 # ---------------------------------------------------------------------------

@@ -95,6 +95,10 @@ The caller-facing label remains `fm-<id>`, but the actual cmux workspace title i
 Test cleanup must use the guarded path in [`docs/cmux-backend.md`](cmux-backend.md#current-operation-and-safety), never enumerate-and-close every workspace.
 `config/backend` is inherited into secondmate homes under the primary-authoritative contract owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md).
 
+## Dispatch lane ceilings (config/dispatch-max-lanes / config/dispatch-max-provider-lanes)
+
+`config/dispatch-max-lanes` sets the home-local maximum for all working or unknown worker lanes; `config/dispatch-max-provider-lanes` sets the corresponding per-provider maximum. Both files contain a positive decimal integer, and the per-provider ceiling defaults to the global ceiling when absent or invalid. `FM_DISPATCH_GUARD_MAX_LANES` and `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` override their respective files. Provider identity is read from the provider prefix in each task's recorded `model=` when present, otherwise from its recorded `harness=`; unknown or unreadable lane state occupies both applicable ceilings.
+
 ## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
 
 The `/afk` sub-supervisor injects escalation digests into firstmate's own pane independently of where new task endpoints are spawned.
