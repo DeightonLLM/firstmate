@@ -104,3 +104,18 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-public-followup-lib.sh` | Shared relay-activation gate, O(1) presence checks, and private transport paths for promised public replies |
 | `fm-public-followup.sh`  | Reconcile typed terminal work results into a public commitment and deliver its final reply once |
 | `fm-public-followup-emit.sh` | Report one typed terminal work result into the home that owes the public reply    |
+| `controller-resource-audit.sh` | Read-only Controller resource sampler on the documented six-hour cadence; overwrite `latest.md`, trim the event ledger, report 75/80/85 percent verdicts, classify off-allowlist candidates for operator approval |
+
+## Controller resource cadence units
+
+`controller-resource-audit.sh` ships with the two units that give it the documented cadence:
+
+| Unit | Path | Role |
+| ---- | ---- | ---- |
+| `controller-resource-audit.service` | `bin/systemd/controller-resource-audit.service` | `Type=oneshot`, runs the sampler, `ProtectSystem=strict` with `ReadWritePaths=/root/resource-audit` |
+| `controller-resource-audit.timer` | `bin/systemd/controller-resource-audit.timer` | `OnCalendar=*-*-* 0/6:00:00`, the documented six-hour boundary |
+
+`bin/controller-resource-audit.sh --check-timer-unit <unit>` is the machine check that keeps the shipped
+timer honest: it accepts only a six-hourly `OnCalendar` and refuses anything that overrides the calendar
+with a shorter `OnUnitActiveSec`/`OnUnitInactiveSec`, printing `CADENCE_DRIFT` and exiting non-zero.
+`tests/controller-resource-audit.test.sh` asserts that contract, including the refusal path.

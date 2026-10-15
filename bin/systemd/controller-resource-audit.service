@@ -1,0 +1,17 @@
+[Unit]
+Description=Controller read-only resource audit (documented six-hour cadence)
+Documentation=file:///root/bin/controller-resource-audit.sh
+# This unit is a lifecycle-safety heartbeat of its own. It is deliberately NOT
+# wired to the two-minute herdr-runtime-reconcile.timer, which stays separate.
+
+[Service]
+Type=oneshot
+ExecStart=/root/bin/controller-resource-audit.sh
+# The sampler is read-only on the host and writes only its own report directory.
+# The guard is the contract, not a suggestion: an unexpected mutation surface
+# should stop the run rather than proceed quietly.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/resource-audit
+PrivateTmp=true
+NoNewPrivileges=true
