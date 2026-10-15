@@ -17,7 +17,9 @@ SEND="$ROOT/bin/fm-hetz-send.sh"
 TMP_ROOT=$(fm_test_tmproot fm-hetz-send)
 
 # A stub ssh that records how it was called and exits with a chosen code.
-# The message is written where a caller can inspect it.
+# It runs the requested remote command locally, so remote semantics are real: a
+# missing inbox directory fails the way the far side would fail. The message body
+# is captured on the way past, then replayed into that remote command.
 make_ssh_stub() {  # <rc> -> echoes "<fakebin>"
   local rc=$1 fakebin
   fakebin=$(fm_fakebin "$TMP_ROOT/ssh-$rc")
@@ -25,16 +27,28 @@ make_ssh_stub() {  # <rc> -> echoes "<fakebin>"
 #!/usr/bin/env bash
 printf '%s\n' "\$@" >>"$TMP_ROOT/ssh-$rc/calls.txt"
 cat > "$TMP_ROOT/ssh-$rc/stdin.txt"
+remote_cmd=\${!#}
+eval "\$remote_cmd" < "$TMP_ROOT/ssh-$rc/stdin.txt"
 exit $rc
 SH
   chmod +x "$fakebin/ssh"
   printf '%s\n' "$fakebin"
 }
 
-run_send() {  # <fakebin> <message...>
-  local fakebin=$1
-  shift
+# The remote inbox this home would write into. It must exist for a transfer to
+# be reported as delivered, so the stub's remote command has a real directory.
+inbox_for() {  # <rc> -> echoes a fresh, existing inbox path
+  local d
+  d="$TMP_ROOT/ssh-$1/inbox"
+  mkdir -p "$d"
+  printf '%s\n' "$d"
+}
+
+run_send() {  # <fakebin> <rc> <message...>
+  local fakebin=$1 rc=$2
+  shift 2
   PATH="$fakebin:$PATH" FM_HETZ_LOG="$TMP_ROOT/outbound.log" \
+    FM_HETZ_HOST=temp-target.test FM_HETZ_INBOUND="$(inbox_for "$rc")" \
     "$SEND" "$@" 2>&1
 }
 
@@ -42,7 +56,7 @@ run_send() {  # <fakebin> <message...>
 test_success_reports_sent() {
   local fakebin out code
   fakebin=$(make_ssh_stub 0)
-  out=$(run_send "$fakebin" "hello from the controller")
+  out=$(run_send "$fakebin" 0 "hello from the controller")
   code=$?
   expect_code 0 "$code" "a successful send must exit 0"
   assert_contains "$out" "sent" "a successful transfer does not report success"
@@ -54,7 +68,7 @@ test_success_reports_sent() {
 test_failure_must_not_report_sent() {
   local fakebin out code
   fakebin=$(make_ssh_stub 1)
-  out=$(run_send "$fakebin" "hello from the controller")
+  out=$(run_send "$fakebin" 1 "hello from the controller")
   code=$?
   if [ "$code" -eq 0 ]; then
     fail "a failed transfer exited 0, so the caller reads it as delivered"
@@ -71,7 +85,7 @@ test_failure_must_not_report_sent() {
 test_failure_names_the_real_rc() {
   local fakebin out
   fakebin=$(make_ssh_stub 255)
-  out=$(run_send "$fakebin" "hello from the controller")
+  out=$(run_send "$fakebin" 255 "hello from the controller")
   assert_contains "$out" "255" \
     "the failure does not report the real ssh return code"
   pass "a failed transfer reports the real ssh return code"
