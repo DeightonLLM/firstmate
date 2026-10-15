@@ -20,8 +20,10 @@
 #     requires_child_metadata, blocked_by_ids, unresolved_blocker_ids, and
 #     captain_actionable fields. Repeated blocker tokens remain ordered; a blocker
 #     resolves only when its structured record is Done, and missing ids stay open.
-#   tasks[]: one row per state/<id>.meta, sorted by id.
-#     current_state is parsed from bin/fm-crew-state.sh <id> and preserves
+#   tasks[]: one row per non-Done state/<id>.meta, sorted by id.
+#     Metadata for a structured task already marked Done is excluded even when a
+#     close path left its state files behind; current_state is parsed from
+#     bin/fm-crew-state.sh <id> and preserves
 #     state, source, detail, and raw line separately.
 #     paths.status_log.last_event is historical wake-event data only, never
 #     current state.
@@ -555,8 +557,8 @@ task_json_lines() {
 
 # Main-home current-inventory validity: same orphan / unstructured-current checks
 # used by secondmate_home_summary_json, without inventing live task rows.
-# Meta inventory remains the sole source of live workers; this object only
-# discloses backlog↔task inconsistency for renderers (Bearings omitted/gates).
+# Structured Done records are excluded from TASKS_JSON before inventory checks,
+# so leftover metadata cannot keep a closed task in the current-worker projection.
 main_inventory_json() {  # <backlog-json> <tasks-json>
   printf '%s\n%s\n' "$1" "$2" | jq -s '
     .[0] as $backlog | .[1] as $tasks |
@@ -1286,6 +1288,11 @@ scout_report_lines() {
 
 BACKLOG_JSON=$(backlog_json) || { echo "fm-fleet-snapshot: backlog read failed" >&2; exit 1; }
 TASKS_JSON=$(task_json_lines) || { echo "fm-fleet-snapshot: task snapshot failed" >&2; exit 1; }
+TASKS_JSON=$(printf '%s\n%s\n' "$TASKS_JSON" "$BACKLOG_JSON" | jq -s '
+  .[0] as $tasks | .[1] as $backlog | $tasks
+  | map(. as $task | select(.kind == "secondmate" or
+    (any($backlog.records[]?; .structured == true and .id == $task.id and .state == "done") | not)))
+') || { echo "fm-fleet-snapshot: closed-task filtering failed" >&2; exit 1; }
 
 if [ "$OUTPUT_MODE" = secondmate-home-summary ]; then
   secondmate_home_summary_json "$BACKLOG_JSON" "$TASKS_JSON" \
