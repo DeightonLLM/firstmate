@@ -293,7 +293,7 @@ fresh_agent_baseline_manifest() {
         return 2
         ;;
     esac
-    printf '%s=%s %s\n' "$role" "$resolved" "$digest"
+    printf '%s=%s scope=%s %s\n' "$role" "$resolved" "$(fm_baseline_scope_of "$resolved")" "$digest"
   done
   printf 'warehouse=%s %s\n' "$warehouse_file" "$warehouse_digest"
   printf 'warehouse-preflight=%s %s\n' "$warehouse_preflight_file" "$warehouse_preflight_digest"

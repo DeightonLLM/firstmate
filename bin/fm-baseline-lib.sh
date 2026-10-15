@@ -11,6 +11,15 @@
 #   1. that role's explicit override variable (FM_BASELINE_<ROLE>)
 #   2. this firstmate home ($FM_HOME)
 #   3. the operator's account home ($HOME), the mirror of the original layout
+#   4. a cross-home scope, labelled as such, never silently
+#
+# Step 4 exists because steps 2 and 3 are not the whole picture. The policy
+# family genuinely lives in a root-owned scope that is READABLE from this host,
+# and a manifest that reported those roles as unavailable discarded a real,
+# reachable contract. Reporting a readable root-owned file as missing is its own
+# class of wrong. So the root scope is a candidate too, and every path resolved
+# from outside this home carries an explicit scope label so a fresh agent can
+# see at a glance that it is reading another home's contract rather than its own.
 #
 # A candidate must be a readable regular file; a missing or unreadable one is
 # skipped so resolution falls through to the next home.
@@ -39,25 +48,32 @@ fm_baseline_role_override_var() {
 }
 
 fm_baseline_role_candidates() {
+  local root_scope="${FM_BASELINE_ROOT_SCOPE:-/root}"
   case "$1" in
     policy)
       printf '%s\n' "$FM_HOME/AGENT-POLICY.md"
       [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/AGENT-POLICY.md"
+      printf '%s\n' "$root_scope/AGENTS.md"
       ;;
     project-policy)
       printf '%s\n' "$FM_HOME/agent-work/AGENTS.md"
+      [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/agent-work/AGENTS.md"
+      printf '%s\n' "$root_scope/agent-work/AGENTS.md"
       ;;
     routing)
       printf '%s\n' "$FM_HOME/docs/agent-policy/HERDR_AGENT_ROUTING.md"
       [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/docs/agent-policy/HERDR_AGENT_ROUTING.md"
+      printf '%s\n' "$root_scope/docs/agent-policy/HERDR_AGENT_ROUTING.md"
       ;;
     bounded)
       printf '%s\n' "$FM_HOME/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md"
       [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md"
+      printf '%s\n' "$root_scope/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md"
       ;;
     'lean-ctx')
       printf '%s\n' "$FM_HOME/.codex/LEAN-CTX.md"
       [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/.codex/LEAN-CTX.md"
+      printf '%s\n' "$root_scope/.codex/LEAN-CTX.md"
       ;;
     *) return 1 ;;
   esac
@@ -94,5 +110,25 @@ FM_BASELINE_CANDIDATES
 # The unavailable marker names the role and states the gap. It carries no path
 # and no digest, so it can never be mistaken for a content-pinned pointer.
 fm_baseline_unavailable_line() {
-  printf '%s=unavailable (no home-local file on this host)\n' "$1"
+  printf '%s=unavailable (no readable file for this role in any known scope)\n' "$1"
+}
+
+# The scope label states which home a resolved path came from, so a fresh agent
+# reading another scope's contract can see that it is not reading its own. A
+# path resolved inside this firstmate home is "home"; anything else names the
+# scope it was resolved from. This is a label, never a filter: a readable path
+# outside the home is still a real contract and reporting it as missing would
+# discard information the agent needs.
+fm_baseline_scope_of() {  # <resolved-path>
+  local path=$1 top
+  case "$path" in
+    "$FM_HOME"/*) printf 'home\n'; return 0 ;;
+    "${HOME:-__none__}"/*) printf 'account\n'; return 0 ;;
+  esac
+  # A cross-home path is absolute and begins with its scope's leading slash, so
+  # the scope name is the first segment AFTER that slash. Taking the first
+  # segment before it yields an empty label for every absolute path, which is
+  # exactly the case this branch exists to name.
+  top="${path#/}"
+  printf 'cross-home:%s\n' "${top%%/*}"
 }

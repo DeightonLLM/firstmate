@@ -187,7 +187,7 @@ emit_baseline_block() {
         return 2
       }
       [ -n "$digest" ] || { printf 'brief: FAIL SHA-256 tool unavailable\n' >&2; return 2; }
-      printf '%s=%s sha256:%s\n' "$role" "$resolved" "$digest"
+      printf '%s=%s scope=%s sha256:%s\n' "$role" "$resolved" "$(fm_baseline_scope_of "$resolved")" "$digest"
     done
     printf 'warehouse=%s %s\n' "$warehouse_file" "$warehouse_digest"
     printf 'warehouse-preflight=%s\n' "$warehouse_preflight_file"

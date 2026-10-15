@@ -35,11 +35,21 @@ assert_absent() {
 # literal so it holds on every host.
 verify_resolved_pointer() {
   local manifest=$1 role=$2 label=$3 line path digest actual
-  line=$(printf '%s\n' "$manifest" | sed -n "s/^${role}=\(.*\) \(sha256:[0-9a-f]\{64\}\)$/\1/p" | head -1)
+  # The path is captured before the scope label. Every emitted pointer now
+  # carries scope=<home|account|cross-home:NAME> between the path and the digest,
+  # so a greedy match would fold the label into the path and the readability
+  # check would then fail on a path that exists.
+  line=$(printf '%s\n' "$manifest" | sed -n "s/^${role}=\([^ ]*\) scope=\([^ ]*\) \(sha256:[0-9a-f]\{64\}\)\$/\1/p" | head -1)
+  scope=$(printf '%s\n' "$manifest" | sed -n "s/^${role}=\([^ ]*\) scope=\([^ ]*\) \(sha256:[0-9a-f]\{64\}\)\$/\2/p" | head -1)
   if [ -z "$line" ]; then
-    fail "$label: $role has no resolved content-pinned pointer"
+    fail "$label: $role has no resolved content-pinned pointer with a scope label"
     return
   fi
+  case "$scope" in
+    home|account) : ;;
+    cross-home:?*) : ;;
+    *) fail "$label: $role has an invalid scope label: '$scope'"; return ;;
+  esac
   path=$line
   digest=$(printf '%s\n' "$manifest" | sed -n "s/^${role}=.* \(sha256:[0-9a-f]\{64\}\)$/\1/p" | head -1)
   if [ ! -f "$path" ]; then
@@ -58,9 +68,19 @@ verify_resolved_pointer() {
   pass "$label: $role resolves to a readable existing file with a matching digest"
 }
 
+# A cross-home path is allowed, but it must never be presented as this home's own.
+# The accepted contract is an explicit scope label, not absence: the policy family
+# genuinely lives in a root-owned scope that is readable from this host, and
+# reporting a readable file as missing discards a real contract. So the rule is
+# that every /root pointer must be labelled cross-home:root.
 assert_no_manifest_pointer_to_other_home() {
-  local manifest=$1 label=$2
-  assert_absent "$manifest" '/root/' "$label: manifest contains no Controller-rooted path"
+  local manifest=$1 label=$2 unlabelled
+  unlabelled=$(printf '%s\n' "$manifest" | grep -E '=/(root|home)/[^ ]*sha256:' || true)
+  if [ -n "$unlabelled" ]; then
+    fail "$label: manifest has a cross-home pointer with no scope label: $unlabelled"
+    return
+  fi
+  pass "$label: every cross-home pointer carries a scope label"
 }
 
 # Build a home that owns every policy-family role.
@@ -113,11 +133,11 @@ for i in 0 1 2; do
   manifest=$(sed -n '1,$p' "$POPULATED/data/${ids[$i]}/brief.md")
   assert_contains "$manifest" '# Fresh-agent baseline' "$label brief missing baseline heading"
   assert_contains "$manifest" 'Baseline manifest: fresh-agent-baseline/v1' "$label brief missing manifest version"
-  assert_contains "$manifest" "policy=$POPULATED/AGENT-POLICY.md sha256:" "$label brief policy not resolved from the home"
-  assert_contains "$manifest" "project-policy=$POPULATED/agent-work/AGENTS.md sha256:" "$label brief project policy not resolved from the home"
-  assert_contains "$manifest" "routing=$POPULATED/docs/agent-policy/HERDR_AGENT_ROUTING.md sha256:" "$label brief routing not resolved from the home"
-  assert_contains "$manifest" "bounded=$POPULATED/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md sha256:" "$label brief bounded-execution not resolved from the home"
-  assert_contains "$manifest" "lean-ctx=$POPULATED/.codex/LEAN-CTX.md sha256:" "$label brief lean-ctx not resolved from the home"
+  assert_contains "$manifest" "policy=$POPULATED/AGENT-POLICY.md scope=home sha256:" "$label brief policy not resolved from the home"
+  assert_contains "$manifest" "project-policy=$POPULATED/agent-work/AGENTS.md scope=home sha256:" "$label brief project policy not resolved from the home"
+  assert_contains "$manifest" "routing=$POPULATED/docs/agent-policy/HERDR_AGENT_ROUTING.md scope=home sha256:" "$label brief routing not resolved from the home"
+  assert_contains "$manifest" "bounded=$POPULATED/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md scope=home sha256:" "$label brief bounded-execution not resolved from the home"
+  assert_contains "$manifest" "lean-ctx=$POPULATED/.codex/LEAN-CTX.md scope=home sha256:" "$label brief lean-ctx not resolved from the home"
   assert_contains "$manifest" "warehouse=$ROOT/docs/system-context/INDEX.md sha256:" "$label brief missing warehouse hash pointer"
   assert_contains "$manifest" "warehouse-preflight=$ROOT/bin/fm-context-preflight.sh" "$label brief missing warehouse preflight pointer"
   assert_contains "$manifest" "goal-queue=$POPULATED/data/backlog.md" "$label brief missing goal/queue handoff pointer"
@@ -138,9 +158,9 @@ done
 # contract, so it is asserted rather than assumed.
 populated_session=$(env HOME="$POPULATED" FM_HOME="$POPULATED" FM_ROOT_OVERRIDE="$ROOT" \
   "$SESSION_START" --baseline-manifest 2>&1)
-assert_contains "$populated_session" "policy=$POPULATED/AGENT-POLICY.md sha256:" 'session-start policy not resolved from the home'
-assert_contains "$populated_session" "routing=$POPULATED/docs/agent-policy/HERDR_AGENT_ROUTING.md sha256:" 'session-start routing not resolved from the home'
-assert_contains "$populated_session" "lean-ctx=$POPULATED/.codex/LEAN-CTX.md sha256:" 'session-start lean-ctx not resolved from the home'
+assert_contains "$populated_session" "policy=$POPULATED/AGENT-POLICY.md scope=home sha256:" 'session-start policy not resolved from the home'
+assert_contains "$populated_session" "routing=$POPULATED/docs/agent-policy/HERDR_AGENT_ROUTING.md scope=home sha256:" 'session-start routing not resolved from the home'
+assert_contains "$populated_session" "lean-ctx=$POPULATED/.codex/LEAN-CTX.md scope=home sha256:" 'session-start lean-ctx not resolved from the home'
 assert_contains "$populated_session" "warehouse=$ROOT/docs/system-context/INDEX.md sha256:" 'session-start missing warehouse hash pointer'
 assert_contains "$populated_session" "warehouse-preflight=$ROOT/bin/fm-context-preflight.sh sha256:" 'session-start dropped the warehouse preflight digest'
 assert_no_manifest_pointer_to_other_home "$populated_session" 'populated session-start manifest'
@@ -172,19 +192,27 @@ assert_unavailable_line() {
 
 # --------------------------------------------------------------- unavailable case
 # A home that owns none of the policy-family documents must still produce a
-# manifest, and must say which contracts are missing rather than pointing at
-# another host's account home or dropping the roles.
+# manifest, and must say which contracts are missing rather than dropping the
+# roles or mislabeling another scope's contract as its own.
+#
+# The cross-home scope is pointed at an EMPTY temporary directory for this case,
+# via FM_BASELINE_ROOT_SCOPE. Otherwise the real /root scope is readable from this
+# host and the roles resolve to it with a cross-home:root label, which is correct
+# behaviour and not the unavailable case under test. Pointing the scope at an empty
+# directory is what makes "no readable file in ANY scope" reproducible.
 BARE="$TMP_ROOT/bare-home"
-mkdir -p "$BARE/data" "$BARE/state"
+BARE_SCOPE="$TMP_ROOT/bare-root-scope"
+mkdir -p "$BARE/data" "$BARE/state" "$BARE_SCOPE"
 touch "$BARE/data/backlog.md"
 
-run_brief "$BARE" "$BRIEF" bare-worker firstmate >/dev/null 2>&1 || {
-  printf 'not ok - brief generation failed with no home-local policy files\n' >&2
+run_brief "$BARE" env FM_BASELINE_ROOT_SCOPE="$BARE_SCOPE" "$BRIEF" bare-worker firstmate >/dev/null 2>&1 || {
+  printf 'not ok - brief generation failed with no readable policy files in any scope\n' >&2
   exit 1
 }
 
 bare_brief=$(sed -n '1,$p' "$BARE/data/bare-worker/brief.md")
 bare_session=$(env HOME="$BARE" FM_HOME="$BARE" FM_ROOT_OVERRIDE="$ROOT" \
+  FM_BASELINE_ROOT_SCOPE="$BARE_SCOPE" \
   "$SESSION_START" --baseline-manifest 2>&1)
 
 assert_contains "$bare_brief" 'Baseline manifest: fresh-agent-baseline/v1' 'bare brief missing manifest version'
