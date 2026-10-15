@@ -1,21 +1,16 @@
 Mode: Pi extension background wake.
 
 When this session owns supervision and away mode is not active:
-1. Drain with `bin/fm-wake-drain.sh` **and keep draining until it prints nothing.**
-   One drain is not enough. A single watcher cycle can enqueue more than one wake — on 2026-10-15 a cycle
-   delivered a `check:` wake for a Controller message and a second `check:` wake from another check script,
-   and a single drain surfaced only the first. The unread message then sat until the Captain prompted it,
-   which he correctly called a broken loop.
-   **Act on every wake named in the drained output, not the first one.** A wake you did not act on is a
-   message you have silently discarded.
-   ```
-   while :; do
-     out=$(bash bin/fm-wake-drain.sh 2>&1)
-     [ -z "$out" ] && break
-     # handle every record in $out, then drain again
-   done
-   ```
-   If the loop does not converge, say so plainly rather than proceeding on a partial picture.
+1. Drain with `bin/fm-wake-drain.sh`.
+   It moves the queue snapshot atomically under its lock, so one call empties it. **Do not loop until it prints
+   nothing**, and do not build a drain-until-empty wrapper on top of it.
+   **The raw tab-separated rows are the authoritative wake list.** The `wake annotation:` lines are supplemental
+   status-file context about the latest wake EVENT, not the wake list, and they are omitted from the queue when
+   they would repeat an event already represented. Reading annotations instead of the raw rows is how a queued
+   wake gets missed entirely.
+   Act on every raw row. A wake you did not act on is a message you silently discarded.
+   Ownership: `bin/fm-wake-drain.sh`, `bin/fm-wake-lib.sh` (`fm_wake_print_deduped`), `docs/architecture.md`,
+   `tests/fm-wake-queue.test.sh`.
 2. Confirm the Pi primary auto-loaded both project extensions (plain `pi` or `pi-signed`, after approving project trust once per clone); if not, restart the selected executable with `-e __FM_PI_TURNEND_EXT__ -e __FM_PI_EXT__` as a trust-free fallback.
 3. First cycle only: make the one required `fm_watch_arm_pi` call.
    Use `/fm-watch-arm-pi` only as a human-entered fallback.
