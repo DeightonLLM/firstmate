@@ -557,7 +557,7 @@ When updating this file, preserve every safety boundary and keep the always-load
 - Lane types: MiniMax 2.7 (`mcode exec`) for implementation on accessible surfaces; hetz/brandon lanes for parallel compute-bound work; controller for coordination + captain-gated actions only. Gemini (AGY) reviews deliverables before closeout.
 - Default swarm size: 2-4 disjoint lanes + coordinator. Prefer existing subdomains/routes/infra over new DNS. Backups precede any live mutation (fail-closed).
 
-- BOOT: read /root/agent-work/deightonllm-firstmate/CONTROLLER_STATE.md and BOARD.md before any task work. Keep both current — they are the durable memory; the captain must never re-explain basics.
+- BOOT: read `CONTROLLER_STATE.md` and `BOARD.md` **at the root of the firstmate home you are in** (`/home/hd2admin/kun-agent-workspace/`) before any task work. Keep both current — they are the durable memory; the captain must never re-explain basics. A `/root/agent-work/...` path is Controller-local, unreadable to this account, and never a task input: if a brief names it, treat the file as absent and carry on rather than stalling.
 
 ## Todo board format (deterministic — every session, captain-approved 2026-09-26)
 - Every todo line: `[owner @ host] task — state`. Owners: controller / MiniMax @ <host> / hetz @ brandon / subagent @ <host>.
