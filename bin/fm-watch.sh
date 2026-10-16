@@ -1090,6 +1090,14 @@ EOF
         rm -f "$STATE/.win-dead-$dkey" 2>/dev/null || true
       else
         touch "$STATE/.win-dead-$dkey"
+        # A window absent from a successful bulk pane list is gone. Clear its
+        # per-window tracking state here; otherwise the .stale-since-/.wedge-
+        # escalations-/.hash-/.count- trackers outlive the pane and later sweeps
+        # keep escalating a condition that can never change (2026-10-16: reaped
+        # lanes produced stale wakes indefinitely after the pane was closed).
+        rm -f "$STATE/.hash-$dkey" "$STATE/.count-$dkey" \
+              "$STATE/.stale-$dkey" "$STATE/.stale-since-$dkey" \
+              "$STATE/.wedge-escalations-$dkey" "$STATE/.paused-$dkey" 2>/dev/null || true
         continue
       fi
     fi
