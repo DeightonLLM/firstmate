@@ -313,3 +313,51 @@ tests/fm-afk-pi-herdr-return-e2e.test.sh
 
 Real Herdr tests use the named lab helper and default-session tripwire.
 [`verification/runtime-backends.md`](verification/runtime-backends.md#herdr) records the active version, CLI, projection, event, and lifecycle evidence without task-specific chronology.
+
+## Secondmate endpoints must declare `backend=herdr` (2026-10-16)
+
+Seven registered secondmates were unreachable. Every `fm-send` failed with
+`tmux send failed`, while `herdr workspace list` showed every pane alive and idle.
+
+**Cause: two separate facts.**
+
+```
+absent backend= in a meta file means tmux   <- documented default in fm-backend.sh
+the secondmates' panes are Herdr workspaces <- the panes never existed in tmux
+```
+
+So the sends were routed to a tmux server that does not own those panes. The tmux server is real
+(`/usr/bin/tmux`, socket `firstmate`, windows since 13 Oct) but holds eight unrelated windows and
+**none** of the secondmate panes. Killing tmux is not the fix and would risk whatever lives in
+those eight windows.
+
+**Second trap: tab id versus pane id.** `herdr tab list` reports `w2E:t2`, but `pane send-text`
+requires the **pane** id `w2E:p2`. Writing the tab id produces
+`pane_not_found` even though the workspace and tab are correct. Always take the pane id from
+`herdr pane list`, never from `herdr tab list`.
+
+**Correct secondmate endpoint record:**
+
+```text
+backend=herdr
+window=default:<wID>:p2
+herdr_session=default
+herdr_workspace_id=<wID>
+herdr_pane_id=<wID>:p2
+```
+
+**Verifying, in order:**
+
+```
+herdr pane list                 # pane ids are <wID>:p2
+herdr --session default pane send-text <wID>:p2 "ping"
+FM_HOME=<home> bin/fm-send.sh <secondmate> "ping"   # must report the send, not an error
+```
+
+`bin/fm-repair-secondmate-endpoints.sh` rewrites any record that lacks `backend=herdr` or whose
+recorded workspace disagrees with the live Herdr workspace. It is idempotent and backs up each
+record before rewriting. Run it with `FM_HOME` set explicitly.
+
+**Rule:** a secondmate that has never successfully received a send must not be treated as
+addressable, and a record claiming a window that does not exist in the named backend is stale
+metadata, not a dead pane. Check `herdr pane list` before declaring anything unreachable.
