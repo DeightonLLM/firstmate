@@ -85,34 +85,42 @@ no exclamation marks in copy - confident, not excited
 no invented specs or numbers - if it is not on the site or in the COA, it does not go on a post
 no third-party logos without written permission
 no AI-generated product imagery for vial/stopper/seal/machine shots
+no stock image passed off as our own product, facility, or people
 no rounded corners beyond 2px
 no drop shadows, glow, bevels
 ```
 
-## Unsplash sourcing — the real constraint
+## Stock imagery — the Unsplash initiative (approved direction)
 
-Unsplash supplies **backgrounds, textures and contextual scenes only.** It cannot supply Core
-Distro's actual product photography. That tension is deliberate and must be stated in output:
+**Stock is the plan, not a compromise.** Unsplash is our sourcing route for backgrounds, lab and
+clean-room context, warehouse and logistics scenes, texture and material close-ups, campaign and
+seasonal mood, hero and blog imagery, and social posts across every platform.
+
+The section 2 filter still applies hard - dark or near-black base, one warm light source, tight
+editorial composition, palette that sits beside our greens. **Reject bright, white-background,
+generic-corporate, and smiling-at-camera results.** Unsplash is mostly wrong for this brand, so a
+filtered miss beats an unfiltered hit.
+
+Three rules survive the change:
 
 ```
-Unsplash OK for   abstract dark backgrounds, lab/warehouse context, texture, campaign mood
-Unsplash NOT for  the vials, stoppers, seals, or fill-finish machine themselves
+never present a stock image as our own product, facility, or people
+never composite a third-party logo onto stock imagery without written permission
+our own vials, stoppers, seals and the fill-finish line are still a photography shoot
+        - a stock lookalike for our actual product is a credibility risk
+always carry Unsplash attribution - photographer credit plus a link back, in the caption file
 ```
 
-Any AI or stock image must be **clearly stylized background only** and never presented as product
-photography. If a request needs real product shots, that is a **photography shoot**, not a search.
+Credentials are read at use time from `~/.config/unsplash/credentials` and are **never** copied into
+a report, a file, a prompt, or a commit.
 
-Unsplash API requires photographer credit plus a link back. Carry both in the caption file.
-
-Queries that fit the direction - always verify results visually before use:
+Queries that fit the direction - verify every result visually before use:
 
 ```
 "dark laboratory" "pharmaceutical vial" "clean room" "amber glass bottle macro"
 "laboratory glassware dark" "industrial filling machine" "warehouse inventory dark"
 "pharmaceutical manufacturing" "laboratory pipette dark" "medical packaging"
 ```
-
-Reject any result that is bright, white-background, stock-smiley, or off-palette.
 
 ## Format specs
 
