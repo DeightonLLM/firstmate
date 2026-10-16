@@ -361,3 +361,30 @@ record before rewriting. Run it with `FM_HOME` set explicitly.
 **Rule:** a secondmate that has never successfully received a send must not be treated as
 addressable, and a record claiming a window that does not exist in the named backend is stale
 metadata, not a dead pane. Check `herdr pane list` before declaring anything unreachable.
+
+## A failed send usually means "busy", not "unreachable" (2026-10-16)
+
+Secondmates accept one message at a time. A pane whose agent is already `working` cannot receive a
+send, and `fm-send` reports it as unconfirmed delivery. This is correct behaviour and it is easy to
+misread as a broken endpoint.
+
+```
+herdr workspace list          # check agent_status first
+agent_status = idle           -> a send will land
+agent_status = working        -> a send will fail; that is the answer, not a fault
+```
+
+Confirmed during dispatch: a connectivity test that sent one short prompt to all seven secondmates
+put every one of them into `working`, after which every follow-up send failed and looked like a
+routing fault. It was not.
+
+**Rules:**
+- Check `agent_status` before concluding a target is unreachable.
+- Do not run a liveness ping and then immediately send real work to the same pane.
+- "delivery unconfirmed" against a `working` pane means retry later, not "fix the metadata".
+- Only treat a target as unreachable when it is `idle` and a send still fails.
+
+## Long instructions belong in a file, not in a send
+
+Sends are short single-line prompts. Put anything substantial in a file under `data/handoffs/` and
+send only the path. This keeps the pane readable, survives re-sends, and avoids quoting problems.
