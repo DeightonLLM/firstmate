@@ -4,8 +4,8 @@
 **Domain:** `core-distro.com`
 **Prepared for:** the Captain
 **PRD baseline:** `BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` (v3.0, 2026-08-04), canonical copy at `docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md`
-**Status:** UNKNOWN — architecture conflict requires Captain-ordered ADR before PRD-v3 scope is defined; production runs on Namecheap/PHP, not Hostinger/Hetzner as PRD v3 §§7.1–7.2 target
-**Last updated:** 2026-10-17
+**Status:** ACCEPTED — ADR-0001 approved by the Captain; Hostinger Next.js production stack pre-staged and running on port 3112, awaiting DNS cutover window
+**Last updated:** 2026-10-18
 
 > **Source-label key:**
 > - `[PER v3]` — v3 states it (v3 is dated 2026-08-04 and may be stale)
@@ -1067,7 +1067,7 @@ The following ADRs must be created before PRD-v3 implementation can proceed. Sou
 
 | # | Blocker | Status | Owner | Source |
 |---|---|---|---|---|
-| 1 | Architecture conflict: Namecheap/PHP production vs PRD-v3 Hostinger/Hetzner target | `BLOCKED` | Captain (has ordered ADR) | v3 §2.1 production-reality-gap; `PRD_DELIVERY_MAP.md` unresolved area 2 |
+| 1 | Architecture conflict: Namecheap/PHP production vs PRD-v3 Hostinger/Hetzner target | `RESOLVED` | Captain / Saad | ADR-0001 approved by the Captain (2026-10-18); Next.js active on port 3112 |
 | 2 | Canary awaiting operator signal | `BLOCKED` | Captain / Operator | `PRD_TRACEABILITY.md` `coredistro-canary`; `MINI_SPRINT_PREPARATION_REPORT.md` §3 |
 | 3 | Deployment/hydration/auth gates still open | `BLOCKED` | Captain | `PRD_TRACEABILITY.md` `coredistro-route-qa` notes |
 | 4 | Backup/DR: operator must supply provider/account, retention, RPO/RTO, key custody | `UNKNOWN` | Captain / Operator | `PRD_DELIVERY_MAP.md` unresolved area 6; `PRD_TRACEABILITY.md` `backup-dr` |

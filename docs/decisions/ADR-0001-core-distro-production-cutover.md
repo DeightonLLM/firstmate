@@ -1,6 +1,6 @@
 # ADR-0001: Core Distro Production Cutover to Hostinger Next.js Stack
 
-- **Status:** PROPOSED (Awaiting Captain Sign-Off)
+- **Status:** ACCEPTED (Authorized by the Captain)
 - **Date:** 2026-10-18
 - **Decider:** the Captain (Sole Orchestrator & Technical Acceptance Authority)
 - **Technical Implementation:** Saad & First Mate Coordinator
