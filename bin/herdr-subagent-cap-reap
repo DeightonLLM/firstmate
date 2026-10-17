@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# herdr-subagent-cap-reap — post-closeout hook to free subagent slots.
+#
+# FIRSTMATE_OP v1: close only stale done/idle panes. Never touch working or
+# blocked panes. Used after ACCEPTED/TERMINAL to free a slot before the next
+# dispatch decision.
+#
+# Usage:
+#   herdr-subagent-cap-reap [WORKSPACE]
+#
+# Exit codes:
+#   0   = reap completed (zero or more panes closed)
+#   3   = herdr unavailable
+#   2   = usage error
+#
+# This hook NEVER closes a working or blocked pane. It only inspects the
+# lifecycle state and calls `herdr-pane-close-safe` for each done/idle pane.
+# MiniMax M3 is an ordinary runtime with no protected-lane status.
+
+set -euo pipefail
+
+# Ensure standard user local bin is in PATH for herdr lookup across hosts
+if [ -n "${HOME:-}" ] && [ -d "$HOME/.local/bin" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
+# Portably locate cap.sh: env override -> sibling lib -> canonical /root/lib
+cap_lib="${SUBAGENT_CAP_LIB:-}"
+if [ -z "$cap_lib" ]; then
+  self_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+  if [ -r "$self_dir/../lib/subagent-cap/cap.sh" ]; then
+    cap_lib="$self_dir/../lib/subagent-cap/cap.sh"
+  elif [ -r /root/lib/subagent-cap/cap.sh ]; then
+    cap_lib="/root/lib/subagent-cap/cap.sh"
+  fi
+fi
+
+if [ -n "$cap_lib" ] && [ -r "$cap_lib" ]; then
+  . "$cap_lib"
+else
+  printf 'herdr-subagent-cap-reap: cap library not found\n' >&2
+  exit 3
+fi
+
+ws="${1:-}"
+subagent_cap_reap_stale "$ws"

@@ -1,0 +1,764 @@
+#!/usr/bin/env bash
+# Shared no-prompt-retention intent guard. Hook payloads may be untrusted.
+set -euo pipefail
+
+mode="${1:-tool}"
+agent="unknown"
+lane=""
+invocation=""
+shift || true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --agent)
+      agent="${2:-unknown}"
+      shift 2 || true
+      ;;
+    --lane)
+      lane="${2:-}"
+      shift 2 || true
+      ;;
+    --invocation)
+      invocation="${2:-}"
+      shift 2 || true
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+agent="${agent//[^a-zA-Z0-9_-]/_}"
+lane="${lane:-${AGENT_INTENT_GUARD_LANE:-${HERDR_LANE:-${HERDR_PANE:-}}}}"
+lane="${lane//[^a-zA-Z0-9_.-]/_}"
+invocation="${invocation:-${AGENT_INTENT_GUARD_INVOCATION:-}}"
+invocation="${invocation//[^a-zA-Z0-9_.-]/_}"
+state_dir="${TMPDIR:-/tmp}/agent-intent-guard"
+state_file="$state_dir/$agent.state"
+mkdir -p -m 700 "$state_dir"
+
+write_state() {
+  local value="$1"
+  printf '%s\n' "$value" > "$state_file"
+  chmod 600 "$state_file"
+}
+
+is_protected_config_auth_path() {
+  local p="$1"
+  local p_lower
+  p_lower="$(printf '%s' "$p" | tr '[:upper:]' '[:lower:]')"
+  # Refuse config or auth path components, prefixes, suffixes, or subpaths
+  if [[ "$p_lower" =~ (/|^|\.|_|-)(config|auth)(/|\.|_|-|$) ]] || \
+     [[ "$p_lower" =~ ^/etc/(shadow|gshadow|sudoers|pam\.d|ssh|security) ]] || \
+     [[ "$p_lower" =~ (id_rsa|id_ed25519|\.env|credentials|secrets) ]]; then
+    return 0
+  fi
+  return 1
+}
+
+usage() {
+  printf '%s\n' \
+    'usage: agent-intent-guard tool|prompt|authorize|revoke|status|coords --agent <name> [--lane <id>] [--invocation <hash>] [--ttl <seconds>]' \
+    '  tool       Validate a tool-hook payload from stdin.' \
+    '  prompt     Record allow/deny from an operator prompt supplied on stdin.' \
+    '  authorize  Grant a short-lived operator authorization (default: 900 seconds).' \
+    '  revoke     Revoke the current authorization and coordinates ledger.' \
+    '  status     Show the current authorization state.' \
+    '  coords     Compile declared coordinates from a prompt file into a ledger.'
+}
+
+if [[ -z "$agent" || "$agent" == "unknown" ]]; then
+  printf 'AGENT_INTENT_GUARD: an explicit --agent is required\n' >&2
+  usage >&2
+  exit 64
+fi
+
+case "$mode" in
+  authorize)
+    ttl=31536000
+    while (($#)); do
+      case "$1" in
+        --ttl)
+          ttl="${2:-}"
+          shift 2 || true
+          ;;
+        -h|--help)
+          usage
+          exit 0
+          ;;
+        *)
+          printf 'AGENT_INTENT_GUARD: unknown authorize argument: %s\n' "$1" >&2
+          exit 64
+          ;;
+      esac
+    done
+    if ! [[ "$ttl" =~ ^[0-9]+$ ]] || ((ttl < 1 || ttl > 31536000)); then
+      printf 'AGENT_INTENT_GUARD: --ttl must be an integer from 1 to 31536000 seconds (1 year)\n' >&2
+      exit 64
+    fi
+    expires=$(( $(date +%s) + ttl ))
+    write_state "allow:$expires"
+    printf 'status: authorized\nagent: %s\nexpires_at: %s\n' "$agent" "$expires"
+    exit 0
+    ;;
+  revoke)
+    while (($#)); do
+      case "$1" in
+        --lane) lane="${2:-}"; shift 2 || true ;;
+        --invocation) invocation="${2:-}"; shift 2 || true ;;
+        --agent) agent="${2:-unknown}"; shift 2 || true ;;
+        *) shift || true ;;
+      esac
+    done
+    write_state deny
+    lane="${lane//[^a-zA-Z0-9_.-]/_}"
+    if [[ -n "$lane" ]]; then
+      rm -f "$state_dir/coords.$agent.$lane" "$state_dir/$agent.coords.$lane" 2>/dev/null || true
+    else
+      rm -f "$state_dir/coords.$agent" "$state_dir/coords.$agent."* "$state_dir/$agent.coords"* 2>/dev/null || true
+    fi
+    printf 'status: revoked\nagent: %s\n' "$agent"
+    exit 0
+    ;;
+  coords)
+    from_file=""
+    artifact=""
+    ttl=31536000
+    while (($#)); do
+      case "$1" in
+        --from)
+          from_file="${2:-}"
+          shift 2 || true
+          ;;
+        --artifact)
+          artifact="${2:-}"
+          shift 2 || true
+          ;;
+        --ttl)
+          ttl="${2:-}"
+          shift 2 || true
+          ;;
+        --lane)
+          lane="${2:-}"
+          shift 2 || true
+          ;;
+        --invocation)
+          invocation="${2:-}"
+          shift 2 || true
+          ;;
+        --agent)
+          agent="${2:-unknown}"
+          shift 2 || true
+          ;;
+        -h|--help)
+          usage
+          exit 0
+          ;;
+        *)
+          shift || true
+          ;;
+      esac
+    done
+    if ! [[ "$ttl" =~ ^[0-9]+$ ]] || ((ttl < 1 || ttl > 31536000)); then
+      printf 'AGENT_INTENT_GUARD: --ttl must be an integer from 1 to 31536000 seconds (1 year)\n' >&2
+      exit 64
+    fi
+
+    content=""
+    if [[ -n "$from_file" && -f "$from_file" ]]; then
+      content="$(<"$from_file")"
+    elif [[ "$from_file" == "-" || -z "$from_file" ]] && ! [ -t 0 ]; then
+      content="$(cat 2>/dev/null || true)"
+    fi
+
+    clean_paths=""
+    detected_lane=""
+    if [[ -n "$content" || -n "$artifact" ]]; then
+      parsed_output="$(python3 -c '
+import sys, re, os
+
+content = sys.stdin.read()
+artifact = sys.argv[1] if len(sys.argv) > 1 else ""
+
+lane = ""
+lm = re.search(r"checkpoint\s+lane\s+([a-zA-Z0-9_.-]+)", content, re.I)
+if lm:
+    lane = lm.group(1).rstrip(".")
+else:
+    lm = re.search(r"^\s*LANE:\s*([a-zA-Z0-9_.-]+)", content, re.M | re.I)
+    if lm:
+        lane = lm.group(1).rstrip(".")
+
+tb_m = re.search(r"TARGET_BOUNDARY:\s*(.*?)(?=\n[A-Z_0-9]+:|$)", content, re.S)
+tb = tb_m.group(1) if tb_m else ""
+
+wb_m = re.search(r"WRITE_BOUNDARY:\s*(.*?)(?=\n[A-Z_0-9]+:|$)", content, re.S)
+wb = wb_m.group(1) if wb_m else ""
+
+ev_m = re.search(r"EVIDENCE_PATH:\s*(.*?)(?=\n[A-Z_0-9]+:|$)", content, re.S)
+ev = ev_m.group(1) if ev_m else ""
+
+art_m = re.search(r"ARTIFACT:\s*(.*?)(?=\n[A-Z_0-9]+:|$)", content, re.S)
+art_prompt = art_m.group(1) if art_m else ""
+
+def clean_boundary(text):
+    neg_pattern = r"(?:You\s+MUST\s+NOT|MUST\s+NOT|DO\s+NOT|DENY:|DISALLOW:|FORBIDDEN:|NEGATIVE:|EXCLUDE:).*"
+    allow_match = re.search(r"ALLOW:\s*(.*?)(?=" + neg_pattern + r"|$)", text, re.I | re.S)
+    if allow_match:
+        text = allow_match.group(1)
+    else:
+        text = re.sub(neg_pattern, "", text, flags=re.I | re.S)
+    return text
+
+def extract_paths_from_text(source):
+    cleaned = clean_boundary(source)
+    cleaned = re.sub(r"\([^)]*\)", "", cleaned)
+    cleaned = re.sub(r"\+[A-Z_0-9\s]+", "", cleaned)
+    segments = re.split(r"[\r\n;,]|\s+and\s+", cleaned)
+    paths = []
+    trailing_words = r"(?:only|scratch|state|file|files|sections|as\s+needed|as|needed|read-only|write-only|and|or|etc)"
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+        m = re.search(r"(?:^|[\s:])(/[\w\.\- /]+)", seg)
+        if m:
+            p = m.group(1).strip()
+            p = re.sub(r"[\s,;:.)/*]+$", "", p)
+            while True:
+                p_new = re.sub(r"\s+" + trailing_words + r"$", "", p, flags=re.I).strip()
+                p_new = re.sub(r"[\s,;:.)/*]+$", "", p_new)
+                if p_new == p:
+                    break
+                p = p_new
+            if p and p.startswith("/"):
+                paths.append(p)
+    return paths
+
+paths = extract_paths_from_text(tb) + extract_paths_from_text(wb) + extract_paths_from_text(ev) + extract_paths_from_text(art_prompt)
+if artifact:
+    paths.append(artifact.strip())
+
+if not paths and content:
+    cleaned = clean_boundary(content)
+    paths = [m.group(0).rstrip(".,;:)]") for m in re.finditer(r"/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_.-]+)*", cleaned)]
+
+norm_paths = set()
+for p in paths:
+    if not p:
+        continue
+    norm = os.path.normpath(p)
+    norm_paths.add(norm)
+
+print("LANE:" + lane)
+for p in sorted(norm_paths):
+    print("PATH:" + p)
+' "$artifact" <<< "$content")"
+
+      detected_lane="$(sed -n 's/^LANE://p' <<< "$parsed_output" | head -n 1)"
+      clean_paths="$(sed -n 's/^PATH://p' <<< "$parsed_output")"
+    fi
+
+    ns="${lane:-$detected_lane}"
+    if [[ -z "$ns" ]]; then
+      ns="${invocation:-}"
+    fi
+    if [[ -z "$ns" && -n "$content" ]]; then
+      ns="$(printf '%s' "$content" | sha256sum | awk '{print $1}' | head -c 12)"
+    fi
+    ns="${ns//[^a-zA-Z0-9_.-]/_}"
+
+    expires=$(( $(date +%s) + ttl ))
+
+    if [[ -n "$ns" ]]; then
+      namespaced_coords_file="$state_dir/coords.$agent.$ns"
+      {
+        printf 'expires:%s\n' "$expires"
+        if [[ -n "$clean_paths" ]]; then
+          printf '%s\n' "$clean_paths"
+        fi
+      } > "$namespaced_coords_file"
+      chmod 600 "$namespaced_coords_file"
+    fi
+
+    coords_file="$state_dir/coords.$agent"
+    {
+      printf 'expires:%s\n' "$expires"
+      if [[ -n "$clean_paths" ]]; then
+        printf '%s\n' "$clean_paths"
+      fi
+    } > "$coords_file"
+    chmod 600 "$coords_file"
+
+    printf 'status: coordinates_recorded\nagent: %s\nexpires_at: %s\n' "$agent" "$expires"
+    exit 0
+    ;;
+  status)
+    while (($#)); do
+      case "$1" in
+        --lane) lane="${2:-}"; shift 2 || true ;;
+        --invocation) invocation="${2:-}"; shift 2 || true ;;
+        --agent) agent="${2:-unknown}"; shift 2 || true ;;
+        *) shift || true ;;
+      esac
+    done
+    lane="${lane//[^a-zA-Z0-9_.-]/_}"
+    state="missing"
+    if [[ -r "$state_file" ]]; then
+      state="$(<"$state_file")"
+    fi
+    printf 'agent: %s\nstate: %s\n' "$agent" "$state"
+
+    coords_exp=""
+    if [[ -n "$lane" && -r "$state_dir/coords.$agent.$lane" ]]; then
+      coords_exp="$(sed -n 's/^expires://p' "$state_dir/coords.$agent.$lane" | head -n 1)"
+    elif [[ -r "$state_dir/coords.$agent" ]]; then
+      coords_exp="$(sed -n 's/^expires://p' "$state_dir/coords.$agent" | head -n 1)"
+    fi
+    if [[ -n "$coords_exp" ]]; then
+      printf 'coords_expires_at: %s\n' "$coords_exp"
+    fi
+    exit 0
+    ;;
+  tool|prompt)
+    ;;
+  -h|--help|help)
+    usage
+    exit 0
+    ;;
+  *)
+    printf 'AGENT_INTENT_GUARD: unknown mode: %s\n' "$mode" >&2
+    usage >&2
+    exit 64
+    ;;
+esac
+
+payload="$(cat 2>/dev/null || true)"
+
+review_markers='(^|\n)[[:space:]]*(thread[[:space:]]+mode|mutation|coordinates|stop[[:space:]]+condition|task|verification|acceptance)[[:space:]]*:'
+# Prompt hooks receive the operator message, not a parsed intent object.  Keep
+# this deliberately narrow: a direct request must begin with an action verb
+# (optionally after a short conversational lead-in).  Review-shaped payloads
+# always win, so imperative text inside a pasted plan or handoff remains inert.
+direct_request='^[[:space:]]*((please[[:space:]]+)?|(can|could|would)[[:space:]]+you[[:space:]]+|(i[[:space:]]+(need|want)[[:space:]]+you[[:space:]]+to)[[:space:]]+)?(fix|repair|implement|apply|restart|reboot|dispatch|send|delegate|run|install|update|edit|change|create|write|tidy|clean[[:space:]]+up|deploy)([[:space:]:,.-]|$)'
+legacy_direct='(codex|agent)[[:space:]]+(execute[[:space:]]+this|do[[:space:]]+the[[:space:]]+work|apply[[:space:]]+these[[:space:]]+edits)'
+
+if [[ "$mode" == "prompt" ]]; then
+  normalized_payload="$(printf '%s' "$payload" | tr '[:upper:]' '[:lower:]')"
+  # Worker authorization comes from the controller environment plus the
+  # non-authorizing provenance fields. Prompt text can never authorize itself.
+  lane_mode_count="$(printf '%s' "$normalized_payload" | grep -Ec '^[[:space:]]*lane_mode:[[:space:]]*execute_bounded_task[[:space:]]*$' || true)"
+  dispatch_provenance_count="$(printf '%s' "$normalized_payload" | grep -Ec '^[[:space:]]*dispatch_provenance:[[:space:]]*controller_bound_task[[:space:]]*$' || true)"
+  if [[ "${HERDR_OPERATOR_APPROVED:-}" == "1" && "$lane_mode_count" == "1" && "$dispatch_provenance_count" == "1" ]] && \
+     ! printf '%s' "$normalized_payload" | grep -Fq 'dispatch_authorization'; then
+    write_state "allow:$(( $(date +%s) + 900 ))"
+  elif printf '%s' "$normalized_payload" | grep -Eq "$review_markers"; then
+    write_state deny
+  elif printf '%s' "$normalized_payload" | grep -Eq "$legacy_direct" || printf '%s' "$normalized_payload" | grep -Eq "$direct_request"; then
+    write_state "allow:$(( $(date +%s) + 900 ))"
+  else
+    write_state deny
+  fi
+  exit 0
+fi
+
+# An explicit authorization seen by a prompt hook permits this turn. The state
+# stores only a bounded verdict and expiry, never the operator message.
+state_exists=false
+state_allow=false
+if [[ -r "$state_file" ]]; then
+  state_exists=true
+  state_value="$(<"$state_file")"
+  case "$state_value" in
+      allow)
+      # Legacy, non-expiring state is not accepted for strict Gemini routes.
+      [[ "$agent" != "gemini" && "$agent" != "agy" && "$agent" != "antigravity" ]] && state_allow=true
+      ;;
+    allow:*)
+      expiry="${state_value#allow:}"
+      if [[ "$expiry" =~ ^[0-9]+$ ]] && (( $(date +%s) < expiry )); then
+        state_allow=true
+      else
+        write_state deny
+        state_value=deny
+      fi
+      ;;
+  esac
+fi
+
+lower="$(printf '%s' "$payload" | tr '[:upper:]' '[:lower:]')"
+
+# Gemini and Antigravity never receive browser-capable tool access through this
+# guard, even in an otherwise authorized session. Inspect the action identity
+# when the hook payload provides one; do not classify ordinary document prose
+# (e.g. "performance" or "formal") as a browser action. Unknown/unparseable
+# payloads retain a conservative word-boundary fallback.
+browser_action_denied=false
+tool_identity=""
+if command -v jq >/dev/null 2>&1; then
+  tool_identity="$(printf '%s' "$payload" | jq -r 'try ((.toolCall.name // .tool_name // .name // .tool // .action) | strings) catch empty' 2>/dev/null | head -n 1 || true)"
+fi
+if [[ "$agent" =~ ^(gemini|agy|antigravity) ]]; then
+  if [[ -n "$tool_identity" ]]; then
+    tool_identity_lower="$(printf '%s' "$tool_identity" | tr '[:upper:]' '[:lower:]')"
+    case "$tool_identity_lower" in
+      browser|browser_*|*_browser|navigate|navigate_*|*_navigate|click|click_*|*_click|screenshot|screenshot_*|*_screenshot|form_fill|form-fill|formfill|computer|computer_*|*_computer|computer_use|computer-use|mouse|mouse_*|*_mouse|keyboard|keyboard_*|*_keyboard|tab|tab_*|*_tab|window|window_*|*_window|page|page_*|*_page|admin|admin_*|*_admin)
+        browser_action_denied=true
+        ;;
+    esac
+  elif printf '%s' "$lower" | grep -Eq '(^|[^[:alnum:]_])(browser|navigate|screenshot|click|form|admin)([^[:alnum:]_]|$)'; then
+    browser_action_denied=true
+  fi
+fi
+if $browser_action_denied; then
+  echo "AGENT_INTENT_GUARD: Gemini browser/UI action denied." >&2
+  exit 1
+fi
+
+# A shell command is extracted from payload if present. Prefer JSON parsing so
+# escaped quotes in a command do not truncate it before scope checks.
+command=""
+if command -v jq >/dev/null 2>&1; then
+  command="$(printf '%s' "$payload" | jq -r 'try ((.command // .cmd // .CommandLine // .command_line // .toolCall.args.CommandLine // .toolCall.args.command // .toolCall.args.cmd // .args.CommandLine // .args.command // .args.cmd) | strings) catch empty' 2>/dev/null | head -n 1 || true)"
+fi
+if [[ -z "$command" ]]; then
+  command="$(printf '%s' "$payload" | sed -nE 's/.*"(command|cmd|CommandLine|command_line)"[[:space:]]*:[[:space:]]*"([^"]*)".*/\2/p' | head -n 1)"
+fi
+
+# Docker/runtime command verbs are refused regardless of authorization state.
+docker_runtime_denied=false
+tool_identity_lower="${tool_identity_lower:-$(printf '%s' "$tool_identity" | tr '[:upper:]' '[:lower:]')}"
+if [[ -n "$tool_identity" ]]; then
+  case "$tool_identity_lower" in
+    *docker*|*podman*|*containerd*|*crictl*|*runc*)
+      docker_runtime_denied=true
+      ;;
+  esac
+fi
+if [[ -n "$command" ]]; then
+  if printf '%s' "$command" | grep -Eq '(^|[^[:alnum:]_-])(docker|docker-compose|podman|nerdctl|containerd|crictl|runc)([^[:alnum:]_-]|$)'; then
+    docker_runtime_denied=true
+  fi
+fi
+if $docker_runtime_denied; then
+  echo "AGENT_INTENT_GUARD: Docker/runtime command verb denied." >&2
+  exit 1
+fi
+
+# Extract path-like operands
+all_operands=()
+command_cwd=""
+
+# A run_command cwd is execution context, not a target path.  Only use it as a
+# coordinate operand when the command supplied no explicit absolute operand;
+# otherwise the command's absolute operands are the scope evidence.  This keeps
+# a bounded `lean-ctx read /declared/file` from being denied merely because its
+# shell starts in /root, while relative/pathless commands remain fail-closed.
+if [[ "${tool_identity:-}" == "run_command" ]] && command -v jq >/dev/null 2>&1; then
+  command_cwd="$(printf '%s' "$payload" | jq -r 'try ((.cwd // .Cwd // .toolCall.args.Cwd // .toolCall.args.cwd // .args.Cwd // .args.cwd) | strings) catch empty' 2>/dev/null || true)"
+fi
+
+# 1. From JSON payload
+if command -v jq >/dev/null 2>&1; then
+  while IFS= read -r val; do
+    if [[ "$val" =~ ^/ ]]; then
+      all_operands+=("$val")
+    fi
+  done < <(printf '%s' "$payload" | jq -r '
+    [
+      .. | objects? | to_entries[]? |
+      select(.key | test("^(path|file_?path|target_?file|directory_?path|search_?path|search_?directory|absolute_?path)$"; "i")) |
+      .value | (if type == "array" then .[] else . end) | strings
+    ] | .[]' 2>/dev/null || true)
+fi
+if ((${#all_operands[@]} == 0)); then
+  while IFS= read -r val; do
+    if [[ "$val" =~ ^/ ]]; then
+      all_operands+=("$val")
+    fi
+  done < <(printf '%s' "$payload" | sed -nE 's/.*"(path|file_?path|filepath|target_?file|TargetFile|directory_?path|DirectoryPath|search_?path|SearchPath|search_?directory|SearchDirectory|absolute_?path|AbsolutePath)"[[:space:]]*:[[:space:]]*"([^"]+)".*/\2/p' || true)
+fi
+
+# 2. From shell command if present (exempting trusted wrapper executables)
+is_secret_scan_preflight=false
+if [[ -n "$command" ]]; then
+  command_operands="$command"
+  # lean-ctx is the mandatory read/search/list wrapper for agent work.  Its
+  # executable path is a trusted control binary, not a task coordinate; the
+  # actual operand paths remain subject to the coordinate ledger below.
+  command_operands="$(printf '%s' "$command_operands" | sed -E 's@^[[:space:]]*(/usr/local/bin/|/root/bin/)?lean-ctx([[:space:]])@\2@')"
+  if printf '%s' "$command_operands" | grep -Eq '^[[:space:]]*((/root/bin/)?agent-secret-scan)[[:space:]]+check([[:space:]]|$)'; then
+    is_secret_scan_preflight=true
+  else
+    # Tokenize without eval. Quoted absolute operands stay intact so a
+    # declared path containing spaces is checked as one coordinate.
+    extract_absolute_operands() {
+      local input="$1" token="" quote="" escaped=false i ch
+      for ((i=0; i<${#input}; i++)); do
+        ch="${input:i:1}"
+        if $escaped; then token+="$ch"; escaped=false; continue; fi
+        if [[ "$ch" == "\\" && "$quote" != "'" ]]; then escaped=true; continue; fi
+        if [[ -n "$quote" ]]; then
+          if [[ "$ch" == "$quote" ]]; then quote=""; else token+="$ch"; fi
+          continue
+        fi
+        case "$ch" in
+          "'"|'"') quote="$ch" ;;
+          [[:space:]]|';'|'|'|'&'|'>'|'<'|'='|'('|')'|',')
+            [[ "$token" == /* ]] && printf '%s\n' "$token"
+            token=""
+            ;;
+          *) token+="$ch" ;;
+        esac
+      done
+      [[ "$token" == /* ]] && printf '%s\n' "$token"
+    }
+    while IFS= read -r token; do
+      [[ -n "$token" && "$token" =~ ^/ ]] && all_operands+=("$token")
+    done < <(extract_absolute_operands "$command_operands")
+  fi
+fi
+
+if [[ "${tool_identity:-}" == "run_command" && -n "$command_cwd" && ${#all_operands[@]} -eq 0 ]] && ! $is_secret_scan_preflight; then
+  all_operands+=("$command_cwd")
+fi
+
+# Check for protected config/auth path operands outside /root or config/auth subpaths
+if ((${#all_operands[@]} > 0)); then
+  for op in "${all_operands[@]}"; do
+    op_norm="$(realpath -m "$op" 2>/dev/null || echo "$op")"
+    op_norm="${op_norm%/}"
+    if is_protected_config_auth_path "$op_norm"; then
+      audit_log="$state_dir/audit.log"
+      touch "$audit_log" 2>/dev/null || true
+      chmod 600 "$audit_log" 2>/dev/null || true
+      printf '%s agent=%s tool=%s verdict=SCOPE_DENY operand=%s prefix∈{}\n' \
+        "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        "$agent" \
+        "${tool_identity:-tool}" \
+        "$op" >> "$audit_log" 2>/dev/null || true
+      printf 'AGENT_INTENT_GUARD: SCOPE_DENY protected config/auth path operand=%s\n' "$op" >&2
+      exit 1
+    fi
+  done
+fi
+
+# Read-only operations exemption (evaluated BEFORE coordinate ledger enforcement)
+if printf '%s' "$lower" | grep -Eq '"(read|read_file|read_many_files|grep|find|cat|search|list_dir|list_files|view|view_file)"|"tool_name":"(read|grep|find|cat|search|list|view_file)' ; then
+  exit 0
+fi
+
+readonly_command=false
+if [[ -n "$command" ]] && printf '%s' "$command" | grep -Eq '^[[:space:]]*(rg|grep|find|cat|ls|pwd|whoami|date|sed[[:space:]]+-n|head|tail|wc|test[[:space:]]+-[fed]|git[[:space:]]+(status|diff|log|show)|((/root/bin/)?agent-secret-scan)[[:space:]]+check)([[:space:]].*)?$'; then
+  readonly_command=true
+fi
+# Permit lean-ctx's read-only modes before coordinate/path validation.  Do not
+# permit ctx_shell/run or arbitrary subcommands: those can mutate state and must
+# continue through the explicit operator-authorization gate.
+if [[ -n "$command" ]] && printf '%s' "$command" | grep -Eq '^[[:space:]]*((/usr/local/bin/|/root/bin/)?lean-ctx)[[:space:]]+(read|search|tree|map|signatures|diff|task|reference|aggressive|entropy)([[:space:]].*)?$'; then
+  readonly_command=true
+fi
+if $readonly_command && ! printf '%s' "$command" | grep -Eq '(>|>>|\btee\b|\bapply_patch\b|\bcommit\b|\bpush\b|\bdeploy\b|\brm\b|\bmv\b|\bcp\b)'; then
+  exit 0
+fi
+
+# Coordinates ledger check (enforces fail-closed path boundaries when a ledger exists).
+while (($#)); do
+  case "$1" in
+    --lane) lane="${2:-}"; shift 2 || true ;;
+    --invocation) invocation="${2:-}"; shift 2 || true ;;
+    --agent) agent="${2:-unknown}"; shift 2 || true ;;
+    *) shift || true ;;
+  esac
+done
+
+target_lane="${lane:-${AGENT_INTENT_GUARD_LANE:-${HERDR_LANE:-${HERDR_PANE:-}}}}"
+target_lane="${target_lane//[^a-zA-Z0-9_.-]/_}"
+
+is_ledger_active() {
+  local l="$1"
+  [[ -r "$l" ]] || return 1
+  local exp_ts
+  exp_ts="$(sed -nE 's/^[[:space:]]*expires:([0-9]+).*/\1/p' "$l" | head -n 1)"
+  if [[ -n "$exp_ts" ]] && (( $(date +%s) >= exp_ts )); then
+    return 1 # Expired
+  fi
+  return 0
+}
+
+candidate_ledgers=()
+if [[ -n "$target_lane" ]]; then
+  if is_ledger_active "$state_dir/coords.$agent.$target_lane"; then
+    candidate_ledgers+=("$state_dir/coords.$agent.$target_lane")
+  elif is_ledger_active "$state_dir/$agent.coords.$target_lane"; then
+    candidate_ledgers+=("$state_dir/$agent.coords.$target_lane")
+  fi
+fi
+
+if ((${#candidate_ledgers[@]} == 0)); then
+  if is_ledger_active "$state_dir/coords.$agent"; then
+    candidate_ledgers+=("$state_dir/coords.$agent")
+  elif is_ledger_active "$state_dir/$agent.coords"; then
+    candidate_ledgers+=("$state_dir/$agent.coords")
+  fi
+  for f in "$state_dir"/coords."$agent".* "$state_dir"/"$agent".coords.*; do
+    if is_ledger_active "$f"; then
+      candidate_ledgers+=("$f")
+    fi
+  done
+fi
+
+if ((${#candidate_ledgers[@]} > 0)); then
+  check_ledger_allows() {
+    local ledger="$1"
+    local exp_ts=0
+    local -a decl_paths=()
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+      if [[ "$line" =~ ^expires:([0-9]+)$ ]]; then
+        exp_ts="${BASH_REMATCH[1]}"
+        if (( $(date +%s) >= exp_ts )); then
+          return 2 # Expired
+        fi
+        continue
+      fi
+      if [[ "$line" =~ ^/ ]]; then
+        local norm_line
+        norm_line="$(realpath -m "$line" 2>/dev/null || echo "$line")"
+        decl_paths+=("${norm_line%/}")
+      fi
+    done < "$ledger"
+
+    if [[ -r "$state_file" ]]; then
+      local sf_val
+      sf_val="$(<"$state_file")"
+      if [[ "$sf_val" =~ ^allow:([0-9]+)$ ]]; then
+        if (( $(date +%s) >= ${BASH_REMATCH[1]} )); then
+          return 2
+        fi
+      elif [[ "$sf_val" == "deny" ]]; then
+        return 2
+      fi
+    fi
+
+    ((${#decl_paths[@]} == 0)) && return 1
+
+    for op in "${all_operands[@]}"; do
+      local op_norm
+      op_norm="$(realpath -m "$op" 2>/dev/null || echo "$op")"
+      op_norm="${op_norm%/}"
+      local matched=false matched_parent=false
+      for dec in "${decl_paths[@]}"; do
+        if [[ "$op_norm" == "$dec" || "$op_norm" == "$dec"/* ]]; then
+          matched=true
+          break
+        fi
+        local parent_dec
+        parent_dec="$(dirname "$dec")"
+        if [[ "$op_norm" == "$parent_dec" && "$op_norm" != "/root" && "$op_norm" != "/" ]]; then
+          matched=true
+          matched_parent=true
+        fi
+      done
+      if ! $matched; then
+        return 1
+      fi
+      if $matched_parent; then
+        local is_rec=false
+        if [[ -n "$command" ]]; then
+          if printf '%s' "$command" | grep -Eq '(^|[;&|[:space:]])(rg|find|fd)\b' || \
+             printf '%s' "$command" | grep -Eq 'grep[[:space:]]+-[a-zA-Z0-9]*[rR]' || \
+             printf '%s' "$command" | grep -Eq 'grep[[:space:]]+--recursive' || \
+             printf '%s' "$command" | grep -Eq 'ls[[:space:]]+-[a-zA-Z0-9]*R'; then
+            is_rec=true
+          fi
+        fi
+        case "${tool_identity_lower:-}" in
+          grep_search|find_by_name|search) is_rec=true ;;
+        esac
+        if $is_rec; then
+          return 3
+        fi
+      fi
+    done
+    return 0
+  }
+
+  audit_log="$state_dir/audit.log"
+  log_scope_deny() {
+    local operand="$1"
+    local decl_list="$2"
+    touch "$audit_log" 2>/dev/null || true
+    chmod 600 "$audit_log" 2>/dev/null || true
+    printf '%s agent=%s tool=%s verdict=SCOPE_DENY operand=%s prefix∈{%s}\n' \
+      "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+      "$agent" \
+      "${tool_identity:-tool}" \
+      "$operand" \
+      "$decl_list" >> "$audit_log"
+  }
+
+  allowed_by_any=false
+  last_err_code=1
+  for ledger in "${candidate_ledgers[@]}"; do
+    [[ -r "$ledger" ]] || continue
+    if check_ledger_allows "$ledger"; then
+      allowed_by_any=true
+      break
+    else
+      rc=$?
+      if [[ $rc -eq 3 ]]; then
+        last_err_code=3
+      fi
+    fi
+  done
+
+  if ! $allowed_by_any; then
+    combined_decl=()
+    for ledger in "${candidate_ledgers[@]}"; do
+      [[ -r "$ledger" ]] || continue
+      while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^/ ]]; then
+          combined_decl+=("$line")
+        fi
+      done < "$ledger"
+    done
+    decl_str=$(IFS=,; echo "${combined_decl[*]:-}")
+    first_op="${all_operands[0]:-unknown}"
+    if [[ $last_err_code -eq 2 ]]; then
+      log_scope_deny "ledger_expired" "$decl_str"
+      printf 'AGENT_INTENT_GUARD: SCOPE_DENY coordinate ledger expired\n' >&2
+      exit 1
+    elif [[ $last_err_code -eq 3 ]]; then
+      log_scope_deny "$first_op" "$decl_str"
+      printf 'AGENT_INTENT_GUARD: SCOPE_DENY recursive parent search operand=%s (not in declared coordinates: {%s})\n' "$first_op" "$decl_str" >&2
+      exit 1
+    else
+      log_scope_deny "$first_op" "$decl_str"
+      printf 'AGENT_INTENT_GUARD: SCOPE_DENY operand=%s (not in declared coordinates: {%s})\n' "$first_op" "$decl_str" >&2
+      exit 1
+    fi
+  fi
+fi
+
+# Final gate: block only when a prompt-mode analysis ran and said deny.
+# When no state file exists (prompt integration unavailable), allow —
+# agent-target-guard and lean-ctx hooks still enforce path/protection policy.
+if $state_allow; then
+  exit 0
+fi
+
+# Gemini/Antigravity do not expose a reliable prompt hook in the installed
+# configuration. Their mutation-capable tool calls therefore fail closed when
+# no short-lived operator authorization exists. Other runtimes retain their
+# existing no-prompt-hook behavior and are protected by their own gates.
+if [[ "$agent" == "gemini" || "$agent" == "agy" || "$agent" == "antigravity" ]]; then
+  echo "AGENT_INTENT_GUARD: execution blocked; explicit operator authorization is required." >&2
+  exit 1
+fi
+
+if $state_exists; then
+  echo "AGENT_INTENT_GUARD: execution blocked; explicit operator authorization is required." >&2
+  exit 1
+fi
+exit 0
