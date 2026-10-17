@@ -12,3 +12,4 @@ fce315ff-60b3-4eff-a51b-2de19fef8df0	m2.7h-brandon-widget-sizing	m2.7h	brandon	w
 3244986e-b638-40dc-8041-bb847efa3766	m2.7h-brandon-docs-sweep	m2.7h	brandon	docs-policy-contradiction-sweep	done	data/m27-docs-sweep-20261016/report.md
 b89fc378-62fc-405b-91b5-a9c0ad305274	m2.7h-brandon-inbox-f1-fix	m2.7h	brandon	inbox-candidate-cross-route-f1	done	data/m27-inbox-f1-20261016/report.md
 d8c3ca41-70d2-4c19-b277-3122fe8b54f1	m2.7h-brandon-widget-verify	m2.7h	brandon	widget-sizing-and-console-resume	running	data/m27-widget-embed-fix-20261016/report.md
+8909a925-47ba-4232-8551-b6f419fd2dba	m2.7h-brandon-quota-staleness-probe	minimax/MiniMax-M2.7-highspeed (fast)	brandon/async-1	Diagnose unmoving Codex quota across hosts	running	/tmp/pi-subagents-uid-1000/async-subagent-runs/8909a925-47ba-4232-8551-b6f419fd2dba/output-0.log
