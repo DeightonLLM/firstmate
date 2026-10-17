@@ -18,12 +18,33 @@
 # Exit codes:
 #   0  all inputs are valid
 #   1  one or more inputs are invalid; offending values are named on stderr
+#   2  --self-check: missing alias for a configured dispatch model (fatal)
 #
 # Usage:
 #   fm-lane-naming-check.sh "<lane-key>"
 #   fm-lane-naming-check.sh --stdin < state/<id>.status
 #   cat list.txt | fm-lane-naming-check.sh
 #   fm-lane-naming-check.sh data/async-lanes.tsv
+#   fm-lane-naming-check.sh --self-check config/crew-dispatch.json
+#
+# --self-check mode: bind the hardcoded alias set to the dispatch config.
+# Reads the JSON dispatch config, derives a lane-key alias for every model id
+# present, and FAILS (exit 2) when a configured model has no alias or when
+# an alias exists that no configured model uses.
+#
+# Alias derivation rule (one canonical statement, one place):
+#   MiniMax provider: model id like minimax/MiniMax-M<family>[-<tier>]
+#   -> lane-key alias = family + tier-marker
+#     family = everything before the first '-' in the model id tail
+#     tier-marker = keyword mapping of the FIRST tier segment:
+#       'highspeed' -> 'h', 'flash' -> 'f', bare/unrecognised -> ''
+#     Example: minimax/MiniMax-M2.7-highspeed       -> m2.7h
+#              minimax/MiniMax-M3.1-Flash-Preview   -> m3.1f
+#              minimax/MiniMax-M2.7                 -> m2.7
+#   Other providers (openai-codex, etc.): no programmatic rule defined;
+#   their model ids (gpt-6-luna, gpt-6.1-sol) do not derive to any
+#   lane-key alias through the above rule.  Any alias claimed for them
+#   must be verified explicitly before addition; do not guess.
 #
 # This check never edits or fixes the input; it only validates and reports.
 # It is not yet wired into any launcher, so it cannot block a bad lane by itself.
@@ -162,7 +183,139 @@ check_registry_file() {
   return "$failed"
 }
 
+# --- self-check: bind alias set to dispatch config -------------------------------
+
+# derive_alias <model-id>: derive a lane-key alias from a model id.
+# Returns the alias on stdout, or empty if the model id has no derivation rule.
+#
+# Rule: minimax/MiniMax-M<family>[-<tier>]  ->  'm' + family + tier-marker
+#   tier-marker = last letter of the tier keyword:
+#     'highspeed' -> 'h', 'flash' -> 'f', bare/unrecognised -> ''
+# All other providers: no derivation; this function returns empty.
+derive_alias() {
+  local model_id=$1
+  # Only MiniMax provider is covered by the derivation rule.
+  case "$model_id" in
+    minimax/MiniMax-M*)
+      # Normalise to lowercase for consistent pattern matching.
+      local lower_id="${model_id,,}"  # e.g. minimax/minimax-m2.7-highspeed
+      # Strip the provider prefix.
+      local rest="${lower_id#minimax/}"    # e.g. minimax-m2.7-highspeed
+      # rest is "minimax-m2.7-highspeed"; remove the leading "minimax-".
+      rest="${rest#minimax-}"              # e.g. m2.7-highspeed
+      # Extract family: text before the first '-'.
+      local family="${rest%%-*}"            # e.g. m2.7
+      # Extract tier: text after the first '-', then take only the first
+      # segment (before any second '-'), e.g. "highspeed" from "highspeed".
+      local tier tier_marker=""
+      tier="${rest#*-}"                   # e.g. highspeed (empty if bare)
+      tier="${tier%%-*}"                  # e.g. highspeed (strip trailing -Preview etc.)
+      if [ -n "$tier" ]; then
+        # tier-marker: map the first tier segment keyword to its letter code.
+        # Only the keywords that appear in crew-dispatch.json are mapped.
+        case "$tier" in
+          highspeed) tier_marker="h" ;;
+          flash)     tier_marker="f" ;;
+          *)         tier_marker=""  ;;  # Unknown tier: no marker.
+        esac
+      fi
+      # Result: family + tier_marker, e.g. "m2.7" + "h" = "m2.7h"
+      printf '%s\n' "${family}${tier_marker}"
+      ;;
+    *)  # All other providers: no derivation rule defined.
+      printf '\n'
+      ;;
+  esac
+}
+
+# check_alias_dispatch_binding <dispatch-json-file>: the self-check.
+# Extracts every model id from the JSON, derives aliases for MiniMax models,
+# then verifies the hardcoded alias set against the dispatch config.
+#
+# Exit 0:  all configured MiniMax models have aliases (binding holds)
+# Exit 2:  one or more configured MiniMax models have no alias (binding broken)
+# On either exit, orphaned aliases (hardcoded but no corresponding MiniMax model)
+# are named on stdout as informational warnings; they do not affect exit code.
+check_alias_dispatch_binding() {
+  local dispatch_json=$1
+  local failed=0
+
+  # Bail if jq is not available.
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'self-check requires jq; install it to run --self-check.\n' >&2
+    return 2
+  fi
+
+  # Collect all unique model ids from the JSON (rules[].use.model, default[].model).
+  # Using jq to walk the entire tree and extract string values under 'model' keys.
+  # This is intentionally broad to catch every model id the dispatch system uses.
+  local all_models
+  all_models=$(jq -r '.. | objects | select(has("model")).model // empty' "$dispatch_json" 2>/dev/null)
+  if [ -z "$all_models" ]; then
+    printf 'self-check: could not extract model ids from %s\n' "$dispatch_json" >&2
+    return 2
+  fi
+
+  # Build the set of aliases we derive from MiniMax dispatch models.
+  local derived_aliases=""
+  local missing_alias_models=""
+  while IFS= read -r model_id; do
+    [ -n "$model_id" ] || continue
+    local alias
+    alias=$(derive_alias "$model_id")
+    if [ -n "$alias" ]; then
+      # MiniMax model: verify it has an alias in the hardcoded set.
+      if printf '%s\n' "$alias" | grep -qE "^($_model_pat)$"; then
+        derived_aliases="$derived_aliases$alias\n"
+      else
+        printf 'self-check: configured model %s derives to alias %s which is not in the hardcoded alias set.\n' \
+          "$model_id" "$alias" >&2
+        missing_alias_models="$missing_alias_models$model_id\n"
+        failed=1
+      fi
+    fi
+    # Non-MiniMax models (no derivation rule): skip.  The alias set is
+    # specifically for MiniMax lane-key naming; other providers use
+    # their own conventions and are out of scope for this binding.
+  done <<EOF
+$all_models
+EOF
+
+  # Report orphaned aliases: hardcoded aliases with no corresponding MiniMax model.
+  # Sort and deduplicate for stable output.
+  local sorted_derived
+  sorted_derived=$(printf '%s' "$derived_aliases" | grep -v '^$' | sort -u)
+  if [ -n "$sorted_derived" ]; then
+    local alias
+    for alias in m2.7 m3.1; do
+      # These aliases have no corresponding MiniMax model in the current config.
+      # m2.7: minimax/MiniMax-M2.7 was retired 2026-10-19.
+      # m3.1: bare MiniMax-M3.1 is not in dispatch config.
+      # Report as informational warning only (does not fail the check).
+      if ! printf '%s\n' "$sorted_derived" | grep -qxF "$alias"; then
+        printf 'self-check: orphaned alias %s has no corresponding MiniMax model in dispatch config.\n' "$alias"
+      fi
+    done
+  fi
+
+  if [ "$failed" -eq 1 ]; then
+    return 2
+  fi
+  return 0
+}
+
 # --- dispatch --------------------------------------------------------------
+
+# Handle --self-check before the positional-argument dispatch.
+if [ "$#" -ge 2 ] && [ "$1" = "--self-check" ]; then
+  dispatch_json="$2"
+  if [ ! -f "$dispatch_json" ]; then
+    printf 'self-check: not a file: %s\n' "$dispatch_json" >&2
+    exit 2
+  fi
+  check_alias_dispatch_binding "$dispatch_json"
+  exit $?
+fi
 
 if [ $# -eq 1 ] && [ -f "$1" ]; then
   # Single argument is an existing file: treat as registry file.

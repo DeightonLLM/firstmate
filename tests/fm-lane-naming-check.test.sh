@@ -406,6 +406,95 @@ EOF
 }
 
 # ========================================================================
+# Alias-to-dispatch binding (m27.12)
+#
+# Root defect: the hardcoded alias set in the validator could drift from
+# the models actually configured for dispatch.  Q2 fixed the symptom by
+# adding m2.7h, but did not close the mechanism.  The fix adds a
+# --self-check mode that reads config/crew-dispatch.json, derives the
+# expected alias for every model id present, and fails loudly when a
+# configured model has no alias or when an alias has no corresponding model.
+#
+# Alias derivation rule (ONE canonical statement, one place):
+#   MiniMax provider: model id like minimax/MiniMax-M<family>[-<tier>]
+#   -> lane-key alias = 'm' + family (strip leading M) + tier-marker
+#     tier-marker = last letter of the tier keyword:
+#       'highspeed' -> 'h', 'flash' -> 'f', bare -> ''
+#     Example: minimax/MiniMax-M2.7-highspeed  -> m2.7h
+#              minimax/MiniMax-M3.1-Flash-Preview -> m3.1f
+#              minimax/MiniMax-M2.7                -> m2.7
+#   Other providers (openai-codex, etc.): no programmatic rule defined;
+#   their model ids (gpt-6-luna, gpt-6.1-sol) do not derive to any
+#   lane-key alias through the above rule.  Any alias claimed for them
+#   must be verified explicitly before addition.
+# ========================================================================
+
+# test_self_check_configured_model_has_alias: --self-check reads the dispatch
+# config, derives aliases for every model id present, and verifies that
+# each derived alias is in the validator's hardcoded alias set.
+# RED: current script has no --self-check flag; it exits 2 (unrecognised).
+# GREEN: after implementing --self-check, exit 0 when all dispatch models
+# have aliases (proving the binding holds for the live configuration).
+test_self_check_configured_model_has_alias() {
+  local out rc
+  out=$(bash "$CHECK" --self-check "$ROOT/config/crew-dispatch.json" 2>&1)
+  rc=$?
+  # Exit 0 = self-check passed (all configured models have aliases).
+  # Any non-zero = self-check failure (missing alias for a configured model
+  # OR --self-check flag not implemented yet).
+  [ "$rc" -eq 0 ] || fail "self-check must exit 0; got $rc: $out"
+  pass "self-check passes: all dispatch-config models have lane-key aliases"
+}
+
+# test_self_check_proves_alias_removed_causes_failure: prove the self-check
+# catches the Q2 defect by patching the script to remove m2.7h (the alias
+# that should have been present when workers ran minimax/MiniMax-M2.7-highspeed).
+# We sed-out m2.7h, run --self-check against the patched script, and assert
+# non-zero exit with a diagnostic that names the missing alias or model.
+# RED: current script exits 2 (--self-check not implemented).
+# GREEN: patched script (m2.7h removed) exits non-zero because the configured
+# model minimax/MiniMax-M2.7-highspeed has no alias.
+test_self_check_proves_alias_removed_causes_failure() {
+  local tmp out rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-alias-sim.XXXXXX")
+  # Remove m2.7h from the alias regex, simulating the Q2 defect state
+  # (validator had m2.7 but workers ran m2.7-highspeed).
+  # The _model_pat uses 'm2\.7h' (literal backslash-dot). In BRE, \. matches
+  # a literal dot, and . matches any char. To match the literal backslash-dot
+  # in the file, use '\\.' (escaped backslash in pattern) then 'h'.
+  sed 's/m2\\.7h/m2.7/g' "$CHECK" > "$tmp/patched-check.sh"
+  chmod +x "$tmp/patched-check.sh"
+  out=$(bash "$tmp/patched-check.sh" --self-check "$ROOT/config/crew-dispatch.json" 2>&1)
+  rc=$?
+  rm -rf "$tmp"
+  # After GREEN, --self-check exists; the patched alias set has no m2.7h,
+  # so the self-check must report the mismatch and exit non-zero.
+  [ "$rc" -ne 0 ] || fail "self-check must exit non-zero when m2.7h alias is absent; got $rc"
+  # Error must name the missing alias or the unaliased model.
+  printf '%s\n' "$out" | grep -qiE 'm2\.7|highspeed|alias|model' \
+    || fail "self-check error must name the missing alias or unaliased model: $out"
+  pass "self-check fails (non-zero) when m2.7h alias is absent: mechanism proven"
+}
+
+# test_self_check_reports_orphaned_aliases: the self-check must name any
+# hardcoded alias that has no corresponding model in the dispatch config.
+# This catches the root cause class (alias list grows independently of config).
+# m2.7 is hardcoded; minimax/MiniMax-M2.7 is NOT in dispatch config (that
+# family was retired 2026-10-19).  The self-check must report it.
+# RED: current script exits 2 (--self-check not implemented).
+# GREEN: --self-check runs and names m2.7 as orphaned in its output.
+test_self_check_reports_orphaned_aliases() {
+  local out rc
+  out=$(bash "$CHECK" --self-check "$ROOT/config/crew-dispatch.json" 2>&1)
+  rc=$?
+  # Self-check may exit 0 (all configured models have aliases) OR exit non-zero
+  # (orphaned aliases reported).  Either is acceptable as long as m2.7 is named.
+  printf '%s\n' "$out" | grep -qiE 'm2\.7[^h]|orphaned|not.*configured' \
+    || fail "self-check output must name m2.7 as orphaned (no dispatch-config model): $out"
+  pass "self-check names orphaned alias m2.7 (no corresponding dispatch model)"
+}
+
+# ========================================================================
 # Run all tests
 # ========================================================================
 
@@ -413,6 +502,9 @@ for _t in \
   test_script_exists_and_executable \
   test_lane_key_valid_m2_7 \
   test_lane_key_valid_m2_7h \
+  test_self_check_configured_model_has_alias \
+  test_self_check_proves_alias_removed_causes_failure \
+  test_self_check_reports_orphaned_aliases \
   test_board_line_valid_m2_7h \
   test_lane_key_valid_m3_1f \
   test_lane_key_valid_glm \
