@@ -9,3 +9,14 @@ __pycache__/
 *.pyc
 .env
 config/
+
+# Live channels, generated deps, external mirrors and client campaign data.
+# Live comms must never be committed or deleted.
+BRANDON-COMPUTE-COMMS/
+node_modules/
+warehouse/
+deightonllm-firstmate/
+cbd-campaign/
+h2-lawyer-parity/
+h4-inputs/
+h5-coredistro/

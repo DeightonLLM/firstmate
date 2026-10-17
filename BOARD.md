@@ -1,4 +1,22 @@
 # LIVE BOARD — who is working
+
+## 2026-10-16 — #41 resumed; Gemini repair requested
+## 2026-10-17 — LANE BOARD (model visible, convention names, cost-first routing)
+- [m2.7 @ brandon] Inbox F1 collision fix (b89fc378) — DONE, 4 real failures → 17/17
+- [m2.7 @ brandon] Inbox candidate settled-tree review (b71a2ca5) — RUNNING
+- [m2.7 @ brandon] Widget embed sizing + browser proof (fce315ff) — RUNNING
+- [m2.7 @ brandon] Lane naming + model-visibility enforcement (8e8b80dd) — RUNNING
+- [m2.7 @ brandon] Docs + policy contradiction sweep (3244986e) — DONE, 7 false claims, 2 critical in supplied policy
+- [m3.1 @ brandon] Firstmate / coordinator — working
+- [m3.1 @ brandon] CoreOps home recovery — blocked on Crisp-R
+
+Routing now cost-first: M2.7 for all worker lanes, M3.1 only for the coordinator and genuinely hard reasoning. Codex/Luna retired or exhausted; revisit if headroom returns.
+- [pi·Luna6 m @Hetz] Independent reproduction verification — complete, safe isolated run, 8/8 characterization assertions; not a fixed/deployed behavior.
+- [pi·Luna6 h @Hetz] Widget repair — blocked on actual Next.js source; accessible repo is PHP and `/tmp/wt-look` is Firstmate. Request sent to Crisp-R with correlation `luna6-widget-source-handoff-20261016`. Preserve existing lane and changes.
+- [controller @Hetz] Policy access — resolved; copies read inside workspace. All active dispatch profiles select Luna 6; operator settings untouched.
+- [controller @Hetz] Factory loop — escalate exact blockers to Crisp-R, continue other authorized eligible tickets immediately, consume replies and resume dependencies. Never stop the whole queue for one reply; no filler, duplicate owners or broadened authority.
+- Entries below are historical and must not be treated as current fleet truth.
+
 **Last update: 2026-10-05 ~18:45 UTC — LANE STANDARD LOCKED; RAG tuning FAIL-RESTORED; lanes A/B/D rewriting missing artifacts**
 
 ## 2026-10-05 ~18:45 UTC — LANE STANDARD LOCKED + RAG VERDICT
