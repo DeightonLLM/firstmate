@@ -274,6 +274,32 @@ substitute. If the extension is unavailable or the tracker is missing/fewer
 than five items, do not spawn or classify work as started; record the blocker
 and repair the intake first.
 
+### The tracker is a live view, not a history
+
+This is the half of the gate that gets failed most often, so it is stated
+separately and enforced the same way.
+
+- The tracker holds **only work that is in progress or blocked**. When an item
+  lands, is superseded, is cancelled, or is handed to another owner, remove it
+  from the tracker in the same action. Marking it completed and leaving it
+  sitting there is a defect, not tidiness.
+- A finished item left on the board is worse than no board, because it is
+  trusted. An operator reading it concludes work is outstanding when it is not.
+- Completed work belongs in the durable record instead: the backlog, the task's
+  report, the lane registry, or the fleet board's history. Never delete it from
+  the record; remove it from the *live view* only.
+- Every remaining item must name its owner, its current state, and what it is
+  waiting on. An item with no owner and no named blocker is itself stale.
+- If the tracker holds more items than are genuinely moving, that is a
+  planning failure. Shrink it rather than presenting a backlog as progress.
+- Never leave a turn ending with a question to the operator while unrelated
+  authorized work is still unstarted; route the question to its owner and
+  continue. A turn that ends with only a question and no movement is a failed
+  turn, even when the question was legitimate.
+
+`data/async-lanes.tsv` is the durable lane registry and `BOARD.md` is the
+fleet board; both are records, and neither is a substitute for this live view.
+
 ### Dispatch and supervision handoff
 
 Spawn only through `bash /path/to/firstmate/bin/fm-spawn.sh` after the profile and backend checks in section 4. Always invoke `fm-spawn.sh` with `bash`, never as a bare command resolved through `/bin/sh`; the script requires Bash (uses `${BASH_SOURCE[0]}` and `BASH_SOURCE` arrays) and will Bad-substitution error if run through POSIX sh.
