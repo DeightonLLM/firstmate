@@ -1,0 +1,139 @@
+# =============================================================================
+# Client Infrastructure Isolation Policy
+# =============================================================================
+# PURPOSE: Assert that the HD2 AnythingLLM instance never hosts or serves
+#          client-facing endpoints. The HD2 instance is internal/test-only.
+#
+# POLICY DECLARATION:
+#   The HD2 AnythingLLM instance (associated with hd2stack/vmi3238503)
+#   MUST NOT serve any endpoint that is designated as client-facing.
+#   The HD2 instance must remain reachable only internally.
+#
+# DESIGN: This file is the authoritative policy, not hardcoded IPs.
+#   When a service legitimately moves, edit this file deliberately.
+#   The check script reads this file and asserts the rules.
+#
+# =============================================================================
+
+version: 1
+policy_id: client-infra-isolation
+declared: 2026-10-17
+source: m27.2 ticket directive
+
+# -----------------------------------------------------------------------------
+# HOST CLASSIFICATION
+# -----------------------------------------------------------------------------
+# Each host is classified as one of:
+#   - test_only: HD2-internal/test infrastructure (must NOT serve clients)
+#   - client_infra: Approved client-serving infrastructure
+#   - internal_only: Approved internal-only services
+#
+# The check asserts: no client-facing endpoint may resolve to a test_only host.
+# -----------------------------------------------------------------------------
+
+hosts:
+  # HD2 internal infrastructure - TEST ONLY, never client-facing
+  - id: hd2stack
+    classification: test_only
+    canonical_hostname: vmi3238503
+    public_aliases:
+      - hd2stack.dubzai.com
+      - dash.hd2.ai
+    notes: >
+      HD2 AnythingLLM instance runs here per historical inventory.
+      This host MUST NOT serve client-facing endpoints.
+
+  - id: srv797124
+    classification: test_only
+    canonical_hostname: srv797124
+    notes: >
+      HD2.ai edge/review host - HD2 internal only.
+
+  - id: controller-panel
+    classification: internal_only
+    canonical_hostname: vmi3196300
+    notes: HD2 controller infrastructure - internal only.
+
+  - id: controller
+    classification: internal_only
+    notes: Local controller host - tooling, not a service.
+
+  # Client infrastructure - these MAY serve client-facing endpoints
+  - id: brandon-compute
+    classification: client_infra
+    canonical_hostname: brandon-compute
+    role: Brandon compute plane - scraping, enrichment, workers
+
+  - id: brandon-hub
+    classification: client_infra
+    canonical_hostname: srv1856614
+    role: Brandon hub - public apps and control plane
+
+  - id: srv1137994
+    classification: client_infra
+    canonical_hostname: srv1137994-aminolifesciences
+    role: Brandon legacy VPS - edge/control
+
+  - id: whoosh-runtime
+    classification: client_infra
+    notes: Whoosh project host (coordinates may be UNKNOWN)
+
+# -----------------------------------------------------------------------------
+# CLIENT-FACING ENDPOINT DECLARATIONS
+# -----------------------------------------------------------------------------
+# These domains/routes are explicitly designated as client-facing.
+# An endpoint is client-facing if it serves end users or client applications.
+# -----------------------------------------------------------------------------
+
+client_endpoints:
+  - domain: elevatesci.com
+    type: public_site
+    notes: Elevate Life Sci public website
+
+  - domain: www.elevatesci.com
+    type: public_site
+    notes: Elevate Life Sci www alias
+
+  - domain: agents.elevatesci.com
+    type: application
+    notes: Elevate customer dashboard/application
+
+  - domain: core-distro.com
+    type: public_site
+    notes: Core Distro public website
+
+  - domain: www.core-distro.com
+    type: public_site
+    notes: Core Distro www alias
+
+  - domain: cbd-data.com
+    type: public_site
+    notes: CBD-Data public website
+
+  - domain: www.cbd-data.com
+    type: public_site
+    notes: CBD-Data www alias
+
+  - domain: whooshperformance.com
+    type: public_site
+    notes: Whoosh Performance public website
+
+  - domain: www.whooshperformance.com
+    type: public_site
+    notes: Whoosh Performance www alias
+
+# -----------------------------------------------------------------------------
+# INTERNAL-ONLY SERVICE DECLARATIONS
+# -----------------------------------------------------------------------------
+# These endpoints are explicitly approved as internal-only.
+# They should NOT be reachable from public internet.
+# -----------------------------------------------------------------------------
+
+internal_only_endpoints:
+  - domain: llm.hd2.ai
+    classification: hd2_internal
+    notes: HD2 internal LLM service - not for client use
+
+  - domain: panel.dubzai.com
+    classification: hd2_internal
+    notes: HD2 admin panel - internal access only
