@@ -50,6 +50,22 @@ test_lane_key_valid_m2_7() {
   pass "m2.7-hd2-build passes"
 }
 
+# m2.7h is MiniMax M2.7 Highspeed, the tier live worker lanes actually run. Without it the
+# validator rejected every real lane key we dispatched, which is the defect Q2 fixed.
+test_lane_key_valid_m2_7h() {
+  local out rc
+  out=$(bash "$CHECK" "m2.7h-brandon-build" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "valid key m2.7h-brandon-build should pass, got exit $rc: $out"
+  pass "m2.7h-brandon-build passes"
+}
+
+test_board_line_valid_m2_7h() {
+  local out rc
+  out=$(bash "$CHECK" "[m2.7h @ brandon] widget fix — working" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "valid board line [m2.7h @ brandon] should pass, got exit $rc: $out"
+  pass "[m2.7h @ brandon] board line passes"
+}
+
 test_lane_key_valid_m3_1f() {
   local out rc
   out=$(bash "$CHECK" "m3.1f-dubz-luna6comms" 2>&1); rc=$?
@@ -396,6 +412,8 @@ EOF
 for _t in \
   test_script_exists_and_executable \
   test_lane_key_valid_m2_7 \
+  test_lane_key_valid_m2_7h \
+  test_board_line_valid_m2_7h \
   test_lane_key_valid_m3_1f \
   test_lane_key_valid_glm \
   test_lane_key_valid_gem \

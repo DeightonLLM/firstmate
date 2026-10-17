@@ -1,0 +1,14 @@
+# Async lane registry — every dispatched lane has a convention name
+# Format: run_id<TAB>lane_key<TAB>model<TAB>surface<TAB>task<TAB>state<TAB>output
+# lane_key follows AGENT-TODO-PROMPT-STYLE.md: <model>-<surface>-<task>, lowercase, no spaces.
+# Owner: firstmate. Write a row at dispatch, update `state` at every phase change, never delete a row
+# while a run exists. Deleting a row whose run is gone is a reap, not a cleanup.
+# run_id		lane_key					model			surface	task									state		output
+b71a2ca5-f5eb-43e8-b249-560bc614ec4c	m2.7h-brandon-inbox-review	m2.7h	brandon	inbox-candidate-settled-review	done	data/m27-review-inbox-settled-20261017/report.md
+fce315ff-60b3-4eff-a51b-2de19fef8df0	m2.7h-brandon-widget-sizing	m2.7h	brandon	widget-embed-sizing-original	died-429-partial-measurements	data/m27-widget-embed-fix-20261016/report.md
+8e8b80dd-4387-460b-a2dd-67ee2f3ac47f	m2.7h-brandon-naming-enforce	m2.7h	brandon	lane-naming-and-model-visibility	done	data/m27-lane-naming-enforcement.md
+77fa069b-89da-4c9f-9037-bbb78b5c8c01	m2.7h-brandon-inbox-evidence	m2.7h	brandon	inbox-candidate-evidence-regen	done-artifacts-verified	data/m27-inbox-evidence-regen-20261017/report.md
+8351630f-a0fd-45f0-8694-46939866c3aa	m2.7h-brandon-inbox-review	m2.7h	brandon	inbox-candidate-review-void	superseded	data/m27-review-inbox-candidate.md
+3244986e-b638-40dc-8041-bb847efa3766	m2.7h-brandon-docs-sweep	m2.7h	brandon	docs-policy-contradiction-sweep	done	data/m27-docs-sweep-20261016/report.md
+b89fc378-62fc-405b-91b5-a9c0ad305274	m2.7h-brandon-inbox-f1-fix	m2.7h	brandon	inbox-candidate-cross-route-f1	done	data/m27-inbox-f1-20261016/report.md
+d8c3ca41-70d2-4c19-b277-3122fe8b54f1	m2.7h-brandon-widget-verify	m2.7h	brandon	widget-sizing-and-console-resume	running	data/m27-widget-embed-fix-20261016/report.md

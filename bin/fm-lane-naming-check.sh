@@ -12,7 +12,7 @@
 #   The lane_key segments are cross-checked against the separate model and
 #   surface columns.
 #
-# Model aliases:  m2.7, m3.1f, luna6, glm5.3f, gem38f, pi
+# Model aliases:  m2.7h (MiniMax M2.7 Highspeed), m2.7, m3.1f, luna6, glm5.3f, gem38f, pi
 # Surface aliases: dubz, hd2, brandon, evps, firstmate
 #
 # Exit codes:
@@ -30,11 +30,11 @@
 set -u
 
 # Canonical sets derived from AGENT-TODO-PROMPT-STYLE.md.
-# Model aliases:  m2.7, m3.1f, luna6, glm5.3f, gem38f, pi
+# Model aliases:  m2.7h (MiniMax M2.7 Highspeed), m2.7, m3.1f, luna6, glm5.3f, gem38f, pi
 # Surface aliases: dubz, hd2, brandon, evps, firstmate
 
 # Build anchored regex patterns (anchored so partial matches are not accepted).
-_model_pat='m2\.7|m3\.1f|luna6|glm5\.3f|gem38f|pi'
+_model_pat='m2\.7h|m2\.7|m3\.1f|luna6|glm5\.3f|gem38f|pi'
 _surface_pat='dubz|hd2|brandon|evps|firstmate'
 
 # Lane key: <model>-<surface>-<task>

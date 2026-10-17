@@ -35,7 +35,8 @@ A notification is not delivery. A "delivered" report is not receipt. If you cann
 The async panel renders only the lane key. An unnamed lane is invisible to the operator, which is the defect this rule prevents.
 
 - Lane key: `<model>-<surface>-<task>`, lowercase, no spaces. Example: `m2.7-brandon-widget-sizing`.
-- Model aliases: `m2.7`, `m3.1`, `m3.1f`, `luna6`, `glm5.3f`, `gem38f`, `pi`.
+- Model aliases: `m2.7h`, `m2.7`, `m3.1`, `m3.1f`, `luna6`, `glm5.3f`, `gem38f`, `pi`.
+  `m2.7h` is MiniMax M2.7 Highspeed, the tier live worker lanes actually run.
 - Surface aliases: `brandon`, `hd2`, `dubz`, `evps`, `firstmate`.
 - To-Do board line: `[<model> @ <surface>[/<pane>}] <action> — <state>`.
 - Dispatch async lanes as a workflow whose per-child key is the lane key, so the panel shows the name. A direct single-child dispatch shows only the agent kind and is not acceptable for work the operator must watch.

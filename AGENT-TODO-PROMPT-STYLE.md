@@ -16,7 +16,10 @@ gem38f-hd2-masterlist    Gemini 3.8 Flash on HD2, master task list
 m3.1-brandon-wo0011      MiniMax M3.1 on Brandon, WO-0011
 ```
 
-Model aliases: `m3.1f`, `m2.7`, `luna6`, `glm5.3f`, `gem38f`, `pi`.
+Model aliases: `m3.1f`, `m2.7h`, `m2.7`, `luna6`, `glm5.3f`, `gem38f`, `pi`.
+`m2.7h` denotes MiniMax M2.7 **Highspeed**; the `h` suffix marks the highspeed tier, exactly as `f`
+marks the flash tier in `m3.1f`. Worker lanes currently run `m2.7h`, so a key or board line reading
+`m2.7` for a live worker is wrong, not merely imprecise.
 Surface aliases: `dubz`, `hd2`, `brandon`, `evps`, `firstmate`.
 Add a pane suffix only when the Captain must find or guide a live lane: `gem38f-hd2-wk-p2`.
 
