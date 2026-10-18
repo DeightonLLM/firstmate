@@ -84,6 +84,14 @@ External measurement on 2026-10-18 shows:
 > `data.whooshperformance.com` does NOT RESOLVE (curl exit, no HTTP response at all)
 > `lc.whooshperformance.com` does NOT RESOLVE (curl exit, no HTTP response at all)
 
+> **`[OPEN CONFLICT C]`** — this discrepancy is UNRESOLVED and must not be silently
+> collapsed to either reading. It changes the repair: a `502` implies a reachable origin
+> with a failing upstream, while NXDOMAIN/non-resolution implies no reachable origin at
+> all. Confirm which is true before scoping any fix. Both readings are recorded here
+> because each is sourced — v3 §2.5 and the Captain's v1.0 say 502; direct measurement
+> from the Hetzner host on 2026-10-18 says the names do not resolve. Resolution
+> requires an externally-resolving DNS check with method and timestamp recorded.
+
 **The discrepancy matters.** A `502` means a host exists but the upstream is failing — the origin is addressable and potentially repairable. `NOT RESOLVING` means the DNS records themselves do not exist — there is no host to repair, no upstream to investigate, and the repair path is DNS record creation, not upstream configuration.
 
 Both observations may be true at different times; however, the current measured state (2026-10-18) is **non-resolving**, and this brief records that state as authoritative for its date. The v1.0 text is preserved unchanged. Resolution of the discrepancy requires fresh measurement with a timestamp and the specific DNS method used.
