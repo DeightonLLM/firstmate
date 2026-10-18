@@ -13,3 +13,9 @@ fce315ff-60b3-4eff-a51b-2de19fef8df0	m2.7h-brandon-widget-sizing	m2.7h	brandon	w
 b89fc378-62fc-405b-91b5-a9c0ad305274	m2.7h-brandon-inbox-f1-fix	m2.7h	brandon	inbox-candidate-cross-route-f1	done	data/m27-inbox-f1-20261016/report.md
 d8c3ca41-70d2-4c19-b277-3122fe8b54f1	m2.7h-brandon-widget-verify	m2.7h	brandon	widget-sizing-and-console-resume	running	data/m27-widget-embed-fix-20261016/report.md
 8909a925-47ba-4232-8551-b6f419fd2dba	m2.7h-brandon-quota-staleness-probe	minimax/MiniMax-M2.7-highspeed (fast)	brandon/async-1	Diagnose unmoving Codex quota across hosts	running	/tmp/pi-subagents-uid-1000/async-subagent-runs/8909a925-47ba-4232-8551-b6f419fd2dba/output-0.log
+28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-core-distro	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	adversarial PRD audit, Core Distro
+28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-elevate	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	adversarial PRD audit, Elevate
+28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-cbd-data	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	adversarial PRD audit, CBD-Data
+28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-whoosh	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	adversarial PRD audit, Whoosh
+28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-cross-cutting	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	four cross-cutting UNKNOWNs
+28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-fleet-integrity	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	independent reviewer of sibling lanes
