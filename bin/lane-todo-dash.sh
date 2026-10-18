@@ -149,10 +149,24 @@ if [ "${1:-}" = "serve" ]; then
 fi
 OUT="${1:-index.html}"
 TMP="${OUT}.tmp.$$"
-trap 'rm -f -- "$TMP"' EXIT
+cleanup() {
+  rm -f -- "$TMP"
+  [ -z "${BACKLOG_TMP:-}" ] || rm -f -- "$BACKLOG_TMP"
+  [ -z "${POINTERS_TMP:-}" ] || rm -f -- "$POINTERS_TMP"
+}
+trap cleanup EXIT
 
 html() {
   local value="$1"
+  while [[ "$value" =~ https?://[^[:space:]]+ ]]; do
+    value="${value/${BASH_REMATCH[0]}/[external URL omitted]}"
+  done
+  while [[ "$value" =~ www\.[^[:space:]]+ ]]; do
+    value="${value/${BASH_REMATCH[0]}/[external URL omitted]}"
+  done
+  while [[ "$value" =~ mailto:[^[:space:]]+ ]]; do
+    value="${value/${BASH_REMATCH[0]}/[external URL omitted]}"
+  done
   value=${value//&/\&amp;}; value=${value//</\&lt;}; value=${value//>/\&gt;}
   value=${value//\"/\&quot;}; value=${value//\'/\&#39;}
   printf '%s' "$value"
@@ -203,6 +217,49 @@ age_for() {
   else printf '%sd ago' "$((delta / 86400))"; fi
 }
 
+format_bytes() {
+  awk -v n="${1:-0}" 'BEGIN {
+    split("B KiB MiB GiB TiB", units, " ")
+    i = 1
+    while (n >= 1024 && i < 5) { n /= 1024; i++ }
+    if (i == 1) printf "%.0f %s", n, units[i]
+    else printf "%.1f %s", n, units[i]
+  }'
+}
+
+tree_bytes() {
+  local path="$1" bytes
+  if [ -d "$path" ] && [ ! -L "$path" ]; then
+    bytes=$(du -sb -- "$path" 2>/dev/null | awk 'NR == 1 {print $1}')
+  else
+    bytes=$(stat -c %s -- "$path" 2>/dev/null || printf '0')
+  fi
+  printf '%s' "${bytes:-0}"
+}
+
+warehouse_tree() { # <directory>
+  local directory="$1" child name bytes age
+  local -a children=()
+  [ -d "$directory" ] || return 0
+  mapfile -d '' -t children < <(find "$directory" -mindepth 1 -maxdepth 1 -print0 2>/dev/null | sort -z)
+  for child in "${children[@]}"; do
+    name="${child##*/}"
+    bytes=$(tree_bytes "$child")
+    age=$(age_for "$child")
+    if [ -d "$child" ] && [ ! -L "$child" ]; then
+      printf '<li><details open><summary>%s <small class="muted">directory · %s · %s</small></summary><ul>\n' \
+        "$(html "$name")" "$(format_bytes "$bytes")" "$(html "$age")"
+      warehouse_tree "$child"
+      printf '</ul></details></li>\n'
+    else
+      node_kind=file
+      [ ! -L "$child" ] || node_kind=pointer
+      printf '<li>%s <small class="muted">%s · %s · %s</small></li>\n' \
+        "$(html "$name")" "$node_kind" "$(format_bytes "$bytes")" "$(html "$age")"
+    fi
+  done
+}
+
 last_file() {
   local direction="$1" file selected="" newest=0 epoch
   shopt -s globstar nullglob
@@ -228,6 +285,39 @@ lane_status() { # <task>
   esac
   printf '%s' "$state"
 }
+
+# Pull the authoritative backlog without changing the controller source. Keep
+# the last complete copy on HD2 so a temporary SSH failure remains visible.
+BACKLOG_CACHE="$STATE/dash-live-url-cache/backlog.md"
+BACKLOG_STATUS=""
+umask 077
+mkdir -p -- "$(dirname "$BACKLOG_CACHE")"
+chmod 700 "$(dirname "$BACKLOG_CACHE")" 2>/dev/null || :
+BACKLOG_TMP="${BACKLOG_CACHE}.tmp.$$"
+if ssh -o BatchMode=yes -o ConnectTimeout=5 100.117.47.27 \
+  'cat -- /root/agent-work/deightonllm-firstmate/data/backlog.md' > "$BACKLOG_TMP" 2>/dev/null \
+  && [ -s "$BACKLOG_TMP" ]; then
+  mv -f -- "$BACKLOG_TMP" "$BACKLOG_CACHE"
+  chmod 600 "$BACKLOG_CACHE" 2>/dev/null || :
+  BACKLOG_STATUS="live from controller · refreshed $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+else
+  rm -f -- "$BACKLOG_TMP"
+  if [ -f "$BACKLOG_CACHE" ]; then
+    chmod 600 "$BACKLOG_CACHE" 2>/dev/null || :
+    cache_epoch=$(stat -c %Y -- "$BACKLOG_CACHE" 2>/dev/null || printf '0')
+    cache_now=$(date +%s)
+    cache_age=$((cache_now - cache_epoch)); [ "$cache_age" -ge 0 ] || cache_age=0
+    BACKLOG_STATUS="stale: ${cache_age}s · controller unavailable"
+  else
+    BACKLOG_STATUS="unavailable · controller unreachable and no cache"
+  fi
+fi
+WAREHOUSE_ROOT="$(cd "$FM_HOME/.." 2>/dev/null && pwd)/warehouse"
+SPINE_ROOT="$WAREHOUSE_ROOT/SPINE"
+POINTERS_TMP="$STATE/dash-live-url-cache/pointers.tmp.$$"
+find "$FM_HOME/data" "$SPINE_ROOT" -maxdepth 4 \
+  \( -type l -o -type f \( -iname '*pointer*' -o -iname '*warehouse*' -o -iname '*spine*' \) \) \
+  -print0 2>/dev/null | sort -z > "$POINTERS_TMP" || :
 
 generated=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 pane_file="${HERDR_PANE_LIST_FILE:-}"
@@ -327,11 +417,19 @@ HTML
   printf '</tbody></table></section>\n'
 
   printf '<section class="card wide"><h2>Tickets by priority</h2><table><thead><tr><th>Priority</th><th>Ticket</th><th>Claim</th><th>Blocker</th></tr></thead><tbody>\n'
-  backlog="$FM_HOME/data/backlog.md"; priority=unassigned; ticket=""; claim=""; blocker=""; ticket_state=open; ticket_count=0; ticket_done_count=0
+  printf '<p class="muted">Backlog: %s</p>\n' "$(html "$BACKLOG_STATUS")"
+  backlog="$BACKLOG_CACHE"; priority=unassigned; ticket=""; claim=""; blocker=""; ticket_state=open; ticket_count=0; ticket_done_count=0
   emit_ticket() {
     [ -n "$ticket" ] || return 0
-    printf '<tr class="ticket-row" data-state="%s" data-priority="%s" data-host="all"><td>%s</td><td class="ticket"><details><summary>%s</summary><div class="ticket-detail"><p><strong>Claim:</strong> %s<br><strong>Blocker:</strong> %s</p><form class="feedback-form" action="/feedback" method="post"><input type="hidden" name="ticket" value="%s"><label>Feedback on this ticket<textarea name="comment" maxlength="8000" required></textarea></label><button type="submit">Send feedback</button><span class="feedback-status" aria-live="polite"></span></form></div></details></td><td>%s</td><td class="blocker">%s</td></tr>\n' \
-      "$(html "$ticket_state")" "$(html "$priority")" "$(html "$priority")" "$(html "$ticket")" "$(html "${claim:-unclaimed}")" \
+    local ticket_host="all"
+    case "${ticket,,}" in
+      *elevate*|*staging*|*core-distro*|*whoosh*|*cbd*|*srv1137994*) ticket_host="elevate-vps" ;;
+      *hetz*|*brandon*|*100.106.6.22*) ticket_host="hetzner" ;;
+      *hd2*|*ttft*|*surface*|*firstmate*) ticket_host="hd2stack" ;;
+      *controller*|*kvm1*) ticket_host="controller" ;;
+    esac
+    printf '<tr class="ticket-row" data-state="%s" data-priority="%s" data-host="%s"><td>%s</td><td class="ticket"><details><summary>%s</summary><div class="ticket-detail"><p><strong>Claim:</strong> %s<br><strong>Blocker:</strong> %s</p><form class="feedback-form" action="/feedback" method="post"><input type="hidden" name="ticket" value="%s"><label>Feedback on this ticket<textarea name="comment" maxlength="8000" required></textarea></label><button type="submit">Send feedback</button><span class="feedback-status" aria-live="polite"></span></form></div></details></td><td>%s</td><td class="blocker">%s</td></tr>\n' \
+      "$(html "$ticket_state")" "$(html "$priority")" "$(html "$ticket_host")" "$(html "$priority")" "$(html "$ticket")" "$(html "${claim:-unclaimed}")" \
       "$(html "${blocker:-none}")" "$(html "$ticket")" "$(html "${claim:-unclaimed}")" "$(html "${blocker:-none}")"
     ticket_count=$((ticket_count + 1))
     if [ "$ticket_state" = 'done' ]; then ticket_done_count=$((ticket_done_count + 1)); fi
@@ -383,6 +481,44 @@ HTML
   done
   printf '</section>\n'
   printf '<section class="card"><h2>Capacity</h2><div class="capacity">Declared %s · Running %s</div><small>Running counts working panes from Herdr pane list.</small></section>\n' "$declared" "$running"
+
+  printf '<section class="card wide"><h2>Warehouse map</h2><p class="muted">SPINE = shared append-only; LOCAL = this host only, never synced.</p><ul class="warehouse-tree">\n'
+  root="$FM_HOME/data/end-to-end-20261012"
+  if [ -d "$root" ]; then
+    bytes=$(tree_bytes "$root"); age=$(age_for "$root")
+    printf '<li><details open><summary>data/end-to-end-20261012 <small class="muted">directory · %s · %s</small></summary><ul>\n' \
+      "$(format_bytes "$bytes")" "$(html "$age")"
+    warehouse_tree "$root"
+    printf '</ul></details></li>\n'
+  else
+    printf '<li>data/end-to-end-20261012 <small class="muted">not present on this host</small></li>\n'
+  fi
+  if [ -d "$SPINE_ROOT" ]; then
+    bytes=$(tree_bytes "$SPINE_ROOT"); age=$(age_for "$SPINE_ROOT")
+    printf '<li><details open><summary>warehouse/SPINE <small class="muted">directory · %s · %s</small></summary><ul>\n' \
+      "$(format_bytes "$bytes")" "$(html "$age")"
+    warehouse_tree "$SPINE_ROOT"
+    printf '</ul></details></li>\n'
+  else
+    printf '<li>warehouse/SPINE <small class="muted">not present on this host</small></li>\n'
+  fi
+  pointer_count=0
+  while IFS= read -r -d '' pointer; do
+    [ -n "$pointer" ] || continue
+    pointer_count=$((pointer_count + 1))
+    case "$pointer" in
+      "$FM_HOME"/*) pointer_label="LOCAL/${pointer#"$FM_HOME"/}" ;;
+      "$WAREHOUSE_ROOT"/*) pointer_label="warehouse/${pointer#"$WAREHOUSE_ROOT"/}" ;;
+      *) pointer_label="${pointer##*/}" ;;
+    esac
+    bytes=$(tree_bytes "$pointer"); age=$(age_for "$pointer")
+    printf '<li>%s <small class="muted">per-domain pointer · %s · %s</small></li>\n' \
+      "$(html "$pointer_label")" "$(format_bytes "$bytes")" "$(html "$age")"
+  done < "$POINTERS_TMP"
+  if [ "$pointer_count" -eq 0 ]; then
+    printf '<li class="muted">No per-domain warehouse pointers found</li>\n'
+  fi
+  printf '</ul></section>\n'
 
   printf '<section class="card wide"><h2>Latest gate status</h2><table><thead><tr><th>Gate</th><th>Status</th></tr></thead><tbody>\n'
   declare -A gates=() gate_ranks=()
@@ -456,5 +592,6 @@ HTML
 HTML
 } > "$TMP"
 mv -f -- "$TMP" "$OUT"
+rm -f -- "$POINTERS_TMP"
 trap - EXIT
 printf 'generated: %s\n' "$OUT"
