@@ -1,25 +1,32 @@
 # Elevate Life Sci — Domain Infrastructure PRD v1.0
 
-> ## REMEDIATION UPDATE — 2026-10-18 (supersedes the "still open" status below)
+> ## PARTIAL REMEDIATION — 2026-10-18. NOT CLOSED. REOPENED.
 >
-> HD2Firstmate remediated the unauthenticated console on 2026-10-17. Independently
-> re-measured from the Hetzner host on 2026-10-18:
+> An earlier revision of this file marked the console RESOLVED on the strength of a
+> public-edge 401. That was incomplete and is corrected here.
 >
 > ```
-> https://agents.elevatesci.com/                            -> HTTP/2 401
->   www-authenticate: Basic realm="Elevate Operations Console"
-> https://agents.elevatesci.com/embed/anythingllm-chat-widget.min.js -> 200
-> https://agents.elevatesci.com/api/embed/<embed-id>        -> 200
-> https://elevatesci.com/                                   -> 200
+> https://agents.elevatesci.com/    -> HTTP/2 401  (Cloudflare edge, port 443 only)
 > ```
 >
-> The security exposure is CLOSED as of 2026-10-17. Public embed and customer chat
-> paths were verified still serving. Every row below that describes the console as
-> reachable without an auth wall is HISTORICAL, describing the state recorded in the
-> 2026-09-14 delivery map, not the current state. The v3-versus-reality CONFLICT
-> itself remains OPEN because v3 section 2.2 still describes only a potential portal
-> while real console software exists — that contradiction is about documentation, not
-> about an open exposure.
+> HD2 independently re-probed and confirmed the exposure is NOT closed:
+>
+> ```
+> http://100.69.211.43:8000/  -> 200, nginx, www-authenticate header ABSENT,
+>                                body contains Excalidraw
+> ```
+>
+> The auth wall covers only the public 443 edge. The Tailscale-internal service on
+> port 8000 is still unauthenticated and is NOT covered by that wall. The absence of
+> a www-authenticate header is affirmative evidence, not merely unobserved.
+>
+> Additionally the PRD's own description of this surface is inaccurate: it is recorded
+> as "status/job APIs" but port 8000 serves an Excalidraw whiteboard UI.
+>
+> Required before any production-parity claim: authenticate :8000 behind an auth wall,
+> or restrict it to loopback or an authenticated Tailscale ACL; then re-probe from the
+> untrusted side and confirm 401 or non-routability. NOT YET DONE.
+
 
 **Client:** Brandon / Elevate Life Sci
 **Primary domain:** `elevatesci.com`
@@ -104,7 +111,7 @@ Status table using only `DELIVERED` / `EVIDENCED` / `IN_PROGRESS` / `BLOCKED` / 
 | Row | Status | Label | Evidence |
 |---|---|---|---|
 | Dashboard authentication/allowlisting | **UNKNOWN** | `[OPEN CONFLICT]` | **CONFLICT A:** `ELEVATE_NGINX_ROUTE_20260919.md` §Rollback: "Dashboard authentication/allowlisting also remains unresolved." **vs.** v3 §2.2 describes an authenticated portal as "POTENTIAL" only (not yet existing). Both sources agree the auth model is not approved; the existence of an unauthenticated dashboard is itself the conflict. No auth model is approved. |
-| Elevate operations console — reachable without an auth wall (HISTORICAL, remediated 2026-10-17) | **RESOLVED** | `[OPEN CONFLICT]` | **CONFLICT B:** v3 §2.2 lists "potential authenticated portal" as hypothetical only. `PRD_DELIVERY_MAP.md` lines 48–53 state an Elevate OPERATIONS CONSOLE EXISTS today, is reachable WITHOUT an auth wall, and exposes unauthenticated status/job APIs — unlike the Basic-Auth-protected Core-Distro agents console. The software v3 treated as potential is real and unauthenticated. Source: `PRD_DELIVERY_MAP.md` lines 48–53 (authoritative). **This is the highest-risk open item for this domain.** |
+| Elevate operations console — Tailscale :8000 still unauthenticated; public 443 edge only (2026-10-18 re-probe) | **BLOCKED** | `[OPEN CONFLICT]` | **CONFLICT B:** v3 §2.2 lists "potential authenticated portal" as hypothetical only. `PRD_DELIVERY_MAP.md` lines 48–53 state an Elevate OPERATIONS CONSOLE EXISTS today, is reachable WITHOUT an auth wall, and exposes unauthenticated status/job APIs — unlike the Basic-Auth-protected Core-Distro agents console. The software v3 treated as potential is real and unauthenticated. Source: `PRD_DELIVERY_MAP.md` lines 48–53 (authoritative). **This is the highest-risk open item for this domain.** |
 | Elevate operations console — unauthenticated status/job APIs exposed | **BLOCKED** | `[OPEN CONFLICT]` | Same as above; `BRANDON REWORK/evidence/BR-SAAS-PARITY-20260918/console-parity-report.md` cited by `PRD_DELIVERY_MAP.md` as evidence; that file is NOT present in the workspace. The finding is reproduced from the authoritative ledger, not independently verified. |
 | Elevate-specific application source audit (Gate C) | **UNKNOWN** | `[PER v3]` | v3 PRD §5 Gate C: "For each project, record: repository, framework and runtime, build process, required services, required environment variables, database engine and schema tool, file-storage behavior, scheduled jobs, queue requirements, browser or scraping requirements, external API dependencies." No Gate C artifact is evidenced for Elevate in the traceability ledger. |
 | Elevate data classification (Gate D) | **UNKNOWN** | `[PER v3]` | v3 PRD §5 Gate D: "Every persistent data set must be labeled: Public / Internal / Confidential / Restricted." No Gate D artifact is evidenced for Elevate. PHI, prescription data, payment-card data explicitly prohibited without separate approval (v3 §2.2, §4). |
@@ -304,7 +311,7 @@ Checkboxes traceable to v3 PRD sections. Each criterion is labeled. Marked `UNKN
 
 ### 8.3 Operations Console Security `[OPEN CONFLICT B]` (HIGHEST RISK)
 
-- [x] Elevate operations console is NOT reachable without an auth wall — **[RESOLVED 2026-10-17]**, independently re-measured HTTP 401 on 2026-10-18 `[OPEN CONFLICT B]` — `PRD_DELIVERY_MAP.md` lines 48–53: console reachable without auth wall; `console-parity-report.md` cited but absent
+- [ ] Elevate operations console NOT reachable without auth — **[BLOCKED]** public 443 returns 401 but internal Tailscale :8000 returns 200 with no www-authenticate; re-probe required after remediation `[OPEN CONFLICT B]` — `PRD_DELIVERY_MAP.md` lines 48–53: console reachable without auth wall; `console-parity-report.md` cited but absent
 - [ ] Status/job APIs on the operations console require authentication — **[BLOCKED]** `[OPEN CONFLICT B]` — same source
 - [ ] Security remediation is accepted and verified — **UNKNOWN** — requires accepted artifact confirming the fix
 
