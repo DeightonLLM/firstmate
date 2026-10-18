@@ -2,9 +2,9 @@
 
 **Domain:** `whooshperformance.com`
 **Date:** 2026-10-18
-**PRD this derives from:** `whoosh-performance-wp-data-outreach-prd-v1.0.md` (authoritative; 1616 lines)
+**PRD this derives from:** `whoosh-performance-wp-data-outreach-prd-v1.0.md` (authoritative; updated with security hardening)
 **House template:** `BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` (v3.0, 2026-08-04)
-**Status verdict:** BLOCKED — coordinates missing; no eligible implementation lane exists.
+**Status verdict:** STAGED & UNBLOCKED — Frontend bundle deployed to Elevate VPS (`staging.whooshperformance.com`); enrichment targeted on Hetzner; backup on Namecheap.
 
 ---
 
@@ -13,13 +13,13 @@
 | Field | Value |
 |---|---|
 | Domain | `whooshperformance.com` |
-| Authoritative PRD | `data/prds/whoosh-performance-wp-data-outreach-prd-v1.0.md` (v1.0, 2026-10-17) |
+| Authoritative PRD | `data/prds/whoosh-performance-wp-data-outreach-prd-v1.0.md` (v1.0 merged with 2026-10-18 hardening updates) |
 | Project code | `whoosh` |
-| Current measured state | Parked domain on Hostinger DNS; data/lc subdomains do not resolve; no WordPress, no data service, no Aspire evidence |
+| Current measured state | Frontend STAGED on Elevate VPS (`100.69.211.43:80`, `staging.whooshperformance.com` HTTP 200 OK); enrichment targeted on Hetzner (`100.106.6.22`); backups targeted on Namecheap VPS |
 | PRD-v3 placement | Project 3 of 4 in Phase 5 rollout order (after Core Distro, Elevate) |
-| Domain status | BLOCKED — `COORDINATES_MISSING` per PRD_TRACEABILITY.md |
+| Domain status | STAGED — Frontend live on staging; DNS public delegation for `staging.whooshperformance.com` pending edge CNAME/A record |
 | Bot routing status | UNKNOWN — do not claim completion without accepted artifact |
-| Phase 0 eligibility | NOT ELIGIBLE — Gates A–E cannot open without coordinates |
+| Phase 0 eligibility | UNBLOCKED — Source bundle and staging host supplied by Captain |
 
 ---
 
