@@ -17,7 +17,7 @@
 
 HD2 will implement CBD-Data's public application on Hostinger, its scraping, enrichment, AI execution, and batch-processing workloads on Hetzner, and its encrypted backup and recovery material on a dedicated Namecheap target, per the architecture in the canonical v3 PRD.
 
-### 0.1 Application Scope (PER v3 §2.4)
+### 0.1 Application Scope [PER v3 §2.4]
 
 CBD-Data is the **heaviest scraping, enrichment, queue, export, and data-volume workload** of the four projects. Its product functions are:
 
@@ -66,7 +66,7 @@ Each row carries a provenance label:
 | Real Next/PHP project source at `projects/cbd-data.com/` | `EVIDENCED` | [PER TRACEABILITY] | `cbd-data-source-and-audit`; last verified 2026-09-15; BR-AUD-005 accepted; manifest line 11 |
 | Scraping, enrichment, queue, export, storage, compute placement discovery audited | `EVIDENCED` | [PER TRACEABILITY] | `cbd-data-source-and-audit`; last verified 2026-09-15; BR-AUD-005; PRD_DELIVERY_MAP.md CBD-Data row |
 | Bounded broker/runtime slice — private RabbitMQ `/cbddata` virtual host bootstrap on `brandon-compute` + deterministic `cbd_initial_job_status()` local status helper | `EVIDENCED` | [PER TRACEABILITY] | `cbd-data-enrichment-gap`; last verified 2026-09-18; Gate-CBD-ENRICH-003 evidence.md, decision-and-rollback.md, tdd-evidence.md |
-| RED/GREEN/REFACTOR evidence and full local-suite CHECK_PASS for bounded broker slice | `EVIDENCED` | [PER TRACEABILITY] | Gate-003 evidence tree; PRD_TRACEABILITY.md `cbd-data-enrichment-gap`; last verified 2026-09-18 |
+| RED/GREEN/REFACTOR evidence and full local-suite CHECK_PASS for bounded broker slice | `UNKNOWN` | [OPEN CONFLICT] | Human traceability and delivery-map text report a pass, but structured `prd_traceability.yaml` says the underlying outputs were not retained and marks those claims unverified. Settle with retained raw test output and independent-check artifact, or authoritative reconciliation of the structured-ledger warning; do not treat reconstructed claims as accepted proof. |
 | Local restore/backup documents and tests | `EVIDENCED` | [PER TRACEABILITY] | `cbd-data-source-and-audit`; last verified 2026-09-15; PRD_DELIVERY_MAP.md CBD-Data row |
 
 ### 1.2 Adapter and Integration Layer
@@ -85,9 +85,9 @@ Each row carries a provenance label:
 | Item | Status | Provenance | Notes |
 |---|---|---|---|
 | Local worker canary | `EVIDENCED` (local) | [PER TRACEABILITY] | `cbd-worker-canary`; last verified 2026-09-15; `data/cbd-worker-canary/report.md` |
-| Live `cbd-worker.service` on `srv1137994-aminolifesciences` (AminoVPS) | `EVIDENCED` | [PER TRACEABILITY] | SERVICE_CATALOG.md `cbd-worker`; BR-INV-001/report.md §Host 1; last verified 2026-09-15 |
+| Historical placement of `cbd-worker.service` on `srv1137994-aminolifesciences` (AminoVPS) | `EVIDENCED` (historical, 2026-09-15) | [PER TRACEABILITY] | SERVICE_CATALOG.md `cbd-worker`; BR-INV-001/report.md §Host 1. Current service activity is `UNKNOWN`: dated catalogue/inventory and older canary readings conflict; settle with a fresh read-only service-state check. |
 | AminoVPS Tailscale IP `100.69.211.43` | `EVIDENCED` | [PER TRACEABILITY] | BR-INV-001/report.md §Host 1; SERVICE_CATALOG.md `cbd-worker` |
-| **Live placement on AminoVPS is NOT the v3 PRD target** | `CONFIRMED` | [PER TRACEABILITY] | PRD_DELIVERY_MAP.md unresolved area 2; PRD_TRACEABILITY.md `cbd-worker-canary` notes; SERVICE_CATALOG.md `cbd-worker` notes |
+| **AminoVPS placement differs from the v3 Hetzner target** | `EVIDENCED` | [PER TRACEABILITY + PER v3 §2.4] | SERVICE_CATALOG.md `cbd-worker` and PRD_TRACEABILITY.md `cbd-worker-canary` describe AminoVPS as legacy; canonical v3 §2.4 assigns compute workloads to Hetzner. This establishes the target mismatch, not current service liveness or migration authorization. |
 | Live worker placement on AminoVPS is AUTHORIZATION-blocked | `BLOCKED` (AUTHORIZATION) | [PER TRACEABILITY] | PRD_TRACEABILITY.md `cbd-worker-canary`; PRD_DELIVERY_MAP.md unresolved area 2 |
 | PRD-v3 target worker placement on Hetzner | `UNKNOWN` | [PER TRACEABILITY] | No accepted migration plan or authorization; PRD_DELIVERY_MAP.md unresolved area 2 |
 | Worker denial of cross-project queue access | `UNKNOWN` | [PER TRACEABILITY] | `platform-isolation`; PRD_DELIVERY_MAP.md unresolved area 3 |

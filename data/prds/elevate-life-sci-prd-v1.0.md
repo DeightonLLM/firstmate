@@ -90,9 +90,9 @@ Status table using only `DELIVERED` / `EVIDENCED` / `IN_PROGRESS` / `BLOCKED` / 
 |---|---|---|---|
 | Apex/www site live at `elevatesci.com` with valid TLS | **DELIVERED** | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` Elevate row; `PRD_TRACEABILITY.md` row `elevate-site-live` (DELIVERED, 2026-09-15); manifest lines 42, 45 |
 | 84-file static SEO/schema/image changes applied | **DELIVERED** | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-SEO-PERF-001` (cited; evidence file not present in workspace — see §1.6) |
-| `agents.elevatesci.com` dashboard/vhost with a 200 path | **DELIVERED** | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-SEO-PERF-001` (cited; evidence file not present in workspace) |
-| Static dashboard route retained after vhost change | **EVIDENCED** | `[VERIFIED TODAY]` | `ELEVATE_NGINX_ROUTE_20260919.md` direct read: "Direct-origin dashboard root: 302" (dashboard redirect retained); rollback copy at `/root/agents.elevatesci.com.nginx-pre-hd2-20260919T092103Z` |
-| `/api/*` on `agents.elevatesci.com` returns local 503 | **EVIDENCED** | `[VERIFIED TODAY]` | `ELEVATE_NGINX_ROUTE_20260919.md` direct read: "Direct-origin `https://agents.elevatesci.com/api/health`: 503"; "Public `https://agents.elevatesci.com/api/health`: 503" |
+| Public `agents.elevatesci.com/` dashboard root returns 200 | **UNKNOWN** (latest reported root result is 401) | `[OPEN CONFLICT]` | Older delivery-map/SEO evidence reports a 200 path but its cited artifact is absent; the 2026-10-18 remediation note reports public `/` HTTP/2 401. A root 401 does not prove all routes protected; retain route-specific status only. |
+| Static dashboard route retained after vhost change (historical observation, 2026-09-19) | **EVIDENCED** | `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]` | The report records direct-origin dashboard root 302 and a rollback copy. This was not measured today and does not establish current route behavior. |
+| `/api/health` returned 503 in the 2026-09-19 route report | **EVIDENCED** (historical, one path) | `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]` | This does not establish current behavior or generalize to `/api/*`. The 2026-10-18 note separately reports `/api/embed/...` 200; other API paths remain UNKNOWN pending route-specific measurements. |
 | Nginx reload was clean after vhost change | **EVIDENCED** | `[VERIFIED TODAY]` | `ELEVATE_NGINX_ROUTE_20260919.md` direct read: "nginx -t: successful"; "Nginx reload: successful; service remains active" |
 | No HD2Stack upstream reference in active vhost | **EVIDENCED** | `[VERIFIED TODAY]` | `ELEVATE_NGINX_ROUTE_20260919.md` direct read: "The active vhost contains no HD2Stack upstream reference" |
 
@@ -102,16 +102,16 @@ Status table using only `DELIVERED` / `EVIDENCED` / `IN_PROGRESS` / `BLOCKED` / 
 |---|---|---|---|
 | Dashboard host: `srv1137994-aminolifesciences` (`elevatesVPS`) | **EVIDENCED** | `[PER TRACEABILITY]` | `SERVICE_CATALOG.md` record `elevate-dashboard` (PARTIAL status); `HOSTS.md` record `srv1137994-aminolifesciences` |
 | Dashboard host Tailscale IP `100.69.211.43`, SSH port 2222 | **EVIDENCED** | `[PER TRACEABILITY]` | `HOSTS.md` record `srv1137994-aminolifesciences`; `ELEVATE_NGINX_ROUTE_20260919.md` (confirmed direct target answered over Tailscale and key-only SSH) |
-| Runtime versions on `srv1137994-aminolifesciences`: Docker 29.1.3, Percona MySQL 8.4.10-10, PHP CLI 8.4.22, Node.js v22.19.0, Python 3.12.3, Composer 2.8.12, Nginx | **EVIDENCED** | `[PER v3]` | `BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` §2.2 Elevate; `HOSTS.md` record `srv1137994-aminolifesciences` (runtime version block) |
+| Recorded runtime versions on `srv1137994-aminolifesciences` | **EVIDENCED** (inventory record; freshness not established) | `[PER HOSTS.md]` | Docker 29.1.3, Percona MySQL 8.4.10-10, PHP CLI 8.4.22, Node.js v22.19.0, Python 3.12.3, Composer 2.8.12, Nginx; source is the `HOSTS.md` runtime block, not v3 §2.2. |
 | Public IP of `srv1137994-aminolifesciences` | **UNKNOWN** | `[PER TRACEABILITY]` | `HOSTS.md` record: "Public IP: UNKNOWN — not surfaced in workspace" |
-| Elevate DNS inventory (all records for `elevatesci.com` and `agents.elevatesci.com`) | **UNKNOWN** | `[PER v3]` | v3 PRD Gate A: DNS inventory required; not evidenced for Elevate |
+| Elevate DNS inventory (all records for `elevatesci.com` and `agents.elevatesci.com`) | **UNKNOWN** | `[UNKNOWN — evidence gap]` | v3 Gate A requires an inventory; that requirement does not prove the inventory is absent. Settle with a dated DNS export/query covering the relevant names and record types. |
 
 ### 1.3 Application and Auth
 
 | Row | Status | Label | Evidence |
 |---|---|---|---|
 | Dashboard authentication/allowlisting | **UNKNOWN** | `[OPEN CONFLICT]` | **CONFLICT A:** `ELEVATE_NGINX_ROUTE_20260919.md` §Rollback: "Dashboard authentication/allowlisting also remains unresolved." **vs.** v3 §2.2 describes an authenticated portal as "POTENTIAL" only (not yet existing). Both sources agree the auth model is not approved; the existence of an unauthenticated dashboard is itself the conflict. No auth model is approved. |
-| Elevate operations console — Tailscale :8000 still unauthenticated; public 443 edge only (2026-10-18 re-probe) | **BLOCKED** | `[OPEN CONFLICT]` | **CONFLICT B:** v3 §2.2 lists "potential authenticated portal" as hypothetical only. `PRD_DELIVERY_MAP.md` lines 48–53 state an Elevate OPERATIONS CONSOLE EXISTS today, is reachable WITHOUT an auth wall, and exposes unauthenticated status/job APIs — unlike the Basic-Auth-protected Core-Distro agents console. The software v3 treated as potential is real and unauthenticated. Source: `PRD_DELIVERY_MAP.md` lines 48–53 (authoritative). **This is the highest-risk open item for this domain.** |
+| Elevate operations console — public root reports 401; Tailscale :8000 reports unauthenticated Excalidraw UI (2026-10-18) | **BLOCKED** (internal exposure) | `[OPEN CONFLICT]` | v3 §2.2 describes only potential application components; `PRD_DELIVERY_MAP.md` lines 48–53 records the historical console/API finding. The 2026-10-18 remediation note reports public `/` HTTP/2 401 and direct `http://100.69.211.43:8000/` HTTP 200 with no `WWW-Authenticate` header and Excalidraw body. This is route-specific evidence, not proof about all APIs. The internal :8000 unauthenticated surface remains open; secure it or restrict it, then re-probe. |
 | Elevate operations console — unauthenticated status/job APIs exposed | **BLOCKED** | `[OPEN CONFLICT]` | Same as above; `BRANDON REWORK/evidence/BR-SAAS-PARITY-20260918/console-parity-report.md` cited by `PRD_DELIVERY_MAP.md` as evidence; that file is NOT present in the workspace. The finding is reproduced from the authoritative ledger, not independently verified. |
 | Elevate-specific application source audit (Gate C) | **UNKNOWN** | `[PER v3]` | v3 PRD §5 Gate C: "For each project, record: repository, framework and runtime, build process, required services, required environment variables, database engine and schema tool, file-storage behavior, scheduled jobs, queue requirements, browser or scraping requirements, external API dependencies." No Gate C artifact is evidenced for Elevate in the traceability ledger. |
 | Elevate data classification (Gate D) | **UNKNOWN** | `[PER v3]` | v3 PRD §5 Gate D: "Every persistent data set must be labeled: Public / Internal / Confidential / Restricted." No Gate D artifact is evidenced for Elevate. PHI, prescription data, payment-card data explicitly prohibited without separate approval (v3 §2.2, §4). |
@@ -178,15 +178,15 @@ These are the central contradictions for this domain. They are recorded, not res
 1. `elevatesci.com` apex/www serves a live static site over HTTPS with valid TLS. `[PER TRACEABILITY]` — `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-IDENTITY-001` cited but file absent.
 2. 84 static files received SEO, schema, and image changes. `[PER TRACEABILITY]` — `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-SEO-PERF-001` cited but file absent.
 3. `agents.elevatesci.com` vhost is live and serves a 200 path. `[PER TRACEABILITY]` — `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-SEO-PERF-001` cited but file absent.
-4. The vhost on `srv1137994-aminolifesciences` no longer proxies `/api/*` to HD2Stack; it returns local 503. `[VERIFIED TODAY]` — `ELEVATE_NGINX_ROUTE_20260919.md` direct read.
-5. Nginx on `srv1137994-aminolifesciences` reload was clean (`nginx -t`: success; service active). `[VERIFIED TODAY]` — `ELEVATE_NGINX_ROUTE_20260919.md` direct read.
+4. The 2026-09-19 route report records `/api/health` 503 and no HD2Stack upstream; this is historical, one-path evidence, not a current `/api/*` result. `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]`
+5. The 2026-09-19 route report records a successful `nginx -t` and reload; this is historical, not measured today. `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]`
 6. The ops provider adapter has a local mock-test implementation with passing contract tests. `[PER TRACEABILITY]` — `SOFTWARE_LANES.md` Lane 1.
 
 ### Not proven (PRD-wide acceptance absent)
 
 1. **Dashboard authentication** — no accepted artifact proves an approved auth model for `agents.elevatesci.com`. `[OPEN CONFLICT A]`
-2. **Operations console security** — the console is reachable without an auth wall and exposes unauthenticated status/job APIs. `[OPEN CONFLICT B]` — the highest-risk open item.
-3. **API backend** — the `/api/*` route intentionally returns 503 pending an Elevate-owned backend; no such backend is evidenced. `[PER v3]`
+2. **Operations console security** — the 2026-10-18 report records public root 401 but direct Tailscale :8000 HTTP 200 without `WWW-Authenticate`, serving Excalidraw; status/job API exposure is not established by that response. `[OPEN CONFLICT B]` The unauthenticated internal UI remains the highest-risk open item; route-specific re-probe needed after remediation.
+3. **API backend** — `/api/health` returned 503 in the 2026-09-19 report; the 2026-10-18 note reports `/api/embed/...` 200. Other paths and current backend behavior are UNKNOWN; no general `/api/*` status is established. `[OPEN CONFLICT]`
 4. **Application source audit (Gate C)** — no Gate C artifact for Elevate. `[PER v3]`
 5. **Data classification (Gate D)** — no Gate D artifact for Elevate. `[PER v3]`
 6. **Access matrix (Gate E)** — no Gate E artifact for Elevate. `[PER v3]`

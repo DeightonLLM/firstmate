@@ -73,7 +73,7 @@ the Captain must convert this PRD into small, reviewable task packets for Saad. 
 >
 > BR-AUD-002/report.md §1 explicitly states: "Core Distro is **NOT** a pharmaceutical/lab-supply catalog as described in PRD v3 §2.1 — the actual application is a multi-tenant SaaS lead-generation tool that can be rebranded per product (Core Distro, CBD-Data share the same codebase)."
 >
-> Both descriptions are retained. This PRD treats the audit description as the authoritative current application identity while noting the v3 description for transparency. The application patterns listed in v3 §2.1 (public marketing, quote forms, internal dashboards, product/supplier records, file uploads, background enrichment, CRM integrations) are [PER v3] as "expected patterns"; BR-AUD-002 [PER TRACEABILITY] maps these to actual PHP SaaS implementation. No resolution is implied; the conflict is recorded for the Captain.
+> Both descriptions are retained as an OPEN CONFLICT; neither is designated authoritative by this PRD. The application patterns listed in v3 §2.1 are [PER v3] expected patterns, not implementation evidence. BR-AUD-002 [PER TRACEABILITY — `coredistro-source-runtime`, EVIDENCED, 2026-09-15] supports only its enumerated PHP production, Next.js staging, MySQL/Percona, authentication/lead-list data, and queue-like-job findings. Whether product/supplier records, quote/partnership flows, or every listed file-flow pattern exist in the current application is UNKNOWN pending a source audit that maps each pattern to code or runtime evidence.
 
 **Application patterns [PER v3 §2.1 as expected patterns]:**
 
@@ -518,7 +518,7 @@ Required hardening items:
 
 ### 10.3 TLS and Security Headers
 
-> **[PER v3 §10.4]:** TLS 1.2 and 1.3 only; automated certificate renewal; HSTS; `X-Content-Type-Options: nosniff`; CSP staged from report-only to enforced; `X-Frame-Options`.
+> **[PER v3 §11.4 — target security requirements, not current compliance evidence]:** CSP staged from report-only to enforced is specified there. The listed TLS versions, automated certificate renewal, HSTS, `X-Content-Type-Options: nosniff`, and `X-Frame-Options` are not substantiated by v3 §10.4 (Docker networks) or by the cited §11.4 passage; current configuration for each remains UNKNOWN until directly measured.
 
 ### 10.4 Public Ports
 
