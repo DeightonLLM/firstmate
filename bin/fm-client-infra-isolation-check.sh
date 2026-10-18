@@ -201,6 +201,7 @@ is_test_only_ip() {
     
     # HD2Stack Tailscale IP (from hosts.yaml)
     local hd2stack_ips="100.71.95.76"
+
     
     for test_ip in $hd2stack_ips; do
         if [[ "$ip" == "$test_ip" ]]; then
@@ -217,6 +218,9 @@ is_test_only_ip() {
 
 run_check() {
     local policy_file=$1
+    # Hosts a client-facing domain must never reference in served assets, regardless of
+    # where the client domain itself resolves to.
+    local forbidden_hosts=("llm.hd2.ai")
     local violations=0
     local violation_details=()
     local total_checked=0
@@ -303,6 +307,31 @@ run_check() {
         else
             log "  OK: Resolves to non-test-only infrastructure"
         fi
+
+        # Asset-level isolation: a client domain can resolve to correct, non-test-only
+        # infrastructure and still serve assets that call an HD2-internal endpoint.
+        # DNS resolution alone cannot see this. Core Distro's production apex resolved
+        # correctly while its live HTML still referenced llm.hd2.ai, and this check
+        # passed it. Fetch the served page and look for forbidden internal references.
+        local body hits
+        body=$(curl -sL --max-time 15 "https://$domain/" 2>/dev/null || true)
+        if [[ -n "$body" ]]; then
+            hits=$(grep -oE "https?://[a-zA-Z0-9._-]+" <<< "$body" 2>/dev/null \
+                   | sort -u \
+                   | grep -F -f <(printf '%s\n' "${forbidden_hosts[@]}") 2>/dev/null || true)
+            if [[ -n "$hits" ]]; then
+                while IFS= read -r hit; do
+                    [[ -n "$hit" ]] || continue
+                    ((violations++)) || true
+                    error "ASSET VIOLATION: Client domain '$domain' serves a reference to internal host '$hit'"
+                    violation_details+=("ASSET VIOLATION: $domain serves $hit")
+                done <<< "$hits"
+            else
+                log "  OK: No internal endpoint referenced in served assets"
+            fi
+        else
+            log "  WARN: Could not fetch https://$domain/ for asset-level isolation check"
+        fi
     done <<< "$client_endpoints"
     
     log ""
@@ -315,7 +344,7 @@ run_check() {
     # Report unverified rows
     log ""
     log "Verification status:"
-    log "  - Client endpoints: CHECKED (DNS resolution performed)"
+    log "  - Client endpoints: CHECKED (DNS resolution AND served-asset reference scan performed)"
     log "  - Note: Rows requiring host access are marked UNVERIFIED"
     log "  - Owner for unverifiable rows: Infrastructure team with host access"
     
