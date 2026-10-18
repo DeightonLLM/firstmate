@@ -1,0 +1,1 @@
+blocked: shared decision-hold completion writes originating task metadata outside the permitted report/status paths; report is saved but not marked done

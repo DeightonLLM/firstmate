@@ -1,0 +1,15 @@
+/*
+ * Astra child-theme token sheet, matched to the current public homepage stylesheet.
+ * These values mirror the public tokens; page styling remains in assets/site.css.
+ */
+:root {
+  --color-cd-green-deep: oklch(18% .065 148);
+  --color-cd-green-mid: oklch(25% .07 148);
+  --color-cd-green-accent: oklch(78% .22 148);
+  --color-cd-green-light: oklch(88% .08 148);
+  --color-cd-white: oklch(98% .005 148);
+  --color-cd-slate: oklch(35% .03 148);
+  --font-display: "Barlow Condensed", sans-serif;
+  --font-body: "DM Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}

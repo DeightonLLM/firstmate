@@ -1,0 +1,1 @@
+done: idle-aware dispatch guard landed as b12b65a0 in main; tests fm-dispatch-guard-max-lanes PASS=10 FAIL=0 verified by firstmate in primary sandbox

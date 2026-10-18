@@ -1,0 +1,1 @@
+blocked: report complete, but decision-hold completion requires a backlog write forbidden by the read-only task boundary; no attestation performed

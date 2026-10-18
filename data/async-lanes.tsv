@@ -19,3 +19,13 @@ d8c3ca41-70d2-4c19-b277-3122fe8b54f1	m2.7h-brandon-widget-verify	m2.7h	brandon	w
 28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-whoosh	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	adversarial PRD audit, Whoosh
 28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-cross-cutting	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	four cross-cutting UNKNOWNs
 28dffac6-4cca-490c-950d-9b8162e49a29	m2.7h-audit-fleet-integrity	openai-codex/gpt-6-luna	fast	running	2026-10-18T00:55Z	independent reviewer of sibling lanes
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-core-distro-isolation	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	repoint production apex off llm.hd2.ai
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-elevate-auth	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	auth the Tailscale :8000 console
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-observability	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	deploy real uptime + alerting
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-backup	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	real backups + restore drill
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-cicd	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	make tests actually gate
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-secondmates	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	seed 6 missing secondmate homes
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-xmlrpc	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	close exposed xmlrpc.php
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-ttft	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	diagnose 847ms latency, no cheating
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-whoosh-coords	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	hunt the missing coordinates
+c1a15598-aec0-41a8-8c67-a68f849c2c5d	build-cbd-placement	openai-codex/gpt-6-luna	EXEC	running	2026-10-18T02:20Z	placement decision brief

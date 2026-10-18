@@ -1,0 +1,51 @@
+=== Approved endpoint reliability-routing-20261012 default:w2Q:p2 ===
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: text not submitted to default:w2Q:p2 (delivery unconfirmed; verdict=pending; tried meta=/home/hd2admin/kun-agent-workspace/state/reliability-routing-20261012.meta; backend=from-meta)
+Exit submit unconfirmed; verifying actual exit without resend
+ `/home/hd2admin/.pi/agent/sessions/--home-hd2admin-.treehouse-kun-agent-workspace-46aafc-13-kun-agent-workspace--/subagent-artifacts/6c383880-167e-40e0-95d8-b2557ca02c43_reviewer
+ _output.md`. It ran no tests and made no source edits. Its report correctly highlighted the unrelated Codex Luna 15% helper and missing 50% tests, but also contained material
+ false claims: it relabeled M3.1 as Gemini 3.8 Flash, contradicted the primary captain file, and proposed changing the unrelated Codex Luna helper threshold. Those claims/deltas
+ are rejected and were not used as source authority.
+ -75 - The first native child call was rejected before launch because unsupported `tools`/`allowNestedSubagents` fields were passed under options. One same-protocol corrected call
+ then launched successfully; no CLI fallback or additional child launch occurred. The run id above is retained.
+ +75 - The first native child call was rejected before launch because unsupported `tools`/`allowNestedSubagents` fields were passed under options. One same-protocol corrected call
+ then launched successfully; no CLI fallback or additional child launch occurred. The run id above is retained. The child's five-item visible tracker was not independently
+ verified; do not treat the child run as satisfying that separate tracker requirement without evidence.
+  76 - No tests or source changes were made in this follow-up. The previous completion-gate denial remains unmodified and unresolved. The exact Controller handoff remains absent.
+ This admission is not an implementation, validation, landing, delivery, or cleanup receipt.
+
+
+ Waiting on dependency
+
+ Awaiting controller handoff
+
+ Awaiting controller handoff
+
+ Captain, the private routing admission is at /home/hd2admin/kun-agent-workspace/data/durable-recovery-20261013/enforcement-admission.md.
+
+ It records the current model evidence, enforcement gap, focused acceptance cases, and the source/delivery conflict. No shared source or config was changed. The exact Controller
+ handoff was absent, so its work remains excluded; the earlier completion-tool denial also remains untouched. The report is not a completion or delivery receipt.
+
+● Todos (4/8)
+├─ ○ #4 Write and validate report ⛓ #2,#3
+├─ ○ #5 Close out task ⛓ #4
+├─ ✓ #6 Verify follow-up scope
+├─ ✓ #7 Map independent evidence lanes ⛓ #6
+├─ ✓ #8 Collect routing contracts and artifacts ⛓ #7
+├─ ✓ #9 Update authorized evidence report ⛓ #8
+├─ ◐ #10 Validate and close follow-up (validating follow-up closeout)
+└─ ○ #11 Resolve source admission blocker ⛓ #10
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/.treehouse/kun-agent-workspace-46aafc/13/kun-agent-workspace (detached)
+↑434k ↓32k R10M CH99.5% $0.160 (sub) 23.1%/1.1M (auto)                                                                                            (openai-codex) gpt-6-luna • medium
+✓ gpt-6-luna · w2Q:p2 · READY
+
+To resume this session: pi --session 01a1319c-dfbb-7542-ba61-d1da133ae0c8
+hd2admin@brandon-compute:~/.treehouse/kun-agent-workspace-46aafc/13/kun-agent-workspace$
+hd2admin@brandon-compute:~/.treehouse/kun-agent-workspace-46aafc/13/kun-agent-workspace$
+hd2admin@brandon-compute:~/.treehouse/kun-agent-workspace-46aafc/13/kun-agent-workspace$
+{"id":"cli:pane:process_info","result":{"process_info":{"foreground_process_group_id":3648071,"foreground_processes":[{"argv":["/bin/bash"],"cmdline":"/bin/bash","cwd":"/home/hd2admin/.treehouse/kun-agent-workspace-46aafc/13/kun-agent-workspace","name":"bash","pid":3648071}],"pane_id":"w2Q:p2","shell_pid":3647291},"type":"pane_process_info"}}
+Structured confirmed gone: default:w2Q:p2

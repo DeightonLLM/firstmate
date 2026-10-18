@@ -1,0 +1,3 @@
+EXPECTED FAIL (exit 1): ack succeeded (file unchanged, hash matched)
+Output: acknowledged: d2.md sha256=dd0aec17a1d2d8ad52db01924d64a79379d73aefe386d41f8e785d073b827649
+EXIT=1

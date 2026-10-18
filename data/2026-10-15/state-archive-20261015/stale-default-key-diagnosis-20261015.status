@@ -1,0 +1,2 @@
+working: preflight confirmed; beginning read-only decision-key trace
+blocked: report written; shared decision-hold completion attestation would mutate origin state, forbidden by READ ONLY scope

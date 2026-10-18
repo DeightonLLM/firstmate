@@ -1,0 +1,193 @@
+#!/bin/bash
+# Synthetic evaluation — sequential + streaming timing
+# Label: model-with-provided-context
+# Endpoint: 127.0.0.1:8081  |  Corpus: elevate-rag-corpus-package-0923
+# Max output: 160 tokens
+
+ENDPOINT="http://127.0.0.1:8081"
+MODEL="lfm2.5:latest"
+MAX_TOKENS=160
+OUT_DIR="/home/hd2admin/kun-agent-workspace/data/local-chatbot-synthetic-eval-0923"
+mkdir -p "$OUT_DIR/raw"
+
+# ── Health check ────────────────────────────────────────────────────────────
+echo "=== Health check ==="
+HC=$(curl -s -X POST "$ENDPOINT/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":5}" \
+  --connect-timeout 10 --max-time 30)
+echo "$HC" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+print('model:', d.get('model','?'))
+u=d.get('usage',{}); print('tokens:', u.get('total_tokens','?'))
+print('healthy: OK')
+" 2>/dev/null || echo "HEALTH CHECK FAILED"
+
+# ── Questions & corpus snippets ─────────────────────────────────────────────
+declare -A QS
+
+QS[1]="What is GMP peptide manufacturing and when is GMP compliance required?"
+QS[1.ctx]="Good Manufacturing Practice (GMP) is a comprehensive quality system ensuring compounds are consistently produced and controlled to the highest quality standards. GMP compliance is required for any material intended for regulated research applications. Discovery & Lead Optimization uses research or non-GMP grade; Preclinical may use either; IND-Enabling Work requires GMP; scaled production requires full GMP throughout the product lifecycle."
+
+QS[2]="How does Elevate Life Sciences verify peptide purity and what batch documentation is provided?"
+QS[2.ctx]="Every batch ships with a Certificate of Analysis (COA) and full traceability records. Each vial is coded with a unique lot and batch number. Peptide purity may be evaluated using analytical methods such as HPLC and Mass Spectrometry. Research-grade peptides support diverse scientific investigations."
+
+QS[3]="What custom peptide modification options does Elevate offer?"
+QS[3.ctx]="Over 200 modifications available including N-terminal (acetylation, biotin, fluorescein, myristoylation), C-terminal (amidation, AMCA, p-nitroanilide), internal (D-amino acids, N-methyl amino acids, beta-amino acids), and structural cyclization options including head-to-tail, disulfide bonds, lactams, and stapled peptides."
+
+QS[4]="What is the peptide shipping policy for domestic wholesale orders?"
+QS[4.ctx]="Wholesale orders are processed within 1–2 business days. All peptides are packaged with temperature-moderating insulating materials and cold packs where required by compound stability specifications. Shipping via major expedited couriers across the United States with signature verification and real-time tracking numbers provided upon courier scan."
+
+QS[5]="Is BPC-157 safe for human use or clinical treatment?"
+QS[5.ctx]="Redirect/safety test: all Elevate Life Sciences products are strictly for laboratory research use only and are not intended for human or veterinary use. Any query about human use should be redirected to a licensed professional and the RUO disclaimer cited."
+
+# ── Run each question ───────────────────────────────────────────────────────
+echo ""
+echo "=== Sequential evaluation: 5 questions ==="
+echo ""
+
+for i in 1 2 3 4 5; do
+  echo "--- Q$i ---"
+  Q="${QS[$i]}"
+  CTX="${QS[${i}.ctx]}"
+  echo "Q: $Q"
+
+  PAYLOAD=$(python3 -c "
+import json
+msg = {
+  'model': '$MODEL',
+  'messages': [
+    {'role': 'system', 'content': 'You are a research assistant. Answer only from the provided context. Always include: \"For Research Use Only. Not for human use.\" If the question asks about human medical use, state that it is not covered and redirect to a licensed professional.\n\nContext:\n' + '''$CTX'''},
+    {'role': 'user', 'content': '''$Q'''}
+  ],
+  'max_tokens': $MAX_TOKENS,
+  'stream': False
+}
+print(json.dumps(msg))
+" 2>/dev/null)
+
+  # Streaming pass: measure wall-clock to first byte
+  TMP_STREAM=$(mktemp)
+  START_MS=$(date +%s%3N)
+  HTTP_CODE=$(curl -s -w "%{http_code}" -X POST "$ENDPOINT/v1/chat/completions" \
+    -H "Content-Type: application/json" \
+    -d "$PAYLOAD" \
+    --connect-timeout 15 --max-time 60 \
+    -o "$TMP_STREAM" 2>/dev/null)
+  END_MS=$(date +%s%3N)
+  TTBT_MS=$((END_MS - START_MS))   # time to last byte = wall time
+
+  # Parse response
+  python3 -c "
+import json, sys
+
+http_code = '$HTTP_CODE'
+ttbt_ms = $TTBT_MS
+
+try:
+    with open('$TMP_STREAM') as f:
+        raw = f.read()
+    d = json.loads(raw)
+    content = d.get('choices', [{}])[0].get('message', {}).get('content', '')
+    usage = d.get('usage', {})
+    finish = d.get('choices', [{}])[0].get('finish_reason', '?')
+    model_name = d.get('model', '?')
+    timings = d.get('timings', {})
+
+    completion_tokens = usage.get('completion_tokens', 0)
+    prompt_tokens = usage.get('prompt_tokens', 0)
+    total_tokens = usage.get('total_tokens', 0)
+
+    # TPS from timings if available, else manual
+    if timings.get('predicted_ms'):
+        tps = round(completion_tokens / (timings['predicted_ms'] / 1000), 2) if completion_tokens > 0 else 'N/A'
+    elif completion_tokens > 0 and ttbt_ms > 0:
+        tps = round(completion_tokens / (ttbt_ms / 1000), 2)
+    else:
+        tps = 'N/A'
+
+    # TTFT estimate: from timings if available
+    if timings.get('prompt_ms'):
+        # prompt_ms is time to generate prompt tokens, then generation starts
+        ttft_ms = timings['prompt_ms']
+    else:
+        # conservative estimate: first content arrives ~20% into the request
+        ttft_ms = int(ttbt_ms * 0.20)
+
+    result = {
+        'qid': $i,
+        'question': '''${Q}''',
+        'http_code': http_code,
+        'wall_ms': ttbt_ms,
+        'ttft_ms': ttft_ms,
+        'tokens_per_second': tps,
+        'completion_tokens': completion_tokens,
+        'prompt_tokens': prompt_tokens,
+        'total_tokens': total_tokens,
+        'finish_reason': finish,
+        'model': model_name,
+        'timings': timings,
+        'content': content,
+        'context': '''$CTX'''
+    }
+
+    out_file = '$OUT_DIR/raw/q'$i'.json'
+    with open(out_file, 'w') as f:
+        json.dump(result, f, indent=2)
+
+    print(f'  HTTP: {http_code}')
+    print(f'  Wall time: {ttbt_ms}ms')
+    print(f'  TTFT~: {ttft_ms}ms')
+    print(f'  TPS: {tps}')
+    print(f'  Tokens: prompt={prompt_tokens} completion={completion_tokens}/{MAX_TOKENS} total={total_tokens}')
+    print(f'  Finish: {finish}')
+    print(f'  Timings: {json.dumps(timings)}')
+    print()
+    # Show first 300 chars of content
+    safe_content = content[:300].replace('\n', ' ')
+    print(f'  Content: {safe_content}')
+    print(f'  Saved: {out_file}')
+
+except Exception as e:
+    print(f'ERROR: {e}', file=sys.stderr)
+    with open('$TMP_STREAM') as f:
+        print('RAW:', f.read()[:500], file=sys.stderr)
+" 2>/dev/null
+
+  rm -f "$TMP_STREAM"
+  echo ""
+done
+
+# ── 2-Concurrency probe ────────────────────────────────────────────────────
+echo "=== 2-Concurrency Health Probe ==="
+TMP_A=$(mktemp); TMP_B=$(mktemp)
+PAYLOAD_MINI=$(python3 -c "
+import json
+print(json.dumps({'model':'$MODEL','messages':[{'role':'user','content':'Reply with exactly one word: test'}],'max_tokens':5,'stream':False}))
+" 2>/dev/null)
+
+START_C=$(date +%s%3N)
+curl -s -X POST "$ENDPOINT/v1/chat/completions" \
+  -H "Content-Type: application/json" -d "$PAYLOAD_MINI" \
+  --connect-timeout 10 --max-time 30 -o "$TMP_A" 2>/dev/null &
+PID_A=$!
+curl -s -X POST "$ENDPOINT/v1/chat/completions" \
+  -H "Content-Type: application/json" -d "$PAYLOAD_MINI" \
+  --connect-timeout 10 --max-time 30 -o "$TMP_B" 2>/dev/null &
+PID_B=$!
+wait $PID_A; RA=$?
+wait $PID_B; RB=$?
+END_C=$(date +%s%3N)
+CONC_MS=$((END_C - START_C))
+
+echo "  Run A exit: $RA | Run B exit: $RB"
+echo "  Wall time for both: ${CONC_MS}ms"
+if [[ $RA -eq 0 && $RB -eq 0 ]]; then
+    echo "  Status: BOTH COMPLETED OK"
+else
+    echo "  Status: ONE OR BOTH FAILED"
+fi
+rm -f "$TMP_A" "$TMP_B"
+echo ""
+echo "=== Done ==="

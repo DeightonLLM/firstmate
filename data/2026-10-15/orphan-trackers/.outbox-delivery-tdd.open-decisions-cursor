@@ -1,0 +1,4 @@
+version=9:scout
+offset=787
+ident=strong:2306:27671137:2026-10-03 17:10:07.251496153 +0100
+default	needs-decision	no-mistakes Review asks whether receipts are monotonic and whether the remote ack file proves worker acceptance; exact findings are in the updated report.

@@ -1,0 +1,3 @@
+EXPECTED FAIL (exit 1): real.md count is 0 (expected 1)
+Output: 
+EXIT=1

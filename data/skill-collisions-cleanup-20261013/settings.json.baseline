@@ -1,0 +1,69 @@
+{
+  "lastChangelogVersion": "1.2.0",
+  "theme": "firstmate-black",
+  "defaultProvider": "minimax",
+  "defaultModel": "MiniMax-M3.1-Flash-Preview",
+  "packages": [
+    "npm:pi-subagents",
+    "npm:@calesennett/pi-codex-fast",
+    "npm:@juicesharp/rpiv-todo@2.12.0",
+    "npm:pi-lean-ctx"
+  ],
+  "subagents": {
+    "defaultModel": "minimax/MiniMax-M3.1-Flash-Preview",
+    "agentOverrides": {
+      "reviewer": {
+        "model": "minimax/MiniMax-M3.1-Flash-Preview",
+        "effort": "high"
+      },
+      "scout": {
+        "tools": [
+          "read",
+          "grep",
+          "find",
+          "ls",
+          "bash",
+          "subagent",
+          "write",
+          "contact_supervisor",
+          "todo"
+        ],
+        "subagentOnlyExtensions": [
+          "/home/hd2admin/.pi/agent/npm/node_modules/@juicesharp/rpiv-todo/index.ts"
+        ]
+      }
+    }
+  },
+  "tuiMode": "regular",
+  "pi-codex-fast": {
+    "mode": "fast",
+    "enabled": true
+  },
+  "compaction": {
+    "enabled": true,
+    "keepRecentTokens": 20000,
+    "modelOverrides": {
+      "openai-codex/gpt-6-luna": {
+        "reserveTokens": 550000
+      },
+      "openai-codex/gpt-6.1-sol": {
+        "reserveTokens": 122400
+      },
+      "minimax/MiniMax-M3": {
+        "reserveTokens": 500000
+      },
+      "minimax/MiniMax-M3.1-Flash-Preview": {
+        "reserveTokens": 800000
+      }
+    }
+  },
+  "enabledModels": [
+    "minimax/MiniMax-M3.1-Flash-Preview",
+    "openai-codex/gpt-6-luna",
+    "zai/glm-5.3-flash",
+    "openai-codex/gpt-6.1-sol",
+    "zai/glm-5.3-highspeed",
+    "minimax/MiniMax-M3"
+  ],
+  "defaultProjectTrust": "always"
+}

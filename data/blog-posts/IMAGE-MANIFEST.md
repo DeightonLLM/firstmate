@@ -1,0 +1,42 @@
+# Unsplash image manifest
+
+## Selection outcome
+
+**No image was selected.** The requested visual filter is dark or near-black, editorial, one warm light source and appropriate for an audited pharmaceutical audience. The sampled results inspected visually did not meet that filter without risking a misleading depiction. Every post therefore has a conspicuous pending hero reference and `[VERIFY: select a brand-compliant image; see IMAGE-MANIFEST.md]`. Do not publish with a blank or placeholder hero.
+
+The Unsplash searches used the API with credentials read at use time. No credential value was printed or saved. The API returned photo IDs, descriptions, photographer names and profile/page/download links. Several sampled result images were visually inspected; none was selected. Candidate details below are rejected candidates, not article assets. **No image is represented as Core Distro's product, facility, employees or operations.**
+
+## Per-post proposed searches and result
+
+| # / post | Proposed queries (2–3) | Selection |
+|---|---|---|
+| 1 `from-manufacturer-to-pharmacy` | `pharmaceutical distribution warehouse dark`; `dark warehouse warm light editorial`; `medicine logistics facility low light` | None. Search results included a gas-station pump, empty garage, metal-pipe factory and industrial warehouse; none verified as pharmaceutical operations or a filter-compliant hero. |
+| 2 `drug-supply-chain-traceability` | `warehouse barcode scanning dark`; `pharmaceutical package traceability editorial`; `medicine labels low light` | None. Warehouse-box images did not show scanning or traceability and were bright/blue-grey. Do not imply that a generic warehouse photo shows serialization. |
+| 3 `good-distribution-practice-control-map` | `pharmaceutical quality control dark`; `laboratory documentation warm light`; `pharma distribution inspection editorial` | None. The sampled lab/cleanroom results were bright or blue-lit and did not pass the brand filter. |
+| 4 `cold-chain-excursion-evidence-and-decisions` | `medical refrigerator dark editorial`; `temperature logger cold chain low light`; `refrigerated medicine transport night` | None. Results were domestic refrigerators, a white thermometer, a syringe, a medicine bottle or generic vans; none credibly showed pharmaceutical cold-chain equipment. |
+| 5 `serialized-product-events-explained` | `pharmaceutical serialization label dark`; `warehouse barcode scanning editorial`; `medicine package traceability` | None. Results were generic pills, warehouse shelves or bright warehouse boxes; no verified serialization depiction and no compliant image selected. |
+| 6 `pharmacy-inventory-review` | `pharmacy inventory dark shelves editorial`; `medicine inventory low light`; `pharmacy stock review cinematic` | None. The medicine-shelf result was bright and generic. A stock shelf image could be mistaken for a real pharmacy or product view. |
+| 7 `returns-and-recalls-reverse-supply-chain` | `pharmaceutical returns inspection dark`; `medicine cartons reverse logistics low light`; `warehouse product quarantine editorial` | None. Search proposal only; no selected image or verified returned/recall product scene. |
+| 8 `distributor-onboarding-documents-and-data` | `pharmaceutical supplier documents dark`; `warehouse order records editorial`; `quality documentation warm light` | None. Sampled documentation results were pills or unrelated/bright imagery; do not use a generic handshake. |
+| 9 `audit-ready-distribution-record` | `pharmaceutical records audit dark`; `warehouse shipment documentation low light`; `quality records close up editorial` | None. Sampled images did not show a suitable records-in-use scene; avoid exposing confidential or fictional records. |
+| 10 `specialty-medicine-planned-handoffs` | `specialty pharmacy delivery dark editorial`; `cold chain package handoff low light`; `pharmaceutical logistics warm light` | None. Sampled van/warehouse imagery did not demonstrate validated cold transport; no compliant image selected. |
+
+## Inspected rejected candidates
+
+These records document why a plausible search result was not used. Their download endpoints are included for traceability of the API search results only; **do not call them or use these images as selected assets**.
+
+| Photo ID | API description / reason rejected | Photographer | Photographer profile | Photo page | API download location |
+|---|---|---|---|---|---|
+| `cX7yzYiRmVY` | Glassware with warm dark lighting, but visually resembles beverage glassware and could be confused with a product lookalike. Rejected. | Lilian Do Khac | https://unsplash.com/@nailil | https://unsplash.com/photos/row-of-glass-bottles-filled-with-colored-liquids-cX7yzYiRmVY | https://api.unsplash.com/photos/cX7yzYiRmVY/download?ixid=M3wxMTA0MDEyfDB8MXxzZWFyY2h8MXx8ZGFyayUyMGxhYm9yYXRvcnklMjBnbGFzc3dhcmV8ZW58MHx8fHwxNzkyMTcwMTA2fDA |
+| `JT3wYV0LHYI` | Dark glass beakers, but image does not show pharmaceutical operations and has no suitable verified context. Rejected. | Madeline Liu | https://unsplash.com/@madeline_sd | https://unsplash.com/photos/several-glass-beakers-on-a-dark-background-JT3wYV0LHYI | https://api.unsplash.com/photos/JT3wYV0LHYI/download?ixid=M3wxMTA0MDEyfDB8MXxzZWFyY2h8NXx8ZGFyayUyMGxhYm9yYXRvcnklMjBnbGFzc3dhcmV8ZW58MHx8fHwxNzkyMTcwMTA2fDA |
+| `QJHS9_k-c1c` | Laboratory glassware, blue/cool lighting and unrelated context. Rejected. | Egor Myznik | https://unsplash.com/@vonshnauzer | https://unsplash.com/photos/laboratory-glassware-and-equipment-sit-on-a-counter-QJHS9_k-c1c | https://api.unsplash.com/photos/QJHS9_k-c1c/download?ixid=M3wxMTA0MDEyfDB8MXxzZWFyY2h8NHx8ZGFyayUyMGxhYm9yYXRvcnklMjBnbGFzc3dhcmV8ZW58MHx8fHwxNzkyMTcwMTA2fDA |
+| `uAE9TIp9gGU` | Dark industrial machine room with blue/cool lights; not pharmaceutical-specific and off-palette. Rejected. | Shavr IK | https://unsplash.com/@shavr | https://unsplash.com/photos/a-dark-room-with-lots-of-machines-and-lights-uAE9TIp9gGU | https://api.unsplash.com/photos/uAE9TIp9gGU/download?ixid=M3wxMTA0MDEyfDB8MXxzZWFyY2h8NHx8cGhhcm1hY2V1dGljYWwlMjB3YXJlaG91c2UlMjBkYXJrfGVufDB8fHx8MTc5MjE3MDEwN3ww |
+| `I-_wYj9yOzw` | Pallet warehouse with strong bright orange daylight; not dark editorial and not pharmaceutical-specific. Rejected. | Vida Huang | https://unsplash.com/@rebylulu | https://unsplash.com/photos/warehouse-storage-filled-with-pallets-of-goods-I-_wYj9yOzw | https://api.unsplash.com/photos/I-_wYj9yOzw/download?ixid=M3wxMTA0MDEyfDB8MXxzZWFyY2h8M3x8ZGFyayUyMHdhcmVob3VzZSUyMHdhcm0lMjBsaWdodCUyMGludGVyaW9yfGVufDB8fHx8MTc5MjE3MDEyOHww |
+| `scKZFa9oW_Q` | Dark shelves, but no warm source and no visible context indicating pharmaceutical distribution. Rejected. | Alex Durynin | https://unsplash.com/@zitzdorovo | https://unsplash.com/photos/a-dark-room-filled-with-lots-of-shelves-scKZFa9oW_Q | https://api.unsplash.com/photos/scKZFa9oW_Q/download?ixid=M3wxMTA0MDEyfDB8MXxzZWFyY2h8NXx8ZGFyayUyMHdhcmVob3VzZSUyMHdhcm0lMjBsaWdodCUyMGludGVyaW9yfGVufDB8fHx8MTc5MjE3MDEyOHww |
+| `9gZO2N6leRI` | Cleanroom photograph is bright, blue/cool-lit, with people in full suits; violates photography filter. Rejected. | TECNIC Bioprocess Solutions | https://unsplash.com/@tecnic | https://unsplash.com/photos/workers-in-protective-suits-inside-a-sterile-laboratory-9gZO2N6leRI | https://api.unsplash.com/photos/9gZO2N6leRI/download?ixid=M3wxMTA0MDEyfDB8MXxzZWFyY2h8MXx8aW5kdXN0cmlhbCUyMGNsZWFuJTIwcm9vbSUyMGRhcmslMjBwaG90b2dyYXBoeXxlbnwwfHx8fDE3OTIxNzAxMjl8MA |
+
+## Selected-image attribution and API handling
+
+There are no selected images, so this manifest has no selected-image photographer credits, hotlinked image URLs or download calls. Once an image passes visual review, record its API `photo.id`, photographer name, `user.links.html`, `links.html`, exact `links.download_location`, and `urls.raw` hotlink. Call the returned `download_location` when selecting/downloading the image as required by the API guidelines. Display attribution with a link to the photographer profile and Unsplash; use the current required referral parameters. Never embed an access key in an image URL or content file.
+
+Reference pages in the research base: [Unsplash API Guidelines](https://help.unsplash.com/en/articles/2511245-unsplash-api-guidelines) and [Unsplash License](https://unsplash.com/license). The research base reports the API guidelines page was opened and the license page was unreachable; confirm current license terms when an image is selected. No license conclusion is claimed here.

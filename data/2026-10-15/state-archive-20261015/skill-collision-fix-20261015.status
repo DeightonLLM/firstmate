@@ -1,0 +1,2 @@
+blocked: required pre-session secret scan found possible secret material in 419 files under /home/hd2admin; policy requires stop until findings are resolved
+blocked: agent-secret-scan and fm-context-preflight scan different scopes; 419 possible findings remain unresolved in home-wide scan

@@ -1,0 +1,1 @@
+blocked: bash is denied by the execution allowlist; required tests and lint cannot run

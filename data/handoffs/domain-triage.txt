@@ -1,0 +1,41 @@
+TASK - domain triage. Every domain needs work. Establish the real state of yours and
+report it. No code changes yet.
+
+READ THIS FILE FIRST: /home/hd2admin/kun-agent-workspace/data/handoffs/domain-triage.txt
+
+WHY THIS EXISTS
+The Captain states that nearly every domain needs work and wants the state of each one
+established honestly before anything is built. A lane that reports "done" on a status code,
+a file, or an HTTP 200 will be treated the same as the one that reported staging "live"
+when it was visibly broken.
+
+WHAT TO DO
+1. Establish what actually exists for YOUR domain, with evidence:
+   - the real source path or repository, and whether it is under version control
+   - what is deployed and where, and which environment
+   - what is running, and whether it is actually healthy
+   - what is missing, broken, or never built
+2. Browser-check any web surface you own. Screenshots, desktop and mobile. A curl 200 is
+   not evidence - it only proves the server answered. Report what the page actually shows,
+   including the chatbot, images, forms, and layout.
+3. List what is genuinely blocked, and for each one name the exact recovery condition.
+4. Give a ranked list of the next three things worth doing, most valuable first, with the
+   reason each one matters.
+
+EVIDENCE RULES
+- Every claim needs a second signal. Status plus artifact, branch plus ancestry, pane plus
+  transcript, file plus content, HTTP plus page identity.
+- If you cannot verify it, say UNVERIFIED. Do not round it up to done.
+- Never invent a statistic, a customer, or a completion percentage.
+- If something is unreachable, say exactly which host, which path, and the error verbatim.
+
+HARD RULES
+- Read only unless this task explicitly authorises a change. This one does not.
+- Never touch anything outside your own domain scope.
+- Never touch srv1137994 Aminolifesciences or any production site.
+
+REPORT
+Write data/handoffs/<your-domain>-triage.md in your own home.
+Keep it short and factual. End with one VERDICT line: the single most important thing that
+is true about your domain right now.
+Use an explicit [key=<slug>] on any blocked or needs-decision line.

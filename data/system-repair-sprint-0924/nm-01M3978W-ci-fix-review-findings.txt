@@ -1,0 +1,16 @@
+# no-mistakes CI fix_review gate findings (run 01M3978W5AQNG1VV6J02GEN)
+
+## Finding 1: ci-1
+- ID: ci-1
+- Severity: warning
+- File: (none)
+- Action: ask-user
+- Description: CI checks could not be read from the provider: gh api workflow runs for head commit: unknown flag: --slurp
+
+## Fix determination
+The pipeline fix action determined: No project change is warranted. The finding is a provider CLI invocation error in the no-mistakes tool itself. The PR changes only bin/fm-teardown.sh and tests/fm-teardown.test.sh; neither contains nor assembles the failing gh api invocation. The failing sequence occurs outside the changed code.
+
+## Options
+1. Skip CI gate (accept infrastructure limitation)
+2. Approve and document the external tool issue
+3. Other captain decision

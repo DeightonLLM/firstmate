@@ -1,0 +1,2 @@
+working: verifying required policy and scoped evidence
+blocked: [key=decision-hold-completion] report written; required shared completion attestation writes outside the two permitted output paths, so Firstmate must run it in the authoritative home

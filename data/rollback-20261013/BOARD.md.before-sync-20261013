@@ -1,0 +1,142 @@
+# LIVE BOARD — who is working
+**Last update: 2026-09-27 ~01:00 BST — updated by controller**
+
+## MUSIC METRICS ✅ DONE
+| Lane | Owner | Task | State |
+|---|---|---|---|
+| Fastpath bootstrap | controller | MM_BOOTSTRAP_VERSION deploy | ✅ LIVE SHA256 3e708faf |
+| M3 Layer A | controller | queue_claim.php deploy | ✅ LIVE SHA256 d46fe6e8 |
+| CSV city-coverage | controller | leadlists.php deploy | ✅ LIVE SHA256 ae96c535 |
+| Post-deploy watch | controller | 5-min error log watch | ✅ 10/10 clean |
+
+## ELEVATE SCI chatbot ✅ LIVE
+| Lane | Owner | State |
+|---|---|---|
+| 23-page crawl + ingest | controller | ✅ de-boilerplated |
+| De-boilerplate tightening | MiniMax @ brandon | ✅ 10-14s → 9.34s steady |
+| TLS proxy | MiniMax @ brandon | ✅ agents.elevatesci.com |
+| Branding | controller | ✅ 0 AnythingLLM refs |
+
+## CORE-DISTRO chatbot ✅ LIVE
+| Lane | Owner | State |
+|---|---|---|
+| core-distro workspace | controller | ✅ 8 docs, cold-chain verified |
+| Chatbot | controller | ✅ live HTTP 200 |
+
+## CBD — IN PARALLEL RECOVERY (hetz + MiniMax M2.7)
+| Lane | Owner | Task | State |
+|---|---|---|---|
+| CBD fastpath + getTopCities | hetz MiniMax M2.7 | Adapt MM pattern to CBD | RUNNING |
+| CBD Gemini review | hetz Gemini | Verify before deploy | PENDING |
+| CBD live drift | controller | 12 files captured | ✅ DONE |
+
+## LAWYER-DTA.COM — IN PARALLEL RECOVERY (controller + MiniMax)
+| Lane | Owner | Task | State |
+|---|---|---|---|
+| Lawyer fastpath + M3 | controller MiniMax | Backup + patch + deploy | RUNNING |
+| Lawyer Gemini review | controller Gemini | Verify | PENDING |
+
+## ACCESS INVENTORY — READ BEFORE ANY SaaS WORK
+`/root/agent-work/warehouse/access/SAAS_ACCESS_INVENTORY.md`
+`/root/agent-work/warehouse/access/SAAS_STATE_MAP.md`
+
+## CPANEL TOKENS (all verified)
+| Account | Host | Status |
+|---|---|---|
+| musilnsy | business186.web-hosting.com | ✅ LIVE |
+| cbddpolp | cbd-data.com:2083 | ✅ LIVE |
+| corejdng | business190.web-hosting.com | ✅ LIVE |
+| lawylhvs | business184.web-hosting.com | ✅ LIVE |
+
+## LAWYER-DTA.COM ✅ DONE
+| Lane | Owner | State |
+|---|---|---|
+| Fastpath bootstrap | controller | ✅ DEPLOYED SHA256 a7c4f022 |
+| M3 Layer A queue_claim.php | controller | ✅ DEPLOYED SHA256 d46fe6e8 |
+| getTopCities | already present | ✅ |
+
+**2026-09-27 ~01:15 BST**
+
+## PARALLEL EXECUTION — LESSON LEARNED ✅
+CBD and lawyer-dta.com run simultaneously. AGENTS.md updated: parallel-by-default rule written.
+
+## CBD (cbd-data.com) ✅ DONE — 2026-09-27 ~01:20 BST
+| Lane | Owner | State |
+|---|---|---|
+| Fastpath bootstrap (2026-09-27-cbd-1) | controller | ✅ DEPLOYED SHA256 8f6bb75e |
+| getTopCities (188-line block from Music Metrics) | controller | ✅ DEPLOYED SHA256 8f6bb75e |
+| M3 Layer A queue_claim.php | controller | ✅ DEPLOYED SHA256 d46fe6e8 |
+
+## ALL THREE SaaS APPS — Music Metrics standard achieved
+| App | Fastpath | getTopCities | queue_claim M3 |
+|---|---|---|---|
+| Music Metrics | ✅ | ✅ | ✅ |
+| lawyer-dta.com | ✅ | ✅ | ✅ |
+| cbd-data.com | ✅ | ✅ | ✅ |
+
+## CBD Fix — 2026-09-27 ~00:25 BST
+| Issue | Fix |
+|---|---|
+| Missing `if (!$mmBootstrapSkip) {` opening brace | Added with 433-line DDL section |
+| Missing `ensureColumn`/`ensureIndex` functions | Added after fastpath helpers |
+| Orphaned `exit;` ran on every load | Removed; `exit` now inside if block only |
+| Re-bootstrap after `</html>` | Moved inside if block (correct placement) |
+
+**Final SHA256: c0d22872dfdd5759...** ✅
+
+## WAREHOUSE — FULLY BUILT 2026-09-27
+Both controller + brandon warehouse now in sync.
+```
+warehouse/
+├── README.md              ← start here
+├── access/
+│   ├── SAAS_ACCESS_INVENTORY.md
+│   ├── SAAS_STATE_MAP.md
+│   └── drift/CBD_DRIFT_REPORT.md
+├── backups/              ← immutable pre-deploy snapshots
+├── reports/              ← SAAS fix/recovery reports
+├── recovery/             ← CBD recovery evidence
+└── sources/             ← MUSIC_METRICS_MANIFEST
+```
+
+## OPEN DECISION — CBD Canonical Source
+Lane-B tree has enrichment + job boundary NOT in live.
+Live has Jul 25+ edits NOT in Lane-B.
+Operator needs to choose: push Lane-B or merge live edits into Lane-B first.
+
+## PARALLEL EXECUTION RULE — written to AGENTS.md ✅
+Rule: when 2+ independent tasks exist, execute in parallel by default.
+
+## CBD — TOP CITIES UI ✅ 2026-09-27 ~01:00 BST
+| | |
+|---|---|
+| Top Cities preset panel | ✅ DEPLOYED |
+| `selectTopCities()` JS | ✅ DEPLOYED |
+| `updateTopUsCitiesPanel()` | ✅ DEPLOYED |
+| Deployed SHA256 | d6d3c1d0... |
+
+## data.core-distro.com — FASTPATH ✅ 2026-09-27 ~00:55 BST
+| | |
+|---|---|
+| Fastpath bootstrap | ✅ DEPLOYED SHA256 0466e407 |
+| getTopCities | ✅ already present |
+| queue_claim M3 | ❌ NOT DEPLOYED (not in live) |
+| Staged | already live at data.core-distro.com |
+| Host | business190.web-hosting.com |
+
+## CBD Live SHA256
+| File | SHA256 |
+|---|---|
+| leadlists.php | d6d3c1d0... (Top Cities UI added) |
+| queue_claim.php | d46fe6e8... (M3 Layer A) |
+
+## data.core-distro.com Live SHA256
+| File | SHA256 |
+|---|---|
+| leadlists.php | 0466e407... (fastpath added) |
+| queue_claim.php | NOT PRESENT |
+
+## OPEN — CBD Canonical Source Decision
+Lane-B tree (detached HEAD, 54KB uncommitted) has enrichment + job boundary features.
+Live has Jul 25+ edits.
+Decision required: push Lane-B to live, or inspect live edits first.

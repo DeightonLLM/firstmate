@@ -1,0 +1,3 @@
+working [at=1791043779]: Starting config inventory scan
+done [at=1791043887]: Config inventory complete — 6 parallel cap, Codex never-approval, MiniMax-M2.7 default, 18 skills, 3 dispatch rules
+done [at=2026-10-12T08:43:00Z]: kun-config-inventory refresh; new section in data/kun-config-inventory/report.md covers M3 50% and Sol 55% compaction overrides, lean-ctx 3.8.8 bridge off, current package versions, and allowlisted commands

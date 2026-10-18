@@ -1,0 +1,2 @@
+bash: /home/hd2admin/kun-agent-workspace/data/controller-inbox-local-repair-20261013/fixtures/T11-symlink.sh: No such file or directory
+EXIT=127
