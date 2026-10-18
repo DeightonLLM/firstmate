@@ -1,0 +1,97 @@
+# Core Distro chatbot stream-routing lane
+
+**Date:** 2026-10-18 UTC  
+**Outcome:** **BLOCKED — no production route or application file was changed.** No DNS or configuration mutation was made. The requested real-message POST was sent, but neither production route produced an assistant stream/reply. The client-facing defect is not fixed.
+
+## Live widget request contract
+
+The live production page `https://core-distro.com/` contains this served embed configuration:
+
+```html
+<script data-embed-id="0ec57bfa-7368-42ef-bdb6-d7959bc4f1e2"
+  data-base-api-url="https://llm.hd2.ai/api/embed"
+  src="https://llm.hd2.ai/embed/anythingllm-chat-widget.min.js" defer="">
+```
+
+Fetched the actual production widget JS from `https://llm.hd2.ai/embed/anythingllm-chat-widget.min.js` (HTTP 200, JavaScript, 658,999 bytes). Its minified source constructs the chat request as:
+
+```js
+fetchEventSource(`${baseApiUrl}/${embedId}/stream-chat`, {
+  method: "POST",
+  body: JSON.stringify({ message, sessionId, username, prompt, model, temperature }),
+  ...
+})
+```
+
+The fetch-event-source code sets `Accept: text/event-stream`; the stream handler rejects a successful response unless its Content-Type starts with `text/event-stream`. Optional prompt/model/temperature values are null when unset; JSON serialization omits an undefined username. Browser Fetch supplies the body content type for a string body. This source inspection establishes the app-specific path, method, request body fields, and stream Accept header. A DevTools capture of every browser-added transport header was not obtained, so no claim is made about the complete wire-header set.
+
+**Exact widget URL from the currently served production embed:**
+
+`POST https://llm.hd2.ai/api/embed/0ec57bfa-7368-42ef-bdb6-d7959bc4f1e2/stream-chat`
+
+## Instance comparison and real request result
+
+GET measurements:
+
+| Request | Result |
+|---|---|
+| Production widget JS `https://llm.hd2.ai/embed/anythingllm-chat-widget.min.js` | `200 application/javascript`, 658,999 bytes |
+| Client production's presumed same-origin widget path `https://core-distro.com/embed/anythingllm-chat-widget.min.js` | `404 text/html`, 1,251 bytes |
+| Client staging widget `https://staging.core-distro.com/llm/chat/api/embed/anythingllm-chat-widget.min.js` | `200 application/javascript`, 678,470 bytes |
+| Production embed config URL `https://llm.hd2.ai/api/embed/0ec57bfa-7368-42ef-bdb6-d7959bc4f1e2` | `200 text/html; charset=utf-8`, 1,908 bytes; HTML SPA shell, not embed config |
+| Direct upstream config URL `http://100.106.6.22:3001/api/embed/0ec57bfa-7368-42ef-bdb6-d7959bc4f1e2` | `200 text/html; charset=utf-8`, 1,926 bytes; HTML SPA shell, not embed config |
+
+Sent a synthetic message through the exact widget URL using `Accept: text/event-stream`, `Content-Type: text/plain;charset=UTF-8`, and this exact request body:
+
+```json
+{"message":"Connectivity check: reply with the single word OK.","sessionId":"lane-check-20261018","username":null,"prompt":null,"model":null,"temperature":null}
+```
+
+The response was **not** HTML, but it was also not a stream or assistant reply:
+
+```text
+POST https://llm.hd2.ai/api/embed/0ec57bfa-7368-42ef-bdb6-d7959bc4f1e2/stream-chat
+HTTP 401 application/json; charset=utf-8 (133 bytes)
+{"id":"6d4b4325-58a9-486f-b0d4-997980877708","type":"abort","textResponse":null,"sources":[],"close":true,"error":"Invalid request."}
+```
+
+The direct upstream POST to the same `/api/embed/<id>/stream-chat` path returned:
+
+```text
+POST http://100.106.6.22:3001/api/embed/0ec57bfa-7368-42ef-bdb6-d7959bc4f1e2/stream-chat
+HTTP 404 text/plain; charset=utf-8 (9 bytes)
+Not Found
+```
+
+Thus a route mismatch is measured: the public hostname returns a JSON request rejection, while the direct upstream does not serve the stream route at that path. A previous GET-only report found the shell at `/api/embed` on both; today's GET confirms that for the embed-config URL. The observed direct-upstream POST did not return that shell; it returned 404. No assistant answer or `text/event-stream` payload was observed.
+
+## Staging comparison / unresolved exact mapping
+
+The current staging homepage preloads the staging-owned widget asset at `/llm/chat/api/embed/anythingllm-chat-widget.min.js`; this asset is live and returns JavaScript 200. Its bundle constructs the same `POST ${baseApiUrl}/${embedId}/stream-chat` request and requires `text/event-stream`. The current homepage HTML did not expose a configured embed ID or base API URL. Prior staging audit artifacts use embed ID `fd029baa-22fd-4a3a-b074-40c7a00daf30` and report `POST https://staging.core-distro.com/api/embed/<id>/stream-chat` returning 401 `Invalid request`; that is contrary to the task's stated current fact that staging is now correct, so I did not treat that old ID/route as authoritative or copy it into production. A current owner-supplied staging browser capture/config value is needed to establish exactly which active mapping is known-good.
+
+## Why no route change was staged
+
+No active production routing/configuration file, origin, or supported deployment/save procedure was identified in the available evidence. The production page is currently configured to call `llm.hd2.ai`, and the only direct upstream identified for this service is `100.106.6.22:3001`. The instruction explicitly forbids routing production to `llm.hd2.ai` or any HD2-internal endpoint. The measured upstream also returns 404 for the actual widget stream path. Therefore, rewriting a proxy rule to this origin would violate the isolation requirement and is not a viable fix; selecting any other target or route without owner-verified evidence would be fabrication. No file was edited and no config backup was made because there was no identified safe target to back up. No DNS was touched.
+
+**Exact unblocking requirement:** provide the production owner-controlled, non-HD2 chatbot API origin and its verified working stream route, plus the exact active production route/config file and approved deployment command. Provide a fresh current staging browser capture/config identifying its working API base URL and embed ID (or authorize a staging owner to supply it). Then back up the identified production config to a timestamped sibling `.bak`, change only the matching chatbot route, validate and deploy using the supplied command, and repeat the widget POST plus public widget/config checks. Until that evidence exists, there is no safe exact config edit or backup path to stage.
+
+## Commands and verification
+
+Commands run (abbreviated only for presentation; exact targets and outputs above):
+
+```sh
+curl -sS -L --max-time 20 https://core-distro.com/ -o /tmp/core-live.html
+curl -sS -L --max-time 20 https://llm.hd2.ai/embed/anythingllm-chat-widget.min.js -o /tmp/hd2-widget.js
+curl -sS -L --max-time 20 https://staging.core-distro.com/ -o /tmp/core-staging.html
+curl -sS -L --max-time 20 https://staging.core-distro.com/llm/chat/api/embed/anythingllm-chat-widget.min.js -o /tmp/staging-widget.js
+curl -sS -L --max-time 15 [GET public widget, client widget, staging widget, public embed config, direct embed config]
+curl -sS --max-time 20 -X POST [production widget stream URL] -H 'Accept: text/event-stream' -H 'Content-Type: text/plain;charset=UTF-8' --data-binary [synthetic message JSON]
+curl -sS --max-time 20 -X POST [direct upstream stream URL] -H 'Accept: text/event-stream' -H 'Content-Type: text/plain;charset=UTF-8' --data-binary [same synthetic message JSON]
+```
+
+Verification outcome: public upstream widget asset 200; staging widget asset 200; production same-origin widget path 404; public and direct embed-config GETs 200 but HTML; production chat POST 401 JSON; direct upstream chat POST 404 text/plain. No automated tests were added or run because no source/config change was made.
+
+- **Changed files:** this new audit report only.
+- **Backup:** no prior report existed; no production/config mutation, and therefore no config backup.
+- **Staged files:** none created by this lane. Existing unrelated working-tree changes were left untouched.
+- **Residual risk:** production remains misconfigured and does not produce an assistant reply. Staging's newly corrected live configuration is not captured by the older reports available to this lane.
