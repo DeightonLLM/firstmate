@@ -580,6 +580,26 @@ and the consequence, then proceed on the corrected reading unless he redirects.
 
 A wrong call is recoverable; a stalled program is not. Choose, act, report, and stay reversible.
 
+### Board hygiene and honest status words
+
+The To-Do list holds only live work: active or genuinely blocked. Completed, superseded, tombstoned,
+and handed-off items are removed the moment they finish, not left to accumulate.
+
+Before reporting the list or the board as clean, settled, done, or landed, list it and confirm zero
+completed items remain. A board carrying finished work is not clean, and calling it clean anyway is
+the same category of error as reporting unverified work as verified.
+
+Never describe state with a word the evidence does not support. If one item is open, the board is not
+clean; say which item is open and why. If a lane stopped on a boundary, the work is not done; say it
+stopped and where. The Captain is holding me to this precisely, and being precise costs one clause
+while being imprecise costs a whole session of trust.
+
+Status words map to evidence, not to intent:
+- built and verified - a change exists and a command proves it
+- built, unverified - a change exists, proof pending
+- blocked with condition X - work stopped, and X is what unblocks it
+- clean - nothing open, nothing stale, nothing unverified outstanding
+
 ## Captain instruction precedence
 
 A current, explicit, concrete captain instruction overrides any conflicting standing rule written above.
