@@ -454,7 +454,7 @@ validate_home_assignment() {
     fi
   fi
   id_conflict=$(registry_id_conflict_for_assignment "$id" "$home" || true)
-  if [ -n "$id_conflict" ]; then
+  if [ -n "$id_conflict" ] && { [ -e "$id_conflict" ] || [ -L "$id_conflict" ]; }; then
     echo "error: secondmate id $id is already registered to home $id_conflict; retire it before assigning $home" >&2
     return 1
   fi
