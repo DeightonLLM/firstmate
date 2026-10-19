@@ -615,7 +615,11 @@ for (let i = 0; i < 500; i += 1) {
 }
 if (rows().length !== 3) throw new Error(`late close did not restore one successor: ${rows().join(" | ")}`);
 if (process.env.FM_LATE_KIND === "actionable") {
-  if (prompts.length !== 2 || !prompts[1].includes("late wake")) throw new Error(`late actionable close was not delivered: ${prompts.join(" | ")}`);
+  // Coalescing contract: a late actionable close collapses into the one
+  // outstanding hint instead of queueing a second follow-up; the durable wake
+  // queue holds the event for the drain and supervision must still restore one
+  // successor (asserted above).
+  if (prompts.length !== 1 || !prompts[0].includes("original wake")) throw new Error(`late actionable close did not collapse into the outstanding hint: ${prompts.join(" | ")}`);
 } else if (prompts.length !== 1) {
   throw new Error(`late non-actionable close sent an extra wake: ${prompts.join(" | ")}`);
 }

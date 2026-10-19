@@ -9,7 +9,7 @@
 // quit leaves the final generation stopped so late callbacks cannot rearm. Stale
 // callbacks from a prior generation are no-ops against the active replacement.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,6 +54,22 @@ type SessionGeneration = {
   retryFailures: number;
   restoring: boolean;
   seq: number;
+  pendingWake: PendingWake | null;
+  coalescedCritical: string | null;
+  deliveredCritical: string | null;
+};
+
+// At most one outstanding queued watcher follow-up per generation. The wake id
+// embedded in the prompt text identifies the exact queued notification, so a
+// stale generation's hint or any human text can never acknowledge the live
+// generation's pending wake. Ordinary cycles collapse into the outstanding hint
+// because the durable wake queue already holds every underlying event for the
+// normal drain. A critical failure is never swallowed: it coalesces into at
+// most one bounded upgrade that is delivered as its own notification once the
+// pending hint is consumed, and a rejected send restores that upgrade rather
+// than dropping it.
+type PendingWake = {
+  prompt: string;
 };
 
 function refreshWatchToolShell(
@@ -193,6 +209,9 @@ function createGeneration(): SessionGeneration {
     retryFailures: 0,
     restoring: false,
     seq: 0,
+    pendingWake: null,
+    coalescedCritical: null,
+    deliveredCritical: null,
   };
 }
 
@@ -237,17 +256,56 @@ export default function (pi: ExtensionAPI) {
     !calmPresentation.stockExportRendering &&
     !calmTranscriptClassIsVisible(itemClass);
 
-  async function sendWake(owner: SessionGeneration, message: string): Promise<void> {
+  async function sendWake(owner: SessionGeneration, message: string, critical = false): Promise<void> {
     if (!generationIsLive(owner)) return;
+    if (owner.pendingWake) {
+      if (!critical) return;
+      if (message === owner.coalescedCritical || message === owner.deliveredCritical) return;
+      owner.coalescedCritical = message;
+      return;
+    }
     const content = encodeFirstmateOperationalInput(
       "watcher",
-      `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned.`,
+      `FIRSTMATE WATCHER WAKE: ${message}\n\nRun bin/fm-wake-drain.sh first and handle the queued wake. Watcher continuity is extension-owned. (wake ${randomUUID()})`,
     );
-    await pi.sendUserMessage(content, { deliverAs: "followUp" });
+    const pending: PendingWake = { prompt: content };
+    owner.pendingWake = pending;
+    if (critical) owner.deliveredCritical = message;
+    try {
+      await pi.sendUserMessage(content, { deliverAs: "followUp" });
+    } catch (error) {
+      // A rejected send releases this reservation only. A critical message must
+      // keep its evidence: without restoring it here the typed failure vanished
+      // with the rejected send, and nothing in THIS generation could ever
+      // deliver it again.
+      if (owner.pendingWake === pending) {
+        owner.pendingWake = null;
+        if (critical && owner.deliveredCritical === message) {
+          owner.deliveredCritical = null;
+          if (!owner.coalescedCritical) owner.coalescedCritical = message;
+        }
+      }
+      throw error;
+    }
+  }
+
+  function acknowledgeWake(owner: SessionGeneration, prompt: string): void {
+    if (!generationIsLive(owner) || !owner.pendingWake || owner.pendingWake.prompt !== prompt) return;
+    owner.pendingWake = null;
+    owner.deliveredCritical = null;
+    const upgrade = owner.coalescedCritical;
+    owner.coalescedCritical = null;
+    if (upgrade) {
+      void sendWake(owner, upgrade, true).catch(() => {
+        // sendWake already released the reservation; restore the evidence so a
+        // later cycle re-notifies instead of swallowing the failure.
+        if (!owner.coalescedCritical) owner.coalescedCritical = upgrade;
+      });
+    }
   }
 
   function surfaceFailure(owner: SessionGeneration, message: string): void {
-    void sendWake(owner, message).catch(() => {
+    void sendWake(owner, message, true).catch(() => {
       // Pi owns delivery errors; continuity restoration never waits on prompting.
     });
   }
@@ -429,7 +487,7 @@ export default function (pi: ExtensionAPI) {
           if (generationIsLive(owner)) owner.restoring = false;
           if (!generationIsLive(owner)) return;
           const message = failure ? `${classification.message}\n\n${failure}` : classification.message;
-          await sendWake(owner, message);
+          await sendWake(owner, message, Boolean(failure));
         })().catch(() => {
         });
         return;
@@ -460,6 +518,34 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on?.("session_shutdown", () => {
     stopGeneration(generation);
+  });
+
+  const messageText = (content: unknown): string => {
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+    return content
+      .filter((item): item is { type: "text"; text: string } =>
+        typeof item === "object" && item !== null &&
+        (item as { type?: unknown }).type === "text" &&
+        typeof (item as { text?: unknown }).text === "string")
+      .map((item) => item.text)
+      .join("\n");
+  };
+
+  // Consumption boundary. The installed Pi drains a queued follow-up either as
+  // a user message_start inside the running session or as the prompt of a
+  // starting run, so acknowledgement happens at either exact-text boundary and
+  // never on agent_end or unrelated input. Only then can the next distinct wake
+  // notify again.
+  pi.on?.("message_start", (event) => {
+    const message = (event as { message?: { role?: string; content?: unknown } }).message;
+    if (message?.role !== "user") return;
+    acknowledgeWake(generation, messageText(message.content));
+  });
+  pi.on?.("before_agent_start", (event) => {
+    const prompt = (event as { prompt?: unknown }).prompt;
+    if (typeof prompt !== "string" || !prompt) return;
+    acknowledgeWake(generation, prompt);
   });
 
   pi.registerCommand?.("fm-watch-arm-pi", {
