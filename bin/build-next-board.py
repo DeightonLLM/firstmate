@@ -388,19 +388,24 @@ def collect(repo, stale_days, now, ledger_path=None):
                                   "verdict": (re.findall(r"VERDICT\s*:\s*([^\n]{0,80})", text) or [""])[0].strip(),
                                   "next_line": None})
 
-    # ledger: push attempts, cleared and refused
+    # ledger: push attempts, cleared and refused. Every host keeps its own copy,
+    # so read them all and label the source - reading only the first one
+    # understated the fleet (it showed 0 cleared while the merge lane had 37).
     ledger = []
     for lp in [pathlib.Path(repo) / "ops" / "state" / "push-ledger.tsv",
                pathlib.Path("/root/ops/state/push-ledger.tsv"),
-               pathlib.Path("/root/agent-work/ops/state/push-ledger.tsv")]:
-        if lp.is_file():
-            try:
-                for line in lp.read_text(encoding="utf-8").splitlines():
-                    if line.strip():
-                        ledger.append(line.split("\t"))
-                break
-            except Exception:
-                pass
+               pathlib.Path("/home/hd2admin/ops/state/push-ledger.tsv"),
+               pathlib.Path("/root/agent-work/ops/state/push-ledger.tsv"),
+               pathlib.Path("/root/agent-work/ops/state/push-ledger.hetzner.tsv"),
+               pathlib.Path("/root/agent-work/ops/state/push-ledger.controller.tsv")]:
+        if not lp.is_file():
+            continue
+        try:
+            rows = [line.split("\t") for line in lp.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except Exception:
+            continue
+        for row in rows:
+            ledger.append(row + [str(lp)])
 
     # claims board: who holds what right now
     claims = []
@@ -605,9 +610,31 @@ def render(items, residuals, ledger, claims, repo, now, lane_ledger=None, digest
     if ledger:
         refused = [r for r in ledger if len(r) > 5 and r[5].upper().startswith("REFUSED")]
         cleared = [r for r in ledger if len(r) > 5 and r[5].lower() == "committed"]
-        out.append("- attempts recorded: **%d** (cleared %d, refused %d)" % (len(ledger), len(cleared), len(refused)))
-        for r in refused[-5:]:
-            out.append("  - refused: %s %s %s — %s" % (r[0], r[1], r[3], r[5][:120]))
+        pending = [r for r in ledger if len(r) > 5 and r[5].lower() == "pending"]
+        out.append("- attempts recorded: **%d** (cleared %d, refused %d, still pending %d)"
+                   % (len(ledger), len(cleared), len(refused), len(pending)))
+        by_source = collections.defaultdict(lambda: collections.Counter())
+        for r in ledger:
+            source = r[-1] if r else "?"
+            status = r[5] if len(r) > 5 else "?"
+            if status.lower() == "committed":
+                kind = "cleared"
+            elif status.upper().startswith("REFUSED"):
+                kind = "refused"
+            elif status.lower() == "pending":
+                kind = "pending"
+            else:
+                kind = "other"
+            by_source[source][kind] += 1
+        for source in sorted(by_source):
+            kinds = by_source[source]
+            out.append("  - `%s` — %d attempt(s): %d cleared, %d refused, %d pending"
+                       % (source, sum(kinds.values()), kinds.get("cleared", 0),
+                          kinds.get("refused", 0), kinds.get("pending", 0)))
+        if refused:
+            out.append("- the refusals, and why they were right:")
+            for r in refused[-6:]:
+                out.append("  - refused: %s %s %s — %s" % (r[0], r[1], r[3], r[5][:120]))
     else:
         out.append("_no ledger found_")
     out.append("")
