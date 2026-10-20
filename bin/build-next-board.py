@@ -148,6 +148,9 @@ def collect(repo, stale_days, now):
     raw = read_jsonl(tracker_dir / "tickets.jsonl")
 
     items = []
+    if isinstance(live, dict):
+        # schema hd2-live-state/v1: the verifier lane's evidence-backed states
+        live = live.get("tickets") or live.get("items") or []
     if isinstance(live, list):
         for row in live:
             items.append({
@@ -156,7 +159,7 @@ def collect(repo, stale_days, now):
                 "priority": row.get("priority") or "P2",
                 "state": row.get("true_state") or "UNVERIFIED",
                 "next_action": (row.get("next_action") or "").strip(),
-                "owner": (row.get("owner_lane") or OWNER_DEFAULT).strip(),
+                "owner": (row.get("owner_lane") or row.get("owner") or OWNER_DEFAULT).strip(),
                 "captain_question": row.get("captain_question"),
                 "source": row.get("source") or "tracker",
                 "evidence": row.get("evidence") or [],
