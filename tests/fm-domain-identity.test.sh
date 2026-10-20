@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/fm-domain-identity.test.sh - the behavior suite for the domain identity report.
+# tests/fm-domain-identity.test.sh - the behavior suite for the domain identity report.
 #
 # The suite drives bin/fm-domain-identity.sh through its executable interface
 # against purpose-built fixture homes under a temp dir, so it asserts the

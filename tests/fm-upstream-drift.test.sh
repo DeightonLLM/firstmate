@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bin/fm-upstream-drift.test.sh - contract tests for the firstmate upstream drift detector.
+# tests/fm-upstream-drift.test.sh - contract tests for the firstmate upstream drift detector.
 #
 # Contract under test (owner: docs/upstream-drift.md):
 #   - the detector compares a local docs/ tree against an upstream docs/ tree
@@ -18,7 +18,8 @@
 set -u
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DETECTOR="$SELF_DIR/fm-upstream-drift.sh"
+REPO_ROOT="$(dirname "$SELF_DIR")"
+DETECTOR="$REPO_ROOT/bin/fm-upstream-drift.sh"
 
 TMP_ROOT=""
 PASS_COUNT=0

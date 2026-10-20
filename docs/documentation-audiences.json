@@ -358,6 +358,14 @@
     {
       "path": "skills/stow/SKILL.md",
       "audience": "public-product"
+    },
+    {
+      "path": "docs/domain-identity.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/upstream-drift.md",
+      "audience": "operator-current"
     }
   ]
 }
