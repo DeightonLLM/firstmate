@@ -575,6 +575,13 @@ requires.
 
 **Not pushed. No PR opened. Not merged.** Firstmate merges.
 
+This report itself landed on the `deightonllm-firstmate` branch
+`fm/transcript-sweep-20261020` as commit `d07e101`, containing exactly one
+file — this report — on top of the current `main` (`4c802f0`), so the merge
+into local `main` is a clean fast-forward. A copy of the same file is also
+at `data/transcript-sweep-20261020/report.md` in the primary checkout's
+private `data/` tree, which is where the lane brief names it.
+
 ---
 
 ## 9. Acceptance checklist
