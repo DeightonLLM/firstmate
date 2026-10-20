@@ -252,6 +252,61 @@ harness_supports_todo_list() {
   esac
 }
 
+# --- lean-ctx status transport -------------------------------------------------
+# The native `echo "{state}: {one short line}" >> <status file>` append is the
+# default status transport. A harness whose shell is mediated by lean-ctx replace
+# mode cannot use it: the lean-ctx PreToolUse hook denies native Bash commands
+# that are not on its allowlist, so the append never runs, the lane writes no
+# status event, and firstmate cannot see whether the lane is alive. A denied
+# mandate is a wedge, not a safety net, so the brief must name a transport the
+# lane can actually use. The honest fix keeps the same command and changes only
+# the transport - route it through the lean-ctx MCP `ctx_shell` tool - and puts
+# that exact call in the brief so the lane complies without guessing.
+#
+# Replace mode is host state, not repo state: the host's own harness integration
+# registers the deny hook and the MCP server that publishes ctx_shell. The probe
+# below reads that registration read-only. A host that registers neither keeps
+# the ordinary native transport, so a brief never names a tool the lane lacks.
+#
+# Evidence per entry:
+#   codex   the lean-ctx PreToolUse hook is registered for the Bash|Read|Grep|Glob
+#           matcher in the codex host hook file, and the lean-ctx MCP server that
+#           publishes ctx_shell is registered for the same host.
+# Deliberately NOT listed: every other verified harness (claude, opencode, pi,
+# pi-signed, grok, kimi, agy, minimax-code). None of them is mediated by
+# lean-ctx replace mode, so their briefs keep the native transport unchanged.
+FM_HARNESS_LEAN_CTX_REPLACE="codex"
+
+harness_in_lean_ctx_replace_set() {
+  case " $FM_HARNESS_LEAN_CTX_REPLACE " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Read-only probe of the host's harness integration for the target harness.
+# Returns 0 only when that harness's shell is actually mediated by lean-ctx
+# replace mode AND the MCP server that publishes ctx_shell is registered for it.
+lean_ctx_replace_mode_active() {
+  case "$1" in
+    codex)
+      local codex_home hooks_file config_file
+      codex_home="${CODEX_HOME:-$HOME/.codex}"
+      hooks_file="$codex_home/hooks.json"
+      config_file="$codex_home/config.toml"
+      [ -r "$hooks_file" ] || return 1
+      [ -r "$config_file" ] || return 1
+      grep -q "codex-pretooluse" "$hooks_file" 2>/dev/null || return 1
+      grep -q "mcp_servers\.lean-ctx" "$config_file" 2>/dev/null || return 1
+      grep -q "ctx_shell" "$config_file" 2>/dev/null || return 1
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 # Which harness is this brief written for? An explicit --harness wins; otherwise
 # defer to bin/fm-harness.sh, the harness detection authority, using the same
 # crew resolution fm-spawn.sh applies to an unflagged crewmate spawn.
@@ -304,6 +359,30 @@ shell_quote() {
 }
 
 STATUS_FILE=$(shell_quote "$STATE/$ID.status")
+
+# The status-report transport for this scaffold. The native append is the
+# default. A lean-ctx-replace-mode harness gets the identical command routed
+# through the lean-ctx MCP `ctx_shell` tool, with the exact call named so the
+# lane never has to work out how to reach the append.
+emit_status_append_block() {
+  local harness="$1"
+  if harness_in_lean_ctx_replace_set "$harness" && lean_ctx_replace_mode_active "$harness"; then
+    IFS= read -r -d '' STATUS_APPEND_BLOCK <<'EOF' || true
+   Report status through the lean-ctx MCP `ctx_shell` tool, not native Bash: your harness runs in lean-ctx replace mode, where the lean-ctx PreToolUse hook DENIES native Bash commands that are not on its allowlist, so a native `echo ... >>` append never runs and no status event ever lands.
+   Use this exact call - same command, different transport:
+   ctx_shell(command="echo \"{state}: {one short line}\" >> @STATUS_FILE@")
+   Reading files and running git are unaffected: the hook rewrites allowed native commands to their lean-ctx equivalents by itself.
+EOF
+  else
+    IFS= read -r -d '' STATUS_APPEND_BLOCK <<'EOF' || true
+   `echo "{state}: {one short line}" >> @STATUS_FILE@`
+EOF
+  fi
+  STATUS_APPEND_BLOCK=${STATUS_APPEND_BLOCK//@STATUS_FILE@/$STATUS_FILE}
+  # read -r -d '' keeps the heredoc's trailing newline; drop it so the rendered
+  # brief stays byte-identical to the historical Bash 5 output.
+  STATUS_APPEND_BLOCK=${STATUS_APPEND_BLOCK%$'\n'}
+}
 if [ -n "$WORKLOCATION" ]; then
   IFS= read -r -d '' SHIP_LOCATION_SETUP <<EOF || true
 You are authorized to operate in the external worklocation at \`$WORKLOCATION\` instead of the disposable task worktree.
@@ -360,6 +439,11 @@ else
 fi
 
 
+SECONDMATE_HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate 2>/dev/null || true)
+SECONDMATE_HARNESS=$(printf '%s' "$SECONDMATE_HARNESS" | tr -d '[:space:]')
+[ -n "$SECONDMATE_HARNESS" ] || SECONDMATE_HARNESS=unknown
+emit_status_append_block "$SECONDMATE_HARNESS"
+
 prepare_baseline || exit 2
 cat > "$BRIEF" <<EOF
 You are a persistent second mate managed by the main firstmate. Work on your own; do not wait for a human.
@@ -397,7 +481,7 @@ A message with NO marker is the captain typing directly into your pane: treat it
 # Escalation to main firstmate
 Handle routine work yourself.
 Report only true captain-relevant outcomes or a declared external wait by appending one line:
-   \`echo "{state}: {one short line}" >> $STATUS_FILE\`
+$STATUS_APPEND_BLOCK
 States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
 Use \`$PAUSED_VERB: {why}\` (distinct from \`blocked:\`) only when your domain is deliberately idling on a known external wait you expect to clear on its own; use \`blocked:\` when you are stuck and need firstmate to act.
 Use this only for material phase changes, a captain decision, a real blocker, a failure, or work ready for review.
@@ -466,6 +550,7 @@ HERDR_SECTION=${HERDR_SECTION%$'\n'}
 fi
 
 if [ "$KIND" = scout ]; then
+emit_status_append_block "$BRIEF_HARNESS"
 prepare_baseline || exit 2
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
@@ -485,7 +570,7 @@ $TODO_BREAKDOWN
 2. $SCOUT_RULE2
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
-   \`echo "{state}: {one short line}" >> $STATUS_FILE\`
+$STATUS_APPEND_BLOCK
    States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
    Each append wakes firstmate, so report sparingly: only phase changes a supervisor
    would act on and the needs-decision/blocked/paused/done/failed states. No step-by-step
@@ -585,6 +670,8 @@ esac
 # briefs stay byte-identical to the historical Bash 5 output.
 DOD=${DOD%$'\n'}
 
+emit_status_append_block "$BRIEF_HARNESS"
+
 prepare_baseline || exit 2
 cat > "$BRIEF" <<EOF
 You are a crewmate: an autonomous worker agent managed by firstmate. Work on your own; do not wait for a human.
@@ -606,7 +693,7 @@ $RULE1
 2. $SHIP_RULE2
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
-   \`echo "{state}: {one short line}" >> $STATUS_FILE\`
+$STATUS_APPEND_BLOCK
    States: working, needs-decision, blocked, $PAUSED_VERB, done, failed.
    Each append wakes firstmate, so report sparingly: only phase changes a supervisor
    would act on (setup done, bug reproduced, fix implemented, validation passed) and the

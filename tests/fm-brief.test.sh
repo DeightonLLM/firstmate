@@ -704,6 +704,91 @@ test_scout_and_secondmate_scaffold() {
   pass "fm-brief: scout and secondmate code paths still scaffold well-formed briefs"
 }
 
+# --- lean-ctx replace-mode status transport -----------------------------------
+# A codex lane on a host whose codex integration registers the lean-ctx
+# PreToolUse deny hook cannot append its own status line with native Bash: the
+# hook denies the command, so the append never runs, no status event ever lands,
+# and firstmate cannot see whether the lane is alive. The brief must therefore
+# name the lean-ctx MCP ctx_shell route for that lane, with the exact call, while
+# every other harness keeps the native transport byte-for-byte.
+
+# A fixture codex home with the shape of a replace-mode host: the lean-ctx
+# PreToolUse deny hook registered, and the lean-ctx MCP server that publishes
+# ctx_shell registered for the same host.
+make_lean_ctx_codex_home() {
+  local dir="$1"
+  mkdir -p "$dir"
+  printf '%s\n' '{"hooks":{"PreToolUse":[{"matcher":"Bash|Read|Grep|Glob","hooks":[{"type":"command","command":"/usr/local/bin/lean-ctx hook codex-pretooluse"}]}]}}' > "$dir/hooks.json"
+  printf '%s\n' '[mcp_servers.lean-ctx]' 'command = "/usr/local/bin/lean-ctx"' '[mcp_servers.lean-ctx.tools.ctx_shell]' 'approval_mode = "approve"' > "$dir/config.toml"
+}
+
+test_lean_ctx_replace_mode_status_transport() {
+  local home codex_home bare_home brief
+  home="$TMP_ROOT/lean-ctx-home"
+  codex_home="$TMP_ROOT/lean-ctx-codex-home"
+  bare_home="$TMP_ROOT/lean-ctx-bare-codex-home"
+  mkdir -p "$home/data" "$home/config"
+  make_lean_ctx_codex_home "$codex_home"
+  mkdir -p "$bare_home"
+
+  # The codex lane's brief must name the ctx_shell route with the exact call.
+  CODEX_HOME="$codex_home" FM_HOME="$home" "$ROOT/bin/fm-brief.sh" lean-ctx-ship sample \
+    --harness codex >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold a codex brief"
+  brief="$home/data/lean-ctx-ship/brief.md"
+  assert_grep 'ctx_shell(command="echo \"{state}: {one short line}\" >> ' "$brief" \
+    "codex brief did not name the exact ctx_shell status call"
+  assert_grep "lean-ctx replace mode" "$brief" \
+    "codex brief did not explain the replace-mode status transport"
+  assert_no_grep '   `echo "{state}: {one short line}" >>' "$brief" \
+    "codex brief still told the lane to append its status with native Bash"
+
+  # A scout brief carries the same contract.
+  CODEX_HOME="$codex_home" FM_HOME="$home" "$ROOT/bin/fm-brief.sh" lean-ctx-scout sample \
+    --scout --harness codex >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold a codex scout brief"
+  brief="$home/data/lean-ctx-scout/brief.md"
+  assert_grep 'ctx_shell(command="echo \"{state}: {one short line}\" >> ' "$brief" \
+    "codex scout brief did not name the exact ctx_shell status call"
+
+  # The secondmate charter reports to the main status file, so it follows the
+  # harness the primary launches secondmate agents with.
+  printf 'codex\n' > "$home/config/secondmate-harness"
+  CODEX_HOME="$codex_home" FM_HOME="$home" "$ROOT/bin/fm-brief.sh" lean-ctx-charter \
+    --secondmate --no-projects >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold a secondmate charter"
+  brief="$home/data/lean-ctx-charter/brief.md"
+  assert_grep 'ctx_shell(command="echo \"{state}: {one short line}\" >> ' "$brief" \
+    "secondmate charter did not name the exact ctx_shell status call"
+
+  # A host without the lean-ctx registration keeps the native transport: a brief
+  # must never name a tool the lane does not have.
+  CODEX_HOME="$bare_home" FM_HOME="$home" "$ROOT/bin/fm-brief.sh" lean-ctx-bare sample \
+    --harness codex >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold a codex brief on a host without lean-ctx"
+  brief="$home/data/lean-ctx-bare/brief.md"
+  assert_no_grep "ctx_shell(command=" "$brief" \
+    "codex brief on a host without lean-ctx named a tool the lane does not have"
+  assert_grep '   `echo "{state}: {one short line}" >>' "$brief" \
+    "codex brief on a host without lean-ctx lost the native status transport"
+
+  # Every other harness keeps the native transport unchanged.
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" lean-ctx-claude sample --harness claude >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold a claude brief"
+  brief="$home/data/lean-ctx-claude/brief.md"
+  assert_no_grep "ctx_shell(command=" "$brief" \
+    "claude brief picked up the lean-ctx status transport"
+  assert_grep '   `echo "{state}: {one short line}" >>' "$brief" \
+    "claude brief lost the native status transport"
+
+  # The shipped template itself must carry the route, so the fix survives any
+  # scaffold shape no single case above renders.
+  assert_grep 'ctx_shell(command="echo \"{state}: {one short line}\" >> @STATUS_FILE@")' \
+    "$ROOT/bin/fm-brief.sh" \
+    "bin/fm-brief.sh no longer carries the ctx_shell status route"
+  pass "fm-brief.sh: lean-ctx replace-mode lanes get the ctx_shell status transport"
+}
+
 # The mandatory task breakdown must match the To-Do List support the target
 # harness actually has. A harness without the extension cannot produce a
 # five-item tracker, so mandating one wedges the crewmate on first contact; it
@@ -840,6 +925,7 @@ test_todo_breakdown_follows_harness_capability() {
 }
 
 test_todo_breakdown_follows_harness_capability
+test_lean_ctx_replace_mode_status_transport
 test_script_parses
 test_no_heredoc_in_command_substitution
 test_help_includes_entire_header

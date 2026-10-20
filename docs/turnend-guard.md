@@ -73,6 +73,24 @@ Grok's project hook requires the checkout to be trusted with `/hooks-trust` or l
 If a passive adapter cannot invoke its SDK, or the Grok legacy fallback cannot find `grok` or a session id, the next pull-based `fm-guard.sh` call reports the problem.
 That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it always points to the active harness protocol rather than embedding another repair command.
 
+## Status-report transport
+
+A crewmate reports phase changes by appending one line to its status file.
+The native append is the default transport, and every scaffold in [`bin/fm-brief.sh`](../bin/fm-brief.sh) carries it.
+
+A harness whose shell is mediated by lean-ctx replace mode cannot use the native append.
+The lean-ctx PreToolUse hook denies native Bash commands that are not on its allowlist, so the append never runs, the lane writes no status event, and firstmate cannot see whether the lane is alive.
+A denied mandate is a wedge, not a safety net, so the brief must name a transport the lane can actually use.
+For those harnesses the brief keeps the same command and changes only the transport, routing it through the lean-ctx MCP `ctx_shell` tool and naming that exact call:
+
+    ctx_shell(command="echo \"{state}: {one short line}\" >> '<status file>'")
+
+Replace mode is host state, not repo state.
+The scaffold probes the host's own harness integration read-only: the deny hook has to be registered in that harness's hook file, and the lean-ctx MCP server that publishes `ctx_shell` has to be registered for the same host.
+A host that registers neither keeps the native transport, so a brief never names a tool the lane does not have.
+The probe is deliberately narrow: reading files and running git are unaffected, because the hook rewrites allowed native commands to their lean-ctx equivalents by itself.
+A secondmate charter reports to the main status file, so it follows the harness the primary launches secondmate agents with rather than the crewmate harness.
+
 ## Compatibility limits
 
 - Child crewmate and scout worktrees are outside scope.
@@ -90,6 +108,7 @@ That warning uses `bin/fm-supervision-instructions.sh --repair-line`, so it alwa
 
 ## Regression coverage
 
+`tests/fm-brief.test.sh` covers the status-report transport split: a codex lane, a codex scout, and a secondmate charter get the `ctx_shell` call on a replace-mode host, while a codex brief on a host without the lean-ctx registration and every other harness keep the native append byte-for-byte.
 `tests/fm-turnend-guard.test.sh` covers the predicate, main and secondmate primary scope, child-worktree exclusion, `FM_HOME` and `FM_STATE_OVERRIDE` precedence, the cooperative `--claude` claim wait, epoch allow, re-block budget, Pi logical-run latching, missing-`jq` behavior, all five primary registrations, Grok native and legacy selection, typed field precedence, malformed input, and exactly-one-path safety.
 `tests/fm-kimi-harness.test.sh` covers the separate Kimi crew hook's format preservation, idempotence, refusal cases, token guard, spawn registration, and teardown cleanup.
 `tests/fm-supervision-instructions.test.sh` covers recovery-line ownership and pi-signed's identity-preserving reuse of Pi's protocol.
