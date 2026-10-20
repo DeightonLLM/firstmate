@@ -27,6 +27,8 @@ Every path exits 0, including malformed state and adapter errors, because a Clau
 | Grok | `.grok/hooks/fm-primary-sessionstart-nudge.json` registers a project `SessionStart` hook and invokes the wrapper through inline-defaulted `${GROK_WORKSPACE_ROOT:-}`. | The project hook runs when the checkout is trusted, but Grok currently discards hook stdout from model context, so this path is intentionally fail-open. |
 | MCode (`minimax-code`) | No tracked transport. | Run `bin/fm-session-start.sh` from the operator; the CLI exposes no session-start hook. |
 
+The Pi row's reason list leaves `fork` and `reload` without a session-start digest.
+That exclusion no longer leaves supervision off: the Pi watcher extension arms the replacement session generation's watcher cycle itself, so continuity after a same-process session replacement does not depend on a model-remembered arm call.
 The OpenCode nudge runs only on `session.created`.
 The watcher-arm and turn-end plugins run later on `session.idle`, and the guard lets the watcher coordinator act first, so the plugins do not race for one lifecycle event.
 

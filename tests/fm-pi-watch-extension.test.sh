@@ -59,6 +59,289 @@ export const Type = {
 JS
 }
 
+test_pi_replacement_session_start_rearms_after_retired_generation() {
+  local repo home plugin log stop out status
+  repo="$TMP_ROOT/pi-replacement-rearm-root"
+  home="$TMP_ROOT/pi-replacement-rearm-home"
+  log="$TMP_ROOT/pi-replacement-rearm.log"
+  stop="$TMP_ROOT/pi-replacement-rearm.stop"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_pi_watch_extension_fixture "$repo"
+  plugin="$repo/.pi/extensions/fm-primary-pi-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'arm=%s predecessor=%s\n' "$$" "${FM_WATCH_PREDECESSOR_ARM_PID:-none}" >> "${FM_ARM_LOG:?}"
+printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+trap 'exit 0' TERM INT
+while [ ! -e "$FM_STOP_FILE" ]; do sleep 0.05; done
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_STOP_FILE="$stop" node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+let tool = null;
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_pi") tool = candidate;
+  },
+  sendUserMessage: async () => {},
+};
+
+const rows = () => existsSync(process.env.FM_ARM_LOG)
+  ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n").filter(Boolean)
+  : [];
+const armPid = (row) => /arm=(\d+)/.exec(row)?.[1] ?? "";
+
+async function waitFor(predicate, label, attempts = 400) {
+  for (let i = 0; i < attempts; i += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`timeout waiting for ${label}`);
+}
+
+function pidAlive(pid) {
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+
+// The first session of a process is still the model's one required first cycle.
+await handlers.get("session_start")?.({ type: "session_start", reason: "startup" }, {});
+if (rows().length !== 0) throw new Error(`first session start armed ${rows().length} arm children`);
+
+const first = await tool.execute("first-cycle", {}, undefined, undefined, {});
+if (!first.details?.ok || !String(first.details.message).includes("started Pi extension arm child")) {
+  throw new Error(`first cycle did not start the arm child: ${JSON.stringify(first.details)}`);
+}
+await waitFor(() => rows().length === 1, "first arm child");
+const retiredPid = armPid(rows()[0]);
+
+// The operator reloads: Pi retires the generation that owned the watcher.
+await handlers.get("session_shutdown")?.({ type: "session_shutdown", reason: "reload" }, {});
+await waitFor(() => !pidAlive(retiredPid), "retired arm child exit");
+
+// The replacement session start has to arm again with no model call at all.
+await handlers.get("session_start")?.({ type: "session_start", reason: "reload" }, {});
+await waitFor(() => rows().length === 2, "replacement arm child");
+if (rows().length !== 2) throw new Error(`replacement started ${rows().length} arm children`);
+if (!rows()[1].includes(`predecessor=${retiredPid}`)) {
+  throw new Error(`replacement arm did not inherit the retired arm identity: ${rows()[1]}`);
+}
+if (!pidAlive(armPid(rows()[1]))) throw new Error("replacement arm child is not alive");
+writeFileSync(process.env.FM_STOP_FILE, "stop\n");
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi replacement session start must re-arm the retired generation's watcher cycle"
+  [ -z "$out" ] || fail "Pi replacement re-arm test printed output: $out"
+  pass "Pi replacement session start re-arms the retired watcher cycle"
+}
+
+test_pi_replacement_session_start_keeps_one_live_arm_child() {
+  local repo home plugin log stop out status
+  repo="$TMP_ROOT/pi-replacement-single-arm-root"
+  home="$TMP_ROOT/pi-replacement-single-arm-home"
+  log="$TMP_ROOT/pi-replacement-single-arm.log"
+  stop="$TMP_ROOT/pi-replacement-single-arm.stop"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_pi_watch_extension_fixture "$repo"
+  plugin="$repo/.pi/extensions/fm-primary-pi-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'arm=%s\n' "$$" >> "${FM_ARM_LOG:?}"
+printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+trap 'exit 0' TERM INT
+while [ ! -e "$FM_STOP_FILE" ]; do sleep 0.05; done
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_STOP_FILE="$stop" node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+let tool = null;
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_pi") tool = candidate;
+  },
+  sendUserMessage: async () => {},
+};
+
+const rows = () => existsSync(process.env.FM_ARM_LOG)
+  ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n").filter(Boolean)
+  : [];
+const armPid = (row) => /arm=(\d+)/.exec(row)?.[1] ?? "";
+
+async function waitFor(predicate, label, attempts = 400) {
+  for (let i = 0; i < attempts; i += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`timeout waiting for ${label}`);
+}
+
+function pidAlive(pid) {
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+await tool.execute("first-cycle", {}, undefined, undefined, {});
+await waitFor(() => rows().length === 1, "first arm child");
+await handlers.get("session_shutdown")?.({ type: "session_shutdown", reason: "reload" }, {});
+await waitFor(() => !pidAlive(armPid(rows()[0])), "retired arm child exit");
+await handlers.get("session_start")?.({ type: "session_start", reason: "reload" }, {});
+await waitFor(() => rows().length === 2, "replacement arm child");
+const liveArm = armPid(rows()[1]);
+
+// A second replacement session start on the live generation owns an arm
+// child already, so it must not spawn a competing arm or disturb the running
+// one.
+await handlers.get("session_start")?.({ type: "session_start", reason: "reload" }, {});
+await new Promise((resolve) => setTimeout(resolve, 2000));
+if (rows().length !== 2) throw new Error(`second replacement session start spawned ${rows().length} arm children`);
+if (!pidAlive(liveArm)) throw new Error("the live arm child was disturbed");
+const redundant = await tool.execute("redundant", {}, undefined, undefined, {});
+if (!String(redundant.details?.message ?? "").includes("already owns an arm child")) {
+  throw new Error(`ownership no-op missing: ${JSON.stringify(redundant.details)}`);
+}
+writeFileSync(process.env.FM_STOP_FILE, "stop\n");
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi replacement session start must not duplicate a live arm child"
+  [ -z "$out" ] || fail "Pi replacement single-arm test printed output: $out"
+  pass "Pi replacement session start keeps exactly one live arm child"
+}
+
+test_pi_replacement_session_start_keeps_one_scheduled_retry() {
+  local repo home plugin log stop out status
+  repo="$TMP_ROOT/pi-replacement-single-retry-root"
+  home="$TMP_ROOT/pi-replacement-single-retry-home"
+  log="$TMP_ROOT/pi-replacement-single-retry.log"
+  stop="$TMP_ROOT/pi-replacement-single-retry.stop"
+  mkdir -p "$repo/bin" "$home/state" "$home/config"
+  install_pi_watch_extension_fixture "$repo"
+  plugin="$repo/.pi/extensions/fm-primary-pi-watch.ts"
+  cat > "$repo/bin/fm-watch-arm.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'arm=%s\n' "$$" >> "${FM_ARM_LOG:?}"
+count=$(wc -l < "$FM_ARM_LOG" | tr -d '[:space:]')
+if [ "$count" -le 1 ]; then
+  printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+  trap 'exit 0' TERM INT
+  while [ ! -e "$FM_STOP_FILE" ]; do sleep 0.05; done
+  exit 0
+fi
+printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+exit 0
+SH
+  chmod +x "$repo/bin/fm-watch-arm.sh"
+  out=$(PLUGIN="$plugin" FM_HOME="$home" FM_ROOT_OVERRIDE="$repo" FM_ARM_LOG="$log" FM_STOP_FILE="$stop" FM_WATCH_REARM_RETRY_BASE_MS=10000 FM_WATCH_REARM_RETRY_MAX_MS=10000 node --input-type=module 2>&1 <<'EOF'
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const handlers = new Map();
+let tool = null;
+const pi = {
+  on(event, handler) {
+    handlers.set(event, handler);
+  },
+  registerCommand() {},
+  registerTool(candidate) {
+    if (candidate.name === "fm_watch_arm_pi") tool = candidate;
+  },
+  sendUserMessage: async () => {},
+};
+
+const rows = () => existsSync(process.env.FM_ARM_LOG)
+  ? readFileSync(process.env.FM_ARM_LOG, "utf8").trim().split("\n").filter(Boolean)
+  : [];
+const armPid = (row) => /arm=(\d+)/.exec(row)?.[1] ?? "";
+
+async function waitFor(predicate, label, attempts = 400) {
+  for (let i = 0; i < attempts; i += 1) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`timeout waiting for ${label}`);
+}
+
+function pidAlive(pid) {
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
+const mod = await import(pathToFileURL(process.env.PLUGIN).href);
+mod.default(pi);
+await tool.execute("first-cycle", {}, undefined, undefined, {});
+await waitFor(() => rows().length === 1, "first arm child");
+await handlers.get("session_shutdown")?.({ type: "session_shutdown", reason: "reload" }, {});
+await waitFor(() => !pidAlive(armPid(rows()[0])), "retired arm child exit");
+
+// The replacement arm closes cleanly, so the replacement generation owns a
+// scheduled continuity retry.
+await handlers.get("session_start")?.({ type: "session_start", reason: "reload" }, {});
+let pending = null;
+for (let i = 0; i < 400; i += 1) {
+  pending = await tool.execute("during-retry", {}, undefined, undefined, {});
+  if (String(pending.details?.message ?? "").includes("scheduled continuity retry")) break;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
+if (!String(pending?.details?.message ?? "").includes("already owns a scheduled continuity retry")) {
+  throw new Error(`replacement generation never owned a scheduled retry: ${JSON.stringify(pending?.details)}`);
+}
+const armed = rows().length;
+
+// A second replacement session start must not compete with the pending retry.
+await handlers.get("session_start")?.({ type: "session_start", reason: "reload" }, {});
+await new Promise((resolve) => setTimeout(resolve, 2000));
+if (rows().length !== armed) throw new Error(`second replacement session start spawned ${rows().length - armed} competing arms`);
+const redundant = await tool.execute("redundant", {}, undefined, undefined, {});
+if (!String(redundant.details?.message ?? "").includes("already owns a scheduled continuity retry")) {
+  throw new Error(`scheduled retry no-op missing: ${JSON.stringify(redundant.details)}`);
+}
+writeFileSync(process.env.FM_STOP_FILE, "stop\n");
+process.exit(0);
+EOF
+)
+  status=$?
+  expect_code 0 "$status" "Pi replacement session start must not duplicate a scheduled continuity retry"
+  [ -z "$out" ] || fail "Pi replacement single-retry test printed output: $out"
+  pass "Pi replacement session start keeps exactly one scheduled continuity retry"
+}
+
 test_pi_extension_reports_external_healthy_watcher() {
   local repo home plugin out status
   repo="$TMP_ROOT/pi-external-healthy-root"
@@ -990,7 +1273,7 @@ async function replaceSession(previous, reason) {
   await waitFor(() => {
     if (!existsSync(process.env.FM_CHILD_PID_FILE)) return false;
     const child = readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim();
-    return child && child !== previousChild && pidAlive(child);
+    return child && child !== previousChild && pidAlive(child) && liveArmPids().includes(child);
   }, `${reason} replacement child`);
   const live = liveArmPids();
   if (live.length !== 1) {
@@ -1014,7 +1297,7 @@ if (!sameInstanceArm.details?.ok || String(sameInstanceArm.details.message).incl
 await waitFor(() => {
   if (!existsSync(process.env.FM_CHILD_PID_FILE)) return false;
   const child = readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim();
-  return child !== sameInstanceChild && pidAlive(child);
+  return child !== sameInstanceChild && pidAlive(child) && liveArmPids().includes(child);
 }, "same-instance replacement child");
 await waitFor(() => !pidAlive(sameInstanceChild), "same-instance previous child exit");
 if (liveArmPids().length !== 1) {
@@ -2124,6 +2407,9 @@ EOF
   pass "OpenCode healthy arm output does not suppress the turn-end guard"
 }
 
+test_pi_replacement_session_start_rearms_after_retired_generation
+test_pi_replacement_session_start_keeps_one_live_arm_child
+test_pi_replacement_session_start_keeps_one_scheduled_retry
 test_pi_extension_reports_external_healthy_watcher
 test_pi_tool_returns_agent_tool_result
 test_pi_redundant_tool_call_is_owned_noop
