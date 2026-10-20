@@ -13,6 +13,31 @@ Current execution receipt: `data/2026-10-20/core-execution-baseline/execution.js
 
 This is navigation, not a replacement backlog or approval system. Ahoy recaps visible session events/questions; silence never answers a decision.
 
+## Where the behaviour is actually documented — read upstream, do not improvise
+
+The upstream docs fully explain how Herdr and the firstmate harness work. Prefer them over inference, and
+prefer a documented invocation over an improvised one.
+
+**Harness / agent runtime** (`/home/hd2admin/.nvm/versions/node/v22.23.2/lib/node_modules/@earendil-works/pi-coding-agent/docs/`):
+`how-pi-works.md` · `tui.md` · `models.md` · `custom-provider.md` · `providers.md` · `settings.md` ·
+`compaction.md` · `codemode.md` · `containerization.md` · `environment-variables.md` · `extensions.md`
+
+**Subagents and delegation** (`/home/hd2admin/.pi/agent/npm/node_modules/pi-subagents/skills/pi-subagents/`):
+`SKILL.md` plus `references/` — `execution-controls.md`, `prompting-and-roles.md`,
+`constraints-and-recipes.md`, `review-and-validation.md`. In-session, `subagent({action:"guide",
+options:{topic:"…"}})` serves the live tool reference, including workflow recipes, lane metadata,
+execution and budget guidance. Prefer the guide over recalled tool shapes — this session twice relied on
+memory and was wrong.
+
+**Herdr** is a terminal workspace manager for coding agents: `herdr --help`, then `herdr tab list`,
+`herdr workspace list`. Herdr tab labels are presentation, not identity; pane titles do not prove which
+agent or model is running. See `data/learnings.md` (2026-09-24) and `bin/fm-harness.sh` for what a pane
+label may and may not be used to infer.
+
+**Firstmate's own contract** lives in this repo, not upstream: `AGENTS.md` is the standing contract,
+`AGENT-TODO-PROMPT-STYLE.md` solely owns naming, `.agents/skills/` holds the agent-only skills, and
+`docs/README-index.md` indexes the rest.
+
 ## Session handoff from the previous first mate (2026-10-19)
 
 Read this before trusting anything inherited from that session. Its most expensive mistake is recorded
