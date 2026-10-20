@@ -54,9 +54,11 @@ not share, and the local fast-forward contract will not force them. **The homes 
 against upstream `kunchenguid/firstmate`, our primary is 657 commits behind upstream while a secondmate home is
 only 234 behind and 423 ahead of us, and the two sides carry different contracts.** Reconciling them is a
 lineage decision, not a copy. Source: `data/learnings.md` (2026-10-20).
-**Detector, landing in a parallel lane:** the re-runnable per-home domain-identity check is being built as
-`bin/fm-domain-identity.sh`, with its contract to live in `docs/domain-identity.md`. Read that contract there
-before claiming any home is synced.
+**Detector, landed:** the re-runnable per-home domain-identity check is `bin/fm-domain-identity.sh`, with its
+contract in `docs/domain-identity.md`. It exits 1 while any registered home is unscoped or diverged, so
+"synced" is a command's verdict and never a claim. **The upstream drift check is `bin/fm-upstream-drift.sh`,
+contract in `docs/upstream-drift.md`; it exits 1 while any upstream file is divergent or missing locally.**
+Run both before asserting anything about agent sync or upstream freshness.
 
 ## Session handoff from the previous first mate (2026-10-19)
 
