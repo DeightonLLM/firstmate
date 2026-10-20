@@ -74,6 +74,23 @@ refresh_row() {  # <file> <result> <detail>
   return 0
 }
 
+# Wake the operator through the fleet's durable wake queue - the same path every
+# other actionable event uses ("a wake or a notification to the operator through
+# the same path every other actionable event uses", not a row in a table).
+# The status file is the durable record and the watcher's signal path; this
+# append is the immediate wake, and it does not depend on the watcher process
+# being alive. One append per transition: the caller only reaches this on a
+# state change, so a guard that stays bad does not wake on every poll.
+wake_operator() {  # <kind> <key> <payload>
+  local kind=$1 key=$2 payload=$3
+  [ -f "$FM_HOME/bin/fm-wake-lib.sh" ] || return 0
+  (
+    # shellcheck source=bin/fm-wake-lib.sh
+    . "$FM_HOME/bin/fm-wake-lib.sh" >/dev/null 2>&1 || exit 0
+    fm_wake_append "$kind" "$key" "$payload" >/dev/null 2>&1 || true
+  )
+}
+
 # Guards registered with this home. A guard absent from disk is reported MISSING;
 # adding one here is what makes it visible to the status surface.
 KNOWN_GUARDS="${FM_ATTEST_GUARDS:-factory-queue ticket-intake comms-notify}"
@@ -126,6 +143,7 @@ case "${1:-}" in
           alerts+=("GUARD_ALERT: $g is $current_state (age: ${age}s, last result: $result, remediation: check daemon / restart $g)")
           echo "$current_state" > "$ALERT_STATE_DIR/$g.state"
           rm -f "$ALERT_STATE_DIR/$g.recovered"
+          wake_operator stale "guard:$g" "GUARD_ALERT: $g is $current_state (age: ${age}s, last result: $result, remediation: check daemon / restart $g)"
         fi
       else
         printf '%-22s %-8s %-10s %-9s %s\n' "$g" "$result" "${age}s" "$fired" "$ever"
@@ -133,6 +151,7 @@ case "${1:-}" in
           recoveries+=("GUARD_RECOVERED: $g is healthy again (last run ${age}s ago)")
           echo "HEALTHY" > "$ALERT_STATE_DIR/$g.state"
           echo "done: GUARD_RECOVERED: $g is healthy again (last run ${age}s ago)" > "$ALERT_STATE_DIR/$g.recovered"
+          wake_operator check "guard:$g" "GUARD_RECOVERED: $g is healthy again (last run ${age}s ago)"
         else
           [ -f "$ALERT_STATE_DIR/$g.state" ] || echo "HEALTHY" > "$ALERT_STATE_DIR/$g.state"
         fi

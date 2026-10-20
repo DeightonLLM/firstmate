@@ -23,10 +23,12 @@ fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+export FM_HOME="$REPO_ROOT"
 export FM_ATTEST_DIR="$TMP_DIR/attestations"
 export FM_ATTEST_STATE_DIR="$TMP_DIR/state"
 export FM_ATTEST_STATUS_FILE="$TMP_DIR/status"
 export FM_STATE_OVERRIDE="$TMP_DIR/state"
+export FM_WAKE_QUEUE="$TMP_DIR/wake-queue"
 export FM_ATTEST_STALE_SECS=10
 export FM_ATTEST_GUARDS="test-guard test-missing"
 
@@ -85,6 +87,13 @@ sed -i 's/^[0-9]*/1000000000/' "$FM_ATTEST_DIR/test-guard.tsv"
 output_stale=$("$GUARD_ATTEST" status 2>&1 || true)
 assert_contains "Stale guard triggers alert" "$output_stale" "GUARD_ALERT: test-guard"
 assert_contains "Alert specifies STALE state" "$output_stale" "STALE"
+
+# 4b. The verdict must reach the operator through the fleet's durable wake
+# queue - the same path every other actionable event uses. This is the
+# delivery, asserted on the emitted queue record, not on source text.
+wake_records=$(cat "$FM_WAKE_QUEUE" 2>/dev/null || printf '')
+assert_contains "Stale verdict produced a wake-queue record for the operator" "$wake_records" "guard:test-guard"
+assert_contains "Wake record carries the stale verdict" "$wake_records" "GUARD_ALERT: test-guard"
 
 # 5. Repeated poll with test-guard stale: No alert storm
 output_stale2=$("$GUARD_ATTEST" status 2>&1 || true)
@@ -152,15 +161,20 @@ assert_contains "Operator-facing status file names the bad guard" "$(cat "$FM_AT
 # persisted size:mtime signature, so a rewritten-but-identical file would wake
 # the operator on every poll.
 sig_before=$(stat -c "%s:%Y" "$FM_ATTEST_STATUS_FILE" 2>/dev/null || printf 'absent')
+wake_before=$(wc -l < "$FM_WAKE_QUEUE" 2>/dev/null | tr -d ' ')
 sleep 1
 "$GUARD_ATTEST" status >/dev/null 2>&1 || true
+"$GUARD_ATTEST" status >/dev/null 2>&1 || true
 sig_after=$(stat -c "%s:%Y" "$FM_ATTEST_STATUS_FILE" 2>/dev/null || printf 'absent')
+wake_after=$(wc -l < "$FM_WAKE_QUEUE" 2>/dev/null | tr -d ' ')
 assert_eq "Healthy poll does not churn the operator-facing status file" "$sig_after" "$sig_before"
+assert_eq "Healthy poll does not spam the wake queue" "$wake_after" "$wake_before"
 
 # Recovery notice reaches the operator as its own captain-relevant event.
 "$GUARD_ATTEST" run test-missing CLEAR "it came back" >/dev/null 2>&1
 "$GUARD_ATTEST" status >/dev/null 2>&1 || true
 assert_contains "Recovery notice is written for the operator" "$(cat "$FM_ATTEST_STATUS_FILE" 2>/dev/null || printf '')" "GUARD_RECOVERED: test-missing"
+assert_contains "Recovery notice produced a wake-queue record" "$(cat "$FM_WAKE_QUEUE" 2>/dev/null || printf '')" "GUARD_RECOVERED: test-missing"
 
 # Healthy surface: nothing captain-relevant is left standing.
 rm -f "$FM_ATTEST_DIR/test-guard.tsv" "$FM_ATTEST_DIR/test-liveness.tsv" "$FM_ATTEST_DIR/test-missing.tsv"
