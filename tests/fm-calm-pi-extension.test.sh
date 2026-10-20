@@ -52,6 +52,38 @@ PI_TUI_DIR=$(resolve_pi_dependency "@earendil-works/pi-tui") ||
 PI_TYPEBOX_DIR=$(resolve_pi_dependency "typebox") ||
   fail "installed Pi dependency typebox not found near $PI_PACKAGE_DIR"
 TMUX_SOCKET="fm-calm-$$"
+# The Pi launcher used by the end-to-end cases below. The host's pi wrapper runs
+# a whole-home workspace secret scan before it starts Pi and refuses to launch
+# when that scan fails. When the scan fails on content that has nothing to do
+# with these fixtures, every end-to-end case would report a Calm failure that
+# never happened, so fall back to the Pi runtime binary itself. The host
+# launcher is still preferred, the fallback is printed rather than silent, and
+# the fixture stays in its own temporary home.
+PI_LAUNCHER="pi"
+PI_LAUNCHER_PATH=""
+PI_LAUNCHER_RESOLVED=0
+resolve_pi_launcher() {
+  [ "$PI_LAUNCHER_RESOLVED" -eq 1 ] && return 0
+  PI_LAUNCHER_RESOLVED=1
+  local out runtime
+  if out=$("$PI_LAUNCHER" --version 2>&1); then
+    return 0
+  fi
+  case "$out" in
+    *secret*material*|FAILED:*)
+      runtime="/root/tools/pi-agent/node_modules/.bin/pi"
+      if [ -x "$runtime" ]; then
+        printf 'note: the host pi launcher refused to start (%s); the end-to-end cases use the Pi runtime binary instead\n' \
+          "$(printf '%s\n' "$out" | head -1)"
+        PI_LAUNCHER="$runtime"
+        if [ -d /root/senpi2026/node24/bin ]; then
+          PI_LAUNCHER_PATH="/root/senpi2026/node24/bin:"
+        fi
+      fi
+      ;;
+  esac
+  return 0
+}
 # This host loads /root/bin/agent-shell-guard.sh through BASH_ENV (see /usr/local/bin/pi),
 # which defines env() as a refused command. A pane launched with `env A=1 pi` therefore
 # dies with BLOCKED_BY_AGENT_SECRET_GUARD / exit 126 before Pi ever starts, and every
@@ -405,6 +437,7 @@ JS
 }
 
 test_rendering_and_session_lifecycle() {
+  resolve_pi_launcher
   local fixture out status version
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
     echo "skip: node or npm not found for Pi calm renderer test"
@@ -928,7 +961,14 @@ async function assertStockHtmlRendering(command, submitData) {
   editorText = command;
   terminalInputHandler(submitData);
   const htmlRenderer = createToolHtmlRenderer({
+    // Pi renamed the lookup the HTML exporter uses: Pi 0.81/0.82 asked for
+    // getToolDefinition, Pi 1.3.0 asks for getToolRenderers and ignores the old
+    // key. With only the old key, the exporter looks the renderers up as
+    // undefined, catches the failure and returns no HTML at all, so every tool
+    // silently "disappears" from the export. Pass both so the fixture works
+    // against either Pi generation.
     getToolDefinition: (name) => tools.find((tool) => tool.name === name),
+    getToolRenderers: (name) => tools.find((tool) => tool.name === name),
     theme,
     cwd: process.cwd(),
   });
@@ -960,6 +1000,7 @@ editorText = "/export remapped.html";
 terminalInputHandler("\r");
 const unmatchedRenderer = createToolHtmlRenderer({
   getToolDefinition: (name) => tools.find((tool) => tool.name === name),
+  getToolRenderers: (name) => tools.find((tool) => tool.name === name),
   theme,
   cwd: process.cwd(),
 });
@@ -1083,6 +1124,7 @@ JS
 }
 
 test_operational_followup_turn_e2e() {
+  resolve_pi_launcher
   local project home config sessions version label case_name calm_state expected_notifications session_file pane i captain_line handled_line geometry_gap exact_session
   if ! command -v pi >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then
     echo "skip: pi or tmux not found for Pi operational follow-up E2E"
@@ -1245,15 +1287,21 @@ TS
     local extensions
 
     tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+    # Absolute extension paths, expanded here. Pi 1.3.0 resolves a relative -e
+    # argument against the Pi install directory rather than the launch
+    # directory, so the paths cannot stay relative. They are expanded in this
+    # shell on purpose: the pane command is run by another shell, and a
+    # single-quoted $project would reach that shell unexpanded and resolve to
+    # "/", which fails the extension load before Pi ever reaches the composer.
     if [ "$calm_state" = absent ]; then
       rm -f "$home/config/calm"
-      extensions='-e $project/followup-e2e.ts'
+      extensions="-e $project/followup-e2e.ts"
     elif [ "$calm_state" = default ]; then
       rm -f "$home/config/calm"
-      extensions='-e $project/.pi/extensions/fm-calm.ts -e $project/followup-e2e.ts'
+      extensions="-e $project/.pi/extensions/fm-calm.ts -e $project/followup-e2e.ts"
     else
       printf '%s\n' "$calm_state" >"$home/config/calm"
-      extensions='-e $project/.pi/extensions/fm-calm.ts -e $project/followup-e2e.ts'
+      extensions="-e $project/.pi/extensions/fm-calm.ts -e $project/followup-e2e.ts"
     fi
     if [ -z "$session_arg" ]; then
       session_arg="--session-dir '$sessions/$label'"
@@ -1263,7 +1311,7 @@ TS
     fi
 
     tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 160 -y 36 \
-      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-context-files --no-skills --no-prompt-templates --no-extensions $extensions $session_arg; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
+      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 PATH='$PI_LAUNCHER_PATH'\$PATH '$PI_LAUNCHER' --approve --no-context-files --no-skills --no-prompt-templates --no-extensions $extensions $session_arg; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
     i=0
     while [ "$i" -lt "$PI_BOOT_WAIT_TRIES" ]; do
       pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
@@ -1289,8 +1337,23 @@ TS
       fail "Pi follow-up $label case did not process the monitoring notification"
     fi
 
-    pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
-    [ "$(printf '%s\n' "$pane" | grep -Fc "CAPTAIN_ANSWER_$label" || true)" -eq 1 ] \
+    # Pi draws the transcript a beat after the session file records the turn,
+    # so the pane is polled until the captain answer is visible instead of
+    # being captured once. Counting what is then visible keeps the assertion
+    # honest: one answer is correct, two are a duplicate, none is a failure to
+    # render.
+    i=0
+    answer_count=0
+    while [ "$i" -lt 200 ]; do
+      pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
+      answer_count=$(printf '%s\n' "$pane" | grep -Fc "CAPTAIN_ANSWER_$label" || true)
+      [ "$answer_count" -ge 1 ] && break
+      sleep 0.05
+      i=$((i + 1))
+    done
+    [ "$answer_count" -ge 1 ] \
+      || fail "Pi follow-up $label case did not render the captain answer"
+    [ "$answer_count" -eq 1 ] \
       || fail "Pi follow-up $label case rendered a duplicate captain answer"
     assert_contains "$pane" "CAPTAIN_PROMPT_$label" "Pi follow-up $label case hid the genuine captain prompt"
     assert_contains "$pane" "MONITOR_HANDLED_${label}_ONE" "Pi follow-up $label case did not render the intended processing result"
@@ -1391,7 +1454,7 @@ JS
     tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
     printf '%s\n' on >"$home/config/calm"
     tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 160 -y 36 \
-      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-context-files --no-skills --no-prompt-templates --no-extensions -e '$project/.pi/extensions/fm-calm.ts' -e '$project/followup-e2e.ts' --session '$exact_session'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
+      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 PATH='$PI_LAUNCHER_PATH'\$PATH '$PI_LAUNCHER' --approve --no-context-files --no-skills --no-prompt-templates --no-extensions -e '$project/.pi/extensions/fm-calm.ts' -e '$project/followup-e2e.ts' --session '$exact_session'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
     i=0
     while [ "$i" -lt 120 ]; do
       pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
@@ -1443,6 +1506,7 @@ JS
 }
 
 test_hidden_block_geometry_e2e() {
+  resolve_pi_launcher
   local project home config sessions session_file snapshot expanded_snapshot calm_off_snapshot restarted_snapshot
   local version skill_line final_line gap i
   if ! command -v pi >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then
@@ -1551,7 +1615,7 @@ TS
     local session_arg=$1
     tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
     tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 100 -y 44 \
-      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' PI_OFFLINE=1 pi --approve --no-context-files --no-prompt-templates --no-extensions -e '$project/.pi/extensions/fm-calm.ts' -e '$project/geometry-provider.ts' $session_arg; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
+      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' PI_OFFLINE=1 PATH='$PI_LAUNCHER_PATH'\$PATH '$PI_LAUNCHER' --approve --no-context-files --no-prompt-templates --no-extensions -e '$project/.pi/extensions/fm-calm.ts' -e '$project/geometry-provider.ts' $session_arg; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
   }
 
   capture_geometry_viewport() {
@@ -1687,6 +1751,7 @@ TS
 }
 
 test_working_ship_geometry_and_lifecycle() {
+  resolve_pi_launcher
   local fixture out status version
   if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
     echo "skip: node or npm not found for Pi Calm working-ship test"
@@ -2591,6 +2656,7 @@ JS
 }
 
 test_interactive_terminal_e2e() {
+  resolve_pi_launcher
   local project config home session_file export_file export_dom default_snapshot expanded_snapshot hidden_snapshot active_before_snapshot active_hidden_snapshot export_snapshot restored_snapshot working_snapshot working_response_snapshot restarted_snapshot resumed_restored_snapshot hash_before hash_after now version chrome chrome_pid chrome_wait active_wait active_screen_wait boat_frame_one boat_frame_two boat_resized_snapshot boat_focus_snapshot boat_cleared_snapshot boat_hull_line boat_sail_line boat_column_one boat_column_two boat_line boat_color_snapshot boat_color_line boat_water_snapshot boat_water_line boat_water_first boat_water_changed boat_narrow_snapshot boat_narrow_sails boat_freeze_snapshot boat_resume_snapshot boat_freeze_column boat_freeze_sail boat_resume_column boat_resume_sail
   if ! command -v pi >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then
     echo "skip: pi or tmux not found for Pi calm interactive E2E"
@@ -2822,7 +2888,7 @@ TS
 JSON
 
   tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 180 -y 44 \
-    "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
+    "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 PATH='$PI_LAUNCHER_PATH'\$PATH '$PI_LAUNCHER' --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
   wait_for_text "$default_snapshot" "The deterministic tool example is complete." \
     || fail "Pi calm E2E did not reach the restored session transcript"
   assert_contains "$(cat "$default_snapshot")" "CALM_E2E_OUTPUT" "calm mode was not off by default"
@@ -3371,7 +3437,7 @@ JS
   tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 
   tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 180 -y 44 \
-    "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
+    "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 PATH='$PI_LAUNCHER_PATH'\$PATH '$PI_LAUNCHER' --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
   wait_for_text "$restarted_snapshot" "CALM_WORKING_E2E_RESPONSE" \
     || fail "Pi did not restore the persisted session after restart"
   assert_not_contains "$(cat "$restarted_snapshot")" "CALM_E2E_OUTPUT" "restart/resume reset Calm and restored a tool row"
@@ -3437,19 +3503,28 @@ test_ctx_tool_renderer_coverage() {
   cp "$ROOT/.pi/extensions/lib/fm-calm-ctx-renderer.ts" "$fixture/lib/fm-calm-ctx-renderer.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$fixture/lib/fm-operational-input.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
-  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
-  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
+  # Resolve the dependency by walking up from the package directory, the same
+  # way every other fixture in this file does. A hard-coded nested path is a
+  # broken symlink on any install that hoists its dependencies, and the failure
+  # then surfaces as an unrelated ERR_MODULE_NOT_FOUND.
+  ln -s "$PI_TUI_DIR" "$fixture/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_TYPEBOX_DIR" "$fixture/node_modules/typebox"
   printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
 
-  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" node --input-type=module 2>&1 <<'JS'
+  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" PI_TUI_DIR="$PI_TUI_DIR" node "${PI_NODE_FLAGS[@]}" --input-type=module 2>&1 <<'JS'
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 const packageRoot = process.env.PI_PACKAGE_DIR;
+// The pi-tui runtime is resolved by walking up from the package directory, so
+// it is read from the environment rather than assumed to sit under it: an
+// install that hoists its dependencies would otherwise fail here with an
+// unrelated ERR_MODULE_NOT_FOUND.
+const piTuiRoot = process.env.PI_TUI_DIR;
 const [{ ToolExecutionComponent }, { initTheme, theme }, { Text, setCapabilities }] = await Promise.all([
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/components/tool-execution.js`).href),
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/theme/theme.js`).href),
-  import(pathToFileURL(`${packageRoot}/node_modules/@earendil-works/pi-tui/dist/index.js`).href),
+  import(pathToFileURL(`${piTuiRoot}/dist/index.js`).href),
 ]);
 initTheme("dark");
 setCapabilities({ images: null, trueColor: true, hyperlinks: false });
@@ -3713,8 +3788,12 @@ test_account_level_home_resolution() {
   cp "$EXT" "$fixture/home-b/.pi/extensions/fm-calm.ts"
   cp -R "$ROOT/.pi/extensions/lib/." "$fixture/home-b/.pi/extensions/lib/"
   ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
-  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
-  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
+  # Resolve the dependency by walking up from the package directory, the same
+  # way every other fixture in this file does. A hard-coded nested path is a
+  # broken symlink on any install that hoists its dependencies, and the failure
+  # then surfaces as an unrelated ERR_MODULE_NOT_FOUND.
+  ln -s "$PI_TUI_DIR" "$fixture/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_TYPEBOX_DIR" "$fixture/node_modules/typebox"
   printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
 
   out=$(cd "$fixture" && \
@@ -3893,6 +3972,7 @@ test_pi_compat_degraded_adapter
 test_pi_compat_missing_adapter_exports
 test_ctx_tool_renderer_coverage
 test_rendering_and_session_lifecycle
+resolve_pi_launcher
 test_operational_followup_turn_e2e
 test_hidden_block_geometry_e2e
 test_working_ship_geometry_and_lifecycle
