@@ -11,22 +11,22 @@ owning document for anything longer.
 
 | Contract | Owning file | One-line rule |
 |---|---|---|
-| Surface identity | `/root/docs/agent-policy/SURFACE-IDENTITY.md` | Identity comes from SSH config, then Herdr's machine list, then the dispatch manifest. Never from the access inventory. A PATH-only miss is **not** proof of absence. |
-| Herdr payload | `/root/docs/agent-policy/HERDR-PAYLOAD-CONTRACT.md` | Measure a field live before writing a gate that reads it. Model identity comes from foreground `argv`, not from a pane label. |
-| To-Do style | `/root/docs/agent-policy/AGENT-TODO-PROMPT-STYLE.md` | Visible native To-Do list, ≥5 items, real dependency chain, exactly one in progress, with the required `[harness·model effort @Host]` prefix. Filesystem trackers are forbidden. |
-| Escape control | `/root/docs/agent-policy/OPERATOR-ESCAPE-CONTROL.md` | ESC belongs to the operator. Never send it to a live agent, never use it as a probe. |
-| Model routing | `/root/docs/agent-policy/HERDR_AGENT_ROUTING.md` | Route by the model visible in the live pane, not by client name or workspace label. |
-| Bounded execution | `/root/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md` | Attempt, retry and no-progress limits; stop with a named classification instead of repeating unchanged work. |
-| Domain routing | `/root/agent-work/warehouse/routing/DOMAIN-ROUTING.md` | Never infer an owner from a domain name, hostname, folder or label. `hetzner-compute` is compute-only. |
+| Surface identity | `/home/hd2admin/kun-agent-workspace/docs/agent-policy/SURFACE-IDENTITY.md` | Identity comes from SSH config, then Herdr's machine list, then the dispatch manifest. Never from the access inventory. A PATH-only miss is **not** proof of absence. |
+| Herdr payload | `/home/hd2admin/kun-agent-workspace/docs/agent-policy/HERDR-PAYLOAD-CONTRACT.md` | Measure a field live before writing a gate that reads it. Model identity comes from foreground `argv`, not from a pane label. |
+| To-Do style | `/home/hd2admin/kun-agent-workspace/docs/agent-policy/AGENT-TODO-PROMPT-STYLE.md` | Visible native To-Do list, ≥5 items, real dependency chain, exactly one in progress, with the required `[harness·model effort @Host]` prefix. Filesystem trackers are forbidden. |
+| Escape control | `/home/hd2admin/kun-agent-workspace/docs/agent-policy/OPERATOR-ESCAPE-CONTROL.md` | ESC belongs to the operator. Never send it to a live agent, never use it as a probe. |
+| Model routing | `/home/hd2admin/kun-agent-workspace/docs/agent-policy/HERDR_AGENT_ROUTING.md` | Route by the model visible in the live pane, not by client name or workspace label. |
+| Bounded execution | `/home/hd2admin/kun-agent-workspace/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md` | Attempt, retry and no-progress limits; stop with a named classification instead of repeating unchanged work. |
+| Domain routing | `/home/hd2admin/agent-work/warehouse/routing/DOMAIN-ROUTING.md` | Never infer an owner from a domain name, hostname, folder or label. `hetzner-compute` is compute-only. |
 
 ## Where work comes from, and where it goes
 
-- **Tickets arrive here:** `/root/agent-work/deightonllm-firstmate/INBOX/`. Any channel, one
+- **Tickets arrive here:** `/home/hd2admin/agent-work/deightonllm-firstmate/BRANDON-COMPUTE-COMMS/from-brandon-compute/`. Any channel, one
   inbox. Nothing is dropped; malformed input is reported, never discarded.
 - **The dashboard is the queue:** `data/campaign-dashboard-20261015/board.md` (authoritative)
   and `board.html` (local view).
-- **The operating model:** `/root/agent-work/deightonllm-firstmate/PLAN.md`.
-- **Credentials and hosts:** `/root/agent-work/warehouse/access/SAAS_ACCESS_INVENTORY.md` —
+- **The operating model:** see `AGENTS.md` §10 for backlog and task lifecycle conventions.
+- **Credentials and hosts:** `/home/hd2admin/agent-work/warehouse/access/SAAS_ACCESS_INVENTORY.md` —
   read it before any SaaS work; never ask the operator for a credential that is already listed.
 - **Owner scope (authority):** `data/agent-scopes.tsv` on Hetz. Machine-readable. The gate
   enforces it; prose never overrides it.
@@ -41,8 +41,7 @@ owning document for anything longer.
 - **`srv1137994` / `elevatesci-vps` is a HARD GATE.** Never touched, probed or routed to.
   The former "Aminolifesciences" company is **folded** — that name is retired in current docs;
   historical evidence filenames keep it because they are records. Elevate does not supersede it.
-- **Instant Controller↔Hetz notification is live** (file first, then guarded notify, defer
-  while busy, dedupe by content hash). The 5-minute catch is the only fallback.
+- **Instant Controller↔Hetz notification is pending** — not yet ported, validated, or activated. The feature is designed but unmerged; do not claim it live until a fresh correlated wake confirms it. The 5-minute watcher poll is the current fallback.
 - **Three retained Core branches are held** pending the Captain's named merge approval.
 
 ## The failures we are actually fixing

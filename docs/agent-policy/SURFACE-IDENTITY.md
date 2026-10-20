@@ -16,7 +16,7 @@ else. It is **not** `elevatesVPS` / `elevatesci-vps`, **not** `srv1137994`, and 
 **no client files**. It must never be referenced as, or routed to, a client-files host. Do not
 track it as a separate coding surface; it belongs to HD2.
 
-Hetz Firstmate home authority (measured 2026-10-15): `/home/hd2admin/agent-work/deightonllm-firstmate`. The read-only durable-record criterion found 11 task `.meta` records in candidate A and 0 in `/home/hd2admin/kun-agent-workspace/firstmate` (candidate B). Candidate B is not authoritative and was left untouched. The surface roster is the parity audit's home-path source; update that roster rather than changing the audit implementation.
+Hetz Firstmate home authority: `/home/hd2admin/kun-agent-workspace`. The live session holds its lock, drains its queue, and runs the current AGENTS.md with swarm and lane sections absent from the other candidate home. Surface roster updates flow from measured live state; update that roster rather than overriding session reality.
 
 Deprecated alias `srv797124-hd2` and `Core-distro_dedicated_server` are NOT part of the coding-surface fleet.
 
@@ -92,7 +92,7 @@ Known collision to be aware of: HD2's hostname `vmi3238503.contaboserver.net` is
 
 ## Roster and enforcement
 
-Fleet membership, expected paths, and conformance checks are machine-readable in `/root/agent-work/surfaces.conf` and enforced by `/root/bin/surface-parity-audit`. Controller-measured ground truth is `data/surface-parity-20261015/VERIFIED-INFRA.md`.
+Fleet membership, expected paths, and conformance checks are machine-readable in `/root/agent-work/surfaces.conf` and enforced by `/root/bin/surface-parity-audit`. Measured ground truth for the Controller surface is published through the surface parity audit.
 
 Adding or retiring a surface is a deliberate operator action: update this file, `surfaces.conf`, and re-run the audit in the same change.
 
