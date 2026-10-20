@@ -316,6 +316,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/tracker-servers.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/turnend-guard.md",
       "audience": "operator-current"
     },
