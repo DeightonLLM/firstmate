@@ -27,7 +27,7 @@ Use the session-read section first. Open dispatch/blocker guidance when its trig
 - [`calm.md`](calm.md) — Pi Calm presentation behavior, persistence, and limits.
 - [`calm-mode-feasibility.md`](calm-mode-feasibility.md) — version-scoped Calm implementation evidence and supported API boundaries.
 - [`decision-hold-lifecycle.md`](decision-hold-lifecycle.md) — deterministic mechanism for recording and completing unresolved investigation decisions.
-- [`ticket-board.md`](ticket-board.md) — one-screen read-only view over the ticket system: what needs the Captain's input, what is under way, and what is planned.
+- [`ticket-board.md`](ticket-board.md) - one-screen read-only view over the ticket system: what needs the Captain's input, what is under way, and what is planned.
 - [`subagent-guard.md`](subagent-guard.md) — guard preventing an untracked primary-session delegation bypass.
 - [`arm-pretool-check.md`](arm-pretool-check.md) — command-shape seatbelt for arming the watcher safely.
 - [`cd-guard.md`](cd-guard.md) — seatbelt against persistent shell directory changes into project clones.
