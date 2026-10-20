@@ -1,6 +1,49 @@
 # Backlog
 
 ## In flight
+- [ ] core-completion-20261020 - Verify Core end to end and close evidenced completion gaps; reconcile conflicting skill instructions (repo: core-distro-saas-clean) (kind: scout) (since 2026-10-20)
+  # Core completion evidence reconciliation - 2026-10-20
+
+  Audit wave delivered six evidence artifacts and one independent Luna review. This is NOT Core completion. Review read reports and selected browser logs, not independent execution of all tests. Exact actual MCode response model remains unverified; CLI arguments explicitly pinned M3.1-Flash-Preview.
+
+  ## Accepted bounded findings
+  - Add Leads: true-pointer fixture test fails when a lead card is open. Normal entry, modal paint order and hidden-ancestor repair are distinct. Old branch map incorrectly attributes pointer interception to the nesting guard. Failure reproduced against a46cea9 and later 43eae3d fixture bytes, not authenticated production.
+  - Source tests at a46cea9 pass; named tracked ZIP fails PA-04 source-contract regression. Sanitization forbids shipping SQL; do not copy SQL back just to restore old artifact shape. Installer silently skips absent geo data. Browser acceptance and runtime tenant-isolation proof remain unverified.
+  - Live public observations: header collision, short-phone menu clipping, Polish/Spanish links returning 404, broken/placeholder sitemaps and manifest issues. A missing form action or hash href alone does not establish a broken JS-driven form/CTA: worker did not trace/submit them. Do not accept that overclaim. Public site origin/source binding remains unverified; edge TLS is not origin certificate verification.
+  - Locally evidenced backup copy shares source filesystem; not a distinct failure domain. No backup elsewhere evidenced by reviewed corpus; global absence unproven. Missing log plus fresh cron does not conclusively prove no manual or alternative run. Migration stages lack delivered completion proof; do not duplicate HD2's work or reopen prior authority decisions from stale prose.
+  - Naming contract duplicated; validator grammar paths disagree. Current explicit operator instruction already chooses root naming owner and harness-bearing keys; no new Captain naming choice is needed. Existing config conflicts with current MCode M3.1/Luna high routing. Proposal not applied; proposal also contains overbroad retired-model warnings and claims (Luna/Gemini are not universally retired; valid distinct warehouse file paths do not inherently collide), which must not be copied into implementation.
+
+  ## Source concurrency correction
+  Read-only verification found canonical main and cached origin/main moved to 43eae3d34e7a47e6060d8d50093b7f5ab345b66a during the wave, via 241cf4f (HD2 FirstMate) and a merge by Firstmate Coordinator, adding Top Cities. This parent dispatched only read-only project work and did not create those commits. Attribution to a sibling of this workflow is NOT established. Source currently has untracked evidence/; preserve it. No rollback, reset, branch removal or competing write to that primary copy.
+
+  ## Next work
+  Prepare independent fixes in new isolated local copies: Add Leads pointer path; truthful local regression harness; sanitized deterministic artifact build; Core public theme header/mobile geometry after exact local source discovery; SaaS deploy metadata/template corrections with source binding limits; instruction/validator consistency under the already selected root contract. All remain uncommitted and unpublished pending Captain's explicit commit/merge/production authority. Shared dirty baseline must be preserved and provenance captured before changes. Unverified deployment/remote-backup facts go to HD2 through the existing supported route.
+
+  ## Artifacts
+  Six seam directories under data/2026-10-20/core-completion; independent review luna-review/review.md; original workflow 5a8846ea-65c8-42ce-aabf-0514c3c4734d. Missing repo-tests/report.md recovered verbatim from delivered runner-result.md with recovery note; no rerun.
+
+- [ ] core-saas-baseline-20261018 - Document definitive Core SaaS baseline and agree completion rubric with Crisp-R data/core-saas-baseline-20261018/report.md (repo: core-distro-saas-clean) (kind: scout) (since 2026-10-18)
+  # Core SaaS baseline — Captain context, 2026-10-18
+
+  ## Current Captain instruction
+  Core Distro remains sole product focus. The SaaS belongs on Core's completion radar, not a separate background programme. Captain says substantial SaaS work/research exists on servers; a definitive working baseline was never established/published to GitHub and subsequent builds became confused. Captain recalls music-metrics.com as closest to completion, and explicitly clarified: Music Metrics belongs to HD2 infrastructure and is a REFERENCE SITE ONLY for this work. It is not a Core delivery target, not a new project to ship, and not authority to copy, move or change its infrastructure. Crisp-R is the primary historical/source contact for the rundown and collaborative completion rubric.
+
+  Captain identifies these surfaces:
+  - core-distro.com — Core public/product surface.
+  - data.core-distro.com — associated SaaS.
+  - agentes.core-distro.com — associated dashboard, EXACT Captain spelling. Existing docs often say agents.core-distro.com; confirm spelling and relationship with Crisp-R, do not silently substitute.
+  - music-metrics.com — HD2-infrastructure REFERENCE SITE ONLY, per explicit Captain correction. Confirm exact reference identity/artifacts with Crisp-R. Not a Core product target, not an approved Core baseline, and no authority to modify or migrate it.
+
+  ## Authorized next work
+  Ask Crisp-R via established Controller route for authoritative history, relevant research/source artifacts, version/branch/host identity, current working candidate and completion rubric. Use existing Core/local evidence and sanctioned read-only document/source access, not new credentials or host modifications. Continue independent source/version inventory while answer pending. Use Music Metrics only as a read-only HD2 reference for applicable patterns/research, not as a presumed Core source baseline or a deliverable. Compare Core variants by explicit evidence, not names or timestamps alone.
+
+  Produce definitive source-of-truth record candidate: repo/host/path/revision or uncommitted-state identity; source/deployment binding; what works, what is untested, what is broken, dependencies and retained work. Record baseline uncertainty until measured. No reset, force, discard, stash, merge, publication or deployment is authorized by this investigative request. GitHub publication is not implied; absent baseline is not permission to overwrite history or create an unmentioned remote.
+
+  ## Completion rubric to agree with Crisp-R
+  Three Core surfaces plus shared SaaS reference: product intent, functional journeys, source/version provenance, data/auth/tenant boundaries, integrations, UX/responsive/accessibility, executable evidence, operational readiness, and explicit approved scope. Completion of documentation, product acceptance, implementation, tested behavior and production readiness remain separate. Music Metrics research is reusable evidence, not automatic approved Core requirements.
+
+  ## Existing work
+  Keep data/prd-review-candidates/core-only-20261018/ and prior review outputs. Newly supplied SaaS context supersedes any inference that older local core-distro-saas-clean snapshots alone identify the intended whole Core product. Do not discard earlier analysis; tag which product/surface each finding actually describes. Existing workflow6976d781 finishes its current output/review, which is predecessor evidence, not the final complete scope after this intake.
 - [ ] ticket-0017-artifact-verify - TICKET 0017 independent artifact verification (repo: firstmate) (kind: scout) (since 2026-10-15)
   TICKET 0017 — independent verification of theme artifact `50ae6849c190`. READ ONLY. Verify nothing else.
 
@@ -164,6 +207,68 @@
 - [ ] elevate-ops-source-map - Locate the BR-ELEVATE-OPS-001 source and mock-test lane (repo: firstmate) (kind: scout) (priority: 4) (since 2026-09-23) (hold: Awaiting source owner to provide repository, tests, and build or test command) (hold-kind: external)
   Read-only source and test discovery for the ElevateSci Ops provider-adapter ticket BR-ELEVATE-OPS-001. Separate this from the elevatesci.com mobile CSS audit. The current traceability record marks live/provider work AUTHORIZATION-blocked and permits local mock-test work only. Find the owning repository, current source/tests, build/test entry point, evidence and exact remaining blocker. Do not edit, authenticate to, or change a provider or production service.
 ## Queued
+- [ ] core-top-cities-preset-correctness-20261020 - Make the Top Cities preset return N uncovered cities (repo: core-distro-saas-clean) (kind: ship) (priority: 1) (since 2026-10-20) blocked-by: top-cities-preset-limit
+  Captain's symptom: selecting Top 200 shows fewer than 200 new cities, and already-scraped cities occupy the top 200 while unscraped ones are available.
+  The implementation is derived from the `top-cities-preset-limit` lane artifact, which must exist and carry its verdict before this item starts.
+  The firstmate already established that the client calls `getTopCities` and then filters out covered cities itself, so the limit appears to be applied before coverage is excluded, and that the server's covered set and the client's name-match coverage check are two different mechanisms.
+  The fix must make the server return up to the requested number of uncovered cities, continuing past covered ones, and must report covered, new, in-preset and beyond-preset counts truthfully for the requested scope.
+  Acceptance: selecting Top 200 yields 200 new cities, the status line counts agree with the selection, a local offline test proves it, and no deploy happens without the Captain.
+- [ ] core-coverage-truth-repair-20261020 - Make one notion of covered authoritative so the card and the status line cannot disagree (repo: core-distro-saas-clean) (kind: ship) (priority: 1) (since 2026-10-20) blocked-by: coverage-truth-model
+  Captain's symptom: the card claims 51 searched states and 1,962,186 city searches while the Top Cities status line can claim `Covered: 1`, and the captain's conclusion is that the maths and logic around the database are not correct.
+  The implementation is derived from the `coverage-truth-model` lane artifact, which must exist and carry its verdict before this item starts.
+  The artifact must map every displayed number to its source query and grain, so the fix can state which single notion of covered becomes authoritative and which displayed numbers need rewording.
+  Acceptance: the card and the status line cannot disagree for the same list, every displayed number has one documented source, and a local offline test proves it.
+- [ ] core-aggregate-performance-20261020 - Fix the slow aggregate paths, starting with the highest-leverage change (repo: core-distro-saas-clean) (kind: ship) (priority: 1) (since 2026-10-20) blocked-by: aggregate-scan-performance
+  Captain's symptom: selecting Top 200 waits an agonising time and the app is slow throughout, and the captain judges the coding poor on speed even for the machine's power.
+  The implementation is derived from the `aggregate-scan-performance` lane artifact, which must exist and carry its verdict before this item starts.
+  The prior measurement to confirm or correct is that the admin list overview takes about 15 seconds because it aggregates city counts across 21 lists and 949k rows with one full scan per list, and the candidate fix is a per-list city summary table, which is a schema change.
+  Acceptance: the ranked list is applied in order, the admin list overview and the Top 200 selection each have a recorded before and after time, and any schema change is called out for the Captain before it lands.
+- [ ] core-ui-latency-dark-flash-20261020 - Stop the lead card click stalling and remove the white flash before the cards render (repo: core-distro-saas-clean) (kind: ship) (priority: 2) (since 2026-10-20) blocked-by: ui-latency-and-dark-flash
+  Captain's symptom: pressing a card inside the leads list does nothing for a long time and then opens, while Add Lead opens instantly, and loading in dark mode shows a blank white page before the cards appear.
+  The implementation is derived from the `ui-latency-and-dark-flash` lane artifact, which must exist and carry its verdict before this item starts.
+  The fix must be ranked by user-visible effect, and the first paint in dark mode must be dark.
+  Acceptance: the lead card opens without a long stall, the first paint in dark mode is dark, and a local offline test proves both.
+- [x] core-coverage-data-semantics-decision-20261020 (done 2026-10-20 — Captain decided: an imported lead's pre-scraped cities and states ARE coverage, the import must reflect them, and exports must carry them; PA-11/12/13 ratified as drafted) - Decide the canonical covered relation and what searched means (repo: core-distro-saas-clean) (kind: captain) (priority: 1) (since 2026-10-20)
+  The Captain's decision, recorded 2026-10-20: when an imported lead card carries pre-scraped cities and states, the import must reflect that as coverage, and the exports must export it.
+  So every coverage source counts as covered, which means a scrape, an import and a lead batch all create coverage rows, and the only defect in the current behaviour is the label.
+  The `Searched Areas` heading must go, and the display must name what it is counting, with imported and batched geography counted as covered areas rather than as searches.
+  The CSV export must carry the covered searched-areas data, which the repository's own proposed criterion PA-05 already names as the CSV portability and searched-area round trip.
+  The coverage relation therefore needs its `source` column of scrape, import or batch to be part of the display and part of the export, so the operator can see which areas were searched and which came in with an import.
+  The remaining sub-decisions that this answers: an imported or batched row does count as a covered area, coverage stays per list, and the credits meter leaves the list header.
+  Acceptance: the decisions are recorded with their rationale, the implementation lanes that depend on them can be written, and the search history table can mean covered again.
+- [x] core-acceptance-criteria-ratification-20261020 (done 2026-10-20 — the Captain ratified PA-11, PA-12 and PA-13 as drafted, and accepted the ranked order for the 15 second overview, the grouped-aggregate rewrite first and the summary table as the follow-on) - Ratify the missing acceptance criteria for preset correctness, latency and first paint (kind: captain) (priority: 1) (since 2026-10-20)
+  The Captain ratified all three criteria as drafted on 2026-10-20, and the ratification record with the baseline commit is in `data/core-remediation/proposed-criteria.md`.
+  The three criteria may now be reported as PASS or FAIL against a recorded commit, and never as PASS without the local evidence each criterion names.
+
+  The repository's `CORE_DISTRO_V3_PROPOSED_PRODUCT_ACCEPTANCE_SPEC.md` is marked PROPOSED ONLY and every criterion in it is UNRATIFIED, and it has no criterion for Top Cities preset correctness, for speed, or for first paint, which is why these defects could ship.
+  The primary proposes three new criteria, PA-11 preset correctness, PA-12 latency budgets, and PA-13 first paint, drafted in `data/core-remediation/plan.md`.
+  The Captain ratifies or amends the wording, because a criterion is only enforceable once it is ratified, and the spec's own rule is that a local source-contract result may be reported only when every ratified, in-scope criterion is PASS.
+  Unratified criteria must never be reported as passing.
+  Acceptance: the three criteria are ratified with their exact wording, scope and baseline revision recorded, and the local test plan gains the matching checks.
+- [ ] core-enrichment-surface-hetzner-ready-20261020 - Get the enrichment surface ready to run on this Hetzner host (repo: core-distro-saas-clean) (kind: ship) (priority: 1) (since 2026-10-20)
+  The Captain confirmed the scraping hold and then required the enrichment surface to be ready to go on this Hetzner host, because the hold is not a reason to leave the next surface unprepared.
+  The enrichment surface is the Re-Enrich All action, the provider calls it makes, and the webhook callback that projects provider results back onto the leads and their contact flags.
+  The KVM8 migration is already done and its evidence is committed, including the loopback vhost and the public fastcgi vhost configuration, so the host side of the path is in place.
+  What has to be established is what remains before the surface is genuinely runnable from here.
+  Establish the enrichment request path, the provider credentials it needs and whether they are present, the callback path and whether it is reachable from this host, the local source-contract evidence the proposed criterion PA-08 already names, and whether the current provider keys are the exposed ones.
+  Acceptance: the surface is proven runnable from this host with local offline evidence, the credential situation is stated plainly, and anything that still needs the Captain is named as one specific item.
+- [ ] core-distro-cutover-reconcile-20261020 - Finish the public Core cutover and reconcile it against the merged canonical (repo: core-distro-saas-clean) (kind: ship) (since 2026-10-20)
+  The merge is closed and safe: the primary merged the P1 unification branch into `origin/main` as `d5db90b`, added the Add Leads entry fix `6b3699b` and the maintained browser regression `591c9a0`, and the HD2 first mate then carried a credential scrub `5c1606b` and evidence commits on top, so `origin/main` is now `06b43d3`.
+  Nothing was force-pushed, the branch is kept, and the pre-merge state stays addressable at `pre-merge-main-20261020` and `backup/main-pre-merge-20261020`.
+  The regression is green at 10 of 10 expectations on the merged tree, measured RED at 6 of 10 against the pinned broken canonical.
+  Two items are still open.
+  First, production still runs `94e88f4c`, so `main` is one CSS commit ahead of production and any deploy from `main` must re-run the browser gate first.
+  Second, the admin list overview takes about 15 seconds for the admin account because it aggregates city counts across 21 lists and 949k rows with one full scan per list, and the fix needs a per-list city summary table, which is a schema change.
+  The Captain's own 2-minute site check is specified in the HD2 inbound message of 2026-10-20: sign in at `https://data.core-distro.com/login.php` as `admin@core-distro.com`, open Lead Engine, click Top Cities, and expect the panel under a second with Top 100 pre-selected and the status line `Total in US: 2000 | Covered: 1 | New (all): 1999 | In this preset: 100 | Beyond preset limit: 1899 across 34 states.`, then Top 200, then the map, and expect the 15 second wait on the list overview to be the known open item and not a regression.
+  Acceptance: the deployed app serves the merged canonical, the browser regression passes against the deployed surface, the per-list city summary table exists or the Captain accepts the 15 second overview, and the Captain's site check is recorded.
+- [ ] rotate-exposed-provider-keys-20261020 - Rotate the exposed RapidAPI and Replicate keys (kind: captain) (since 2026-10-20)
+  Both keys were reported as exposed in the HD2 inbound message on 2026-10-20.
+  No value has been read, stored or rotated by the fleet, and this is deliberately tracked rather than acted on.
+  Acceptance: the Captain confirms rotation, and the rotated values never enter the repo, the backlog or any report.
+- [ ] primary-checkout-reconcile-20261020 - Reconcile the primary checkout with origin/main and the local hook copies (repo: kun-agent-workspace) (kind: ship) (since 2026-10-20)
+  The primary checkout is on `main` at `395f2ab0` with 36 dirty paths and is now 5 commits behind `origin/main` at `aa490138`.
+  It also carries local copies of `bin/fm-herdr-agent-report.sh`, `bin/fm-install-mcode-herdr-agent.sh`, `tests/fm-herdr-agent-report.test.sh` and `extensions/mcode-herdr-agent/`, which are now tracked upstream, so a future fast-forward will refuse to overwrite them.
+  Acceptance: the primary checkout is fast-forwarded onto `origin/main` with its dirty paths intact and no file left behind that the fast-forward would overwrite.
 - [ ] core-elevate-chatbot-rollout - Implement HD2-branded local-model chatbots for Core and Elevate blocked-by: local-chatbot-trial-map-and-benchmark-core-elevate-chatbots-d1 (kind: ship) (priority: 1) (since 2026-09-23) (hold: Dubz now reports that the controller crawled and ingested nine Core pages, then requests a coverage audit; that external report is not locally verified. Prior direct instruction prohibits access to AnythingLLM, port 3001, production runtime or config, credentials, and external sites. Option A: explicitly authorize only a read-only audit of /tmp/core-crawl/manifest.csv, the requested local HTTP API and chat queries using the local credential, and targeted public-page reads if a gap requires them; no uploads, embedding updates, container operations, or Elevate ingestion. Option B: maintain the no-access boundary and treat the controller's claims as unverified. No manifest read, site request, credential read, API call, upload, embedding update, chat test, or runtime inspection has occurred here.) (hold-kind: captain)
   Captain hold set: 2026-09-26T16:42:39Z
 
@@ -222,24 +327,12 @@
   Origin: controller-inbox-local-repair-20261013
   Decision key: default
   State: awaiting captain decision.
-- [ ] controller-inbox-local-repair-20261013-decision-automatic-receipt - Automatic receipt remains unproved and was never re-armed (repo: firstmate) (kind: captain) (since 2026-10-13) (hold: The canary predates any qualifying away entry and the return catch-up gate never cleared, so automatic receipt was never observed. Reaping was authorized by the captain on 2026-10-13 with this decision explicitly left open rather than silently closed.) (hold-kind: captain)
-  Origin: controller-inbox-local-repair-20261013
-  Decision key: automatic-receipt
-  State: awaiting captain decision.
 - [ ] core-stage-chunk2-route-inventory - Inventory which Core staging routes exist versus missing (repo: core-distro-stage) (kind: ship) (since 2026-10-13)
   READ-ONLY. Determine which local WordPress staging routes actually exist versus which are missing, using existing tests tests/multipage-smoke.mjs and tests/wp-page-records.mjs and the repo docs. Produce an evidence-backed gap list. No route creation, no DB writes, no content changes, no production fetch.
 - [ ] core-stage-chunk3-visual-parity - Capture visual parity evidence for the Core staging homepage blocked-by: core-stage-chunk1-test-baseline (repo: core-distro-stage) (kind: ship) (since 2026-10-13)
   Use chrome-devtools-axi to capture desktop and mobile screenshots of http://100.106.6.22:8087/ against theme/public-homepage-body.html. This is the documented remaining check: static and HTTP checks are not pixel-match proof. Do not submit the newsletter form, do not activate the chatbot, do not request production pages, do not add a public listener.
 - [ ] core-stage-chunk1-test-baseline-decision-default - Core staging isolation cannot be satisfied without a decision (repo: kun-agent-workspace) (kind: captain) (since 2026-10-13) (hold: The staging tree at /home/hd2admin/campaign/core-distro-stage is not a git repository, so no isolated worker copy can exist and the mandatory isolation assertion fails before any work. A worker confirmed this refusal at runtime. Isolation posture is now a question to the controller firstmate, not to the captain.) (hold-kind: captain)
   Origin: core-stage-chunk1-test-baseline
-  Decision key: default
-  State: awaiting captain decision.
-- [ ] core-v3-spec-rewrite-decision-default - V3 rewrite cancelled - original spec recovered intact (repo: kun-agent-workspace) (kind: captain) (since 2026-10-13) (hold: Original spec exists as commit 538e4c2d3cd8e69bb23e4a12795c7ee7a3d77fdc, 577 lines, dated 2026-09-27, on branch fm/core-v3-product-acceptance-spec-0927 in projects/core-distro-saas-clean. The rewrite was cancelled by firstmate to avoid duplicating and diverging from the real deliverable. Recovered spec remains unlanded pending merge authority.) (hold-kind: captain)
-  Origin: core-v3-spec-rewrite
-  Decision key: default
-  State: awaiting captain decision.
-- [ ] unlanded-work-guard-fix-decision-default - No guard defect found - existing unlanded-work refusal works (repo: kun-agent-workspace) (kind: captain) (since 2026-10-13) (hold: Worker could evidence no concrete guard or discoverability defect and confirmed the local-only unlanded-work refusal is present and functioning. No speculative fix or reproduction was written. The primary's earlier data-loss claim was wrong on two counts: the work was never lost, and the guard was never defective. Local-only delivery is contractually meant to leave work unlanded pending merge authority.) (hold-kind: captain)
-  Origin: unlanded-work-guard-fix
   Decision key: default
   State: awaiting captain decision.
 - [ ] core-stage-chunk4-spec-challenge-decision-pa04-owned-list-gap - PA-04 addLeads does not verify list ownership before insert (repo: kun-agent-workspace) (kind: captain) (since 2026-10-13) (hold: The spec's own section 11 note records that addLeads accepts a caller-supplied list_id without first checking the list belongs to that caller; inserted rows carry the caller user_id but the parent list is not verified as owned. On the stated baseline the PA-04 owned-list condition cannot pass, and if this reads correctly an unauthenticated-ownership write path exists. This is a source correction or a confirmed product-policy exception, which is a captain and product-owner decision.) (hold-kind: captain)
@@ -292,22 +385,6 @@
   State: awaiting captain decision.
 - [ ] clear-closeout-20261013 - Close-out pass: entries whose work is already done (repo: firstmate) (kind: scout) (since 2026-10-14)
   Entries with a `done:` status line or a report on disk. Verify the evidence independently - read the status tail and check the artifact actually exists. Classify each as GENUINELY DONE or NOT ACTUALLY DONE. The prior audit wrongly classified two entries as done that were not; do not repeat that. Report which should be closed and which were misclassified. TARGET ENTRIES: pi-trust-prompt-fix-20261005, widget-consent-fix-20261005, hetz-gate-A-20261005, elevate-rag-diagnosis-20261005, kun-config-inventory, kun-video-source-study, core-v3-product-acceptance-spec-0927, core-v3-product-acceptance-minimax-test-0927, fleet-view-live-actions, backlog-truth-pass
-- [ ] clear-domain-20261013-decision-default - Backlog clearing pass complete, verdicts in report (repo: kun-agent-workspace) (kind: captain) (since 2026-10-14) (hold: Read-only classification pass over backlog entries. Verdicts and per-entry evidence are in data/clear-domain-20261013/report.md. The prior pass had already closed the genuinely-done entries live, so most verdicts confirm existing state rather than change it. No task state was mutated by the worker.) (hold-kind: captain)
-  Origin: clear-domain-20261013
-  Decision key: default
-  State: awaiting captain decision.
-- [ ] clear-obsolete-20261013-decision-default - Backlog clearing pass complete, verdicts in report (repo: kun-agent-workspace) (kind: captain) (since 2026-10-14) (hold: Read-only classification pass over backlog entries. Verdicts and per-entry evidence are in data/clear-obsolete-20261013/report.md. The prior pass had already closed the genuinely-done entries live, so most verdicts confirm existing state rather than change it. No task state was mutated by the worker.) (hold-kind: captain)
-  Origin: clear-obsolete-20261013
-  Decision key: default
-  State: awaiting captain decision.
-- [ ] clear-core-20261013-decision-default - Core clearing pass complete, verdicts in report (repo: kun-agent-workspace) (kind: captain) (since 2026-10-14) (hold: Read-only classification of Core Distro backlog entries. Verdicts with file:line evidence are in data/clear-core-20261013/report.md. Two entries verified genuinely done, three still need work with evidence, one not actionable in this home. Worker correctly declined to mutate task state, which is firstmate-owned.) (hold-kind: captain)
-  Origin: clear-core-20261013
-  Decision key: default
-  State: awaiting captain decision.
-- [ ] offload-backlog-close-20261014 - Close every backlog entry the evidence proves closable (repo: firstmate) (kind: scout) (since 2026-10-14)
-  Firstmate owns the decision; you gather the proof. For every backlog entry that is GENUINELY DONE, produce the evidence that proves it, then close it with tasks-axi done. Close only with proof. Never close 'ready in branch' or 'partial' - those are NOT done.
-- [ ] offload-backlog-phantom-20261014 - Close backlog entries that never existed (repo: firstmate) (kind: scout) (since 2026-10-14)
-  Close entries with no report, no status record and no task directory. They implied work that never happened. Verify absence first, then close. Produce a one-line reason per entry.
 - [ ] controller-msg-triage-20261015-decision-watcher-tdd-publication-authorization - controller-watcher-tdd needs two Captain authorizations to finish (repo: kun-agent-workspace) (kind: captain) (since 2026-10-15) (hold: Controller decision WATCHER-TDD-CAPTAIN-DECISION-ANSWER.md approved Option 1 and said 'Do not merge', but the task is still parked: no-mistakes lint is red only on four warnings in out-of-scope fm-brief.sh/fm-teardown.sh, and push/PR/CI stages remain skipped, so there is no PR. Captain must authorize or decline the out-of-scope lint cleanup AND a no-skip publication run.) (hold-kind: captain)
   Origin: controller-msg-triage-20261015
   Decision key: watcher-tdd-publication-authorization
@@ -383,24 +460,90 @@
 - [ ] m27.4-recurring-failure-answers - Publish durable answers and enforcement for the recurring failures: delivery vs receipt, contradictory measurements, unnamed lanes, model visibility, missing source, gate conflicts (repo: kun-agent-workspace) (kind: docs) (since 2026-10-17)
 - [ ] m27.5-widget-logo-fixes - Widget panel proportions and logo aspect fixes, tracked with owners and acceptance, pending source and gate decisions (repo: kun-agent-workspace) (kind: ship) (since 2026-10-17)
   RESOLVED 2026-10-17: key=ask-questions-shortcut CLOSED (handler bound, mobile hidden by hidden 2xl:block = expected responsive). Panel sizing CONFIRMED CORRECT (400x640 desktop, 366x680 mobile) - earlier 0x0 was the widget's own allm-hidden lazy-show state, NOT a reboot regression. ROOT CAUSE of empty chat: staging widget is configured baseApiUrl=https://llm.hd2.ai/api/embed embedId=fd029baa-...; POST stream-chat returns 404. That is a client site pointed at an HD2 endpoint = architecture violation. key=chat-history-scroll remains BLOCKED until streaming answers. Secondary: staging nginx has no location /llm/chat/ block (owner: staging host owner, gated).
+- [ ] doc-audience-diagnosis-20261018-decision-privacy-safe-index-repair - Approve privacy-safe repository index repair (repo: firstmate) (kind: captain) (since 2026-10-18) (hold: Approve untracking only the private paths identified by the diagnosis while preserving every local file, and classifying the public documents; no history rewrite, push or merge.) (hold-kind: captain)
+  Origin: doc-audience-diagnosis-20261018
+  Decision key: privacy-safe-index-repair
+  State: awaiting captain decision.
+- [ ] core-prd-review-20261018-decision-product-identity - Decide Core Distro product identity (repo: firstmate) (kind: captain) (since 2026-10-18) (hold: The reviewed candidate preserves conflicting product descriptions. Record the intended product scope before implementation; architecture cannot decide product identity implicitly.) (hold-kind: captain)
+  Origin: core-prd-review-20261018
+  Decision key: product-identity
+  State: awaiting captain decision.
+- [ ] core-prd-review-20261018-decision-adr-acceptance - Decide Core Distro production architecture proposal (repo: firstmate) (kind: captain) (since 2026-10-18) (hold: ADR Option B is reported as proposed, not accepted. No cutover or migration until an explicit captain decision; unavailable ADR content must not be inferred.) (hold-kind: captain)
+  Origin: core-prd-review-20261018
+  Decision key: adr-acceptance
+  State: awaiting captain decision.
+- [ ] local-alert-logging-20261018-decision-one-log-cycle - Approve one direct append-only local alert cycle (repo: firstmate) (kind: captain) (since 2026-10-18) (hold: The reviewed implementation passes fixture tests but its live append was permission-refused. Approve one controller-run cycle to /home/hd2admin/alerts.log with certificate and backup inputs unset, no permission changes, schedules, network or external paging.) (hold-kind: captain)
+  Origin: local-alert-logging-20261018
+  Decision key: one-log-cycle
+  State: awaiting captain decision.
+- [ ] deferred-noncore-20261018 - Defer non-Core work while Core Distro is sole product focus (kind: coordination) (since 2026-10-18)
+  # Deferred non-Core work — Captain priority reset
+
+  Captain directs Core Distro end-to-end PRD completion as the sole product focus now; only urgent system/harness repairs remain active alongside it. This is prioritization, not cancellation, acceptance, merge, write approval or discard authority.
+
+  Preserve these former native tracker items and their evidence; remove them from the live visual while deferred:
+  - #42 CBD behavioral verification: authoritative contract tests inaccessible, seven failures/Gate-004 remain. No weakened tests or cutover authorization.
+  - #43 recovery-tool PR https://github.com/DeightonLLM/firstmate/pull/5: CI unverified, CLI upgrade approval and merge unresolved.
+  - #44 documentation inventory/index repair: 1,171 unclassified paths reported; narrow index change awaits approval. Existing durable decision doc-audience-diagnosis-20261018-decision-privacy-safe-index-repair.
+  - #51 general HD2 ticket parity: transferred artifact integrity/snapshot checked; 0039/0040 narrowly qualified; 0041/0042 closure unsupported. Do not resume non-Core domains. Preserve Core-specific evidence relevance, not general parity as a blanket Core research hold.
+  - #62 one alert-log append: fixture-tested, live write refused, no append/scheduling/paging authority. Durable decision local-alert-logging-20261018-decision-one-log-cycle.
+  - #69 SOP citation traceability: research saved data/2026-10-18/agent-sop-source-research-m31.md; exact citation index incomplete. No new literature audit now.
+  - #75 nonurgent naming-policy harmonization: reviewed plan saved data/2026-10-18/naming-plan-luna-review.md; unlanded rewrite preserved, no discard. Defer general cleanup; use original prefix in current live list.
+
+  Core decisions are NOT deleted: durable tasks core-prd-review-20261018-decision-product-identity and core-prd-review-20261018-decision-adr-acceptance stay open. Core lanes must turn those into precise evidence-backed choices, not treat drafts as acceptance.
+
+  Urgent harness work already assigned: #77/#79/#80 docs-read correction/review; #81/#83/#88 concurrency policy/admission/native path. Preserve isolated work and finish bounded in-flight corrections; no additional generic systems programme or duplicate workers. Their final reviews still govern actual verified claims; no merge/activation authority inferred.
+
+  Core source candidates: data/prds/core-distro-prd-v1.0.md and data/prd-review-candidates/m31-core-first-20261018/core-distro-review-candidate.md. Canonical product identity/architecture acceptance remain distinct from document quality and operational readiness. Existing retained branches must be preserved.
+
+- [ ] core-completion-20261020-decision-commit-reviewed-fixes - Approve commits for reviewed isolated Core completion fixes (repo: core-distro-saas-clean) (kind: captain) (since 2026-10-20) (hold: Captain explicitly reserves commit authority. Pending scope: Add Leads pointer fix, truthful regression harness, sanitized artifact builder, missing-geo installer warning, source-bound theme layout fixes, and current routing/naming consistency. Commit only independently reviewed passing deltas in isolated branches; excludes the 40 preexisting changed paths, merge, deployment, production, DNS, credentials and spending.) (hold-kind: captain)
+  Origin: core-completion-20261020
+  Decision key: commit-reviewed-fixes
+  State: awaiting captain decision.
+- [ ] core-completion-20261020-decision-isolated-validation-permission - Approve one scoped non-interactive validation run (repo: core-distro-saas-clean) (kind: captain) (since 2026-10-20) (hold: Headless smart test execution requests approvals unavailable in that worker. Approve or decline one MCode M3.1 Flash validation-only run using --permission full in the existing isolated artifact-build and installer-geo copies: PHP lint and synthetic installer baseline/candidate tests, Python artifact contract/build/verifier and checksum checks. No global settings changes, production, credentials, external network, integration, commit, merge or deployment. This approval would expand that one worker permission mode; not standing permission or proof that guardrails remain equivalent.) (hold-kind: captain)
+  Origin: core-completion-20261020
+  Decision key: isolated-validation-permission
+  State: awaiting captain decision.
+- [ ] m3.1f-brandon-addleads-inventory-decision-addleads-narrow-drawer-occlusion-disposition - Disposition of the Add Leads narrow and mobile drawer occlusion (repo: kun-agent-workspace) (kind: captain) (since 2026-10-20) (hold: The Add Leads entry is not operable while a lead card is open below about 1100 px viewport width, and at 768 px and below the drawer is full width by design, so the primary Add Leads action is unreachable on mobile. The pointer candidate fixes only the backdrop interception and explicitly declares the drawer layout out of seam, and the maintained browser regression has no width assertion, so the narrow band would silently regress. Option A is to accept the band as a documented known limitation. Option B is to authorise a separate bounded drawer and header layout change with its own evidence and maintained coverage. This is a product trade-off on a customer facing surface and no existing decision resolves it.) (hold-kind: captain)
+  Origin: m3.1f-brandon-addleads-inventory
+  Decision key: addleads-narrow-drawer-occlusion-disposition
+  State: awaiting captain decision.
 ## Done
+- [x] offload-backlog-phantom-20261014 - Close backlog entries that never existed data/offload-backlog-phantom-20261014/report.md (repo: firstmate) (kind: scout) (reported 2026-10-20)
+  Close entries with no report, no status record and no task directory. They implied work that never happened. Verify absence first, then close. Produce a one-line reason per entry.
+  The investigation task is complete. It searched the authoritative backlog and the state directory for the two phantom ids by exact prefix and found no matches in either location, so neither was ever a backlog entry. Its recommendation was explicit: do not mark absent or nonexistent work as done, and keep any genuinely present entry open until landing work is evidenced. The task itself is done and this row is closed.
+- [x] offload-backlog-close-20261014 - Close every backlog entry the evidence proves closable data/offload-backlog-close-20261014/report.md (repo: firstmate) (kind: scout) (reported 2026-10-20)
+  Firstmate owns the decision; you gather the proof. For every backlog entry that is GENUINELY DONE, produce the evidence that proves it, then close it with tasks-axi done. Close only with proof. Never close 'ready in branch' or 'partial' - those are NOT done.
+  The investigation task is complete. It classified every candidate entry against the available evidence and deliberately left all of them open because it could not invoke tasks-axi itself and because a ready branch is not a landed branch. Its report records the specific per-entry evidence and the exact blocker. The classification work is done and the row is closed; the individual entries it listed stay open and unchanged, which is the correct state.
+- [x] clear-obsolete-20261013-decision-default - Backlog clearing pass complete, verdicts in report data/clear-obsolete-20261013/report.md (repo: kun-agent-workspace) (kind: captain) (reported 2026-10-20) (hold: Read-only classification pass over backlog entries. Verdicts and per-entry evidence are in data/clear-obsolete-20261013/report.md. The prior pass had already closed the genuinely-done entries live, so most verdicts confirm existing state rather than change it. No task state was mutated by the worker.) (hold-kind: captain)
+  Origin: clear-obsolete-20261013
+  Decision key: default
+  State: awaiting captain decision.
+  Resolved: the read-only classification pass over the obsolete backlog entries is complete and its verdicts with per-entry evidence are in data/clear-obsolete-20261013/report.md. The prior pass had already closed the genuinely-done entries live, so most verdicts confirm existing state rather than change it. Closed 2026-10-20 by firstmate.
+- [x] clear-domain-20261013-decision-default - Backlog clearing pass complete, verdicts in report data/clear-domain-20261013/report.md (repo: kun-agent-workspace) (kind: captain) (reported 2026-10-20) (hold: Read-only classification pass over backlog entries. Verdicts and per-entry evidence are in data/clear-domain-20261013/report.md. The prior pass had already closed the genuinely-done entries live, so most verdicts confirm existing state rather than change it. No task state was mutated by the worker.) (hold-kind: captain)
+  Origin: clear-domain-20261013
+  Decision key: default
+  State: awaiting captain decision.
+  Resolved: the read-only classification pass over the domain backlog entries is complete and its verdicts with per-entry evidence are in data/clear-domain-20261013/report.md. The prior pass had already closed the genuinely-done entries live, so most verdicts confirm existing state rather than change it. Closed 2026-10-20 by firstmate.
+- [x] clear-core-20261013-decision-default - Core clearing pass complete, verdicts in report data/clear-core-20261013/report.md (repo: kun-agent-workspace) (kind: captain) (reported 2026-10-20) (hold: Read-only classification of Core Distro backlog entries. Verdicts with file:line evidence are in data/clear-core-20261013/report.md. Two entries verified genuinely done, three still need work with evidence, one not actionable in this home. Worker correctly declined to mutate task state, which is firstmate-owned.) (hold-kind: captain)
+  Origin: clear-core-20261013
+  Decision key: default
+  State: awaiting captain decision.
+  Resolved: the read-only classification pass over the Core Distro backlog entries is complete and its verdicts with file:line evidence are in data/clear-core-20261013/report.md. The worker correctly declined to mutate task state because that is firstmate-owned, and the decision it was waiting on is now recorded and this row is closed. Closed 2026-10-20 by firstmate.
+- [x] core-v3-spec-rewrite-decision-default - V3 rewrite cancelled - original spec recovered intact data/clear-core-20261013/report.md (repo: kun-agent-workspace) (kind: captain) (reported 2026-10-20) (hold: Original spec exists as commit 538e4c2d3cd8e69bb23e4a12795c7ee7a3d77fdc, 577 lines, dated 2026-09-27, on branch fm/core-v3-product-acceptance-spec-0927 in projects/core-distro-saas-clean. The rewrite was cancelled by firstmate to avoid duplicating and diverging from the real deliverable. Recovered spec remains unlanded pending merge authority.) (hold-kind: captain)
+  Origin: core-v3-spec-rewrite
+  Decision key: default
+  State: awaiting captain decision.
+  Resolved: the V3 rewrite was cancelled by firstmate to avoid duplicating and diverging from the real deliverable. The original spec is recovered and preserved as commit 538e4c2d3cd8e69bb23e4a12795c7ee7a3d77fdc (577 lines, dated 2026-09-27) on branch fm/core-v3-product-acceptance-spec-0927, and that branch is pushed to origin as archive/fm/core-v3-product-acceptance-spec-0927, so the spec is durably retained. The decision row is finished; the spec itself remains available for whoever lands it. Closed 2026-10-20 by firstmate.
+- [x] unlanded-work-guard-fix-decision-default - No guard defect found - existing unlanded-work refusal works data/clear-obsolete-20261013/report.md (repo: kun-agent-workspace) (kind: captain) (reported 2026-10-20) (hold: Worker could evidence no concrete guard or discoverability defect and confirmed the local-only unlanded-work refusal is present and functioning. No speculative fix or reproduction was written. The primary's earlier data-loss claim was wrong on two counts: the work was never lost, and the guard was never defective. Local-only delivery is contractually meant to leave work unlanded pending merge authority.) (hold-kind: captain)
+  Origin: unlanded-work-guard-fix
+  Decision key: default
+  State: awaiting captain decision.
+  Resolved by worker evidence: no concrete guard or discoverability defect exists; the local-only unlanded-work refusal is present and functioning. The primary's earlier data-loss claim was wrong on two counts - the work was never lost and the guard was never defective. No fix was written and none is needed. Closed 2026-10-20 by firstmate under the standing rule that finished work comes off the board.
+- [x] core-distro-a-z-20261018 - Deliver one consolidated Core Distro PRD for public site, SaaS and dashboard data/core-distro-a-z-20261018/report.md (repo: core-distro-saas-clean) (kind: docs) (reported 2026-10-18)
+  Captain priority: Core Distro only, urgent harness repairs exception. Six disjoint source-linked lanes reconcile existing canonical/candidate PRDs, user journeys, current implementation, design/content, integrations and acceptance. No duplicate audits where evidence suffices; no production/DNS/security/merge/cutover or product-identity approval inferred. Preserve all unlanded work. Deferred work record data/2026-10-18/deferred-noncore-work.md. Local tracker is authoritative only for this home; HD2 shared tracker sync requested, not assumed.
+  Existing PRDs were already written; consolidation and editorial corrections delivered. Canonical unchanged. Document work only, not product/implementation/runtime approval. HD2 Core-specific reply received/read/ACKed; remaining exact SaaS source-to-deployment binding stays open in separate baseline task. No further redrafting.
 - [x] brief-worklocation-template-fix - Add a staging-tree worklocation clause to the ship/scout brief scaffold (repo: firstmate) (kind: ship) (done 2026-10-17)
   CLOSED 2026-10-17: implementation verified complete; landing remains separately gated.
 - [x] core-distro-stage-article-drawer-fix-20261012 - Correct hidden article-drawer keyboard focus in private staging (repo: core-distro-stage) (kind: ship) (done 2026-10-17)
   CLOSED 2026-10-17: work complete, finish directory holds evidence and rollback.
-- [x] reliability-permission-20261012 - Collect original helper-denial evidence for existing repair owner (repo: firstmate) (kind: scout) (done 2026-10-17) (hold: Captain approved closing this agent while preserving unfinished work; consolidated ownership in existing recovery lead; no automatic relaunch) (hold-kind: parked)
-  CLOSED 2026-10-17: scout completed; captain authorized closure on 2026-10-13.
-- [x] reliability-reporting-20261012 - Verify authentic correlated reporting and one-recovery contract (repo: firstmate) (kind: scout) (done 2026-10-17) (hold: Captain approved closing this agent while preserving unfinished work; consolidated ownership in existing recovery lead; no automatic relaunch) (hold-kind: parked)
-  CLOSED 2026-10-17: scout completed; captain authorized closure on 2026-10-13.
-- [x] reliability-routing-20261012 - Establish current quota/model enforcement gaps (repo: firstmate) (kind: scout) (done 2026-10-17) (hold: Captain approved closing this agent while preserving unfinished work; consolidated ownership in existing recovery lead; no automatic relaunch) (hold-kind: parked)
-  CLOSED 2026-10-17: scout completed; captain authorized closure on 2026-10-13.
-- [x] overnight-secondmate-progress-20261012 - Coordinate quota-aware overnight secondmate progress (kind: scout) (done 2026-10-17)
-  CLOSED 2026-10-17 as never-dispatched: no brief, no artifacts.
-- [x] outbox-delivery-tdd - Firstmate outbox delivery TDD fix — establish checksum-verifiable outbound path (kind: scout) (done 2026-10-17)
-  CLOSED 2026-10-17 as never-dispatched: no brief, no task directory, no artifacts.
-- [x] elevate-anythingllm-repair - Elevate AnythingLLM repair: restore agents.elevatesci.com workspace (kind: ship) (done 2026-10-17)
-  CLOSED 2026-10-17 as never-dispatched: no brief, no task directory, no artifacts.
-- [x] core-distro-stage-scale-100pct - Match full staging page at 100% browser zoom (repo: core-distro-stage) (kind: ship) (done 2026-10-17)
-  CLOSED 2026-10-17 as never-dispatched: no brief, no task directory, no artifacts.
-- [x] skill-collision-fix-20261015 - SCOUT. Produce an exact, reversible cleanup plan for the d (repo: firstmate) (done 2026-10-17)
-  CLOSED 2026-10-17 as never-dispatched: no brief, no artifacts.
