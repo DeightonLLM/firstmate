@@ -20,7 +20,8 @@ prefer a documented invocation over an improvised one.
 
 **Harness / agent runtime** (`/home/hd2admin/.nvm/versions/node/v22.23.2/lib/node_modules/@earendil-works/pi-coding-agent/docs/`):
 `how-pi-works.md` · `tui.md` · `models.md` · `custom-provider.md` · `providers.md` · `settings.md` ·
-`compaction.md` · `codemode.md` · `containerization.md` · `environment-variables.md` · `extensions.md`
+`compaction.md` · `codemode.md` · `containerization.md` · `environment-variables.md` · `extensions.md` ·
+`configuration.md` (context files) · `security.md` (context loading)
 
 **Subagents and delegation** (`/home/hd2admin/.pi/agent/npm/node_modules/pi-subagents/skills/pi-subagents/`):
 `SKILL.md` plus `references/` — `execution-controls.md`, `prompting-and-roles.md`,
@@ -37,6 +38,22 @@ label may and may not be used to infer.
 **Firstmate's own contract** lives in this repo, not upstream: `AGENTS.md` is the standing contract,
 `AGENT-TODO-PROMPT-STYLE.md` solely owns naming, `.agents/skills/` holds the agent-only skills, and
 `docs/README-index.md` indexes the rest.
+
+**Agent startup context (how Pi finds its context file):** Pi loads ONE context file per directory, first match
+wins, in the order `AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`, `CLAUDE.md`, `CLAUDE.MD`, and the agent
+directory, the working directory, and parent directories all count, so a file at a shared parent path reaches
+every domain below it. `AGENTS.override.md` is the per-directory override and applies in its own directory only;
+the agent directory `~/.pi/agent/` currently holds no context file at all. Upstream statement:
+`configuration.md` (context-files section) and `security.md` in the harness docs directory above; shipped
+resolver at
+`/home/hd2admin/.nvm/versions/node/v22.23.2/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:116`,
+ancestor walk at lines 168-190.
+**Measured state 2026-10-20:** secondmate homes carry a month-old, mutually divergent startup context; no
+`AGENTS.override.md` exists on any home; a shared parent file reaches every domain; two live homes sit on a
+diverged lineage the local fast-forward contract will not force. Source: `data/learnings.md` (2026-10-20).
+**Detector, landing in a parallel lane:** the re-runnable per-home domain-identity check is being built as
+`bin/fm-domain-identity.sh`, with its contract to live in `docs/domain-identity.md`. Read that contract there
+before claiming any home is synced.
 
 ## Session handoff from the previous first mate (2026-10-19)
 

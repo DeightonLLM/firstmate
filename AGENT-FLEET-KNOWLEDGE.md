@@ -86,6 +86,19 @@ Full-page PNG decoding in pure Python can take minutes per invocation. For slow 
 
 **Narrow watcher-lock ruling, not a general bypass:** HD2 endorsed reclaiming an empty watcher-lock owner directory only through `fm_lock_try_acquire()`'s stale-steal path and `fm_lock_mid_acquire_is_fresh()` check; honor the minimum 2-second race window. This specific evidence-based recovery does not authorize bypassing other locks or guards. Evidence: `/home/hd2admin/controller-replies/2026-10-19-hd2-formal-reply-to-crispr-watcher-and-tracker.md` (HD2 reply, 2026-10-19T06:25Z).
 
+## One rule from 2026-10-20 evidence
+
+### 19. AN AGENT MUST KNOW WHICH DOMAIN IT IS IN, AND THAT MUST BE PROVABLE
+
+Domain identity is a measurement, not an assertion.
+A home carries its own identity in its own directory, using the harness's own per-directory override file `AGENTS.override.md`, which applies in that directory only and cannot silence the agent directory or a parent.
+A shared parent instruction file reaches every agent below it, so it may carry a fleet-wide tool or safety note and must never carry domain identity, scope, or charter.
+"I read the startup files" is not evidence that they are synced or domain-specific, so prove it per home by measuring which context file that home's agent actually loads and whether that file's content matches the authority for that home.
+A fleet-wide verdict must be printed by a tool, state a reason for every failure, and exit non-zero when a home fails.
+A stale or diverged home is reported and escalated as a lineage decision, never forced, because forcing discards unlanded work.
+The check must be re-runnable, because a one-time manual audit decays into a false claim.
+Evidence: `data/learnings.md` (2026-10-20, section "agent startup context"); `data/captain-shared.md` section 4 (2026-10-20); Pi's shipped context-file resolver at `/home/hd2admin/.nvm/versions/node/v22.23.2/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:116` with the ancestor walk at lines 168-190.
+
 ## Source conflicts and limits — do not silently resolve
 
 1. **Host identity conflict (safety-critical):** `data/learnings.md` (2026-10-15 Controller STOP) identifies `45.90.220.156` with forbidden `srv1137994` and prohibits touching it. The corrected `data/2026-10-19/CANONICAL-HOST-REGISTER.md` also attributes that address as the public edge for Core staging, while separately recording the KVM1/identity dispute and warning not to infer reachability. This consolidated rule preserves the absolute STOP; it does not authorize staging access at that address. **Owner for reconciliation:** Controller/host-register owner. Until a new authoritative resolution, treat the address as forbidden.
