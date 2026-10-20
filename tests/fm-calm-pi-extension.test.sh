@@ -3485,7 +3485,10 @@ JS
     active_screen_wait=$((active_screen_wait + 1))
   done
   [ "$(cat "$home/config/calm")" = on ] || fail "Calm was not restored before the persistence restart"
-  tmux -L "$TMUX_SOCKET" resize-window -t "$TMUX_SESSION" -x 180 -y 44
+  # Back to the session's own viewport, which is the tall one this transcript
+  # needs: a 44-row viewport drops the transcript's first rows from every
+  # snapshot, and the restart assertions below are about exactly those rows.
+  tmux -L "$TMUX_SOCKET" resize-window -t "$TMUX_SESSION" -x 180 -y 120
 
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" -l "/quit"
   tmux -L "$TMUX_SOCKET" send-keys -t "$TMUX_SESSION" M-s
@@ -3493,7 +3496,10 @@ JS
     || fail "Pi did not exit cleanly before the Calm persistence restart"
   tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 
-  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 180 -y 44 \
+  # The restarted session gets the same tall viewport as the first one: a
+  # 44-row viewport drops the restored transcript's first rows from every
+  # snapshot, and the assertions below are about exactly those rows.
+  tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 180 -y 120 \
     "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 PATH='$PI_LAUNCHER_PATH'\$PATH '$PI_LAUNCHER' --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
   wait_for_text "$restarted_snapshot" "CALM_WORKING_E2E_RESPONSE" \
     || fail "Pi did not restore the persisted session after restart"
