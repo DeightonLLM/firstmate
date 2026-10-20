@@ -53,6 +53,11 @@ import {
   setCalmPresentation,
   setCalmStockExportRendering,
 } from "./lib/fm-calm-visibility.ts";
+import {
+  createCalmCtxToolRenderers,
+  isCalmCtxToolName,
+} from "./lib/fm-calm-ctx-renderer.ts";
+import { resolveCalmHome } from "./lib/fm-calm-home.ts";
 
 type DefinitionFactory<TParams extends TSchema, TDetails, TState> = (
   cwd: string,
@@ -82,7 +87,6 @@ type StandardShellState = {
 
 const extensionFile = fileURLToPath(import.meta.url);
 const extensionDir = dirname(extensionFile);
-const root = resolve(extensionDir, "../..");
 
 // Each presentation adapter probes the exact Pi API it patches. If a future Pi removes
 // that API, only the affected adapter degrades; the rest of Calm keeps working.
@@ -132,9 +136,18 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
-  const fmHome = process.env.FM_HOME || process.env.FM_ROOT_OVERRIDE || root;
-  const configDirectory = process.env.FM_CONFIG_OVERRIDE || resolve(fmHome, "config");
-  const calmPreferencePath = resolve(configDirectory, "calm");
+  // The Calm preference is home-local, and the effective home is not always the
+  // extension's own location: an account-level install (…/.pi/agent/extensions)
+  // belongs to no home, so the session's working directory decides which home
+  // this session belongs to. The path is therefore recomputed on every
+  // session_start, because only the session context carries that directory.
+  const calmPreferencePathFor = (home: string): string => {
+    const configDirectory = process.env.FM_CONFIG_OVERRIDE || resolve(home, "config");
+    return resolve(configDirectory, "calm");
+  };
+  let calmPreferencePath = calmPreferencePathFor(
+    resolveCalmHome({ extensionDir, sessionCwd: process.cwd() }).home,
+  );
   const loadCalmPreference = (): boolean => {
     try {
       return readFileSync(calmPreferencePath, "utf8").trim() === "on";
@@ -274,8 +287,26 @@ export default function (pi: ExtensionAPI) {
   registerBuiltIn(createFindToolDefinition);
   registerBuiltIn(createLsToolDefinition);
 
+  // The lean-ctx ctx_* tools are registered by another extension, so Calm
+  // selects their renderers through the supported resolver API instead of
+  // wrapping definitions it does not own. next() carries the rest of the
+  // resolver chain and the tool's own renderers, so a non ctx_* tool and any
+  // row Calm must not hide keep their stock presentation.
+  installCalmPresentationAdapter("ctx-tool-renderer", () => {
+    pi.registerToolRenderer((toolName, next) => {
+      if (!isCalmCtxToolName(toolName)) return next();
+      return createCalmCtxToolRenderers(next(), { exportRendering });
+    });
+  });
+
   pi.on("session_start", (_event, ctx) => {
     exportRendering = false;
+    calmPreferencePath = calmPreferencePathFor(
+      resolveCalmHome({
+        extensionDir,
+        sessionCwd: typeof ctx?.cwd === "string" ? ctx.cwd : process.cwd(),
+      }).home,
+    );
     setCalmPresentation(loadCalmPreference());
     setCalmStockExportRendering(false);
     publishPresentationState();
