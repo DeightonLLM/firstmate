@@ -384,6 +384,45 @@ routing fault. It was not.
 - "delivery unconfirmed" against a `working` pane means retry later, not "fix the metadata".
 - Only treat a target as unreachable when it is `idle` and a send still fails.
 
+## MCode panes report their own agent state (2026-10-20)
+
+Herdr has no built-in adapter for the MCode harness, so an MCode pane carries no agent label.
+Such a pane reports `agent_status` as `unknown` and never appears in `herdr agent list`, so its
+running and stopped light stays dark.
+`bin/fm-housekeeping.sh` and `bin/fm-dead-pane-sweep.sh` cannot see such a pane either, because
+both filter on `agent_status` matching `working`, `blocked`, `idle` or `done`.
+
+Herdr's documented self-report path is the fix, and it needs no Herdr release.
+`bin/fm-herdr-agent-report.sh` calls `herdr pane report-agent` for the current pane, and Herdr then
+shows the agent label and state for that pane:
+
+```
+herdr pane report-agent "$HERDR_PANE_ID" --source mcode --agent mcode --state working --seq <n>
+```
+
+The same script maps an MCode session start to an `idle` report plus a session identity report, a
+submitted prompt to a `working` report, a permission request to a `blocked` report, a turn end to
+an `idle` report, and a session end to `herdr pane release-agent`.
+The sequence number must rise with every report from the source, so the script keeps a per-pane
+counter in the home's `state/` directory.
+Every failure path exits 0, because a slow or broken Herdr must never delay or break an agent turn.
+
+`extensions/mcode-herdr-agent/` is the MCode plugin package that drives those calls through MCode's
+lifecycle hooks.
+Its root `plugin.json` is the portable Agent Plugins manifest, and `.minimax-plugin/plugin.json`
+carries the MCode-native manifest and the hook declaration.
+`bin/fm-install-mcode-herdr-agent.sh` publishes the package into the MCode local marketplace and puts
+the reporter on `PATH` so the hook can call it by name.
+
+**Verified on 2026-10-20:** reporting the live MCode pane `w64:p1C` made it appear in
+`herdr agent list` as `agent: mcode` and `agent_status: working`, the same shape as the Pi panes,
+and `herdr pane list` reported the same pane with `agent_status: working`.
+
+**Open:** MCode's local marketplace does not enumerate a bare package directory, so
+`mcode plugin add mcode-herdr-agent@local` does not resolve the package and the hook does not fire
+on its own yet.
+Until that is closed, an MCode pane's state is reported by calling the reporter directly.
+
 ## Long instructions belong in a file, not in a send
 
 Sends are short single-line prompts. Put anything substantial in a file under `data/handoffs/` and
