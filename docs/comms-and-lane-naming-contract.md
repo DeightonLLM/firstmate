@@ -38,7 +38,7 @@ When given a registry file, `bin/fm-lane-naming-check.sh` requires each `lane_ke
 The registry check also requires each `run_id` to be a UUID unique to one row; duplicate IDs are rejected, as verified by the negative control in `tests/fm-lane-naming-check.test.sh`.
 
 Known defect: direct single-key input still accepts a key without a harness segment, so a key rejected in the registry can pass when supplied directly to the checker.
-The existing test's passing assertion for `m2.7-hd2-build` exercises this legacy direct-input behavior; closing this gap is a separate change that needs its own test and the Captain's merge authorization.
+The existing test's passing assertion for a legacy harness-less lane key (see `tests/fm-lane-naming-check.test.sh`) exercises this legacy direct-input behavior; closing this gap is a separate change that needs its own test and the Captain's merge authorization.
 
 ## 5. Model visibility and cost
 
@@ -54,7 +54,7 @@ The existing test's passing assertion for `m2.7-hd2-build` exercises this legacy
 
 ## 7. Alias-dispatch binding (m27.12)
 
-The lane-key validator's hardcoded alias set must not drift from the models actually configured for dispatch.  Q2 fixed the surface symptom by adding `m2.7h`, but did not close the mechanism.
+The lane-key validator's hardcoded alias set must not drift from the models actually configured for dispatch.  Q2 fixed the surface symptom by adding one MiniMax tier alias, but did not close the mechanism.
 
 `bin/fm-lane-naming-check.sh --self-check config/crew-dispatch.json` is the binding check.  It reads the dispatch config, derives a lane-key alias for every MiniMax model id present, and:
 
@@ -65,12 +65,11 @@ The alias derivation rule (one canonical statement, one place):
 
 - **MiniMax provider**: model id like `minimax/MiniMax-M<family>[-<tier>]`
   derives to lane-key alias = family + tier-marker, where:
-  - family = text before the first `-` in the model id tail (e.g. `m2.7`)
+  - family = text before the first `-` in the model id tail (e.g. `m3.1`)
   - tier-marker = keyword mapping of the **first** tier segment:
     `highspeed` -> `h`, `flash` -> `f`, bare/unrecognised -> `''`
-  - Example: `minimax/MiniMax-M2.7-highspeed` -> `m2.7h`
+  - Example: `minimax/MiniMax-M3.1-Flash` -> `m3.1f`
             `minimax/MiniMax-M3.1-Flash-Preview` -> `m3.1f`
-            `minimax/MiniMax-M2.7` -> `m2.7`
 - **Other providers** (openai-codex, etc.): no programmatic rule defined.  Their model ids do not derive to lane-key aliases through the above rule.  Adding an alias for a non-MiniMax model requires explicit verification; do not guess.
 
 Adding a new MiniMax model variant to `config/crew-dispatch.json` without adding its alias to the validator's hardcoded set will now cause `--self-check` to fail and stop the pipeline.  This is the correct failure mode: it forces the developer to add the alias at the same time as the model, rather than silently diverging.

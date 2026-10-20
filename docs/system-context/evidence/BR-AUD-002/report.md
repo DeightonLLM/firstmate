@@ -1,6 +1,6 @@
 # BR-AUD-002 — Core Distro Application Audit Report
 **Task:** BR-AUD-002 | **Phase:** Phase 1 | **Campaign:** Brandon Multi-Project Infrastructure
-**Generated:** 2026-08-06 | **Runtime model:** MiniMax-M2.7
+**Generated:** 2026-08-06 | **Runtime model:** MiniMax M2 (retired generation)
 **Scope:** Read-only local source audit; campaign artifacts only; no live infrastructure mutation
 **Source repo:** `/root/agent-work/deightonllm-firstmate/projects/core-distro.com/`
 **PRD baseline:** `Brandon-Multi-Project-Infrastructure-PRD-v3.md`

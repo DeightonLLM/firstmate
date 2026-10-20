@@ -25,7 +25,7 @@ publishes per vendor. The mapping is deliberately small and explicit:
 | `agy` | `gemini` | AGY publishes AGY's effective availability under its own `gemini` scope token, not the generic `all_models` token that legacy fixtures used. |
 | `zai` (GLM) | `all_models` | Continues to use the legacy `all_models` scope. |
 | `codex` | `all_models` | Continues to use the legacy `all_models` scope. |
-| `minimax` (M2.7 / M3) | `all_models` | See "MiniMax M3 quota semantics" below; absence is not eligibility. |
+| `minimax` (M3 / M3.1 Flash Preview) | `all_models` | See "MiniMax M3 quota semantics" below; absence is not eligibility. |
 | anything else | `all_models` | Predictable no-match → existing `provider_missing` / `quota_unproven` decision. |
 
 The mapping is owned by `provider_scope()` in the route script and exercised
@@ -51,7 +51,7 @@ and is not used as a general routing assumption; the calendar gate therefore
 continues to apply the normal schedule.
 
 MiniMax currently documents Token Plan usage as a shared usage bar with a
-five-hour rolling window and a weekly window. M3 and M2.7 usage therefore must
+five-hour rolling window and a weekly window. M3 and M3.1 Flash Preview usage therefore must
 not be modeled as independent pools, and the console usage bar is the quota
 source of truth.
 
@@ -102,7 +102,7 @@ separately authored check.
 
 ### Model vs CLI adapter distinction
 
-MiniMax M2.7 and M3 are model designations; `mcode` is the MiniMax Code CLI
+MiniMax M3.1 Flash Preview and M3 are model designations; `mcode` is the MiniMax Code CLI
 execution adapter. Quota and schedule eligibility do not imply that `mcode` is
 installed in PATH or authenticated. Runtime availability, adapter presence,
 authentication/quota, and environment capabilities must still be verified
