@@ -1,0 +1,48 @@
+--- /home/hd2admin/kun-agent-workspace/data/core-distro-stage-article-drawer-fix-20261012/finish-20261012T070755Z-9877/rollback/theme/stage-content-fixes.php	2026-10-10 17:04:50.999090032 +0100
++++ /home/hd2admin/campaign/core-distro-stage/theme/stage-content-fixes.php	1970-01-01 01:00:00.000000000 +0100
+@@ -134,6 +134,45 @@
+ 		$content = str_replace( 'color:oklch(0.55 0.04 148)', 'color:oklch(0.45 0.04 148)', $content );
+ 	}
+ 
++	// The closed mobile drawer overlay is visually hidden with
++	// opacity:0;pointer-events:none, yet its links stayed in the keyboard tab
++	// order. The homepage already carries the correct source pattern
++	// (theme/public-homepage-body.html), so the canonical route fragments render
++	// the same focus exclusion here instead of having the drawer stripped. Only
++	// the two attributes are added to that one already-closed overlay div: its
++	// markup, panel and links are untouched, the header nav and any open panel
++	// are left alone, and an element that already carries `inert` is skipped so
++	// repeated render passes stay idempotent. Scoped to the canonical slugs, so
++	// the nine held duplicate records are never newly transformed.
++	//
++	// The element is identified by the drawer's own class signature rather than
++	// by "any fixed hidden element": each class token is matched whole, inside
++	// the quoted class attribute, so a class that merely contains `fixed` as a
++	// substring cannot match, and another closed fixed overlay that happens to
++	// appear earlier in the fragment cannot consume the single replacement and
++	// leave the drawer itself focusable.
++	$canonical_routes = array(
++		'about',
++		'aluminum-seals',
++		'blog',
++		'compliance',
++		'contact',
++		'faq',
++		'glass-vials',
++		'products',
++		'register',
++		'resources',
++		'rubber-stoppers',
++	);
++	if ( in_array( $route, $canonical_routes, true ) ) {
++		$content = preg_replace(
++			'~<div\b(?![^>]*\binert\b)(?=[^>]*\bclass="(?:[^"]*\s)?fixed(?:\s|"))(?=[^>]*\bclass="(?:[^"]*\s)?inset-0(?:\s|"))(?=[^>]*\bclass="(?:[^"]*\s)?z-40(?:\s|"))(?=[^>]*\bclass="(?:[^"]*\s)?lg:hidden(?:\s|"))(?=[^>]*\bstyle="[^"]*\bopacity:0;pointer-events:none")([^>]*)>~i',
++			'<div inert aria-hidden="true"$1>',
++			$content,
++			1
++		);
++	}
++
+ 	return $content;
+ }
+ 

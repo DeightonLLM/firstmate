@@ -1,0 +1,14 @@
+source=/home/hd2admin/kun-agent-workspace/state/controller-inbox.check.sh
+source_sha256=c75fb91acb0174dcff8eefaa74a8843a093cbbc5e84176f5623b715d664e25ff
+independent_fixture_source=/home/hd2admin/kun-agent-workspace/data/luna6-inbox-repro-20261016/controller-inbox.fixture.sh
+independent_fixture_sha256=27b8fac62617974c17a7e666f968c70e52f1d129cbc5993f3538857b4a3addd8
+isolated_baseline=controller-inbox.baseline.sh
+isolated_baseline_sha256=1db73b61e12e63c0b785dd2c70b68979ab0a675ecebea46691720a68f9693f8c
+candidate=controller-inbox.candidate.sh
+candidate_sha256=17a598a6724dbd51d9c685b4f782557824f9c55f52a5c661486ea8e5624cfddc
+regeneration_timestamp=2026-10-17T00:54:00Z
+regeneration_note=final.patch regenerated from baseline to current candidate; contains locate_with_hash cross-route fix (3 occurrences); verified by applying to throwaway baseline copy produces byte-identical sha256
+test=test-candidate.sh
+test_sha256=4f9bec17c4ee2764d87de5eb4fc923b20c3ebfb716ace129e1b74434073833b0
+traceability=baseline is the independent fixture poll copied then only its absolute inbox route strings rewritten from repro to this candidate directory; candidate changes are final.patch; the source poll was read-only and retains its pinned digest.
+isolation_preflight=runner requires all inbox/state/TMPDIR paths under candidate and rejects symlinks before reset or poll; poll scripts checked for original external route strings before execution.

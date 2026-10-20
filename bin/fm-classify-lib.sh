@@ -335,14 +335,48 @@ crew_absorb_class() {  # <id>
   local id=$1 line state src
   [ -n "$id" ] || { printf 'none'; return; }
   line=$("$FM_CREW_STATE_BIN" "$id" 2>/dev/null) || true
-  case "$line" in state:*) ;; *) printf 'none'; return ;; esac
+  case "$line" in state:*) ;; *)
+    # No readable state record. Before declaring the crew gone, ask the LIVE surface.
+    # A pane the backend reports as working is working, even when its recorded home
+    # directory is missing from disk. Disk is not liveness.
+    if crew_live_pane_working "$id"; then printf 'working'; return; fi
+    printf 'none'; return ;;
+  esac
   state=${line#state: }; state=${state%% *}
   if [ "$state" = paused ]; then printf 'paused'; return; fi
   if [ "$state" = working ]; then
     src=${line#*source: }; src=${src%% *}
     case "$src" in run-step|pane) printf 'working'; return ;; esac
+    if crew_live_pane_working "$id"; then printf 'working'; return; fi
+  elif [ "$state" = unknown ]; then
+    if crew_live_pane_working "$id"; then printf 'working'; return; fi
   fi
   printf 'none'
+}
+
+# Ask the recorded backend whether the pane is currently busy. Never mutates.
+crew_live_pane_working() {  # <id>
+  local id=$1 meta status
+  [ -n "$id" ] || return 1
+  meta="$FM_HOME/state/$id.meta"
+  [ -r "$meta" ] || return 1
+  grep -q '^backend=herdr$' "$meta" 2>/dev/null || return 1
+  local pane
+  pane=$(sed -n 's/^herdr_pane_id=//p' "$meta" 2>/dev/null | head -1)
+  [ -n "$pane" ] || return 1
+  status=$(herdr workspace list 2>/dev/null | python3 -c "
+import json,sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+want = '${pane%%:*}'
+for w in d.get('result', {}).get('workspaces', []):
+    if w.get('workspace_id') == want:
+        print(w.get('agent_status', ''))
+        break
+" 2>/dev/null)
+  [ "$status" = working ]
 }
 
 # 0 if crew <id> shows POSITIVE evidence it is still working (crew_absorb_class

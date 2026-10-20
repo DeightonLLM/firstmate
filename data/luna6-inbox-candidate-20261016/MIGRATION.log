@@ -1,0 +1,5 @@
+PASS first-run-exclusion expected=1 actual=1
+PASS existing-watermark-migration-blocked expected=1 actual=1
+PASS existing-watermark-migration-exit expected=3 actual=3
+PASS migration-notification-ledger-unchanged expected=b539e4ab22046431e1298ef72f5d2c9f062cb7d5ec92eea1cb518ac536748161 actual=b539e4ab22046431e1298ef72f5d2c9f062cb7d5ec92eea1cb518ac536748161
+SUMMARY PASS=4 FAIL=0

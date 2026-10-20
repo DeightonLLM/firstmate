@@ -174,7 +174,72 @@ test_help_includes_entire_header() {
   local help
   help=$("$ROOT/bin/fm-brief.sh" --help)
   assert_contains "$help" "Refuses to overwrite an existing brief." "fm-brief.sh --help omitted its header terminator"
+  assert_contains "$help" "--worklocation <absolute-path>" "fm-brief.sh --help omitted explicit worklocation opt-in"
   pass "fm-brief.sh: --help renders the complete header"
+}
+
+test_worklocation_is_explicit_and_preserves_default_bytes() {
+  local home external brief baseline
+  home="$TMP_ROOT/worklocation-home"
+  external="$TMP_ROOT/live external tree"
+  mkdir -p "$home/data" "$external"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" worklocation-ship sample \
+    --worklocation "$external" --harness claude >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold an explicitly authorized worklocation"
+  brief="$home/data/worklocation-ship/brief.md"
+  assert_grep "external worklocation at \`$external\` instead of the disposable task worktree" "$brief" \
+    "worklocation ship brief did not name the authorized directory"
+  assert_grep "amends only the ordinary worktree-location/isolation assertion" "$brief" \
+    "worklocation ship brief did not narrowly amend the isolation assertion"
+  assert_grep "every other boundary in this brief remains in force" "$brief" \
+    "worklocation ship brief did not preserve every other boundary"
+  assert_grep "Stay inside the authorized worklocation at \`$external\`; modify nothing outside it." "$brief" \
+    "worklocation ship brief did not keep the location boundary"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" worklocation-scout sample --scout \
+    --worklocation "$external" --harness claude >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold a scout at an explicitly authorized worklocation"
+  brief="$home/data/worklocation-scout/brief.md"
+  assert_grep "external worklocation at \`$external\` instead of the disposable task worktree" "$brief" \
+    "worklocation scout brief did not name the authorized directory"
+  assert_grep "Stay inside the authorized worklocation at \`$external\`; the only files you may write elsewhere are the report and status file below." "$brief" \
+    "worklocation scout brief weakened its report/status-only exception"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" default-stable sample --harness claude >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to scaffold a default brief"
+  brief="$home/data/default-stable/brief.md"
+  baseline="$TMP_ROOT/default-stable.expected"
+  cp "$brief" "$baseline"
+  rm -f "$brief"
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" default-stable sample --harness claude >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed to regenerate a default brief"
+  cmp -s "$baseline" "$brief" \
+    || fail "default brief bytes changed between generations without --worklocation"
+  assert_grep "Verify isolation before anything else" "$brief" \
+    "default brief lost the mandatory worktree-isolation assertion"
+  pass "fm-brief.sh: explicit worklocations are bounded and defaults remain byte-stable"
+}
+
+test_worklocation_cannot_be_enabled_implicitly() {
+  local home external brief status
+  home="$TMP_ROOT/worklocation-implicit-home"
+  external="$TMP_ROOT/implicit tree"
+  mkdir -p "$home/data" "$external"
+  FM_HOME="$home" FM_WORKLOCATION="$external" \
+    "$ROOT/bin/fm-brief.sh" implicit-location sample --harness claude >/dev/null 2>&1 \
+    || fail "fm-brief.sh failed with an unrelated worklocation environment variable"
+  brief="$home/data/implicit-location/brief.md"
+  assert_grep "Verify isolation before anything else" "$brief" \
+    "an environment variable implicitly replaced the isolation assertion"
+  assert_no_grep "authorized to operate in the external worklocation" "$brief" \
+    "an environment variable implicitly enabled the external worklocation"
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" missing-location sample --worklocation >/dev/null 2>&1; status=$?
+  expect_code 1 "$status" "--worklocation without a named directory must be rejected"
+  assert_absent "$home/data/missing-location/brief.md" \
+    "--worklocation without a path still wrote a brief"
+  pass "fm-brief.sh: external worklocation requires an explicit named path"
 }
 
 # Registry with one project per delivery mode, so each ship-mode DOD branch is
@@ -336,7 +401,8 @@ test_herdr_lab_contract_quotes_foreign_firstmate_path() {
   id="brief-herdr-lab-foreign-d2"
   helper=$(printf '%s' "$foreign_root/bin/fm-herdr-lab.sh" | sed "s/'/'\\\\''/g")
   helper="'$helper'"
-  FM_HOME="$home" FM_ROOT_OVERRIDE="$foreign_root" "$ROOT/bin/fm-brief.sh" "$id" foreign --scout --herdr-lab >/dev/null 2>&1
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$foreign_root" FM_BASELINE_ROOT="$ROOT" \
+    "$ROOT/bin/fm-brief.sh" "$id" foreign --scout --herdr-lab >/dev/null 2>&1
   brief="$home/data/$id/brief.md"
   assert_grep "HERDR_LAB_HELPER=$helper" "$brief" \
     "Herdr lab brief must shell-quote an absolute Firstmate helper path"
@@ -777,6 +843,8 @@ test_todo_breakdown_follows_harness_capability
 test_script_parses
 test_no_heredoc_in_command_substitution
 test_help_includes_entire_header
+test_worklocation_is_explicit_and_preserves_default_bytes
+test_worklocation_cannot_be_enabled_implicitly
 test_ship_modes_generate_clean_briefs
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording

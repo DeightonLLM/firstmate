@@ -31,9 +31,9 @@ SNAPSHOT=$("$SCRIPT_DIR/fm-fleet-snapshot.sh" --json) || exit $?
 printf '%s\n' "$SNAPSHOT" | jq -r '
   def dash($v): if $v == null or $v == "" then "-" else $v end;
   def endpoint_exists($t):
-    if $t.endpoint.exists == null then "unknown"
-    elif $t.endpoint.exists then "present"
-    else "absent" end;
+    if $t.liveness.status == "live" then "present"
+    elif $t.liveness.status == "stale" then "absent"
+    else "unknown" end;
   def endpoint_of($t):
     if $t.kind == "secondmate" then "\(endpoint_exists($t)) / \($t.endpoint.agent_alive)"
     else endpoint_exists($t) end;
@@ -65,12 +65,30 @@ printf '%s\n' "$SNAPSHOT" | jq -r '
   "Home: \(.fm_home)",
   "",
   "## Under Way",
-  (if (.tasks | length) == 0 then
-    "No live task metadata found."
+  (if ([.tasks[] | select(.liveness.status == "live")] | length) == 0 then
+    "No live tasks found."
    else
     "| ID | Current | Kind | Repo/Project | Backend | Endpoint | Artifact | Path | Watch / return channel |",
     "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-    (.tasks[] | task_row(.))
+    (.tasks[] | select(.liveness.status == "live") | task_row(.))
+   end),
+  "",
+  "## Stale - metadata without a live endpoint",
+  (if ([.tasks[] | select(.liveness.status == "stale")] | length) == 0 then
+    "No stale task metadata found."
+   else
+    "| ID | Current | Kind | Repo/Project | Backend | Endpoint | Artifact | Path | Watch / return channel |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    (.tasks[] | select(.liveness.status == "stale") | task_row(.))
+   end),
+  "",
+  "## Liveness Unknown",
+  (if ([.tasks[] | select(.liveness.status == "unknown")] | length) == 0 then
+    "No tasks have unknown liveness."
+   else
+    "| ID | Current | Kind | Repo/Project | Backend | Endpoint | Artifact | Path | Watch / return channel |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    (.tasks[] | select(.liveness.status == "unknown") | task_row(.))
    end),
   "",
   "## Queued",

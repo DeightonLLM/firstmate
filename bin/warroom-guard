@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# warroom-guard — MANDATORY pre-flight for ANY herdr pane/tab layout change.
+# Enforces: the operator's MAIN pane (wD3:p2, label MAIN CONTROLLER) and MAIN TAB
+# (wD3:t2) must NEVER be split, closed, renamed, swapped, or repurposed.
+# Visibility panes go ONLY in a dedicated tab (e.g. "CBD WAR-ROOM").
+# Usage: warroom-guard <pane_id-or-tab_id> [operation]
+# Exit 0 = allowed. Exit 64 = FORBIDDEN (log + refuse).
+MAIN_PANE="wD3:p2"; MAIN_TAB="wD3:t2"
+# COORDINATOR pane protection (2026-10-04, after captain lost sight of the
+# coordinator window): wD3:p32 is the operator's window onto the firstmate —
+# it is NEVER split again. Lanes live in the right column, dedicated tabs, or
+# hd2stack/brandon surfaces.
+COORD_PANE="wD3:p32"
+TARGET="${1:-}"; OP="${2:-layout}"
+LOG=/home/hd2admin/kun-agent-workspace/state/warroom-guard.log
+log(){ printf '%s [%s] %s\n' "$(date -u +%FT%TZ)" "$OP" "$*" >> "$LOG"; }
+case "$TARGET" in
+  ""|"$MAIN_PANE"|"$MAIN_TAB"|"$COORD_PANE")
+    log "DENY target=$TARGET op=$OP reason=main-pane/tab or coordinator-pane protection"
+    echo "FORBIDDEN: $TARGET is protected (operator main pane/tab, or coordinator pane — lanes go right column/tabs/surfaces)" >&2
+    exit 64 ;;
+esac
+log "ALLOW target=$TARGET op=$OP"
+exit 0

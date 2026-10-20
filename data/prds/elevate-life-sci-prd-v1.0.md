@@ -1,5 +1,37 @@
 # Elevate Life Sci — Domain Infrastructure PRD v1.0
 
+> ## PARTIAL REMEDIATION — 2026-10-18. NOT CLOSED. REOPENED.
+>
+> An earlier revision of this file marked the console RESOLVED on the strength of a
+> public-edge 401. That was incomplete and is corrected here.
+>
+> ```
+> https://agents.elevatesci.com/    -> HTTP/2 401  (Cloudflare edge, port 443 only)
+> ```
+>
+> Source attribution: `data/audit/2026-10-18-build-close-elevate-console.md` reports these probe results; this PRD repair did not independently re-probe them.
+>
+> The dated report records the following route-specific observations:
+>
+> ```
+> http://100.69.211.43:8000/  -> HTTP/1.1 200 OK, Server: nginx,
+>                                no WWW-Authenticate response header
+> https://agents.elevatesci.com/       -> 401
+> https://agents.elevatesci.com/embed/ -> 200
+> https://agents.elevatesci.com/api/embed/ -> 200
+> https://elevatesci.com/             -> 200
+> ```
+>
+> These are report-attributed historical probe results, not independently verified
+> current conditions. They establish neither current authentication behavior on
+> internal port 8000 nor general API behavior; current route/auth state remains UNKNOWN
+> pending an authorized recheck.
+>
+> Required before any production-parity claim: authenticate :8000 behind an auth wall,
+> or restrict it to loopback or an authenticated Tailscale ACL; then re-probe from the
+> untrusted side and confirm 401 or non-routability. NOT YET DONE.
+
+
 **Client:** Brandon / Elevate Life Sci
 **Primary domain:** `elevatesci.com`
 **Project code:** `elevate`
@@ -18,7 +50,7 @@ position (after Core Distro, before Whoosh and CBD-Data).
 This is a focused delivery domain. It is not a discovery sprint, a redesign,
 or a compliance architecture review.
 
-**IMPORTANT — OPEN CONFLICT between v3 and reality (record only, do not resolve):**
+**IMPORTANT — OPEN CONFLICT between v3 and historical ledger/report claims (record only, do not resolve):**
 
 > v3 §2.2 (dated 2026-08-04) says Elevate's exact application requirements
 > are **not proven** by the materials available to that PRD, and instructs that
@@ -27,15 +59,13 @@ or a compliance architecture review.
 > potential lead/company/product data, potential files and reports, potential
 > background enrichment.
 >
-> **BUT** `PRD_DELIVERY_MAP.md` lines 48–53 record that an Elevate
-> **OPERATIONS CONSOLE EXISTS today**, is reachable **without an auth wall**,
-> and exposes **unauthenticated status and job APIs** — unlike the
-> Basic-Auth-protected Core-Distro agents console. It is explicitly called a
-> security remediation candidate, not accepted production-parity state.
+> **BUT** `PRD_DELIVERY_MAP.md` lines 48–53 (2026-09-14 ledger) record a historical
+> operations-console finding: a console was described as reachable without an auth
+> wall and exposing status/job APIs. Its cited report is absent from this workspace;
+> this is a ledger assertion, not a current measurement or independently checked API
+> result. It remains a security remediation candidate, not accepted production-parity state.
 >
-> **Conclusion:** Real application software exists that v3 describes only as
-> hypothetical. The part that exists is unauthenticated. This is the central
-> open conflict for this domain. It is recorded here, not resolved.
+> **Conclusion:** The delivery map records an operations-console/API finding that differs from v3's potential-only description. The cited report is unavailable in this workspace, so current existence, routes, and authentication are not independently established. Preserve the conflict; do not treat it as resolved or as proof of current exposure.
 
 ---
 
@@ -45,7 +75,7 @@ Every row in this document carries one of these four labels:
 
 | Label | Meaning |
 |---|---|
-| `[VERIFIED TODAY]` | This writer measured it; a command and its output are cited |
+| `[PER dated report]` | A dated report records the observation; this is not a fresh measurement unless explicitly stated |
 | `[PER v3]` | Sourced from `BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` v3.0, dated 2026-08-04; may be stale |
 | `[PER TRACEABILITY]` | Sourced from `PRD_TRACEABILITY.md`; row name, ledger status, and evidence date are cited |
 | `[OPEN CONFLICT]` | Sources disagree on this item; conflict is recorded, not resolved |
@@ -62,11 +92,11 @@ Status table using only `DELIVERED` / `EVIDENCED` / `IN_PROGRESS` / `BLOCKED` / 
 |---|---|---|---|
 | Apex/www site live at `elevatesci.com` with valid TLS | **DELIVERED** | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` Elevate row; `PRD_TRACEABILITY.md` row `elevate-site-live` (DELIVERED, 2026-09-15); manifest lines 42, 45 |
 | 84-file static SEO/schema/image changes applied | **DELIVERED** | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-SEO-PERF-001` (cited; evidence file not present in workspace — see §1.6) |
-| `agents.elevatesci.com` dashboard/vhost with a 200 path | **DELIVERED** | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-SEO-PERF-001` (cited; evidence file not present in workspace) |
-| Static dashboard route retained after vhost change | **EVIDENCED** | `[VERIFIED TODAY]` | `ELEVATE_NGINX_ROUTE_20260919.md` direct read: "Direct-origin dashboard root: 302" (dashboard redirect retained); rollback copy at `/root/agents.elevatesci.com.nginx-pre-hd2-20260919T092103Z` |
-| `/api/*` on `agents.elevatesci.com` returns local 503 | **EVIDENCED** | `[VERIFIED TODAY]` | `ELEVATE_NGINX_ROUTE_20260919.md` direct read: "Direct-origin `https://agents.elevatesci.com/api/health`: 503"; "Public `https://agents.elevatesci.com/api/health`: 503" |
-| Nginx reload was clean after vhost change | **EVIDENCED** | `[VERIFIED TODAY]` | `ELEVATE_NGINX_ROUTE_20260919.md` direct read: "nginx -t: successful"; "Nginx reload: successful; service remains active" |
-| No HD2Stack upstream reference in active vhost | **EVIDENCED** | `[VERIFIED TODAY]` | `ELEVATE_NGINX_ROUTE_20260919.md` direct read: "The active vhost contains no HD2Stack upstream reference" |
+| Public `agents.elevatesci.com/` dashboard root returns 200 | **UNKNOWN** (latest reported root result is 401) | `[OPEN CONFLICT]` | Older delivery-map/SEO evidence reports a 200 path but its cited artifact is absent; the 2026-10-18 remediation note reports public `/` HTTP/2 401. A root 401 does not prove all routes protected; retain route-specific status only. |
+| Static dashboard route retained after vhost change (historical observation, 2026-09-19) | **EVIDENCED** | `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]` | The report records direct-origin dashboard root 302 and a rollback copy. This was not measured today and does not establish current route behavior. |
+| `/api/health` returned 503 in the 2026-09-19 route report | **EVIDENCED** (historical, one path) | `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]` | This does not establish current behavior or generalize to `/api/*`. The unavailable `data/audit/2026-10-18-next-elevate.md` is reported to describe `/api/embed/` HTML response(s); exact path/outcome is not independently checked here. Other API paths remain UNKNOWN. |
+| Nginx reload was clean after vhost change | **EVIDENCED** (historical, 2026-09-19) | `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]` | Report records `nginx -t` and reload successful; not measured today. |
+| No HD2Stack upstream reference in active vhost | **EVIDENCED** (historical, 2026-09-19) | `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]` | The report records no upstream reference in the then-active vhost; current configuration is UNKNOWN. |
 
 ### 1.2 Host and Infrastructure
 
@@ -74,19 +104,19 @@ Status table using only `DELIVERED` / `EVIDENCED` / `IN_PROGRESS` / `BLOCKED` / 
 |---|---|---|---|
 | Dashboard host: `srv1137994-aminolifesciences` (`elevatesVPS`) | **EVIDENCED** | `[PER TRACEABILITY]` | `SERVICE_CATALOG.md` record `elevate-dashboard` (PARTIAL status); `HOSTS.md` record `srv1137994-aminolifesciences` |
 | Dashboard host Tailscale IP `100.69.211.43`, SSH port 2222 | **EVIDENCED** | `[PER TRACEABILITY]` | `HOSTS.md` record `srv1137994-aminolifesciences`; `ELEVATE_NGINX_ROUTE_20260919.md` (confirmed direct target answered over Tailscale and key-only SSH) |
-| Runtime versions on `srv1137994-aminolifesciences`: Docker 29.1.3, Percona MySQL 8.4.10-10, PHP CLI 8.4.22, Node.js v22.19.0, Python 3.12.3, Composer 2.8.12, Nginx | **EVIDENCED** | `[PER v3]` | `BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` §2.2 Elevate; `HOSTS.md` record `srv1137994-aminolifesciences` (runtime version block) |
+| Recorded runtime versions on `srv1137994-aminolifesciences` | **EVIDENCED** (inventory record; freshness not established) | `[PER HOSTS.md]` | Docker 29.1.3, Percona MySQL 8.4.10-10, PHP CLI 8.4.22, Node.js v22.19.0, Python 3.12.3, Composer 2.8.12, Nginx; source is the `HOSTS.md` runtime block, not v3 §2.2. |
 | Public IP of `srv1137994-aminolifesciences` | **UNKNOWN** | `[PER TRACEABILITY]` | `HOSTS.md` record: "Public IP: UNKNOWN — not surfaced in workspace" |
-| Elevate DNS inventory (all records for `elevatesci.com` and `agents.elevatesci.com`) | **UNKNOWN** | `[PER v3]` | v3 PRD Gate A: DNS inventory required; not evidenced for Elevate |
+| Elevate DNS inventory (all records for `elevatesci.com` and `agents.elevatesci.com`) | **UNKNOWN** | `[UNKNOWN — evidence gap]` | v3 Gate A requires an inventory; that requirement does not prove the inventory is absent. Settle with a dated DNS export/query covering the relevant names and record types. |
 
 ### 1.3 Application and Auth
 
 | Row | Status | Label | Evidence |
 |---|---|---|---|
-| Dashboard authentication/allowlisting | **UNKNOWN** | `[OPEN CONFLICT]` | **CONFLICT A:** `ELEVATE_NGINX_ROUTE_20260919.md` §Rollback: "Dashboard authentication/allowlisting also remains unresolved." **vs.** v3 §2.2 describes an authenticated portal as "POTENTIAL" only (not yet existing). Both sources agree the auth model is not approved; the existence of an unauthenticated dashboard is itself the conflict. No auth model is approved. |
-| Elevate operations console — reachable without an auth wall | **BLOCKED** | `[OPEN CONFLICT]` | **CONFLICT B:** v3 §2.2 lists "potential authenticated portal" as hypothetical only. `PRD_DELIVERY_MAP.md` lines 48–53 state an Elevate OPERATIONS CONSOLE EXISTS today, is reachable WITHOUT an auth wall, and exposes unauthenticated status/job APIs — unlike the Basic-Auth-protected Core-Distro agents console. The software v3 treated as potential is real and unauthenticated. Source: `PRD_DELIVERY_MAP.md` lines 48–53 (authoritative). **This is the highest-risk open item for this domain.** |
-| Elevate operations console — unauthenticated status/job APIs exposed | **BLOCKED** | `[OPEN CONFLICT]` | Same as above; `BRANDON REWORK/evidence/BR-SAAS-PARITY-20260918/console-parity-report.md` cited by `PRD_DELIVERY_MAP.md` as evidence; that file is NOT present in the workspace. The finding is reproduced from the authoritative ledger, not independently verified. |
+| Dashboard authentication/allowlisting | **UNKNOWN** | `[OPEN CONFLICT]` | The 2026-09-19 route report says authentication/allowlisting remained unresolved; v3 §2.2 describes an authenticated portal as potential only. Neither establishes current route auth or approves an auth model. |
+| Elevate operations console — 2026-10-18 report records public root 401 and internal :8000 HTTP 200 response | **UNKNOWN** current state; security acceptance **BLOCKED** | `[PER dated report]` | `data/audit/2026-10-18-build-close-elevate-console.md` is present and reports route-specific probe results; they are not current verification and establish neither all-route authentication nor API behavior. Recheck authorized routes before status changes. |
+| Elevate operations console — status/job API authentication | **UNKNOWN** | `[OPEN CONFLICT; cited source unavailable]` | The 2026-09-14 delivery-map assertion cites `BRANDON REWORK/evidence/BR-SAAS-PARITY-20260918/console-parity-report.md`, which is absent here. Neither that unavailable source nor the report's root request establishes status/job API exposure or authentication. |
 | Elevate-specific application source audit (Gate C) | **UNKNOWN** | `[PER v3]` | v3 PRD §5 Gate C: "For each project, record: repository, framework and runtime, build process, required services, required environment variables, database engine and schema tool, file-storage behavior, scheduled jobs, queue requirements, browser or scraping requirements, external API dependencies." No Gate C artifact is evidenced for Elevate in the traceability ledger. |
-| Elevate data classification (Gate D) | **UNKNOWN** | `[PER v3]` | v3 PRD §5 Gate D: "Every persistent data set must be labeled: Public / Internal / Confidential / Restricted." No Gate D artifact is evidenced for Elevate. PHI, prescription data, payment-card data explicitly prohibited without separate approval (v3 §2.2, §4). |
+| Elevate data classification (Gate D) | **UNKNOWN** | `[PER v3 §5; evidence gap]` | No private stores or records were inspected. v3 defines a required classification gate but establishes neither current data presence nor absence; PHI, prescription data, and payment-card data remain separately approval-gated (v3 §§2.2, 4). |
 | Elevate access matrix (Gate E) | **UNKNOWN** | `[PER v3]` | v3 PRD §5 Gate E: "List every human and machine identity with: name, role, required access, authentication method, expiration or review date, approver." No Gate E artifact is evidenced for Elevate. |
 | Elevate discovery document approved before enabling unverified services | **UNKNOWN** | `[PER v3]` | v3 PRD §20.2 Elevate acceptance criterion: "Discovery document is approved before enabling unverified services." No approved discovery document is evidenced. |
 
@@ -126,20 +156,21 @@ Rows citing absent evidence files are stated as the traceability documents state
 
 These are the central contradictions for this domain. They are recorded, not resolved.
 
-### OPEN CONFLICT A: Dashboard authentication — hypothetical vs. unresolved
+### OPEN CONFLICT A: Dashboard authentication — potential component vs. unresolved route status
 
-- **v3 §2.2 (2026-08-04):** Lists "potential authenticated portal" as a possibility, not an existing component. Elevate's exact application requirements are "not yet proven by the materials available."
+- **v3 §2.2 (2026-08-04):** Lists a "potential authenticated portal" as a possibility, not an established component. Elevate's exact application requirements are "not yet proven by the materials available."
 - **ELEVATE_NGINX_ROUTE_20260919.md:** States "Dashboard authentication/allowlisting also remains unresolved."
-- **Resolution:** Both sources agree no auth model is approved. The conflict is that v3 frames an authenticated portal as a future option, while the dashboard's current state is "unresolved" — meaning it exists but has no auth. This is not a contradiction in the data; it is a gap in both sources.
-- **Owner:** Brandon / Eric / Dubz — decision required.
+- **Attributed reply (2026-10-18):** Reports public `agents.elevatesci.com/` HTTP/2 401 and an internal `100.69.211.43:8000/` HTTP 200 with no `WWW-Authenticate`; no raw capture is included here and no independent re-probe occurred. Public 443 auth does not establish internal-port auth. This report does not establish all routes or status/job API behavior.
+- **Resolution:** Preserve v3's potential-only product scope and the unresolved auth status. The reply is reported evidence, not an independently established current state; no auth model is approved by this PRD.
+- **Owner:** Brandon / Eric / Dubz — decision required; route-specific authorized evidence needed.
 
-### OPEN CONFLICT B: Real operations console exists vs. v3 describes only potential components
+### OPEN CONFLICT B: Historical console/API assertion vs. v3 potential-only scope
 
-- **v3 §2.2 (2026-08-04):** Elevate's exact application requirements are "not proven." Only lists: potential authenticated portal, potential lead/company/product data, potential files and reports, potential background enrichment.
-- **PRD_DELIVERY_MAP.md lines 48–53 (authoritative ledger, 2026-09-14):** An Elevate OPERATIONS CONSOLE EXISTS today, reachable without an auth wall, exposing unauthenticated status and job APIs. This is explicitly called a security remediation candidate.
-- **Source quality:** The ledger finding is authoritative as stated. The cited evidence file (`console-parity-report.md`) is absent from the workspace, so the specific endpoints and data exposed cannot be independently verified.
-- **Resolution:** The software v3 treated as hypothetical is real. The security posture (no auth wall) is documented in the authoritative ledger. This is not resolved; it is the highest-risk open item for this domain.
-- **Owner:** Operator — security remediation required before any production-parity claim.
+- **v3 §2.2 (2026-08-04):** Elevate's exact application requirements are "not proven." It lists only potential components; it does not establish a console.
+- **PRD_DELIVERY_MAP.md lines 48–53 (2026-09-14):** Records a historical claim of a console without an auth wall and unauthenticated status/job APIs. The cited `console-parity-report.md` is absent from this workspace; this remains an attributed ledger assertion, not verified API evidence.
+- **Build-close report (2026-10-18):** `data/audit/2026-10-18-build-close-elevate-console.md` reports internal `:8000/` HTTP 200 without `WWW-Authenticate` and public route results. It does not report an Excalidraw UI or establish status/job API exposure. Its observations are not independently re-probed here.
+- **Resolution:** Current console existence, exact routes, authentication, and API behavior remain UNKNOWN. Preserve the historical ledger assertion and dated probe results without promoting either to independently verified current fact. Require authorized route-specific evidence; do not infer product requirements or mark security acceptance.
+- **Owner:** Operator — security evidence/remediation candidate remains open.
 
 ---
 
@@ -149,18 +180,18 @@ These are the central contradictions for this domain. They are recorded, not res
 
 1. `elevatesci.com` apex/www serves a live static site over HTTPS with valid TLS. `[PER TRACEABILITY]` — `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-IDENTITY-001` cited but file absent.
 2. 84 static files received SEO, schema, and image changes. `[PER TRACEABILITY]` — `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-SEO-PERF-001` cited but file absent.
-3. `agents.elevatesci.com` vhost is live and serves a 200 path. `[PER TRACEABILITY]` — `PRD_DELIVERY_MAP.md` Elevate row; `BR-ELEVATE-SEO-PERF-001` cited but file absent.
-4. The vhost on `srv1137994-aminolifesciences` no longer proxies `/api/*` to HD2Stack; it returns local 503. `[VERIFIED TODAY]` — `ELEVATE_NGINX_ROUTE_20260919.md` direct read.
-5. Nginx on `srv1137994-aminolifesciences` reload was clean (`nginx -t`: success; service active). `[VERIFIED TODAY]` — `ELEVATE_NGINX_ROUTE_20260919.md` direct read.
+3. Historical delivery-map/SEO evidence is cited for a 200 path on `agents.elevatesci.com`, but its underlying artifact is absent; the 2026-10-18 reply separately reports public root HTTP/2 401 and internal `:8000` HTTP 200 without an auth header. These are attributed, route-specific reports, not independently verified current state; neither establishes all-route auth or API behavior. `[OPEN CONFLICT]`
+4. The 2026-09-19 route report records `/api/health` 503 and no HD2Stack upstream; this is historical, one-path evidence, not a current `/api/*` result. `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]`
+5. The 2026-09-19 route report records a successful `nginx -t` and reload; this is historical, not measured today. `[PER dated ELEVATE_NGINX_ROUTE_20260919.md]`
 6. The ops provider adapter has a local mock-test implementation with passing contract tests. `[PER TRACEABILITY]` — `SOFTWARE_LANES.md` Lane 1.
 
 ### Not proven (PRD-wide acceptance absent)
 
 1. **Dashboard authentication** — no accepted artifact proves an approved auth model for `agents.elevatesci.com`. `[OPEN CONFLICT A]`
-2. **Operations console security** — the console is reachable without an auth wall and exposes unauthenticated status/job APIs. `[OPEN CONFLICT B]` — the highest-risk open item.
-3. **API backend** — the `/api/*` route intentionally returns 503 pending an Elevate-owned backend; no such backend is evidenced. `[PER v3]`
+2. **Operations console security** — the 2026-10-18 build-close report records public-root 401 and direct Tailscale `:8000` HTTP 200 without `WWW-Authenticate`; these report-attributed probes were not independently repeated here. The report does not establish status/job API exposure. `[OPEN CONFLICT B]` Current route/auth/API state remains UNKNOWN; authorized route-specific evidence is required before changing status.
+3. **API backend** — the 2026-09-19 report records `/api/health` 503. An unavailable 2026-10-18 report is said to describe an `/api/embed/` HTML response; exact path/outcome is not independently checked here. Other paths and current backend behavior are UNKNOWN; no general `/api/*` status is established. `[OPEN CONFLICT]`
 4. **Application source audit (Gate C)** — no Gate C artifact for Elevate. `[PER v3]`
-5. **Data classification (Gate D)** — no Gate D artifact for Elevate. `[PER v3]`
+5. **Data classification (Gate D)** — current data classification is **UNKNOWN**; no private stores or records were inspected. v3 §5 defines a required classification gate but does not establish present data presence or absence. `[PER v3 §5; evidence gap]`
 6. **Access matrix (Gate E)** — no Gate E artifact for Elevate. `[PER v3]`
 7. **Discovery document** — not approved. `[PER v3]`
 8. **Queue/worker/runtime** — no queue namespace, worker process, or Hetzner placement is evidenced for Elevate.
@@ -178,7 +209,7 @@ These are the central contradictions for this domain. They are recorded, not res
 What this domain includes (per v3 PRD adapted for Elevate):
 
 - `elevatesci.com` public website and frontend — `[PER TRACEABILITY]` DELIVERED for static site and TLS
-- `agents.elevatesci.com` operations dashboard — `[OPEN CONFLICT B]` live but unauthenticated; auth unresolved `[OPEN CONFLICT A]`
+- `agents.elevatesci.com` operations dashboard — live/current auth state UNKNOWN; historical console/API claim remains `[OPEN CONFLICT B]`; dashboard auth model unresolved `[OPEN CONFLICT A]`
 - Elevate-specific application source and Gate C audit — `[PER v3]` UNKNOWN
 - Elevate project queue namespace on Hetzner RabbitMQ — UNKNOWN
 - Elevate-specific database role and credentials on Hostinger PostgreSQL — UNKNOWN
@@ -223,17 +254,18 @@ What this domain explicitly does not include:
 **Status:** `BLOCKED` (`AUTHORIZATION`) — `[PER TRACEABILITY]`  
 **What it blocks:** Real provider key reads, live provider API calls, live VPS control-plane mutation  
 **Source:** `PRD_TRACEABILITY.md` row `elevate-ops-provider-adapter`; `SOFTWARE_LANES.md` Lane 1  
-**What would unblock it:** Explicit operator authorization for live/provider work separate from local mock-test authority  
+**Authority update (attributed reply, 2026-10-18):** SSH credential widening to `100.69.211.43` and disclosure of offsite backup keys, destinations, and retention were explicitly DECLINED pending Captain authority. These are authority decisions, not missing evidence or permission to seek another credential path or disclose the information elsewhere. The report's `:8000` condition remains unverified by this PRD repair; approved local logging to `/home/hd2admin/alerts.log` is not evidence that logging was implemented.  
+**What would unblock it:** Explicit operator authorization for live/provider work separate from local mock-test authority; credential widening requires Captain decision.  
 **Owner:** Operator
 
-### Blocker E-3: Elevate operations console — unauthenticated APIs `[OPEN CONFLICT B]` (SECURITY — HIGHEST RISK)
+### Blocker E-3: Elevate operations-console authentication and API evidence `[OPEN CONFLICT B]` (SECURITY — HIGHEST RISK)
 
 **Status:** `BLOCKED` (security remediation candidate) — `[OPEN CONFLICT B]`  
-**What it blocks:** Production-parity acceptance; compliance with v3 PRD §4 non-goals (no unauthenticated internal APIs)  
+**What it blocks:** Production-parity acceptance; current auth state and API behavior are not established by available evidence.
 **Source:** `PRD_DELIVERY_MAP.md` lines 48–53 (authoritative ledger); `BRANDON REWORK/evidence/BR-SAAS-PARITY-20260918/console-parity-report.md` (cited but absent from workspace)  
 **What would unblock it:** Auth wall added to Elevate operations console; status/job APIs require authentication; accepted artifact confirming the fix  
 **Owner:** Operator (security remediation)  
-**Note:** This is the highest-risk open item for this domain. It is recorded as a security remediation candidate, NOT an accepted production-parity state. Do not treat this as resolved without an accepted artifact. v3 §2.2 described this as potential/hypothetical; reality has it as real and unauthenticated — the central open conflict.
+**Note:** This is the highest-risk open evidence item for this domain, not a verified current exposure. Do not treat it as resolved or confirmed without an accepted artifact. v3 §2.2 lists portal components as potential; the delivery-map records a historical console/API assertion, while its cited report is unavailable here.
 
 ### Blocker E-4: Ticket 0033 traceability artifact
 
@@ -256,8 +288,8 @@ These cross-cutting unknowns gate Elevate regardless of its own progress. All so
 | 3 | Cross-project runtime isolation — no evidence proves four production queue namespaces, worker denial tests, project-scoped ingest, file namespaces, database roles, or Qdrant collection isolation | UNKNOWN | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` unresolved area 3 | Isolated queue/worker/namespace acceptance tests |
 | 4 | Hub application delivery — LiteLLM placeholder keys; AnythingLLM backend/vector-store relationship and Brandon-vs-HD2 data boundary unknown | BLOCKED | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` unresolved area 4 | Approved secret store, backup/restore, embedding route, DNS/TLS, per-project isolation |
 | 5 | Release controls (CI/CD) — local hardening/self-tests are not v3's per-project CI, container-build, dependency/vulnerability, staging, smoke, health, and rollback gates | UNKNOWN | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` unresolved area 5 | Complete per-project CI/CD pipeline with demonstrated rollback |
-| 6 | Backup/DR — no live encrypted off-host provider assignment, per-project target proof, real restore, RPO/RTO, or DR drill for Elevate | UNKNOWN | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` unresolved area 6; blocked on `OPERATOR_INPUT` | Operator supplies Namecheap DR target; live encrypted backup; restore test; measured RPO/RTO |
-| 7 | Observability — no complete four-project SLO/alert/restore-age implementation is evidenced for Elevate | UNKNOWN | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` unresolved area 7 | Metrics, log aggregation, SLO, and alert implementation |
+| 6 | Backup/DR — no live encrypted off-host provider assignment, per-project target proof, real restore, RPO/RTO, or DR drill for Elevate | UNKNOWN; backup authority explicitly declined in attributed reply | `[PER TRACEABILITY; attributed reply 2026-10-18]` | `PRD_DELIVERY_MAP.md` unresolved area 6; reply explicitly declines offsite backup keys, destinations, and retention disclosure pending Captain authority | Captain supplies/authorizes target, key custody and retention; then live encrypted backup, restore test, measured RPO/RTO |
+| 7 | Observability — no complete four-project SLO/alert/restore-age implementation is evidenced for Elevate | UNKNOWN | `[PER TRACEABILITY; attributed reply 2026-10-18]` | `PRD_DELIVERY_MAP.md` unresolved area 7; reply approves local logging to `/home/hd2admin/alerts.log` but provides no execution evidence | Local-log approval is not implementation or human alert delivery; external destination remains Captain-gated. Verify execution and human delivery separately. |
 | 8 | Canonical source provenance — historical Git blob for the PRD itself is absent | BLOCKED | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` unresolved area 8; `DEPENDENCY` on absent Git blob | Recover historical Git blob only if exact-byte provenance required for final signoff |
 | 9 | Reusable HD2 client baseline incomplete — accepted Hetzner/HD2stack recheck is placement/broker evidence, not a complete host-baseline application | UNKNOWN | `[PER TRACEABILITY]` | `PRD_DELIVERY_MAP.md` unresolved area 9 | Host-profile overlay with provider, exact addresses, OS/role, named admin/key pointer, approved ingress, rollback window |
 
@@ -276,18 +308,18 @@ Checkboxes traceable to v3 PRD sections. Each criterion is labeled. Marked `UNKN
 
 ### 8.2 Dashboard and Auth
 
-- [ ] `agents.elevatesci.com` serves the dashboard with a 200 response — **[DELIVERED]** `[PER TRACEABILITY]` — v3 PRD §20.2; `PRD_DELIVERY_MAP.md` Elevate row
+- [ ] `agents.elevatesci.com` serves the dashboard with a 200 response — **UNKNOWN** `[OPEN CONFLICT]` — the delivery-map claim's underlying evidence is unavailable; the 2026-10-18 report records `/` as 401. These historical reports conflict and neither establishes current root behavior.
 - [ ] Dashboard authentication model is approved and implemented — **UNKNOWN** `[OPEN CONFLICT A]` — `ELEVATE_NGINX_ROUTE_20260919.md`: "Dashboard authentication/allowlisting also remains unresolved"; v3 §2.2 lists portal as "potential" only
 - [ ] Unauthorized access to dashboard is denied — **UNKNOWN** `[OPEN CONFLICT A]` — no auth model exists yet
-- [ ] Unauthorized access to `/api/*` is denied — **[EVIDENCED]** `[VERIFIED TODAY]` — `ELEVATE_NGINX_ROUTE_20260919.md`: 503 locally and publicly
+- [ ] Unauthorized access to `/api/*` is denied — **UNKNOWN** — `ELEVATE_NGINX_ROUTE_20260919.md` records `/api/health` returning 503; service unavailability is not evidence that unauthorized access is denied, and one path does not establish all `/api/*` routes.
 
 ### 8.3 Operations Console Security `[OPEN CONFLICT B]` (HIGHEST RISK)
 
-- [ ] Elevate operations console is NOT reachable without an auth wall — **[BLOCKED]** `[OPEN CONFLICT B]` — `PRD_DELIVERY_MAP.md` lines 48–53: console reachable without auth wall; `console-parity-report.md` cited but absent
-- [ ] Status/job APIs on the operations console require authentication — **[BLOCKED]** `[OPEN CONFLICT B]` — same source
+- [ ] Elevate operations console NOT reachable without auth — **UNKNOWN** current state; acceptance **BLOCKED** pending an accepted route-specific auth check. The delivery map historically reports console exposure (`PRD_DELIVERY_MAP.md` lines 48–53); its cited `console-parity-report.md` is absent. The 2026-10-18 build-close report is present but not independently re-probed here.
+- [ ] Status/job APIs on the operations console require authentication — **UNKNOWN**; neither the 2026-10-18 build-close report nor the unavailable cited console report establishes API behavior. Require route-specific accepted evidence.
 - [ ] Security remediation is accepted and verified — **UNKNOWN** — requires accepted artifact confirming the fix
 
-> **NOTE:** This criterion is a security remediation candidate, NOT an accepted production-parity state. It must not be marked complete without an accepted artifact confirming the fix. v3 §2.2 described the portal as potential/hypothetical; the operations console is real and unauthenticated — the central open conflict.
+> **NOTE:** This criterion is a security remediation candidate, NOT an accepted production-parity state. It must not be marked complete without an accepted artifact confirming the relevant routes and authentication behavior. v3 §2.2 describes a portal as potential; the delivery-map assertion is historical and its cited report is unavailable here.
 
 ### 8.4 Application Architecture
 
@@ -462,10 +494,10 @@ Consistent with v3 PRD Phase 5 ordering (Core → Elevate → Whoosh → CBD-Dat
 
 | # | Risk | Severity | Label | Mitigation | Source |
 |---|---|---|---|---|---|
-| R-1 | **Elevate operations console unauthenticated** — reachable without auth wall, exposing unauthenticated status/job APIs | **Critical** | `[OPEN CONFLICT B]` | Add auth wall before any production-parity claim; do not accept as stable state | `PRD_DELIVERY_MAP.md` lines 48–53 |
+| R-1 | **Operations-console authentication/API state UNKNOWN** — delivery-map historically reports a console/API exposure; source report unavailable here | **Critical** | `[OPEN CONFLICT B]` | Owner: operator; unblock when authorized route-specific auth and API checks are recorded in an accepted dated artifact; remediate only if those checks confirm exposure | `PRD_DELIVERY_MAP.md` lines 48–53 (2026-09-14 ledger) |
 | R-2 | **Dashboard auth unresolved** — no auth model is approved for `agents.elevatesci.com` | High | `[OPEN CONFLICT A]` | Obtain operator decision on auth model before Phase 5 rollout | `ELEVATE_NGINX_ROUTE_20260919.md` |
 | R-3 | **Ops provider adapter BLOCKED_AUTHORIZATION** — local mock tests working but live/provider not authorized | High | `[PER TRACEABILITY]` | Do not deploy to live provider without explicit authorization | `SOFTWARE_LANES.md` Lane 1; `PRD_TRACEABILITY.md` |
-| R-4 | **Real software exists vs. v3 hypothetical** — v3 §2.2 describes only potential components; an actual operations console exists today and is unauthenticated | High | `[OPEN CONFLICT B]` | Record the conflict; route security remediation through operator; update v3 PRD when resolved | `PRD_DELIVERY_MAP.md` lines 48–53; v3 §2.2 |
+| R-4 | **Historical delivery-map console assertion vs. v3 potential-only components** — current existence/authentication are UNKNOWN because the cited report is unavailable | High | `[OPEN CONFLICT B]` | Owner: operator; unblock with the cited source report or an authorized, dated route-specific check; preserve v3 scope until then | `PRD_DELIVERY_MAP.md` lines 48–53; v3 §2.2 |
 | R-5 | **Amino/Elevate legacy VPS placement** — current Elevate site on legacy VPS, not PRD-v3 target | Medium | `[PER TRACEABILITY]` | Do not claim v3 target placement complete; route Phase 3/4 decisions through ADR | `PRD_DELIVERY_MAP.md` unresolved area 2; `amino-elevate-live-placement` row |
 | R-6 | **Ticket 0033 traceability gap** — sweep reported CLOSED but no accepted artifact for the traceability row | Medium | `[PER TRACEABILITY]` | Obtain the task's completion report as the row's own evidence | `PRD_DELIVERY_MAP.md` Elevate row |
 | R-7 | **Cross-project isolation not proven** — no evidence that Elevate queues/files/database are isolated | High | `[PER TRACEABILITY]` | Phase 2 cross-project denial tests are the required unblock | `PRD_DELIVERY_MAP.md` unresolved area 3 |
@@ -482,7 +514,7 @@ The following evidence types are the only acceptable basis for changing any stat
 | Criterion type | Required evidence |
 |---|---|
 | Site live / TLS | Live curl/HTTPS HEAD from `elevatesci.com` confirming 200 and valid cert — already `[PER TRACEABILITY]` DELIVERED |
-| Dashboard live | Live curl/HTTPS HEAD from `agents.elevatesci.com` confirming 200 path — already `[PER TRACEABILITY]` DELIVERED |
+| Dashboard live | Accepted, dated route-specific evidence establishing the required current dashboard path and response; the unavailable underlying delivery-map artifact and the 2026-10-18 reported root 401 do not establish current root behavior |
 | Dashboard auth (resolve CONFLICT A) | Accepted artifact proving auth model (e.g., allowlist config, session config, or Basic Auth header requirement) |
 | Ops console security (resolve CONFLICT B) | Accepted artifact confirming auth wall added; status/job APIs no longer respond without credentials; cited `console-parity-report.md` should be recovered or replaced |
 | API backend | Accepted artifact proving an Elevate-owned backend answering `/api/*` with correct auth |

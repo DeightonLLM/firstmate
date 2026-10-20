@@ -1,0 +1,93 @@
+# Elevate Life Sciences — evidence-based discovery
+
+**Observed:** 2026-10-18 01:45 UTC (live public HTTPS GETs from this host).  
+**Scope:** Public `elevatesci.com` and `agents.elevatesci.com` pages/assets, plus locally available Elevate system-context and project reports. Read-only. No login, form submission, API mutation, database query, host scan, or service/configuration change was performed.
+
+## Executive result
+
+The current public surface is more than the previously known protected console: `elevatesci.com` publishes a static-looking catalog/marketing site, policies, product pages, contact/quote/wholesale forms, and loads an AnythingLLM widget from `agents.elevatesci.com`. The public agent host serves the widget asset and an HTML app shell at `/embed/` and `/api/embed/`; the console root and `/api/health` return Basic-auth 401 without credentials. This proves routes and public assets exist, **not** that an Elevate chatbot workspace, data pipeline, authenticated API, or application backend is configured.
+
+No evidence obtained here establishes what records exist in private databases, inboxes, operational tools, or the widget's backing workspace. Therefore the presence or absence of PHI, patient/clinical records, prescription data, or payment-card data in persistent stores is **UNKNOWN**. No claim that these data are absent is warranted. The v3 §2.2 potential-only framing remains the correct product-requirements baseline; nothing below converts public marketing copy into approved requirements.
+
+## Proven from live public responses
+
+| Surface | Observation | Evidence |
+|---|---|---|
+| Marketing/catalog site | `GET https://elevatesci.com/` returned HTTP 200, `text/html`, 35,652 bytes. HTML identifies Elevate Life Sciences and describes research peptides/laboratory compounds. | `curl -sS -L --max-time 12 -D - -o /tmp/elevate-discovery-body -w ... https://elevatesci.com/`; response headers/body captured in this lane's command output. |
+| Public route inventory | `robots.txt` returned 200 and points to `https://elevatesci.com/sitemap.xml`. Sitemap returned 200 and lists 42 URLs: home, shop, about, quality, research, research-notes, lab-supplies, FAQ, contact, quote, wholesale, blog and 3 blog posts, 20 product pages, privacy/terms/disclaimer/shipping/refund/cookie/accessibility. | `curl -sS -L ... https://elevatesci.com/robots.txt` and `.../sitemap.xml`; parsed sitemap with Python ElementTree. URLs enumerated in command output. A sitemap proves advertised paths, not functional workflows. |
+| Sampled page availability | All 42 sitemap URLs were fetched by GET with `curl`; all returned HTTP 200 and `text/html` in the observed pass. Distinct page titles match the routes. | Python loop calling `curl -sS -L --max-time 15 -A Mozilla/5.0 -w ...` for each sitemap URL; full per-route status/title/assets/forms printed in command output. Point-in-time only. |
+| Public forms | `/contact` contains `contact-box-action`; `/quote` contains `quote-box-action`; `/wholesale` contains `wholesale-box-action`; sampled page HTML also contains `newsletter-box-action`. | Same sitemap crawl: extracted `<form>` opening tags. No forms were submitted. Inputs, actual destinations, validation and persistence are not established by this check. |
+| Public page assets | Sampled marketing pages reference `/css/style.css`, `/js/main.js`, and `https://agents.elevatesci.com/embed/anythingllm-chat-widget.min.js`. | Same sitemap crawl, HTML asset references. The public JS assets were retrievable via GET; widget JS returned HTTP 200 (678,470 bytes). This demonstrates a shipped widget asset/reference, not a working chat or backend. |
+| Agent console protection | `GET https://agents.elevatesci.com/` returned HTTP 401 and `WWW-Authenticate: Basic realm="Elevate Operations Console"`; `GET /api/health` also returned 401. | Exact live GET loop output in command record. No credentials supplied. |
+| Embed routes | `GET https://agents.elevatesci.com/embed/` and `/api/embed/` each returned HTTP 200, `text/html; charset=utf-8`, `x-powered-by: Express`, 1,926 bytes. Both bodies are the same AnythingLLM-branded HTML shell, not JSON API data. | Exact live GET loop output; response bodies inspected (title/meta brand the AnythingLLM application). Do not infer a live embed conversation/workspace from the shell response. |
+| Public site/chat integration | Home and sampled marketing pages include the widget script reference; the returned widget JS is a large bundled client asset. | Live HTML and asset GETs above. Chat functionality, embed ID, tenant binding, authentication, and persistence remain untested/unknown. |
+
+The earlier local chatbot scout report (`data/local-chatbot-trial-map-and-benchmark-core-elevate-chatbots-d1/report.md`, §4b/§8) said no Elevate homepage embed was found and dated its observation 2026-09-15. The present live homepage now includes the widget script reference, so that earlier negative observation is stale for the current public page. This does not demonstrate that a working Elevate workspace exists.
+
+## Software, systems, and endpoints: evidence versus unknown
+
+**Demonstrably present at public HTTP level:**
+
+- `elevatesci.com`: Cloudflare-fronted HTTPS website responding with static-style HTML pages and CSS/JavaScript assets. Public page HTML links the widget JS on the agent subdomain.
+- `agents.elevatesci.com`: Cloudflare-fronted HTTPS endpoint. The root provides an nginx Basic-auth challenge; embed paths serve an Express-powered AnythingLLM-branded HTML shell and a JavaScript asset. This establishes a reachable public endpoint, not its physical host, container, upstream architecture, workspace contents, or owner.
+- Public content includes catalog/product, research/quality, policy, informational, contact and commercial-enquiry pages. Site menu/copy is evidence of presented features only—not fulfillment, payment, order processing, inventory, account access, or database capabilities.
+
+**Supported only by dated local documentation, not independently remeasured here:**
+
+- `docs/system-context/ELEVATE_NGINX_ROUTE_20260919.md` describes an earlier nginx route state, including a 503 result for a specific API health path. It is historical and must not be treated as current general `/api/*` behavior.
+- `data/local-chatbot-trial-map-and-benchmark-core-elevate-chatbots-d1/report.md` and `docs/system-context/evidence/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md` contain older source/hosting/workspace assertions and state evidence limits. Some are contradicted or superseded by the live public widget reference and current 401/HTML-shell measurements above.
+- `data/audit/2026-10-18-audit-elevate.md` records v3 §2.2 as explicitly saying exact app requirements are not proven, with only potential portal/data/files/reports/background-enrichment components. It also cites v3 §2.2 at `docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md:92-106`. This discovery independently confirms no basis to promote those potentials to requirements.
+
+**Unknown / not demonstrated:**
+
+- A separate authenticated product portal or end-user account workflow (the protected console is observable, but credentials and authenticated UI are unavailable).
+- Working chat, embed ID/tenant, Elevate workspace, model provider, document corpus, vector store, chat history retention, or workspace/retrieval isolation.
+- API route inventory beyond the two tested embed paths and protected `/api/health`; no endpoint enumeration or guessed-route probing was done. `/api/embed/` returning HTML is not evidence of an API data response.
+- Form submission destinations, CRM/order/email integrations, transaction lifecycle, payment processor, fulfillment, reporting, or background enrichment. No submissions or write calls were made.
+- Which source repository/build artifact is canonical for these live pages, their origin server, deployment arrangement, private services, DNS ownership, or current operational software inventory.
+
+## Data classification reality
+
+### Publicly observable data
+
+The live pages expose business/product and research-oriented descriptions, product catalog page names, quality/policy content, social/contact links, and form entry points. Product listing names include research compounds (for example BPC-157, TB-500, and others in the sitemap). This is public site content; it is not evidence of patient records or clinical datasets. The site states research-use positioning in visible metadata/disclaimer. This report makes no determination about product legality, regulatory status, or compliance.
+
+Forms imply that visitors could be invited to provide contact/enquiry information, but because no form was submitted, no user-submitted personal data was collected or inspected. The HTML form presence alone does not prove whether submissions reach email, a CRM, a file, or any database.
+
+### Private/persisted data
+
+**UNKNOWN.** This read-only discovery did not access authenticated console pages, private service APIs, databases, storage buckets, backups, CRM/email, or order-processing systems. Local dated documentation mentions AnythingLLM workspaces and a local `hd2stack-anythingllm` directory, but that is not an inventory of current Elevate records and cannot establish contents/classification. No database was queried and no record content was inspected.
+
+Accordingly, the evidence does **not** prove either presence or absence of:
+
+- PHI or identifiable patient records;
+- clinical study/participant records or clinical results;
+- prescriptions or prescription/dispensing data;
+- payment-card data or payment processor records;
+- user-submitted contact/enquiry data in a persistent store;
+- commercial customer, order, account, or shipment data.
+
+No ingestion, copying, or introduction of any of those classes is authorized by this discovery. The v3 separate-approved-decision boundary remains applicable.
+
+## Assumptions explicitly not adopted
+
+- A product listing or “research use” disclaimer does not prove a clinical workflow, patient population, prescription workflow, or regulated data processing.
+- A contact/quote/wholesale form does not prove a backend integration or persisted record store.
+- A widget script, `/embed/` shell, or AnythingLLM branding does not prove chat works, that it is Elevate-owned/tenant-isolated, or that it has any particular corpus.
+- A root Basic-auth challenge does not prove all endpoints are protected; explicit embed carve-outs are publicly reachable, and other routes were not surveyed.
+- A 200 status or a sitemap entry does not prove complete or correct product behavior.
+
+## What would settle remaining questions
+
+1. An authorized system owner provides the current service/repository/deployment inventory and confirms the origin and owners for both domains.
+2. A credentialed owner/operator demonstrates the console and workspace/embed mapping without disclosing credentials; inspect only metadata needed to establish tenant, data source, retention, access boundaries and behavior.
+3. Owners of each form/integration provide documented destinations and retention/data-field mapping; use a designated synthetic test path only after owner approval. Do not submit real personal or health information.
+4. A bounded, owner-authorized data inventory classifies actual records by source/schema and access controls, without copying sensitive record values into this report. If sensitive classes are found, stop and use the separate approved decision process before any product/data change.
+5. An approved endpoint contract or source/build mapping identifies application routes. Authenticated route verification should be owner-approved and limited to named paths; no endpoint brute force or unbounded route scan is warranted.
+
+## Mutation, backup, and verification record
+
+- Changed artifact: this report only, created at `/home/hd2admin/kun-agent-workspace/data/audit/2026-10-18-next-elevate.md`.
+- Target was confirmed absent before creation (`test ! -e ...` returned `TARGET_ABSENT`), so there were no prior target bytes to back up; no `.bak` can preserve a nonexistent file. No other file was changed by this lane.
+- Live observation commands were read-only GETs; Python only parsed retrieved sitemap/page output. One initial `urllib` sitemap request returned HTTP 403; the subsequent explicit curl/User-Agent request succeeded, so no failed result was reinterpreted as absence.
+- Post-write verification: `wc -l -c`, `tail -n 12`, `sha256sum`, and `git status --short` ran immediately after creation. Output: 93 lines, 12,575 bytes; SHA-256 `b0366f056e5f6bd9ab38edffce95dd433cf4112b00bc0532c282b5092e836d81`; the expected file was present. Git status showed this report as not tracked/untracked only if listed; unrelated existing worktree changes were also present.

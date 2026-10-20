@@ -1,0 +1,4 @@
+working: deduped 196 files to 75 distinct inbound Controller messages; now extracting decisions
+working: read 47 of 75 inbound messages; verified startup-repair-20260930 baseline fix NOT applied (fm-brief.sh:145 still hardcodes /root/AGENTS.md)
+working: verified acted-on state for key decisions; running conflict/quote audit on revision chains
+done: triaged 75 distinct inbound Controller messages (196 files -> 127 distinct hashes -> 75 inbound after excluding 42 outbound and 7 already-read); 7 superseded, 10 still binding, 7 need Controller; one unactioned ship-worthy defect found (fm-brief.sh:145 / fm-session-start.sh:238 still point the fresh-agent baseline at /root/AGENTS.md, reproduced in this task's own brief); 3 captain decisions registered and completion gate verified

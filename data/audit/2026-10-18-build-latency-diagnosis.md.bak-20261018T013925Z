@@ -1,0 +1,82 @@
+# Core Distro Chat Latency — Read-Only Diagnosis
+
+**Date:** 2026-10-18 (UTC)  
+**Scope:** Repeated live staging probes and isolation assessment. No production, DNS, application, proxy, or service configuration was changed. No request was sent to `llm.hd2.ai` or another HD2-internal service.
+
+## Finding
+
+**The reported 847 ms is not confirmed as a current TTFT.** Repeated requests to the client staging chat route did not yield a token or a valid chat response: all three synthetic POSTs returned HTTP 401 `Invalid request` after 802.6–823.4 ms. These are failed-request response times, not TTFT. Therefore there is no valid current TTFT sample to compare with the 500 ms SLA, and it is not justified to claim either that 847 ms holds or that it has drifted.
+
+The current evidence points first to a **staging chat-route / embed-request validity failure**, not a measured slow model. The stage's `/llm/chat/` route still returns a bare nginx 404. A request at `/api/embed/<embed-id>/stream-chat` reaches an Express response but is rejected as invalid. The client widget's actual live embed ID/configuration and backend/provider trace were not established. The request path cannot be attributed to a specific downstream service timing from these external observations alone.
+
+## Measurements
+
+Probe vantage: `brandon-compute`; timestamp from host: `2026-10-18T01:37:35Z`. `staging.core-distro.com` resolved locally to `45.90.220.156`. All timings below are curl wall-clock fields; `time_starttransfer` is response first-byte timing, **not chat TTFT**.
+
+### Client staging ingress: `GET /llm/chat/`
+
+Five sequential HTTPS GETs, all nginx HTTP 404, 146-byte body:
+
+| Sample | DNS | TCP connect | TLS complete | first response byte | total |
+|---|---:|---:|---:|---:|---:|
+| 1 | 66.8 ms | 224.8 ms | 396.9 ms | 555.1 ms | 555.2 ms |
+| 2 | 35.2 ms | 193.7 ms | 357.5 ms | 515.7 ms | 515.8 ms |
+| 3 | 56.8 ms | 215.0 ms | 379.6 ms | 537.7 ms | 537.8 ms |
+| 4 | 0.9 ms | 158.8 ms | 321.4 ms | 479.6 ms | 479.6 ms |
+| 5 | 38.6 ms | 196.4 ms | 359.9 ms | 517.7 ms | 517.7 ms |
+
+The measurements are from this host to the staging hostname, not a real visitor browser. They show ~159–225 ms TCP connect and ~321–397 ms through TLS, then a quick nginx 404; they do not isolate the CDN/client-to-origin network path or a working chat flow.
+
+### Staging embed paths: GET probes
+
+Five GETs each to `/api/embed/fd029baa-22fd-4a3a-b074-40c7a00daf30/stream-chat` returned HTTP 200, `application/json`, 14 bytes, body `{"history":[]}`. First-byte/total times were 808.4, 805.9, 805.0, 880.1, and 806.0 ms. This is a history-style response to GET, not a generated answer.
+
+Five GETs each to `/llm/chat/api/embed/fd029baa-22fd-4a3a-b074-40c7a00daf30` returned HTTP 404, 9-byte `Not Found`; first-byte/total times were 806.5, 808.5, 804.9, 806.6, and 866.4 ms. This is a failed route response, not TTFT.
+
+### Synthetic stream requests on the client staging hostname
+
+Three sequential POSTs to `https://staging.core-distro.com/api/embed/fd029baa-22fd-4a3a-b074-40c7a00daf30/stream-chat`, each with a fresh synthetic session ID and prompt “Latency probe: reply with the single word OK.” All returned HTTP 401 and the same JSON error (`"error":"Invalid request."`); elapsed times were 823.4, 802.6, and 805.4 ms. No SSE token/content arrived. The POST body used the widget-observed shape (`message`, `sessionId`), but the embed ID and all server-side requirements were not independently authenticated as current. No retry with credentials or a guessed identifier was attempted.
+
+## Hop isolation status
+
+| Requested segment | Evidence | Conclusion |
+|---|---|---|
+| Client to nginx | This host's DNS/TCP/TLS and HTTPS response timings above | Partially measured from one non-customer vantage. No browser-to-edge/origin split; cannot call this customer client-to-nginx latency. |
+| nginx to AnythingLLM | nginx 404 on `/llm/chat/`; Express-tagged responses on `/api/embed/...` | Not separately measurable without origin-side timing/logs or trace IDs. The 404 is a concrete route failure; Express response headers do not prove which upstream handled it. |
+| AnythingLLM to LLM provider | No accepted chat request or provider response | Not measured. No provider timings, credentials, or server tracing were available. |
+| LLM first token | No valid streamed answer in any sample | Not measured; no true TTFT sample. |
+
+## Smallest compliant next step / expected gain
+
+No latency optimization with a defensible numeric gain can be proposed from these data. The 500 ms SLA cannot be evaluated until the client-owned staging chat path returns a valid streamed answer. The smallest legitimate next step is a **staging-only, owner-run route/embed correction and instrumented retest**:
+
+1. The Core Distro staging owner identifies the widget's live `embedId`, `baseApiUrl`, and intended client-owned AnythingLLM origin from the deployed staging configuration (do not infer them from a stale ID or the current error response).
+2. On staging only, make the smallest route/config correction so the widget points to that Core Distro/client-owned origin and the embed request is accepted. If `/llm/chat/` is the intended prefix, repair its staging nginx mapping only after verifying the target upstream. Do not point it at an HD2 service.
+3. Before changing staging config, copy the exact config file to a sibling timestamped `.bak`; record its checksum. Validate nginx syntax before reload, reload only staging, and verify the previous config can be restored from the backup.
+4. Issue at least five synthetic streamed requests to the confirmed staging endpoint. Carry a request ID through nginx and the client-owned AnythingLLM ingress; timestamp request receipt, upstream dispatch, provider first-byte/first-token, and first SSE content at the client. Report p50/p95 separately for each interval.
+
+**Expected gain:** the immediate expected result is functional acceptance of the staging chat request (currently all three POSTs fail); numeric TTFT gain is unknown and no claim of meeting 500 ms is supportable. If later traces show the model/provider is under 500 ms but ingress overhead is high, optimize only the measured client-side hop; if provider first-token dominates, tune the client-owned provider/model/RAG path based on its measured component. Do not apply either optimization without that evidence.
+
+## Explicit isolation ruling
+
+`llm.hd2.ai` is forbidden for Core Distro client traffic. Repointing the widget there, using its widget CDN/API, or routing through any HD2-internal service is explicitly excluded. The prior isolation probe records that the public Core Distro site currently references `https://llm.hd2.ai`; that is an existing policy violation, not an approved remediation. This diagnosis did not contact that host. No alternative compliant endpoint was proven usable during these probes; if Core's own endpoint/configuration cannot be identified and authorized, there is no evidence-backed compliant latency fix to recommend yet.
+
+## Commands and outputs
+
+1. `date -u +%FT%TZ; hostname; getent ahostsv4 www.core-distro.com staging.core-distro.com agents.core-distro.com` → `2026-10-18T01:37:35Z`, host `brandon-compute`; `www.core-distro.com` → `66.29.153.174`; `staging.core-distro.com` → `45.90.220.156`; `agents.core-distro.com` → `161.97.120.4`.
+2. Repeated curl command: `for n in 1 2 3 4 5; do curl -sS --max-time 8 -o /dev/null -w "sample=$n code=%{http_code} remote=%{remote_ip} dns=%{time_namelookup}s connect=%{time_connect}s tls=%{time_appconnect}s ttfb=%{time_starttransfer}s total=%{time_total}s bytes=%{size_download}\n" "$u"; done`; the five per-sample outputs are tabulated above.
+3. `curl -sS --max-time 8 -D - https://staging.core-distro.com/llm/chat/` → `HTTP/1.1 404 Not Found`, `Server: nginx`, `Content-Length: 146`; HTML body is nginx's default 404 page.
+4. `curl -sS --max-time 8 -D - https://staging.core-distro.com/api/embed/fd029baa-22fd-4a3a-b074-40c7a00daf30/stream-chat` → `HTTP/1.1 200 OK`, `Content-Type: application/json; charset=utf-8`, `X-Powered-By: Express`, body `{"history":[]}` (GET only).
+5. Python `urllib` POST probe (three requests; exact URL and synthetic payload described above) → samples: `401`, 823.4 ms; `401`, 802.6 ms; `401`, 805.4 ms; each body `Invalid request`; no content token.
+6. `curl -sS --max-time 10 https://staging.core-distro.com/ -o /tmp/core-staging.html` and public widget script inspection → page references `https://staging.core-distro.com/llm/chat/api/embed/anythingllm-chat-widget.min.js`; no `data-embed-id` or `data-base-api-url` attributes were found in the fetched HTML.
+
+## Change / backup / verification record
+
+Only this audit report was created. Before creation, target absence was verified and recorded in `/home/hd2admin/kun-agent-workspace/data/audit/2026-10-18-build-latency-diagnosis.md.bak-20261018T013839Z` (`Pre-change state: target did not exist at 2026-10-18T01:38:39Z`). Before correcting this report's command transcription and verification record, a byte-identical backup was made at `/home/hd2admin/kun-agent-workspace/data/audit/2026-10-18-build-latency-diagnosis.md.bak-20261018T013908Z` (SHA-256 `c42ffc3e75ec2103fa018e1886ea708b39e71a4ef8b61ab1a6213fa0c72f487d`). No production or staging config was mutated. Initial post-write verification command: `wc -l "$f"; sha256sum "$f"; tail -8 "$f"; git -C /home/hd2admin/kun-agent-workspace diff --cached --name-only` → 82 lines; SHA-256 `c42ffc3e75ec2103fa018e1886ea708b39e71a4ef8b61ab1a6213fa0c72f487d`; tail showed the incomplete verification marker; staged diff output was empty. Final corrected content is verified below.
+
+## Blocked / unknown
+
+- Exact current widget embed ID/API origin and trusted client-owned upstream: unknown; requires Core staging owner to inspect the deployed non-secret widget config.
+- Separate nginx-to-AnythingLLM and AnythingLLM-to-provider timing: blocked on owner-side logs/tracing and a valid staging chat request.
+- Current actual TTFT, comparison to 847 ms, and 500 ms SLA result: not measurable until a valid streamed answer is produced.
+- No production change was authorized or made.

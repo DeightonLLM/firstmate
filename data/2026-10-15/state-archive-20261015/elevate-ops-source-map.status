@@ -1,0 +1,4 @@
+blocked [at=1790164412]: source repo, tests, and command remain unidentified; controller channel unavailable here—please route the report's question.
+blocked [at=1790191432]: report is /home/hd2admin/kun-agent-workspace/data/elevate-ops-source-map/report.md; repo/tests/command unresolved and controller channel unavailable.
+resolved [key=default] [at=1790195418]: reclassified as an external source-mapping wait; report preserved, pending controller/source owner details for repository, tests, and command
+paused [at=1790195418]: waiting for controller/source owner to provide repository, tests, and build or test command; no provider or production access authorized

@@ -1,0 +1,13 @@
+working [at=1790136226]: setup done, branch fm/tool-auto-update created, isolation verified
+working [at=1790136419]: explored existing scripts; existing fm-tool-update-check.sh is a private helper in the deployed supervisor home (not firstmate repo); planning self-contained detector + install orchestrator + live worker helper
+working [at=1790136550]: steering acknowledged; no more probe scripts, no live installs; continuing with smallest code change based on static analysis
+working [at=1790136638]: steering acknowledged; adding explicit allowlist + manual-required findings; herdr stage-only with restart-required report; removing bash & fallback
+done [at=1790136754]: ready in branch fm/tool-auto-update
+working [at=1790137082]: rewiring bin/fm-tool-install.sh shim to drive update-detect → install loop and tightening --check / --all
+done [at=1790137273]: ready in branch fm/tool-auto-update
+working [at=1790141386]: setup verified, isolation confirmed (worktree fm/tool-auto-update, two prior commits 8f6216b 70a8ca1 preserved); implementing timeout-bound deferred retry for slow pi installs
+working [at=1790141577]: inbox 007 acknowledged (no commit); updated todo #6 to leave fix uncommitted; timeout-bound fix applied in bin/fm-tool-install.sh and docs/configuration.md; running bounded read-only review next
+done [at=1790141699]: timeout-bound fix in working tree on fm/tool-auto-update (uncommitted per inbox 007); review pass on all seven checks; changed bin/fm-tool-install.sh and docs/configuration.md; preserved commits 8f6216b 70a8ca1; validation: bash -n pass, no new &, --force, preview channel, kill, or restart
+working [at=1790147849]: implementing Pi on-load self+extension update check in session_start handler
+done [at=1790148002]: ready in branch fm/tool-auto-update
+done [at=1790180947]: ready in branch fm/tool-auto-update

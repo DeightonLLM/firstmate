@@ -1,0 +1,2 @@
+PASS: symlink filtered out, real file reported exactly once
+EXIT=0

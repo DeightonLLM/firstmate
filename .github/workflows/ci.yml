@@ -367,3 +367,32 @@ jobs:
             printf '%s\n' "$tracked"
             exit 1
           fi
+
+  required-ci-gate:
+    name: Required CI gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - lint
+      - test-coverage
+      - tests-portable-parallel-1
+      - tests-portable-parallel-2
+      - tests-portable-serial
+      - tests-herdr
+      - tests-timing-aggregate
+      - macos-stock-bash
+      - invariants
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Require every CI job to pass
+        run: |
+          bin/fm-ci-required-gate.sh \
+            "lint=${{ needs.lint.result }}" \
+            "test-coverage=${{ needs.test-coverage.result }}" \
+            "tests-portable-parallel-1=${{ needs.tests-portable-parallel-1.result }}" \
+            "tests-portable-parallel-2=${{ needs.tests-portable-parallel-2.result }}" \
+            "tests-portable-serial=${{ needs.tests-portable-serial.result }}" \
+            "tests-herdr=${{ needs.tests-herdr.result }}" \
+            "tests-timing-aggregate=${{ needs.tests-timing-aggregate.result }}" \
+            "macos-stock-bash=${{ needs.macos-stock-bash.result }}" \
+            "invariants=${{ needs.invariants.result }}"

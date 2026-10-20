@@ -1,0 +1,56 @@
+# CBD-Data placement decision brief — 2026-10-18
+
+## Decision requested (operator-owned)
+
+Choose whether to (A) authorize a separately planned migration of CBD compute to the v3 Hetzner target, after prerequisites and approvals are met, or (B) formally accept AminoVPS as the current/retained placement and amend the architecture record accordingly. This brief makes neither decision and authorizes no infrastructure, deployment, migration, DNS, or service changes.
+
+**Current finding:** CBD worker placement on AminoVPS is evidenced in the operational record; the v3 target is Hetzner. A fresh live check in this execution could not reach either host. Therefore AminoVPS is the best-supported documented placement, but whether its worker is running at this moment is **UNKNOWN**. Hetzner placement/deployment of the CBD worker is **UNPROVEN**, not disproven. Gate-004 enrichment cutover remains **BLOCKED (AUTHORIZATION)**. The Namecheap DR target remains **BLOCKED (OPERATOR_INPUT)**.
+
+## What is measured, and what is documentary
+
+1. The supplied audit records historical live-placement evidence: `BR-INV-001/report.md` says `cbd-worker.service` was active on `srv1137994-aminolifesciences` (AminoVPS), citing the Aug 1 handoff; the service catalogue repeats AminoVPS as current host, with a 2026-09-15 verification date. The supplied audit also identifies older conflicting evidence: the July 31 canary found the service inactive and disabled, followed by an Aug 1 bounded run. Thus service placement has evidence; present activity needs a fresh host-side read.
+2. v3 §2.4 specifies Hetzner for CBD scraping, enrichment, AI and batch compute. This is the intended architecture, not proof of deployment.
+3. The 2026-10-18 local read-only attempt ran `ssh -o BatchMode=yes -o ConnectTimeout=5 animovps '<hostname/systemctl/pgrep read-only probe>'` and the corresponding `hetzner-compute` probe. Exact result for each: `ssh: Could not resolve hostname <alias>: Temporary failure in name resolution`, `ssh-exit=255`. This measures only that this execution environment could not resolve those SSH aliases. It does **not** prove either host or service is absent, stopped, or unreachable by the operator's approved path.
+4. `BR-INV-001` documented a historical lack of Hetzner coordinates, but that report is superseded in part by the later host inventory. Current `HOSTS.md` documents the separate Hetzner `brandon-compute` host (AX42-2, HEL1-DC9; Tailscale `100.106.6.22`; SSH as `hd2admin`) as live-verified 2026-10-12. This establishes a Hetzner host/compute plane exists, not that CBD worker software, a CBD queue, credentials, project data path, or accepted isolation controls are deployed there. Current authoritative placement evidence must distinguish this newer host evidence from the old zero-Hetzner inventory claim.
+
+## Evidence that would settle placement
+
+Use an operator-approved, authenticated, read-only check on **both** candidate hosts, and retain timestamped raw outputs with the host identity:
+
+- Identify the host using `hostname -f`, provider/instance identity from the approved inventory, and a host-side identity fact that cannot be inferred from an SSH alias.
+- On AminoVPS and Hetzner, inspect `systemctl show cbd-worker.service -p LoadState -p ActiveState -p SubState -p MainPID -p FragmentPath`, `systemctl cat cbd-worker.service`, and `pgrep -af 'cbd_worker|cbd-enrich-worker|cbd-enrich'`. Also inspect the relevant scheduler/container inventory if unit/process results indicate another launch mechanism. Do not print environment values, tokens, or secret contents.
+- To prove a Hetzner CBD placement, require a positive identity match plus a CBD worker unit/container/process with its actual executable/config provenance and runtime evidence; then establish that it processes CBD-specific jobs rather than merely being installed or sharing a generic worker. Correlate source/config revision and queue/job namespace without disclosing credentials or client payloads.
+- To establish absence from a host, use a complete, scoped inventory of systemd units, timers, containers, processes, and deployment paths under the approved CBD service boundary, with timestamps and command/output retained. A failed SSH, search with narrow terms, missing file, or absent catalogue row is not evidence of absence.
+- To prove the accepted architecture exists beyond placement, separately require the project-scoped queue/identity and authorization path, isolation-denial tests, durable retry/persistence/restore evidence, and end-to-end acceptance. The existing audit says Gate-003 is only a bounded private queue bootstrap/status-helper slice; it does not prove this chain. Gate-004 authorization is still required even if technical evidence is later complete.
+
+## Options for the operator
+
+### A. Migrate CBD compute to Hetzner per v3 target
+
+- **Cost:** additional migration engineering and verification time; possible ongoing compute/network/storage/backup charges and operational monitoring. Exact incremental price, resource sizing, and migration labor are **not measured** here and must be quoted/estimated before approval. Hetzner hardware availability is not the blocker; CBD workload readiness and approvals are.
+- **Risk:** service interruption or duplicate/lost jobs during cutover; sensitive lead/customer data or worker credentials exposed through an inadequately isolated shared compute plane; cross-project queue/database/file/log access; rollback failure; network reachability/egress and rate-limit behavior; reliance on unproven restore/DR. v3 requires project isolation at network, credentials, data, queue, file, logging and backup layers. None is demonstrated end-to-end by merely placing a process on Hetzner.
+- **Reversibility:** potentially reversible by retaining AminoVPS worker/config and using a gated, drain/disable/rollback plan, but actual rollback readiness is unproven. Do not cut over until queue semantics, in-flight job handling, data ownership, secret rotation/access, verified backups and a rehearsed rollback are evidenced. Gate-004 authorization remains an independent prerequisite.
+- **What is lost / trade-off:** keeps alignment with the v3 workload-separation target and reduces heavy workloads on AminoVPS, but incurs migration/operational complexity and introduces a second execution environment and network boundary. The operator gives up the simplicity of the documented existing placement; existing AminoVPS familiarity is not a substitute for the target's intended isolation.
+- **Security/isolation:** Hetzner is a shared Brandon compute plane documented as tenant `brandon-compute` only. CBD must be explicitly onboarded as an isolated tenant/namespace, not treated as already isolated. Require separate project queue credentials, least-privilege data access, private networking/firewall rules, scoped filesystem/log/temporary data, secret handling, resource limits, egress controls, and tested denial of access to other projects. Scraping means outbound access and untrusted remote content are material threats. No PHI, payment-card data, or restricted data without separate review/approval per v3.
+
+### B. Formally accept AminoVPS as current placement
+
+- **Cost:** avoids immediate migration and its associated engineering and incremental-host utilization; exact comparative monthly cost is **unknown**. Ongoing AminoVPS capacity, maintenance, security and backup costs remain. No cost figures were measured for this brief.
+- **Risk:** continued mismatch with v3's intended separation of public/control plane and heavy compute; workload spikes or worker compromise may affect other services/data on the same host; legacy service controls/patching and current liveness remain to be reverified; current isolation and recovery remain unproven. Formal acceptance is not itself a security control.
+- **Reversibility:** architecture decision can later be superseded; a future migration remains possible. This preserves current placement and avoids cutover risk now, but does not make future migration cost-free. Keep an explicit review trigger/date, capacity/security thresholds, and transition plan.
+- **What is lost / trade-off:** preserves the known operational path and avoids near-term disruption, but explicitly gives up v3 placement conformance and the intended separation benefit until changed. It may require amending v3/service-catalogue status and documenting an exception; it does not mean Hetzner target has been delivered or that Gate-004 is authorized.
+- **Security/isolation:** AminoVPS is documented as a shared legacy host with multiple project/runtime records, not a CBD-exclusive machine. Confirm tenant boundaries, service account and secret scope, database/queue permissions, inbound/outbound network policy, filesystem/log/temp access, patching, and backup restore. CBD data (business leads/contact information) should be treated as confidential under v3; restrict operator access, avoid payloads/secrets in logs, encrypt transport and protected backups, and test cross-project denial. DR is unresolved: Namecheap assignment is operator-input-blocked, and local backup documents/tests do not establish a live isolated backup target or restore capability.
+
+## Decision guardrails and next evidence
+
+- No migration, provisioning, restart, deployment, DNS change, credential action, or Gate-004 execution is authorized by this brief.
+- If choosing A, first supply/confirm the authorized project-specific target and delivery boundary; approve the migration/cutover explicitly; resolve Gate-004 authorization; and obtain a reviewed plan with backup/restore, queue-drain/idempotency, secret and network isolation, acceptance, monitoring, and rollback evidence. Resolve Namecheap DR operator input separately.
+- If choosing B, record explicit architecture-exception acceptance, owner, scope, review date/trigger, operational capacity/security conditions, and the required catalogue/PRD correction. This does not waive Gate-004 or DR blockers.
+- Either option should be preceded by the paired live read-only placement measurement above; do not state “currently running” from the dated catalogue alone.
+
+## Change and validation record
+
+- Changed: created this decision brief only; no infrastructure, project source, service, DNS, or credential changed.
+- Backup: destination did not exist before creation (`test -e .../2026-10-18-build-cbd-data-placement.md` returned exit 1); therefore there was no pre-existing file to back up.
+- Verification command/output: recorded after creation in the build audit report / lane closeout; content review checked the decision boundary, placement evidence, alternatives, security, cost uncertainty and blocked gates.
+- Blocked: fresh remote host measurements blocked because both SSH aliases failed local hostname resolution in this execution. Recovery: operator-approved working name-resolution/access path, then rerun the read-only host probes; no workaround attempted. Gate-004 remains blocked on authorization; Namecheap DR target remains blocked on operator input.

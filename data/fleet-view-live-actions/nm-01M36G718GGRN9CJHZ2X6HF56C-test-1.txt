@@ -1,0 +1,6 @@
+id: test-1
+severity: warning
+file: ""
+action: ask-user
+description: live validation verdict: inconclusive (4 of 5 scenarios were driven live against the product); untested: A blocked, paused, unknown, or unheld parked worker remains visible under Needs attention with a steer command.
+authority: ask-user

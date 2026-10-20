@@ -1,0 +1,22 @@
+# no-mistakes test gate findings (run 01M3978W5AQNG1VV6J06H02GEN)
+
+## Finding 1: live-evidence-missing
+- ID: live-evidence-missing
+- Severity: warning
+- File: bin/fm-teardown.sh
+- Action: ask-user
+- Description: The live teardown was refused by the active NO_MISTAKES_GATE marker, so the changed backlog output and wake-failure warning could not be demonstrated against a running product. Re-run in an authorized non-gate environment where isolated teardown is permitted.
+
+## Finding 2: focused-test-failure
+- ID: focused-test-failure
+- Severity: warning
+- File: tests/fm-teardown.test.sh
+- Action: no-op
+- Description: The focused teardown test command exited before reaching the manual-backend case: its tasks-axi reminder assertion failed because the output lacked the expected date-gate guidance. This assertion is outside the changed output lines.
+
+## Finding 3: test-3
+- ID: test-3
+- Severity: warning
+- File: (none)
+- Action: ask-user
+- Description: live validation verdict: inconclusive (0 of 2 scenarios were driven live against the product); untested: Complete a manual-backend teardown and see the task ID in the completion message, updated backlog, and queued wake, Make wake enqueue fail during manual-backend teardown and see the task ID in the warning

@@ -1,0 +1,3 @@
+working: read-only source and test review underway
+blocked: shared completion attestation would modify task metadata/status, forbidden by read-only scope
+blocked: completion attestation command rejected before execution: bash is not in the shell allowlist (exit 126); no workaround attempted

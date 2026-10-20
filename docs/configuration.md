@@ -11,7 +11,7 @@ The shared orchestrator behavior lives in [`AGENTS.md`](../AGENTS.md) - edit it 
 This section is the single owner of the top-level operational-home layout; producer script headers and their help own exact child-file fields and mutation contracts.
 The tracked code root contains the shared instruction, skill, documentation, workflow, and `bin/` surfaces, while each effective `FM_HOME` contains private operational directories.
 `data/` holds durable private fleet records such as the project and secondmate registries, captain preferences, optional shared captain preferences, learnings, backlog, briefs, and scout reports.
-`state/` holds volatile runtime records such as task metadata, append-only status events, endpoint signals, watcher and wake-queue coordination, away-mode state, generated X-mode artifacts, private secondmate config-reread generations with their retry and quarantine state, and parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`).
+`state/` holds volatile runtime records such as task metadata, append-only status events, endpoint signals, watcher and wake-queue coordination, away-mode state, generated X-mode artifacts, private secondmate config-reread generations with their retry and quarantine state, parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`), and outbound work-order receipts under `state/outbound-orders/` (`bin/fm-outbound-order.sh`).
 `config/` holds local gitignored operating choices, and `projects/` holds the local project clones that Firstmate reads but changes only through the narrow guarded and concrete captain-approved exceptions in `AGENTS.md`.
 
 `bin/fm-spawn.sh` owns the base task-metadata fields it emits, while the runtime-backend section below owns backend-specific fields and selector interpretation.
@@ -25,7 +25,7 @@ Ordinary dead-direct-report recovery is owned by `stuck-crewmate-recovery`, whil
 
 ## Pi Calm preference (config/calm)
 
-The Pi Calm extension stores the captain's home-local presentation choice in gitignored `config/calm` under the effective Firstmate home, resolved from `FM_HOME`, then `FM_ROOT_OVERRIDE`, then the tracked code root derived from the extension path, or under `FM_CONFIG_OVERRIDE` when that test and specialized-setup override is present.
+The Pi Calm extension stores the captain's home-local presentation choice in gitignored `config/calm` under the effective Firstmate home, resolved from `FM_HOME`, then `FM_ROOT_OVERRIDE`, then the home that owns a project-local extension install, then the session's own Firstmate home, then the tracked code root derived from the extension path, or under `FM_CONFIG_OVERRIDE` when that test and specialized-setup override is present. The session-home step applies only when the extension is not installed inside a home, so an account-level install keeps each home's preference separate instead of collapsing every home onto one shared file. A directory is recognised as a Firstmate home by its own `config/`, `data/` and `state/` directories.
 The only values it writes are `on` and `off`, each followed by one newline; an absent, unreadable, or unrecognized value defaults to off.
 The `/calm` command replaces the file atomically before changing live presentation, so a failed write leaves the current choice unchanged rather than claiming persistence.
 The extension reloads this preference on every Pi `session_start`, including startup, new, resume, fork, and reload reasons.
@@ -94,6 +94,10 @@ cmux has no session layer at all - one workspace per task, in whatever cmux wind
 The caller-facing label remains `fm-<id>`, but the actual cmux workspace title is scoped by the active `FM_HOME` readable label plus a short hash of the resolved `FM_ROOT` path as `fm-<home-label>-<id>`.
 Test cleanup must use the guarded path in [`docs/cmux-backend.md`](cmux-backend.md#current-operation-and-safety), never enumerate-and-close every workspace.
 `config/backend` is inherited into secondmate homes under the primary-authoritative contract owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md).
+
+## Dispatch lane ceilings (config/dispatch-max-lanes / config/dispatch-max-provider-lanes)
+
+`config/dispatch-max-lanes` sets the home-local maximum for all working or unknown worker lanes; `config/dispatch-max-provider-lanes` sets the corresponding per-provider maximum. Both files contain a positive decimal integer, and the per-provider ceiling defaults to the global ceiling when absent or invalid. `FM_DISPATCH_GUARD_MAX_LANES` and `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` override their respective files. Provider identity is read from the provider prefix in each task's recorded `model=` when present, otherwise from its recorded `harness=`; unknown or unreadable lane state occupies both applicable ceilings.
 
 ## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
 
@@ -190,6 +194,17 @@ For the zellij backend, `FM_HOME` does not split containers, but it determines t
 The full zellij home label also includes a short hash of the resolved `FM_ROOT` path.
 For the cmux backend, `FM_CONFIG_OVERRIDE` overrides where `config/cmux-socket-password` is read from, while `FM_HOME` determines the default config path and readable home prefix embedded in workspace titles.
 The full cmux home label also includes a short hash of the resolved `FM_ROOT` path, and there is no per-home container split.
+
+## Fresh-agent baseline resolution (FM_BASELINE_*)
+
+Every fresh agent and every generated brief begins with the `fresh-agent-baseline/v1` pointer manifest, whose policy-family roles resolve from the home rather than from any fixed absolute path.
+Each role resolves in order: that role's override variable, then `$FM_HOME`, then the operator's account home `$HOME`.
+A candidate must be a readable regular file; anything else is skipped so resolution falls through to the next home.
+`FM_BASELINE_POLICY`, `FM_BASELINE_PROJECT_POLICY`, `FM_BASELINE_ROUTING`, `FM_BASELINE_BOUNDED`, and `FM_BASELINE_LEAN_CTX` each pin one role to an explicit path, for a home that keeps that document somewhere the defaults do not reach.
+An override that names an unreadable path leaves the role unresolved rather than falling through, so a bad override is never silently masked by a default.
+A role with no readable candidate is emitted as `<role>=unavailable (no home-local file on this host)`: the role keeps its line, and the line carries no path and no digest, so a missing contract is visible to the fresh agent instead of being dropped or pointed at another host's file.
+The `warehouse` and `warehouse-preflight` pointers stay fail-closed: `FM_BASELINE_ROOT` still selects their root, and a missing one aborts manifest emission rather than emitting a partial baseline.
+`bin/fm-baseline-lib.sh` owns the candidate order and the unavailable marker for both emitters.
 
 ## Harness support
 

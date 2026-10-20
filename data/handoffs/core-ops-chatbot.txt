@@ -1,0 +1,44 @@
+TASK core-ops - repoint the Core Distro chatbot to our own AnythingLLM on Hetz.
+
+READ THIS FILE: /home/hd2admin/kun-agent-workspace/data/handoffs/core-ops-chatbot.txt
+
+WHY
+Live core-distro.com sends its chatbot to https://llm.hd2.ai/api/embed, which is HD2.
+We own AnythingLLM on Hetz. It already has a Core-Distro workspace and already fronts
+Ollama serving ornith-1.5:9b. This is a config change, not a migration. Do not rebuild
+anything and do not write an adapter.
+
+FACTS (verified, do not re-derive)
+  AnythingLLM   100.106.6.22:3001  and  127.0.0.1:3001, container elevate-anythingllm
+  API key       /home/hd2admin/hd2stack-anythingllm/.api-key   mode 600, hd2admin only
+                Read it at use time. Never print it, never copy it into a report or commit.
+  Ollama        127.0.0.1:11434, model ornith-1.5:9b, behind AnythingLLM
+  Workspace    Core-Distro
+  App source   root@100.69.211.43 : "/root/core distro brNDON EDIT/Core Distro Web"
+  Deploy        root@100.69.211.43 : /root/bin/deploy-core-distro-staging
+  Target        staging.core-distro.com   ONLY
+
+WHAT TO DO
+1. Read the current ChatWidgetLoader.tsx and identify every value that must change:
+   baseApiUrl, embedId, and anything else pointing at llm.hd2.ai.
+2. Determine whether our Hetz AnythingLLM uses the same embed-id contract or a different one.
+   Check what the existing embed id 0ec57bfa-7368-42ef-bdb6-d7959bc4f1e2 corresponds to.
+   If the contracts differ, say so plainly and stop. Do not guess.
+3. Make the change, deploy to STAGING ONLY.
+4. Browser-verify with chrome-devtools-axi: the widget renders, opens, and returns an answer
+   from our Hetz instance. Screenshot desktop and mobile. A 200 is not evidence.
+
+HARD RULES
+- STAGING ONLY. core-distro.com production is out of scope.
+- Never touch srv1137994 Aminolifesciences. Never restart nginx, only -s reload.
+- Never expose Ollama 11434 beyond localhost.
+- Never print or copy the API key anywhere.
+- Do not claim success without a browser screenshot of a working answer.
+
+REPORT
+Write data/handoffs/core-ops-chatbot-report.md in your own home.
+State: exact files and lines changed, the before and after values (redacting the key),
+screenshot paths, and an explicit VERDICT: WORKS or NOT.
+Use an explicit [key=<slug>] on any blocked or needs-decision line.
+
+START by replying with your plan in one short paragraph, then execute.

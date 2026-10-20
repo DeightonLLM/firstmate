@@ -1,0 +1,9 @@
+# Current Captain relay of Controller clearance
+
+Captain's exact words: 'controller says you are GTG'. Context: parent reported scoped MCode pilot unable to start because the worker tool refused guarded lab and parent-report helpers, and offered deferral or narrowly scoped permission authorization.
+
+Interpretation: proceed with already-authorized bounded pilot using Controller's approved supported path. This is NOT verified proof that a tool prohibition has been removed, NOT explicit authorization to edit any allowlist/security configuration, and NOT proof persistent MCode supervisor/async child support is already locally verified. No live secondmate switch before existing charter/lab acceptance criteria pass. Preserve identities, layout, dirty work and current owners.
+
+Existing system-ops owns this pilot. Obtain Controller's exact current clearance/invocation evidence through its existing approved channel or specific reply artifact. Use established supported path once the tool owner confirms the rejected route is actually cleared; do not retry an explicitly permanently denied invocation merely because of this relay, bypass through another tool, invent launch wrappers, or broaden permissions. If clearance requires a local permission edit, return exact owner, rule and bounded change for explicit approval rather than guessing. Do not repeat generic setup or create duplicate Controller investigation.
+
+Keep useful independent accepted MiniMax work moving. New bounded work uses Pi minimax/MiniMax-M2.7-highspeed while fresh applicable effective MiniMax quota >50%, regular M2.7 at <=50%; substantive work uses existing minimax-m31-flash-preview MCode child profile without added speed override. Do not launch additional Luna qualification. Return concrete launch/processing evidence or exact remaining clearance discrepancy, not a generic 'GTG' result.

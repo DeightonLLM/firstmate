@@ -1,0 +1,13 @@
+PASS first-run-exclusion expected=1 actual=1
+PASS fresh-surfaced expected=1 actual=1
+FAIL pending-notification-dedup expected=0 actual=1
+FAIL pending-visible-before-ack expected=1 actual=0
+PASS exact-ack expected=1 actual=1
+PASS removed-after-ack expected=0 actual=0
+FAIL timestamp-preserving-arrival-detected expected=1 actual=0
+PASS same-second-arrival-detected expected=1 actual=1
+PASS duplicate-emitted-once expected=1 actual=1
+FAIL duplicate-repeat-suppressed expected=0 actual=1
+PASS changed-bytes-refused expected=1 actual=1
+PASS outbound-suppressed expected=0 actual=0
+SUMMARY PASS=8 FAIL=4

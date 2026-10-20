@@ -313,3 +313,117 @@ tests/fm-afk-pi-herdr-return-e2e.test.sh
 
 Real Herdr tests use the named lab helper and default-session tripwire.
 [`verification/runtime-backends.md`](verification/runtime-backends.md#herdr) records the active version, CLI, projection, event, and lifecycle evidence without task-specific chronology.
+
+## Secondmate endpoints must declare `backend=herdr` (2026-10-16)
+
+Seven registered secondmates were unreachable. Every `fm-send` failed with
+`tmux send failed`, while `herdr workspace list` showed every pane alive and idle.
+
+**Cause: two separate facts.**
+
+```
+absent backend= in a meta file means tmux   <- documented default in fm-backend.sh
+the secondmates' panes are Herdr workspaces <- the panes never existed in tmux
+```
+
+So the sends were routed to a tmux server that does not own those panes. The tmux server is real
+(`/usr/bin/tmux`, socket `firstmate`, windows since 13 Oct) but holds eight unrelated windows and
+**none** of the secondmate panes. Killing tmux is not the fix and would risk whatever lives in
+those eight windows.
+
+**Second trap: tab id versus pane id.** `herdr tab list` reports `w2E:t2`, but `pane send-text`
+requires the **pane** id `w2E:p2`. Writing the tab id produces
+`pane_not_found` even though the workspace and tab are correct. Always take the pane id from
+`herdr pane list`, never from `herdr tab list`.
+
+**Correct secondmate endpoint record:**
+
+```text
+backend=herdr
+window=default:<wID>:p2
+herdr_session=default
+herdr_workspace_id=<wID>
+herdr_pane_id=<wID>:p2
+```
+
+**Verifying, in order:**
+
+```
+herdr pane list                 # pane ids are <wID>:p2
+herdr --session default pane send-text <wID>:p2 "ping"
+FM_HOME=<home> bin/fm-send.sh <secondmate> "ping"   # must report the send, not an error
+```
+
+`bin/fm-repair-secondmate-endpoints.sh` rewrites any record that lacks `backend=herdr` or whose
+recorded workspace disagrees with the live Herdr workspace. It is idempotent and backs up each
+record before rewriting. Run it with `FM_HOME` set explicitly.
+
+**Rule:** a secondmate that has never successfully received a send must not be treated as
+addressable, and a record claiming a window that does not exist in the named backend is stale
+metadata, not a dead pane. Check `herdr pane list` before declaring anything unreachable.
+
+## A failed send usually means "busy", not "unreachable" (2026-10-16)
+
+Secondmates accept one message at a time. A pane whose agent is already `working` cannot receive a
+send, and `fm-send` reports it as unconfirmed delivery. This is correct behaviour and it is easy to
+misread as a broken endpoint.
+
+```
+herdr workspace list          # check agent_status first
+agent_status = idle           -> a send will land
+agent_status = working        -> a send will fail; that is the answer, not a fault
+```
+
+Confirmed during dispatch: a connectivity test that sent one short prompt to all seven secondmates
+put every one of them into `working`, after which every follow-up send failed and looked like a
+routing fault. It was not.
+
+**Rules:**
+- Check `agent_status` before concluding a target is unreachable.
+- Do not run a liveness ping and then immediately send real work to the same pane.
+- "delivery unconfirmed" against a `working` pane means retry later, not "fix the metadata".
+- Only treat a target as unreachable when it is `idle` and a send still fails.
+
+## MCode panes report their own agent state (2026-10-20)
+
+Herdr has no built-in adapter for the MCode harness, so an MCode pane carries no agent label.
+Such a pane reports `agent_status` as `unknown` and never appears in `herdr agent list`, so its
+running and stopped light stays dark.
+`bin/fm-housekeeping.sh` and `bin/fm-dead-pane-sweep.sh` cannot see such a pane either, because
+both filter on `agent_status` matching `working`, `blocked`, `idle` or `done`.
+
+Herdr's documented self-report path is the fix, and it needs no Herdr release.
+`bin/fm-herdr-agent-report.sh` calls `herdr pane report-agent` for the current pane, and Herdr then
+shows the agent label and state for that pane:
+
+```
+herdr pane report-agent "$HERDR_PANE_ID" --source mcode --agent mcode --state working --seq <n>
+```
+
+The same script maps an MCode session start to an `idle` report plus a session identity report, a
+submitted prompt to a `working` report, a permission request to a `blocked` report, a turn end to
+an `idle` report, and a session end to `herdr pane release-agent`.
+The sequence number must rise with every report from the source, so the script keeps a per-pane
+counter in the home's `state/` directory.
+Every failure path exits 0, because a slow or broken Herdr must never delay or break an agent turn.
+
+`extensions/mcode-herdr-agent/` is the MCode plugin package that drives those calls through MCode's
+lifecycle hooks.
+Its root `plugin.json` is the portable Agent Plugins manifest, and `.minimax-plugin/plugin.json`
+carries the MCode-native manifest and the hook declaration.
+`bin/fm-install-mcode-herdr-agent.sh` publishes the package into the MCode local marketplace and puts
+the reporter on `PATH` so the hook can call it by name.
+
+**Verified on 2026-10-20:** reporting the live MCode pane `w64:p1C` made it appear in
+`herdr agent list` as `agent: mcode` and `agent_status: working`, the same shape as the Pi panes,
+and `herdr pane list` reported the same pane with `agent_status: working`.
+
+**Open:** MCode's local marketplace does not enumerate a bare package directory, so
+`mcode plugin add mcode-herdr-agent@local` does not resolve the package and the hook does not fire
+on its own yet.
+Until that is closed, an MCode pane's state is reported by calling the reporter directly.
+
+## Long instructions belong in a file, not in a send
+
+Sends are short single-line prompts. Put anything substantial in a file under `data/handoffs/` and
+send only the path. This keeps the pane readable, survives re-sends, and avoids quoting problems.

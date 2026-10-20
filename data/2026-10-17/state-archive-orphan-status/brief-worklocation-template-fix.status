@@ -1,0 +1,2 @@
+blocked: implementation and targeted tests pass, but the full suite has 39 failures, repository lint fails, and the decision-hold gate/report destination conflict with the worktree-only boundary; report is in the task worktree
+captain-held [key=default]: tracked by brief-worklocation-template-fix-decision-default

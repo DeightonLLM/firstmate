@@ -10,6 +10,8 @@ EXT="$ROOT/.pi/extensions/fm-calm.ts"
 ASSISTANT_LAYOUT="$ROOT/.pi/extensions/lib/fm-calm-assistant-layout.ts"
 OPERATIONAL_USER_LAYOUT="$ROOT/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
 VISIBILITY="$ROOT/.pi/extensions/lib/fm-calm-visibility.ts"
+CTX_RENDERER="$ROOT/.pi/extensions/lib/fm-calm-ctx-renderer.ts"
+CALM_HOME="$ROOT/.pi/extensions/lib/fm-calm-home.ts"
 WORKING_SHIP="$ROOT/.pi/extensions/lib/fm-calm-working-ship.ts"
 WATCH_EXT="$ROOT/.pi/extensions/fm-primary-pi-watch.ts"
 OPERATIONAL_INPUT="$ROOT/bin/fm-operational-input.sh"
@@ -138,6 +140,8 @@ test_home_resolution() {
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$fixture/project/.pi/extensions/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$fixture/project/.pi/extensions/lib/fm-calm-home.ts"
   cp "$WORKING_SHIP" "$fixture/project/.pi/extensions/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$fixture/project/.pi/extensions/lib/fm-operational-input.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/project/node_modules/@earendil-works/pi-coding-agent"
@@ -171,6 +175,7 @@ function registerCalm() {
     },
     registerEntryRenderer() {},
     registerTool() {},
+    registerToolRenderer() {},
   };
   extension.default(pi);
   if (!calmCommand || !handlers.has("session_start")) {
@@ -256,6 +261,8 @@ test_pi_compat_degraded_adapter() {
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$fixture/project/.pi/extensions/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$fixture/project/.pi/extensions/lib/fm-calm-home.ts"
   cp "$WORKING_SHIP" "$fixture/project/.pi/extensions/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$fixture/project/.pi/extensions/lib/fm-operational-input.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/project/node_modules/@earendil-works/pi-coding-agent"
@@ -296,6 +303,7 @@ const pi = {
     if (name === "calm") calmCommand = command;
   },
   registerEntryRenderer() {},
+  registerToolRenderer() {},
   registerTool() {},
 };
 
@@ -355,6 +363,8 @@ test_pi_compat_missing_adapter_exports() {
   cp "$ASSISTANT_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/project/.pi/extensions/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$fixture/project/.pi/extensions/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$fixture/project/.pi/extensions/lib/fm-calm-home.ts"
   cp "$WORKING_SHIP" "$fixture/project/.pi/extensions/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$fixture/project/.pi/extensions/lib/fm-operational-input.ts"
   printf '%s\n' '{"type":"module"}' >"$fixture/project/package.json"
@@ -413,6 +423,8 @@ test_rendering_and_session_lifecycle() {
   cp "$ASSISTANT_LAYOUT" "$fixture/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$fixture/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$fixture/lib/fm-calm-home.ts"
   cp "$WORKING_SHIP" "$fixture/lib/fm-calm-working-ship.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$fixture/lib/fm-operational-input.ts"
   cp "$WATCH_EXT" "$fixture/fm-primary-pi-watch.ts"
@@ -460,6 +472,7 @@ initTheme("dark");
 setCapabilities({ images: null, trueColor: true, hyperlinks: false });
 
 const tools = [];
+const toolRenderers = [];
 const handlers = new Map();
 const entryRenderers = new Map();
 const eventListeners = new Map();
@@ -488,6 +501,9 @@ const pi = {
   },
   registerTool(tool) {
     tools.push(tool);
+  },
+  registerToolRenderer(resolver) {
+    toolRenderers.push(resolver);
   },
 };
 const extension = await import(`${pathToFileURL(process.env.EXT).href}?test=${Date.now()}`);
@@ -1085,6 +1101,8 @@ test_operational_followup_turn_e2e() {
   cp "$ASSISTANT_LAYOUT" "$project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$project/.pi/extensions/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$project/.pi/extensions/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$project/.pi/extensions/lib/fm-calm-home.ts"
   cp "$WORKING_SHIP" "$project/.pi/extensions/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$project/.pi/extensions/lib/fm-operational-input.ts"
   printf '%s\n' '{"followUpMode":"all"}' >"$config/settings.json"
@@ -1453,6 +1471,8 @@ test_hidden_block_geometry_e2e() {
   cp "$ASSISTANT_LAYOUT" "$project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$project/.pi/extensions/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$project/.pi/extensions/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$project/.pi/extensions/lib/fm-calm-home.ts"
   cp "$WORKING_SHIP" "$project/.pi/extensions/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$project/.pi/extensions/lib/fm-operational-input.ts"
   printf '%s\n' on >"$home/config/calm"
@@ -1685,6 +1705,8 @@ test_working_ship_geometry_and_lifecycle() {
   cp "$ASSISTANT_LAYOUT" "$fixture/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$fixture/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$fixture/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$fixture/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$fixture/lib/fm-calm-home.ts"
   cp "$WORKING_SHIP" "$fixture/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$fixture/lib/fm-operational-input.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
@@ -2286,6 +2308,7 @@ const pi = {
   registerCommand(name, command) {
     if (name === "calm") calmCommand = command;
   },
+  registerToolRenderer() {},
   registerEntryRenderer() {},
   registerTool() {},
   appendEntry: (...args) => sessionWrites.push(["appendEntry", ...args]),
@@ -2610,6 +2633,8 @@ test_interactive_terminal_e2e() {
   cp "$ASSISTANT_LAYOUT" "$project/.pi/extensions/lib/fm-calm-assistant-layout.ts"
   cp "$OPERATIONAL_USER_LAYOUT" "$project/.pi/extensions/lib/fm-calm-operational-user-layout.ts"
   cp "$VISIBILITY" "$project/.pi/extensions/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$project/.pi/extensions/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$project/.pi/extensions/lib/fm-calm-home.ts"
   cp "$WORKING_SHIP" "$project/.pi/extensions/lib/fm-calm-working-ship.ts"
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$project/.pi/extensions/lib/fm-operational-input.ts"
   cp "$WATCH_EXT" "$project/.pi/extensions/fm-primary-pi-watch.ts"
@@ -3387,6 +3412,465 @@ commit_calm_implementation() {
   git log -1 --stat
 }
 
+test_ctx_tool_renderer_coverage() {
+  local fixture out status version
+  if ! command -v node >/dev/null 2>&1; then
+    echo "skip: node not found for Pi calm ctx_* renderer test"
+    return 0
+  fi
+  if [ ! -f "$PI_PACKAGE_DIR/package.json" ]; then
+    echo "skip: installed @earendil-works/pi-coding-agent package not found"
+    return 0
+  fi
+  version=$(node -p "require('$PI_PACKAGE_DIR/package.json').version")
+  record_pi_version_evidence "$version" "Pi calm ctx_* renderer assumptions"
+
+  fixture="$TMP_ROOT/ctx-renderer"
+  mkdir -p "$fixture/home/config" "$fixture/lib" "$fixture/node_modules/@earendil-works"
+  cp "$EXT" "$fixture/fm-calm.ts"
+  cp "$ASSISTANT_LAYOUT" "$fixture/lib/fm-calm-assistant-layout.ts"
+  cp "$OPERATIONAL_USER_LAYOUT" "$fixture/lib/fm-calm-operational-user-layout.ts"
+  cp "$VISIBILITY" "$fixture/lib/fm-calm-visibility.ts"
+  cp "$CTX_RENDERER" "$fixture/lib/fm-calm-ctx-renderer.ts"
+  cp "$CALM_HOME" "$fixture/lib/fm-calm-home.ts"
+  cp "$WORKING_SHIP" "$fixture/lib/fm-calm-working-ship.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-calm-ctx-renderer.ts" "$fixture/lib/fm-calm-ctx-renderer.ts"
+  cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$fixture/lib/fm-operational-input.ts"
+  ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
+  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
+  printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
+
+  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" node --input-type=module 2>&1 <<'JS'
+import { readFileSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const packageRoot = process.env.PI_PACKAGE_DIR;
+const [{ ToolExecutionComponent }, { initTheme, theme }, { Text, setCapabilities }] = await Promise.all([
+  import(pathToFileURL(`${packageRoot}/dist/modes/interactive/components/tool-execution.js`).href),
+  import(pathToFileURL(`${packageRoot}/dist/modes/interactive/theme/theme.js`).href),
+  import(pathToFileURL(`${packageRoot}/node_modules/@earendil-works/pi-tui/dist/index.js`).href),
+]);
+initTheme("dark");
+setCapabilities({ images: null, trueColor: true, hyperlinks: false });
+
+const tools = [];
+const handlers = new Map();
+const entryRenderers = new Map();
+const eventListeners = new Map();
+const toolRenderers = [];
+let calmCommand;
+const pi = {
+  events: {
+    emit(name, data) {
+      for (const listener of eventListeners.get(name) ?? []) listener(data);
+    },
+    on(name, listener) {
+      const listeners = eventListeners.get(name) ?? [];
+      listeners.push(listener);
+      eventListeners.set(name, listeners);
+    },
+  },
+  on(event, handler) {
+    const eventHandlers = handlers.get(event) ?? [];
+    eventHandlers.push(handler);
+    handlers.set(event, eventHandlers);
+  },
+  registerCommand(name, command) {
+    if (name === "calm") calmCommand = command;
+  },
+  registerEntryRenderer(customType, renderer) {
+    entryRenderers.set(customType, renderer);
+  },
+  registerToolRenderer(resolver) {
+    toolRenderers.push(resolver);
+  },
+  registerTool(tool) {
+    tools.push(tool);
+  },
+  registerToolRenderer(resolver) {
+    toolRenderers.push(resolver);
+  },
+};
+const extension = await import(`${pathToFileURL(process.env.EXT).href}?test=${Date.now()}`);
+extension.default(pi);
+
+if (toolRenderers.length !== 1) {
+  throw new Error(`expected exactly one tool renderer resolver, got ${toolRenderers.length}`);
+}
+
+// Mirrors ExtensionRunner.resolveToolRenderers in the installed Pi package:
+// extension resolvers in load order, then the registered tool's own renderers.
+const resolveRenderers = (toolName, base) => {
+  const resolve = (index) =>
+    index < toolRenderers.length ? toolRenderers[index](toolName, () => resolve(index + 1)) : base();
+  return resolve(0);
+};
+
+const calmPreferencePath = `${process.env.FM_HOME}/config/calm`;
+const writeCalmPreference = (value) => writeFileSync(calmPreferencePath, `${value}\n`, "utf8");
+const readCalmPreference = () => readFileSync(calmPreferencePath, "utf8").trim();
+
+let editorText = "";
+let terminalInputHandler;
+let expanded = true;
+const sessionContext = {
+  ui: {
+    getEditorText: () => editorText,
+    getToolsExpanded: () => expanded,
+    setToolsExpanded(value) {
+      expanded = value;
+    },
+    onTerminalInput(handler) {
+      terminalInputHandler = handler;
+      return () => {
+        if (terminalInputHandler === handler) terminalInputHandler = undefined;
+      };
+    },
+    setHiddenThinkingLabel() {},
+    setStatus() {},
+    setWorkingVisible() {},
+    setWidget() {},
+  },
+};
+const startSession = async () => {
+  await handlers.get("session_start")[0]({ reason: "startup" }, sessionContext);
+};
+
+// A lean-ctx style ctx_* tool definition: its own call and result renderers.
+const ctxToolDefinition = {
+  name: "ctx_read",
+  renderShell: "default",
+  renderCall: (args, toolTheme, context) => new Text("CTX_READ_CALL", 0, 0),
+  renderResult: (result, options, toolTheme, context) =>
+    new Text(context?.isError ? "CTX_READ_ERROR" : "CTX_READ_RESULT", 0, 0),
+};
+const definitionSnapshot = JSON.stringify(Object.keys(ctxToolDefinition).sort());
+const routineResult = {
+  content: [{ type: "text", text: "ctx_read output" }],
+  details: { ok: true },
+  isError: false,
+};
+const errorResult = {
+  content: [{ type: "text", text: "ctx_read refused the call" }],
+  details: { ok: false },
+  isError: true,
+};
+const ctxArgs = { path: "sample.txt" };
+const renderUi = { requestRender() {} };
+
+const renderRow = (toolName, definition, result, isExpanded) => {
+  const row = new ToolExecutionComponent(
+    toolName,
+    `ctx-${toolName}`,
+    ctxArgs,
+    { showImages: false },
+    definition,
+    renderUi,
+    process.cwd(),
+  );
+  row.markExecutionStarted();
+  row.setArgsComplete();
+  row.updateResult(result);
+  if (isExpanded) row.setExpanded(true);
+  return row.render(100);
+};
+
+// --- Calm on: routine ctx_* rows are hidden, errors stay discoverable -------
+writeCalmPreference("on");
+await startSession();
+
+const quiet = resolveRenderers("ctx_read", () => ctxToolDefinition);
+if (!quiet) {
+  throw new Error("ctx_* tool resolved to no renderers while calm mode was on");
+}
+if (renderRow("ctx_read", quiet, routineResult, false).length !== 0) {
+  throw new Error("ctx_read left a visible collapsed row while calm mode was on");
+}
+if (renderRow("ctx_read", quiet, routineResult, true).length !== 0) {
+  throw new Error("ctx_read left a visible expanded row while calm mode was on");
+}
+const errorLines = renderRow("ctx_read", quiet, errorResult, false);
+if (!errorLines.join("\n").includes("CTX_READ_ERROR")) {
+  throw new Error(`ctx_read hid an error result while calm mode was on: ${JSON.stringify(errorLines)}`);
+}
+
+// Streaming and partial rows are routine rows too.
+const partialRow = new ToolExecutionComponent(
+  "ctx_read",
+  "ctx-partial",
+  ctxArgs,
+  { showImages: false },
+  quiet,
+  renderUi,
+  process.cwd(),
+);
+partialRow.markExecutionStarted();
+partialRow.setArgsComplete();
+partialRow.updateResult(routineResult, true);
+if (partialRow.render(100).length !== 0) {
+  throw new Error("ctx_read left a visible streaming row while calm mode was on");
+}
+
+// A ctx_* tool that is not registered yet still resolves to quiet renderers.
+const unregistered = resolveRenderers("ctx_grep", () => undefined);
+if (!unregistered) {
+  throw new Error("a not-yet-registered ctx_* tool resolved to no renderers");
+}
+if (renderRow("ctx_grep", unregistered, routineResult, false).length !== 0) {
+  throw new Error("a not-yet-registered ctx_* tool left a visible row while calm mode was on");
+}
+
+// Every ctx_* tool name lean-ctx registers is covered.
+for (const name of ["ctx_shell", "ctx_read", "ctx_ls", "ctx_find", "ctx_grep", "ctx_edit", "lean_ctx"]) {
+  const resolved = resolveRenderers(name, () => ctxToolDefinition);
+  if (!resolved || renderRow(name, resolved, routineResult, false).length !== 0) {
+    throw new Error(`${name} was not hidden while calm mode was on`);
+  }
+}
+
+// A tool that is not part of the lean-ctx surface keeps stock rendering.
+const stock = resolveRenderers("read", () => ctxToolDefinition);
+if (stock !== ctxToolDefinition) {
+  throw new Error("a non ctx_* tool did not keep its own renderers");
+}
+
+// --- Calm off: the resolver delegates unchanged -----------------------------
+writeCalmPreference("off");
+await startSession();
+const calmOff = resolveRenderers("ctx_read", () => ctxToolDefinition);
+if (calmOff !== ctxToolDefinition) {
+  throw new Error("ctx_* renderers were not delegated unchanged while calm mode was off");
+}
+const stockLines = renderRow("ctx_read", calmOff, routineResult, false);
+if (!stockLines.join("\n").includes("CTX_READ_CALL")) {
+  throw new Error("ctx_read lost its stock call rendering while calm mode was off");
+}
+
+// --- Export rendering: the resolver delegates unchanged ---------------------
+writeCalmPreference("on");
+await startSession();
+editorText = "/export ctx.html";
+terminalInputHandler("\r");
+const exporting = resolveRenderers("ctx_read", () => ctxToolDefinition);
+if (exporting !== ctxToolDefinition) {
+  throw new Error("ctx_* renderers were not delegated during export rendering");
+}
+editorText = "";
+
+// --- Execution and model-visible results are untouched ----------------------
+if (JSON.stringify(Object.keys(ctxToolDefinition).sort()) !== definitionSnapshot) {
+  throw new Error("the ctx_* tool definition was mutated by the resolver");
+}
+if ("execute" in (quiet ?? {})) {
+  throw new Error("the resolver replaced tool execution");
+}
+const names = tools.map((tool) => tool.name);
+const expectedNames = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+if (JSON.stringify(names) !== JSON.stringify(expectedNames)) {
+  throw new Error(`unexpected wrapped built-ins: ${names.join(",")}`);
+}
+if (!calmCommand) {
+  throw new Error("the calm command was not registered");
+}
+JS
+)
+  status=$?
+  [ "$status" -eq 0 ] || fail "Pi calm ctx_* renderer test failed: $out"
+  [ -z "$out" ] || fail "Pi calm ctx_* renderer test printed output: $out"
+  pass "Pi calm hides routine lean-ctx ctx_* rows through the supported tool renderer resolver, keeps errors discoverable, and delegates when calm is off or exporting"
+}
+
+test_account_level_home_resolution() {
+  local fixture out status version
+  if ! command -v node >/dev/null 2>&1; then
+    echo "skip: node not found for Pi calm account-level home-resolution test"
+    return 0
+  fi
+  if [ ! -f "$PI_PACKAGE_DIR/package.json" ]; then
+    echo "skip: installed @earendil-works/pi-coding-agent package not found"
+    return 0
+  fi
+  version=$(node -p "require('$PI_PACKAGE_DIR/package.json').version")
+  record_pi_version_evidence "$version" "Pi calm account-level home-resolution assumptions"
+
+  # An account-level install lives outside every home (…/.pi/agent/extensions),
+  # so deriving the home from the extension path alone would collapse every
+  # home onto one shared preference file. The session's own working directory
+  # is the signal that separates them.
+  fixture="$TMP_ROOT/account-home-resolution"
+  mkdir -p \
+    "$fixture/account/agent/extensions/lib" \
+    "$fixture/home-a/config" "$fixture/home-a/data" "$fixture/home-a/state" \
+    "$fixture/home-a/.pi/extensions" "$fixture/home-a/work" \
+    "$fixture/home-b/config" "$fixture/home-b/data" "$fixture/home-b/state" \
+    "$fixture/home-b/.pi/extensions/lib" \
+    "$fixture/plain" \
+    "$fixture/override" \
+    "$fixture/node_modules/@earendil-works"
+  cp "$EXT" "$fixture/account/agent/extensions/fm-calm.ts"
+  cp -R "$ROOT/.pi/extensions/lib/." "$fixture/account/agent/extensions/lib/"
+  cp "$EXT" "$fixture/home-b/.pi/extensions/fm-calm.ts"
+  cp -R "$ROOT/.pi/extensions/lib/." "$fixture/home-b/.pi/extensions/lib/"
+  ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
+  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
+  printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
+
+  out=$(cd "$fixture" && \
+    ACCOUNT_EXT="$fixture/account/agent/extensions/fm-calm.ts" \
+    PROJECT_EXT="$fixture/home-b/.pi/extensions/fm-calm.ts" \
+    ACCOUNT_ROOT="$fixture/account" \
+    HOME_A="$fixture/home-a" \
+    HOME_B="$fixture/home-b" \
+    PLAIN="$fixture/plain" \
+    OVERRIDE="$fixture/override" \
+    node --input-type=module 2>&1 <<'JS'
+import { existsSync, rmSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
+const ACCOUNT_EXT = process.env.ACCOUNT_EXT;
+const PROJECT_EXT = process.env.PROJECT_EXT;
+const ACCOUNT_ROOT = process.env.ACCOUNT_ROOT;
+const HOME_A = process.env.HOME_A;
+const HOME_B = process.env.HOME_B;
+const PLAIN = process.env.PLAIN;
+const OVERRIDE = process.env.OVERRIDE;
+
+function expectFile(path, label) {
+  if (!existsSync(path)) throw new Error(`${label}: expected ${path} to exist`);
+}
+
+function expectNoFile(path, label) {
+  if (existsSync(path)) throw new Error(`${label}: expected ${path} to be absent`);
+}
+
+function fakePi() {
+  const handlers = new Map();
+  let calmCommand;
+  return {
+    pi: {
+      events: { emit() {}, on() {} },
+      on(event, handler) {
+        handlers.set(event, handler);
+      },
+      registerCommand(name, command) {
+        if (name === "calm") calmCommand = command;
+      },
+      registerEntryRenderer() {},
+      registerTool() {},
+      registerToolRenderer() {},
+    },
+    handlers,
+    calmCommand: () => calmCommand,
+  };
+}
+
+function makeContext(cwd) {
+  return {
+    cwd,
+    ui: {
+      getEditorText() {
+        return "";
+      },
+      getToolsExpanded() {
+        return false;
+      },
+      onTerminalInput() {
+        return () => {};
+      },
+      setHiddenThinkingLabel() {},
+      setStatus() {},
+      setToolsExpanded() {},
+      setWorkingVisible() {},
+      setWidget() {},
+    },
+  };
+}
+
+async function runCase(extensionPath, cwd, env = {}) {
+  delete process.env.FM_HOME;
+  delete process.env.FM_ROOT_OVERRIDE;
+  delete process.env.FM_CONFIG_OVERRIDE;
+  if (env.FM_HOME) process.env.FM_HOME = env.FM_HOME;
+  const harness = fakePi();
+  const loaded = await import(
+    `${pathToFileURL(extensionPath).href}?case=${Math.random()}`
+  );
+  loaded.default(harness.pi);
+  const command = harness.calmCommand();
+  if (!command || !harness.handlers.has("session_start")) {
+    throw new Error("Calm did not register its command and session handler");
+  }
+  const context = makeContext(cwd);
+  harness.handlers.get("session_start")({ reason: "startup" }, context);
+  await command.handler("", context);
+}
+
+// An account-level install in a home resolves to that home's own preference.
+await runCase(ACCOUNT_EXT, HOME_A);
+expectFile(
+  `${HOME_A}/config/calm`,
+  "an account-level install must use the session's own home",
+);
+expectNoFile(
+  `${ACCOUNT_ROOT}/config/calm`,
+  "an account-level install must not collapse every home onto one shared file",
+);
+
+// A session started below a home still resolves to that home.
+rmSync(`${HOME_A}/config/calm`, { force: true });
+await runCase(ACCOUNT_EXT, `${HOME_A}/work`);
+expectFile(
+  `${HOME_A}/config/calm`,
+  "a session below a home must resolve that home",
+);
+expectNoFile(
+  `${ACCOUNT_ROOT}/config/calm`,
+  "a session below a home must not fall back to the shared account file",
+);
+
+// A session outside every home keeps the existing extension-derived fallback.
+await runCase(ACCOUNT_EXT, PLAIN);
+expectFile(
+  `${ACCOUNT_ROOT}/config/calm`,
+  "a session outside every home must keep the extension-derived fallback",
+);
+expectNoFile(
+  `${PLAIN}/config/calm`,
+  "a session outside every home must not write a preference into its own directory",
+);
+
+// A project-local install keeps deriving its home from the extension path.
+rmSync(`${HOME_A}/config/calm`, { force: true });
+await runCase(PROJECT_EXT, HOME_A);
+expectFile(
+  `${HOME_B}/config/calm`,
+  "a project-local install must keep deriving its home from the extension path",
+);
+expectNoFile(
+  `${HOME_A}/config/calm`,
+  "a project-local install must not adopt another home's session directory",
+);
+
+// An explicit home still wins over every derived source.
+await runCase(ACCOUNT_EXT, HOME_A, { FM_HOME: OVERRIDE });
+expectFile(
+  `${OVERRIDE}/config/calm`,
+  "FM_HOME must still win over derived homes",
+);
+expectNoFile(
+  `${HOME_A}/config/calm`,
+  "FM_HOME must stop the session home from being used",
+);
+JS
+)
+  status=$?
+  [ "$status" -eq 0 ] || fail "Pi calm account-level home resolution failed: $out"
+  [ -z "$out" ] || fail "Pi calm account-level home-resolution test printed output: $out"
+  pass "Pi calm keeps the Calm preference home-local for an account-level install and preserves the project-local derivation"
+}
+
 if [ "${1:-}" = "secret-scan" ]; then
   if [ -x /root/bin/agent-secret-scan ]; then
     /root/bin/agent-secret-scan check /root
@@ -3403,9 +3887,11 @@ if [ $# -gt 0 ]; then
 fi
 
 test_home_resolution
+test_account_level_home_resolution
 test_pi_compat_no_upper_bound
 test_pi_compat_degraded_adapter
 test_pi_compat_missing_adapter_exports
+test_ctx_tool_renderer_coverage
 test_rendering_and_session_lifecycle
 test_operational_followup_turn_e2e
 test_hidden_block_geometry_e2e

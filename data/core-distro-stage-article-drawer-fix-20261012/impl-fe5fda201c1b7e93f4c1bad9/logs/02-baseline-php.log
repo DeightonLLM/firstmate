@@ -1,0 +1,37 @@
+PASS actual wpautop product card stays inside one named link
+PASS product card paragraph boundary is balanced
+PASS optional leading wpautop paragraph is removed without imbalance
+PASS nested disabled CTA button becomes one named navigational link
+PASS missing product video source is removed
+PASS unclosed product video is explicitly closed before overlay content
+PASS product poster is rewritten to the local staged asset
+PASS breadcrumb nav receives its missing closing tag
+PASS contact heading level is corrected without changing its wording
+PASS contact card text stays inside its named phone link
+PASS contact renderer emits no empty phone link after paragraph repair
+PASS contact low-contrast text color is corrected
+PASS contact duplicate textarea closer is removed
+PASS resources inert PDF closer is repaired
+PASS already-correct inert span leaves the following CTA close intact
+PASS resources repair is idempotent on correct generated content and preserves its CTA
+PASS render helper preserves balanced about source fragment
+PASS render helper preserves balanced aluminum-seals source fragment
+PASS render helper preserves balanced blog source fragment
+PASS render helper preserves balanced compliance source fragment
+PASS render helper preserves balanced contact source fragment
+PASS render helper preserves balanced faq source fragment
+PASS render helper preserves balanced glass-vials source fragment
+PASS render helper preserves balanced products source fragment
+PASS render helper preserves balanced register source fragment
+PASS render helper preserves balanced resources source fragment
+PASS render helper preserves balanced rubber-stoppers source fragment
+PASS blog section heading is sequential
+PASS blog helper text has the audited readable color
+PASS resources heading level is sequential
+PASS register helper text has the audited readable color
+PASS unrelated route content is left unchanged
+PASS homepage disables only Astra scroll-to-top
+PASS other pages retain Astra scroll-to-top setting
+
+SUMMARY failures=0
+EXIT=0

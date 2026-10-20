@@ -1503,6 +1503,9 @@ cleanup_firstmate_home_children() {
       child_busy_gen=$(cat "$sub_state/$child_id.busy-gen" 2>/dev/null || true)
     fi
     retire_busy_state "$sub_state" "$child_id" "$child_busy_gen" || return 1
+    # Archive the child's remaining state files (busy-gen/busy-state were already
+    # retired by the call above; these are gone already, which is correct).
+    archive_task_state "$sub_state" "$child_id"
     rm -f "$sub_state/$child_id.status" "$sub_state/$child_id.turn-ended" \
       "$sub_state/$child_id.meta" "$sub_state/$child_id.pi-ext.ts" \
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token"
@@ -1749,6 +1752,25 @@ fm_backend_clear_transition "$BACKEND" "$STATE" "$T" || true
 # Read before the state-file rm below; empty (pre-fix tasks without tasktmp=) is a no-op.
 [ -n "$TASK_TMP" ] && rm -rf "$TASK_TMP"
 remove_pr_poll_artifacts "$STATE" "$ID" || exit 1
+# archive_task_state: archive every task state file into data/teardown-archives/<id>/
+# before the rm below removes them. The archive is deterministic per task id and
+# includes the date, so the same task torn down on different days gets separate
+# archives. Archive lives in data/ (gitignored - survives gitops lifecycle) and
+# never touches state/ (also gitignored but state/ is for live records only).
+# Must run BEFORE retire_busy_state so busy-gen/busy-state are still present.
+# Idempotent: each file is copied only when present, so missing files are not errors.
+archive_task_state() {
+  local state_dir=$1 id=$2 archive_dir
+  archive_dir="$DATA/teardown-archives/$id/$(date +%Y%m%d)"
+  mkdir -p "$archive_dir" && chmod 700 "$archive_dir" || return 0
+  local f
+  for f in meta status turn-ended pi-ext.ts busy-gen busy-state \
+    herdr-presentation grok-turnend-token kimi-turnend-token; do
+    [ -f "$state_dir/$id.$f" ] || continue
+    cp -p -- "$state_dir/$id.$f" "$archive_dir/" || true
+  done
+}
+archive_task_state "$STATE" "$ID"
 retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 rm -f "$STATE/$ID.status" "$STATE/$ID.turn-ended" "$STATE/$ID.meta" \
   "$STATE/$ID.pi-ext.ts" "$STATE/$ID.grok-turnend-token" \

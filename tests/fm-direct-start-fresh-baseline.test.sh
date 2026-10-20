@@ -58,7 +58,11 @@ direct_out=$(
   "$START" direct-worker --kind pi --pane w1:pDIRECT 2>&1
 ) || fail 'direct fresh launch refused a valid baseline handoff'
 assert_contains "$direct_out" 'Baseline manifest: fresh-agent-baseline/v1' 'direct launch did not emit baseline manifest version'
-assert_contains "$direct_out" 'project-policy=/root/agent-work/AGENTS.md sha256:' 'direct launch omitted project policy baseline pointer'
+# The policy-family roles resolve from the home, so a project-policy role is
+# either home-resolved or explicitly declared unavailable. Either way the
+# manifest must not name a path belonging to another host's account home.
+assert_contains "$direct_out" 'project-policy=' 'direct launch omitted the project policy baseline role'
+assert_absent "$direct_out" '/root/' 'direct launch pointed a baseline role at a Controller-rooted path'
 assert_contains "$direct_out" "warehouse=$ROOT/docs/system-context/INDEX.md sha256:" 'direct launch omitted warehouse baseline pointer'
 assert_contains "$direct_out" "goal-queue=$TMP_ROOT/home/data/backlog.md" 'direct launch omitted current goal/queue pointer'
 assert_contains "$direct_out" 'HERDR_STARTED agent start direct-worker' 'direct launch did not start after baseline handoff'

@@ -1,0 +1,4 @@
+interface:
+  display_name: "TDD: Red → Green → Refactor"
+  short_description: "Enforce test-first coding with red/green/refactor evidence"
+  default_prompt: "Apply the TDD red → green → refactor loop to this coding task and report each checkpoint with executable evidence."

@@ -1,0 +1,188 @@
+--- controller-inbox.baseline.sh	2026-10-17 00:18:28.001951731 +0100
++++ controller-inbox.candidate.sh	2026-10-17 00:46:02.691216666 +0100
+@@ -32,6 +32,8 @@
+ HANDLED="$STATE/.controller-inbox-handled"
+ WATERMARK="$STATE/.controller-inbox-watermark"
+ OUTBOUND_LEDGER="$STATE/.controller-inbox-outbound"
++NOTIFIED="$STATE/.controller-inbox-notified"
++INITIALIZED="$STATE/.controller-inbox-initialized"
+ 
+ INBOXES=(
+   "/home/hd2admin/kun-agent-workspace/data/luna6-inbox-candidate-20261016/inbox-controller-replies"
+@@ -71,6 +73,24 @@
+   return 1
+ }
+ 
++# locate_with_hash: resolve a message name to a real regular file whose bytes
++# match the expected hash.  Used by --ack when the same basename exists with
++# different bytes in multiple routes so that each distinct content item can be
++# acknowledged by its exact digest.
++locate_with_hash() {  # <name> <expected_sha256>
++  local name=$1 expected=$2 inbox path actual
++  for inbox in "${INBOXES[@]}"; do
++    [[ -d "$inbox" && ! -L "$inbox" ]] || continue
++    path="$inbox/$name"
++    [[ -f "$path" && ! -L "$path" ]] || continue
++    actual=$(file_hash "$path") || continue
++    [[ "$actual" = "$expected" ]] || continue
++    printf '%s\n' "$path"
++    return 0
++  done
++  return 1
++}
++
+ is_handled() {  # <sha256>
+   local hash=$1
+   [[ -f "$HANDLED" && ! -L "$HANDLED" ]] || return 1
+@@ -103,28 +123,67 @@
+   local name=$1 expected=$2 path actual
+   valid_name "$name" || { printf 'refused: invalid Controller message filename\n' >&2; return 2; }
+   [[ "$expected" =~ ^[a-f0-9]{64}$ ]] || { printf 'refused: invalid Controller message digest\n' >&2; return 2; }
+-  path=$(locate "$name") || { printf 'refused: Controller message is unavailable\n' >&2; return 1; }
+-  actual=$(file_hash "$path") || { printf 'refused: could not verify Controller message\n' >&2; return 1; }
+-  [[ "$actual" = "$expected" ]] || { printf 'refused: Controller message changed after it was read\n' >&2; return 1; }
+-  if is_handled "$expected"; then
+-    printf 'already-acknowledged: %s sha256=%s\n' "$name" "$expected"
++  # First: try to find the file with this name whose content matches the expected
++  # hash.  This resolves F1: when the same basename appears with different bytes
++  # across two routes, each distinct content item can be acknowledged by its exact
++  # digest rather than being confined to the first-matching route.
++  if path=$(locate_with_hash "$name" "$expected"); then
++    # Found the file with matching hash.
++    if is_handled "$expected"; then
++      printf 'already-acknowledged: %s sha256=%s\n' "$name" "$expected"
++      return 0
++    fi
++    record_handled "$expected" || { printf 'refused: could not record acknowledgement\n' >&2; return 1; }
++    printf 'acknowledged: %s sha256=%s\n' "$name" "$expected"
+     return 0
+   fi
+-  record_handled "$expected" || { printf 'refused: could not record acknowledgement\n' >&2; return 1; }
+-  printf 'acknowledged: %s sha256=%s\n' "$name" "$expected"
++  # No file with this name has the expected hash.
++  # Check whether the file exists (any route) but with different bytes: that means
++  # the message was modified after it was read.
++  if path=$(locate "$name"); then
++    printf 'refused: Controller message changed after it was read\n' >&2
++    return 1
++  fi
++  printf 'refused: Controller message is unavailable\n' >&2
++  return 1
+ }
+ 
+ case "${1:-}" in
+   --ack)
+-    [[ "$#" -eq 3 ]] || { printf 'usage: controller-inbox.check.sh --ack <filename> <sha256>\n' >&2; exit 2; }
++    [[ "$#" -eq 3 ]] || { printf 'usage: controller-inbox.check.sh [--pending | --ack <filename> <sha256>]\n' >&2; exit 2; }
+     ack_message "$2" "$3"
+     exit $?
+     ;;
++  --pending) [[ "$#" -eq 1 ]] || { printf 'usage: controller-inbox.check.sh --pending\n' >&2; exit 2; } ;;
+   '') ;;
+-  *) printf 'usage: controller-inbox.check.sh [--ack <filename> <sha256>]\n' >&2; exit 2 ;;
++  *) printf 'usage: controller-inbox.check.sh [--pending | --ack <filename> <sha256>]\n' >&2; exit 2 ;;
+ esac
+ 
+ [[ -d "$STATE" && ! -L "$STATE" ]] || fail 'Firstmate state directory is unavailable'
++for ledger in "$HANDLED" "$WATERMARK" "$OUTBOUND_LEDGER" "$NOTIFIED" "$INITIALIZED"; do
++  [[ ! -L "$ledger" ]] || fail 'candidate inbox ledger is a symlink'
++done
++
++if [[ "${1:-}" == "--pending" ]]; then
++  [[ -f "$INITIALIZED" && ! -L "$INITIALIZED" ]] || { printf 'controller inbox migration blocked: initialization record missing; owner decision required before pending inspection\n'; exit 3; }
++  declare -A pending_hashes=()
++  for inbox in "${INBOXES[@]}"; do
++    [[ -d "$inbox" && ! -L "$inbox" ]] || continue
++    while IFS= read -r -d '' name; do
++      valid_name "$name" || continue
++      path="$inbox/$name"
++      [[ -f "$path" && ! -L "$path" ]] || continue
++      hash=$(file_hash "$path") || fail "cannot hash $name"
++      [[ -z "${pending_hashes[$hash]+x}" ]] || continue
++      { is_handled "$hash" || is_outbound "$hash"; } && continue
++      pending_hashes[$hash]="$name"
++    done < <(find "$inbox" -maxdepth 1 -type f -name '*.md' -printf '%f\0' 2>/dev/null)
++  done
++  for hash in "${!pending_hashes[@]}"; do
++    printf 'pending: %s sha256=%s\n' "${pending_hashes[$hash]}" "$hash"
++  done
++  exit 0
++fi
+ 
+ # Watermark: report messages that arrived since the last sweep. On the very first
+ # run there is no watermark, so the poll seeds it to now and discloses how many
+@@ -132,37 +191,49 @@
+ # calls for mail that predates automatic reception.
+ now=$(date +%s)
+ if [[ -f "$WATERMARK" && ! -L "$WATERMARK" ]]; then
++  if [[ ! -f "$INITIALIZED" || -L "$INITIALIZED" ]]; then
++    printf 'controller inbox migration blocked: existing watermark lacks candidate initialization record; owner decision required; no inbox or ledger changes made\n'
++    exit 3
++  fi
+   since=$(cat -- "$WATERMARK" 2>/dev/null)
+   [[ "$since" =~ ^[0-9]+$ ]] || fail 'watermark is invalid'
+ else
++  # Exclude historical mail by content identity, count it once across mirrored routes,
++  # and never confuse exclusion with a handled acknowledgement.
+   pre=0
++  : > "$NOTIFIED" || fail 'cannot create candidate notification ledger'
++  declare -A initial_hashes=()
+   for inbox in "${INBOXES[@]}"; do
+     [[ -d "$inbox" && ! -L "$inbox" ]] || continue
+     while IFS= read -r -d '' name; do
+       valid_name "$name" || continue
+-      path=$(locate "$name") || continue
+-      is_handled "$(file_hash "$path" 2>/dev/null || printf '')" || is_outbound "$(file_hash "$path" 2>/dev/null || printf '')" || pre=$((pre + 1))
++      path="$inbox/$name"
++      [[ -f "$path" && ! -L "$path" ]] || continue
++      hash=$(file_hash "$path") || fail "cannot hash $name"
++      [[ -z "${initial_hashes[$hash]+x}" ]] || continue
++      { is_handled "$hash" || is_outbound "$hash"; } && continue
++      initial_hashes[$hash]=1
++      printf '%s\n' "$hash" >> "$NOTIFIED" || fail 'cannot record historical exclusion'
++      pre=$((pre + 1))
+     done < <(find "$inbox" -maxdepth 1 -type f -name '*.md' -printf '%f\0' 2>/dev/null)
+   done
+-  printf '%s\n' "$now" > "$WATERMARK" 2>/dev/null || true
+-  chmod 0600 "$WATERMARK" 2>/dev/null || true
+-  printf 'controller inbox poll seeded: %s pre-existing message(s) not surfaced; automatic reception starts now\n' "$pre"
++  printf '%s\n' "$now" > "$WATERMARK" || fail 'cannot initialize watermark'
++  printf 'candidate\n' > "$INITIALIZED" || fail 'cannot record candidate initialization'
++  chmod 0600 "$WATERMARK" "$NOTIFIED" "$INITIALIZED" || fail 'cannot secure candidate initialization records'
++  printf 'controller inbox poll seeded: %s pre-existing message(s) excluded from notifications; no messages marked handled\n' "$pre"
+   exit 0
+ fi
+ 
+-# emitted tracks hashes reported during THIS sweep. Without it a message present
+-# in both inbox directories is reported twice in one run, because the handled
+-# ledger is only updated at ack time and cannot suppress the second sighting.
+-emitted=$(mktemp "${TMPDIR:-/tmp}/controller-inbox-emitted.XXXXXX") || exit 0
++# Persisted notification identity is separate from exact-byte acknowledgement:
++# mirrored copies cannot repeat a routine notification before acknowledgement.
++emitted=$(mktemp "$STATE/.controller-inbox-notified.XXXXXX") || fail 'cannot create notification ledger temporary file'
++if [[ -f "$NOTIFIED" ]]; then cat -- "$NOTIFIED" > "$emitted" || fail 'cannot copy notification ledger'; fi
+ 
+ for inbox in "${INBOXES[@]}"; do
+   [[ -d "$inbox" && ! -L "$inbox" ]] || continue
+   while IFS= read -r -d '' name; do
+     valid_name "$name" || continue
+     path=$(locate "$name") || continue
+-    modified=$(stat -c '%Y' -- "$path" 2>/dev/null) || fail "cannot read timestamp for $name"
+-    [[ "$modified" =~ ^[0-9]+$ ]] || fail "invalid timestamp for $name"
+-    (( modified > since )) || continue
+     hash=$(file_hash "$path") || fail "cannot hash $name"
+     grep -Fqx -- "$hash" "$emitted" && continue
+     { is_handled "$hash" || is_outbound "$hash"; } && continue
+@@ -171,8 +242,7 @@
+   done < <(find "$inbox" -maxdepth 1 -type f -name '*.md' -printf '%f\0' 2>/dev/null)
+ done
+ 
+-rm -f -- "$emitted"
+-
+-printf '%s\n' "$now" > "$WATERMARK" 2>/dev/null || true
+-chmod 0600 "$WATERMARK" 2>/dev/null || true
++mv -f -- "$emitted" "$NOTIFIED" || fail 'cannot publish notification ledger'
++printf '%s\n' "$now" > "$WATERMARK" || fail 'cannot update watermark'
++chmod 0600 "$WATERMARK" "$NOTIFIED" || fail 'cannot secure candidate ledgers'
+ exit 0
+\ No newline at end of file

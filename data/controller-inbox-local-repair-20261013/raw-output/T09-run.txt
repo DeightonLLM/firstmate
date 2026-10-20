@@ -1,0 +1,2 @@
+PASS: changed-digest correctly refused with exit 1
+EXIT: 0

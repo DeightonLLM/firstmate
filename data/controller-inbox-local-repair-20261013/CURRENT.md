@@ -1,0 +1,26 @@
+# Local Controller inbox repair dispatch
+
+Captain provided exact Controller spec and authorized delegated local application with proven rollback. This is a Captain-private operational check repair, not shared source delivery or canonical upstream replacement.
+
+Task queued then started through tasks-axi. Supported fm-spawn launched one isolated existing-home worker:
+- task controller-inbox-local-repair-20261013
+- pane default:w2T:p2
+- disposable copy /home/hd2admin/.treehouse/kun-agent-workspace-46aafc/15/kun-agent-workspace
+- harness pi, exact minimax/MiniMax-M2.7-highspeed, medium verified in actual footer; footer decorative Fast/M3 label is not selected-model proof.
+- fresh quota2026-10-13T15:57:39Z effective93%, short100%, weekly93%, through-reset runway; exact catalog verified.
+
+Worker processing brief verified; isolation exact path shown. Five-item visible tracker verified on targeted peek (preflight marked done, reproduce/implement/tests+rollback/postflight pending). A corrective steer about mandatory tracker returned delivery-unconfirmed; no duplicate text/key, forced restart or alternate transport tried. Subsequent targeted peek verifies tracker present and worker actively proceeding under original brief, current-state pi-ext busy. No relaunch required.
+
+Spawn warned basename not in registry (no-mistakes off) and uncertain Herdr restart binding. Brief explicitly forbids shared tracked edits/commits/PR and defines private operational scope, so no shared source shipping or merge authority is derived from metadata. No restart/move to repair presentation.
+
+Required outcome: focused before/after behavioral tests, unchanged-baseline guarded publication, supported registration, EXECUTED exact original restore/re-registration verification then corrected reapply, actual normal-path automatic receipt, documented completion. No checkmark yet.
+
+Worker prematurely emitted done with9claimed checks, repaired live hash e864f233f499709340cb7e88a0a77c16a4522e35b1771776b620f6b094b66da1 and matching trust receipt, but report describes isolated-copy rollback only. Its manually acknowledged canary cannot produce a new automatic event and predates next away-entry mtime. Fresh primary reads verify the three implementations and matching trust bytes, not successful automatic runtime or live rollback. Correction sent through supported fm-send successfully: replace premature completion with unfinished validation/postflight trackers/status, demonstrate LIVE original restore/re-registration and corrected reapply with current-hash guards, add focused red/green/dedup/changed-ack/symlink tests and preserve raw outputs. No forged away state, watcher change or unrelated acknowledgments. Primary tracker #38-#40 complete intake/discovery/implementation; #41 tests+rollback ACTIVE and unaccepted; #42 closeout pending. Existing backlog remains In flight; no cleanup/landing.
+
+Second worker return now reports13passing checks and executed six-phase LIVE rollback/re-registration/reapply. Primary requested durable runnable fixtures plus raw output paths before full acceptance. Corrected report still incorrectly says canary1791907695 will fire next away cycle: it predates any new entry and mtime filter excludes it; older unhandled pre-away messages are excluded by design, so no-loss claim is unsupported. Correction delivered successfully; worker instructed to leave a genuinely unfinished automatic-receipt tracker.
+
+Primary attempted supported controlled automatic test via bin/fm-afk-launch.sh start. It REFUSED: 'return catch-up is still pending; run bin/fm-afk-return.sh check before re-entering away mode'. No fallback, forged .afk or direct watcher execution. Existing permission/ownership/approval blockers remain; primary #43 captures sanctioned reconciliation dependency. No new canary was published after a nonexistent entry. Repair still In flight, #41 active and #42 pending.
+
+Stale notification reconciled by exact crew-state and pane: worker alive, idle, unfinished automatic-receipt tracker present, waiting on primary dependency; NOT wedged. No restart/recovery launch. Worker reports corrected fixture assertions plus four failure-exit negative controls; durable artifacts now available, but full acceptance/current rollback raw evidence remains unverified. T08 reviewed source captures SCRIPT_EXIT but does not assert it, so broad claim that every fixture checks child exit is not established. Sent supported instruction to publish blocked key automatic-receipt, stop further test repetitions/live edits, retain evidence and await explicit release. Missing original rollback transcript must be disclosed rather than reconstructed.
+
+Worker now explicitly discloses live rollback/reapply original command output and registration receipts were not retained to disk; report/status hash fingerprints only. This is reported execution, NOT independently verified rollback. No fabricated reconstruction or repeated live rollback for logging. Latest free-form disclosure makes crew-state return unknown; targeted pane nevertheless confirms healthy idle and unfinished automatic-receipt todo, not dead/finished. Primary #41 records missing proof. No completion/cleanup.

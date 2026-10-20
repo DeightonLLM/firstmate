@@ -13,7 +13,7 @@
 #       instead of a project list to seed a project-less home for a domain whose
 #       subject is the firstmate repo itself; it is mutually exclusive with a
 #       project list, and omitting both still fails loudly. A project-less seed
-#       refuses a home with project clones or project-registry entries, so it
+#       refuses a home with project clones, so it
 #       never converts populated homes in place. The charter brief
 #       is copied to data/charter.md, newly cloned no-mistakes projects are
 #       initialized, an ignored .fm-secondmate-home identity marker is written, and
@@ -772,7 +772,8 @@ refuse_populated_projectless_home() {
       [ -n "$project" ] && registry_projects+=("$project")
     done <<< "$registry_entries"
   fi
-  [ "${#clones[@]}" -eq 0 ] && [ "${#registry_projects[@]}" -eq 0 ] && return 0
+  # Only actual project clones make a home projectful; a registry without clones is stale pool metadata.
+  [ "${#clones[@]}" -eq 0 ] && return 0
 
   echo "error: cannot seed project-less secondmate home $home because it contains project data" >&2
   if [ "${#clones[@]}" -gt 0 ]; then

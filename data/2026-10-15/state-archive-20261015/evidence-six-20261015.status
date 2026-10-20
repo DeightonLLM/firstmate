@@ -1,0 +1,4 @@
+working: preflight complete; beginning scoped read-only evidence collection
+working: source/history evidence gathered; now checking scheduled-watcher evidence and direct-poll overlap
+working: scheduled-event evidence reconciled; preparing report with the historical/current-session distinction explicit
+blocked: report written; shared completion gate requires tasks-axi, explicitly prohibited by this brief

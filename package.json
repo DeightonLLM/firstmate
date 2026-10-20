@@ -1,0 +1,32 @@
+{
+  "name": "kun-agent-workspace",
+  "version": "1.0.0",
+  "description": "<h1 align=\"center\">firstmate</h1> <p align=\"center\">   <a     href=\"https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue?style=flat-square\"     ><img       alt=\"Platform\"       src=\"https://img.shields.io/badge/platform-macOS%20%7C%20Linux-blue?style=flat-square\"   /></a>   <a href=\"https://x.com/kunchenguid\"     ><img       alt=\"X\"       src=\"https://img.shields.io/badge/X-@kunchenguid-black?style=flat-square\"   /></a>   <a href=\"https://discord.gg/Wsy2NpnZDu\"     ><img       alt=\"Discord\"       src=\"https://img.shields.io/discord/1439901831038763092?style=flat-square&label=discord\"   /></a> </p>",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DeightonLLM/firstmate.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/DeightonLLM/firstmate/issues"
+  },
+  "homepage": "https://github.com/DeightonLLM/firstmate#readme",
+  "dependencies": {
+    "puppeteer-core": "^25.14.0",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "puppeteer": "^25.14.0"
+  }
+}

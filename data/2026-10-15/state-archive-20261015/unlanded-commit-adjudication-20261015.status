@@ -1,0 +1,3 @@
+working: read-only preflight verified; comparing the two commit patches and current main
+working: comparative checks complete; drafting report and documenting current-main replacement behavior
+done: report finds 9601685d already present on main; c51cf8d9 obsolete as-is for current outbound-order delivery, with evidence and tests recorded

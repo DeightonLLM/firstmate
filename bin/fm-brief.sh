@@ -6,7 +6,7 @@
 # description, acceptance criteria, and context, and may adjust other sections
 # when the task genuinely deviates (e.g. working an existing external PR instead
 # of shipping a new one).
-# Usage: fm-brief.sh <task-id> <repo-name> [--scout] [--herdr-lab] [--harness <name>]
+# Usage: fm-brief.sh <task-id> <repo-name> [--scout] [--herdr-lab] [--harness <name>] [--worklocation <absolute-path>]
 #        fm-brief.sh <task-id> --secondmate {<project>...|--no-projects}
 #   --scout writes the scout contract instead: the deliverable is a report at
 #   data/<task-id>/report.md (no branch, no push, no PR) and the worktree is scratch.
@@ -21,6 +21,9 @@
 #   omitting both still fails loudly so an accidental omission is never silent.
 #   Set FM_SECONDMATE_CHARTER='<charter>' to fill the charter text.
 #   Set FM_SECONDMATE_SCOPE='<scope>' to write a routing scope distinct from the charter text.
+#   --worklocation <absolute-path> explicitly authorizes a ship or scout brief to
+#   operate in an existing external directory, amending only its normal location
+#   assertion; the brief names that directory and keeps every other boundary.
 #   --herdr-lab is mandatory when the task will issue Herdr lifecycle commands.
 #   It adds the hard isolation contract backed by bin/fm-herdr-lab.sh.
 #   The flag must be explicit because {TASK} is filled after scaffolding and the
@@ -71,6 +74,8 @@ esac
 . "$SCRIPT_DIR/fm-marker-lib.sh"
 # shellcheck source=bin/fm-classify-lib.sh
 . "$SCRIPT_DIR/fm-classify-lib.sh"
+# shellcheck source=bin/fm-baseline-lib.sh
+. "$SCRIPT_DIR/fm-baseline-lib.sh"
 PAUSED_VERB=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
 
 
@@ -102,6 +107,7 @@ KIND=ship
 HERDR_LAB=0
 NO_PROJECTS=0
 HARNESS_ARG=""
+WORKLOCATION_ARG=""
 POS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -109,6 +115,9 @@ while [ "$#" -gt 0 ]; do
     --secondmate) KIND=secondmate ;;
     --herdr-lab) HERDR_LAB=1 ;;
     --no-projects) NO_PROJECTS=1 ;;
+    --worklocation)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "error: --worklocation requires an absolute directory path" >&2; exit 1; }
+      WORKLOCATION_ARG=$2; shift ;;
     --harness)
       [ "$#" -ge 2 ] || { echo "error: --harness requires a value" >&2; exit 1; }
       HARNESS_ARG=$2; shift ;;
@@ -118,6 +127,22 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 ID=${POS[0]}
+
+if [ -n "$WORKLOCATION_ARG" ]; then
+  case "$WORKLOCATION_ARG" in
+    /*) ;;
+    *) echo "error: --worklocation requires an absolute directory path" >&2; exit 1 ;;
+  esac
+  [ -d "$WORKLOCATION_ARG" ] || { echo "error: --worklocation directory does not exist: $WORKLOCATION_ARG" >&2; exit 1; }
+  WORKLOCATION=$(resolve_directory_input worklocation "$WORKLOCATION_ARG") || exit 1
+else
+  WORKLOCATION=""
+fi
+
+if [ "$KIND" = secondmate ] && [ -n "$WORKLOCATION" ]; then
+  echo "error: --worklocation applies only to crewmate ship or scout briefs" >&2
+  exit 1
+fi
 
 if [ "$KIND" = secondmate ] && [ "$HERDR_LAB" -eq 1 ]; then
   echo "error: --herdr-lab applies only to crewmate ship or scout briefs" >&2
@@ -142,13 +167,9 @@ prepare_baseline() {
 }
 
 emit_baseline_block() {
-  local policy_file="/root/AGENTS.md"
-  local project_policy_file="/root/agent-work/AGENTS.md"
-  local routing_file="/root/docs/agent-policy/HERDR_AGENT_ROUTING.md"
-  local bounded_file="/root/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md"
-  local lean_ctx_file="/root/.codex/LEAN-CTX.md"
-  local warehouse_file warehouse_preflight_file baseline_root digest
-  local -a required hashes
+  local file digest role resolved
+  local warehouse_file warehouse_preflight_file baseline_root warehouse_digest
+  local -a required
 
   baseline_root="${FM_BASELINE_ROOT:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
   baseline_root="$(cd "$baseline_root" 2>/dev/null && pwd -P)" || {
@@ -157,11 +178,7 @@ emit_baseline_block() {
   }
   warehouse_file="$baseline_root/docs/system-context/INDEX.md"
   warehouse_preflight_file="$baseline_root/bin/fm-context-preflight.sh"
-  required=(
-    "$policy_file" "$project_policy_file" "$routing_file" "$bounded_file"
-    "$lean_ctx_file" "$warehouse_file" "$warehouse_preflight_file"
-  )
-  hashes=()
+  required=("$warehouse_file" "$warehouse_preflight_file")
   for file in "${required[@]}"; do
     if [ ! -f "$file" ]; then
       printf 'brief: FAIL required fresh-agent baseline file is missing: %s\n' "$file" >&2
@@ -172,18 +189,30 @@ emit_baseline_block() {
       return 2
     }
     [ -n "$digest" ] || { printf 'brief: FAIL SHA-256 tool unavailable\n' >&2; return 2; }
-    hashes+=("sha256:$digest")
+    if [ "$file" = "$warehouse_file" ]; then
+      warehouse_digest="sha256:$digest"
+    fi
   done
 
   {
     printf '# Fresh-agent baseline\n'
     printf 'Baseline manifest: fresh-agent-baseline/v1\n'
-    printf 'policy=%s %s\n' "$policy_file" "${hashes[0]}"
-    printf 'project-policy=%s %s\n' "$project_policy_file" "${hashes[1]}"
-    printf 'routing=%s %s\n' "$routing_file" "${hashes[2]}"
-    printf 'bounded=%s %s\n' "$bounded_file" "${hashes[3]}"
-    printf 'lean-ctx=%s %s\n' "$lean_ctx_file" "${hashes[4]}"
-    printf 'warehouse=%s %s\n' "$warehouse_file" "${hashes[5]}"
+    # The policy-family roles resolve from this home, so a brief is never
+    # pointed at another host's account home. A role with no readable home-local
+    # file is declared unavailable instead of being dropped or mislabeled.
+    for role in policy project-policy routing bounded lean-ctx; do
+      if ! resolved="$(fm_baseline_resolve_role "$role")"; then
+        fm_baseline_unavailable_line "$role"
+        continue
+      fi
+      digest="$(sha256sum "$resolved" 2>/dev/null | cut -d' ' -f1)" || {
+        printf 'brief: FAIL cannot hash required fresh-agent baseline file: %s\n' "$resolved" >&2
+        return 2
+      }
+      [ -n "$digest" ] || { printf 'brief: FAIL SHA-256 tool unavailable\n' >&2; return 2; }
+      printf '%s=%s scope=%s sha256:%s\n' "$role" "$resolved" "$(fm_baseline_scope_of "$resolved")" "$digest"
+    done
+    printf 'warehouse=%s %s\n' "$warehouse_file" "$warehouse_digest"
     printf 'warehouse-preflight=%s\n' "$warehouse_preflight_file"
     printf 'goal-queue=%s/data/backlog.md\n' "$FM_HOME"
     printf 'state-handoff=%s/state/.wake-queue\n' "$FM_HOME"
@@ -275,6 +304,38 @@ shell_quote() {
 }
 
 STATUS_FILE=$(shell_quote "$STATE/$ID.status")
+if [ -n "$WORKLOCATION" ]; then
+  IFS= read -r -d '' SHIP_LOCATION_SETUP <<EOF || true
+You are authorized to operate in the external worklocation at \`$WORKLOCATION\` instead of the disposable task worktree.
+
+This authorization amends only the ordinary worktree-location/isolation assertion: begin task actions in \`$WORKLOCATION\` and operate only there. It does not authorize any other path, scope, or exception; every other boundary in this brief remains in force.
+EOF
+  IFS= read -r -d '' SCOUT_LOCATION_SETUP <<EOF || true
+You are authorized to operate in the external worklocation at \`$WORKLOCATION\` instead of the disposable task worktree.
+
+This authorization amends only the ordinary worktree-location/isolation requirement: begin task actions in \`$WORKLOCATION\` and operate only there. It does not authorize any other path, scope, or exception; every other boundary in this brief remains in force.
+EOF
+  SHIP_RULE2="Stay inside the authorized worklocation at \`$WORKLOCATION\`; modify nothing outside it."
+  SCOUT_RULE2="Stay inside the authorized worklocation at \`$WORKLOCATION\`; the only files you may write elsewhere are the report and status file below."
+else
+  IFS= read -r -d '' SHIP_LOCATION_SETUP <<'EOF' || true
+You are in a disposable git worktree of @REPO@, at a detached HEAD on a clean default branch.
+
+**Verify isolation before anything else.** Run `pwd -P` and `git rev-parse --show-toplevel`; both must resolve to the disposable task worktree you were launched in, such as a treehouse pool path or an Orca-managed worktree, not the primary checkout firstmate operates from.
+The path check is authoritative: `git rev-parse --git-dir` and `git rev-parse --git-common-dir` can help inspect the repo, but they do not prove you are outside the primary checkout.
+If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append `blocked: launched in primary checkout, not an isolated worktree` to the status file and stop.
+EOF
+  IFS= read -r -d '' SCOUT_LOCATION_SETUP <<'EOF' || true
+You are in a disposable git worktree of @REPO@, at a detached HEAD on a clean default branch.
+This is a SCOUT task: the deliverable is a written report, not a PR.
+The worktree is your laboratory - install, run, edit, and make scratch commits freely; all of it is discarded at teardown.
+The report is the only thing that survives, so anything worth keeping must be in it.
+EOF
+  SHIP_RULE2="Stay inside this worktree; modify nothing outside it."
+  SCOUT_RULE2="Stay inside this worktree; the only files you may write outside it are the report and the status file below."
+fi
+SHIP_LOCATION_SETUP=${SHIP_LOCATION_SETUP%$'\n'}
+SCOUT_LOCATION_SETUP=${SCOUT_LOCATION_SETUP%$'\n'}
 
 if [ "$KIND" = secondmate ]; then
 SECONDMATE_PROJECTS=""
@@ -369,6 +430,8 @@ exit 0
 fi
 
 REPO=${POS[1]}
+SHIP_LOCATION_SETUP=${SHIP_LOCATION_SETUP//@REPO@/$REPO}
+SCOUT_LOCATION_SETUP=${SCOUT_LOCATION_SETUP//@REPO@/$REPO}
 
 if [ "$HERDR_LAB" -eq 1 ]; then
 HERDR_LAB_HELPER=$(shell_quote "$FM_ROOT/bin/fm-herdr-lab.sh")
@@ -413,16 +476,13 @@ You are a crewmate: an autonomous worker agent managed by firstmate. Work on you
 $HERDR_SECTION
 
 # Setup
-You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
-This is a SCOUT task: the deliverable is a written report, not a PR.
-The worktree is your laboratory - install, run, edit, and make scratch commits freely; all of it is discarded at teardown.
-The report is the only thing that survives, so anything worth keeping must be in it.
+$SCOUT_LOCATION_SETUP
 
 $TODO_BREAKDOWN
 
 # Rules
 1. Never push to any remote and never open a PR.
-2. Stay inside this worktree; the only files you may write outside it are the report and the status file below.
+2. $SCOUT_RULE2
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`
@@ -535,11 +595,7 @@ You are a crewmate: an autonomous worker agent managed by firstmate. Work on you
 $HERDR_SECTION
 
 # Setup
-You are in a disposable git worktree of $REPO, at a detached HEAD on a clean default branch.
-
-**Verify isolation before anything else.** Run \`pwd -P\` and \`git rev-parse --show-toplevel\`; both must resolve to the disposable task worktree you were launched in, such as a treehouse pool path or an Orca-managed worktree, not the primary checkout firstmate operates from.
-The path check is authoritative: \`git rev-parse --git-dir\` and \`git rev-parse --git-common-dir\` can help inspect the repo, but they do not prove you are outside the primary checkout.
-If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append \`blocked: launched in primary checkout, not an isolated worktree\` to the status file and stop.
+$SHIP_LOCATION_SETUP
 
 1. First action: create your branch: \`git checkout -b fm/$ID\`$SETUP2
 
@@ -547,7 +603,7 @@ $TODO_BREAKDOWN
 
 # Rules
 $RULE1
-2. Stay inside this worktree; modify nothing outside it.
+2. $SHIP_RULE2
 3. Use gh-axi for GitHub operations and chrome-devtools-axi for browser operations.
 4. Report status by appending one line:
    \`echo "{state}: {one short line}" >> $STATUS_FILE\`

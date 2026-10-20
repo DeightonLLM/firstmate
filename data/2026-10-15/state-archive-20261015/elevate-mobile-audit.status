@@ -1,0 +1,5 @@
+working [at=1790137382]: starting chrome session elevate-mobile-audit, evidence dir ready
+working [at=1790137720]: static evidence captured, browser bridge confirmed unrecoverable, drafting report
+done [at=1790137755]: static-evidence scout — homepage uses undefined Tailwind classes py-20/text-center causing 4 sections to render with zero vertical padding + 1 left-aligned section; effect is viewport-independent so Android-only framing is plausibly masking-aware; no browser reproduction possible (BRIDGE_NOT_READY, libnspr4 missing); apex/www source NOT in local workspace; needs source repo + origin host + working Chrome to ship a fix
+working [at=1790150874]: searching warehouse + local records for elevate-site source/build/deploy owner
+done [at=1790151586]: scout complete — py-20/text-center defect confirmed at both viewports; source/build/deploy gap documented; captain decision needed for access

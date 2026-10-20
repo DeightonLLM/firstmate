@@ -1,0 +1,51 @@
+=== Approved endpoint reliability-reporting-20261012 default:w2N:p2 ===
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: text not submitted to default:w2N:p2 (delivery unconfirmed; verdict=pending; tried meta=/home/hd2admin/kun-agent-workspace/state/reliability-reporting-20261012.meta; backend=from-meta)
+Exit submit unconfirmed; verifying actual exit without resend
+ ## What already works in source and behavioral fixtures
+
+ ... (28 more lines, 38 total, ctrl+o to expand)
+
+
+
+ write ~/kun-agent-workspace/state/reliability-reporting-20261012.status
+
+ blocked: focused test and required completion attestation could not run because shell execution is denied; report records evidence and exact blocker
+
+
+ Creating blocker task
+
+
+ todo + Resolve test and completion-gate restriction
+ ○ pending
+
+
+ Reporting blocked status
+
+ Captain, the report is at data/reliability-reporting-20261012/report.md. Existing fixtures cover correlation and one-recovery behavior; a correlated nonterminal or content-free
+ line may still resolve, but that gap remains unconfirmed because tests did not run.
+
+ The focused test was blocked by the shell allowlist, which explicitly forbids retrying. The required completion attestation also remains undone, so I recorded a blocker rather
+ than claiming the scout is complete.
+
+● Todos (3/6)
+├─ ✓ #1 Verify isolated preflight
+├─ ✓ #2 Map correlation owner and tests ⛓ #1
+├─ ✓ #3 Gather bounded evidence ⛓ #2
+├─ ◐ #4 Validate evidence and recommendations (validating evidence) ⛓ #3
+├─ ○ #5 Write report and close out ⛓ #4
+└─ ○ #6 Resolve test and completion-gate restriction ⛓ #4
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/.treehouse/kun-agent-workspace-46aafc/11/kun-agent-workspace (detached)
+↑91k ↓6.4k R1.5M CH99.4% $0.027 (sub) 7.0%/1.1M (auto)                                                                                            (openai-codex) gpt-6-luna • medium
+✓ gpt-6-luna · w2N:p2 · READY
+
+To resume this session: pi --session 01a1319c-c5f3-7565-a113-af1aade4c8c9
+hd2admin@brandon-compute:~/.treehouse/kun-agent-workspace-46aafc/11/kun-agent-workspace$
+hd2admin@brandon-compute:~/.treehouse/kun-agent-workspace-46aafc/11/kun-agent-workspace$
+hd2admin@brandon-compute:~/.treehouse/kun-agent-workspace-46aafc/11/kun-agent-workspace$
+{"id":"cli:pane:process_info","result":{"process_info":{"foreground_process_group_id":3644685,"foreground_processes":[{"argv":["/bin/bash"],"cmdline":"/bin/bash","cwd":"/home/hd2admin/.treehouse/kun-agent-workspace-46aafc/11/kun-agent-workspace","name":"bash","pid":3644685}],"pane_id":"w2N:p2","shell_pid":3642618},"type":"pane_process_info"}}
+Structured confirmed gone: default:w2N:p2

@@ -23,6 +23,7 @@
 #   FM_DISPATCH_GUARD_LOAD_BYPASS=1   skip only the load ceiling (logged)
 #   FM_DISPATCH_GUARD_QUOTA_BYPASS=1  skip only the quota ceiling (logged)
 #   FM_DISPATCH_GUARD_MAX_LANES=<n>   live-lane ceiling; overrides config/dispatch-max-lanes (default 4)
+#   FM_DISPATCH_GUARD_MAX_PROVIDER_LANES=<n>  per-provider ceiling; overrides config/dispatch-max-provider-lanes (default: global ceiling)
 #   FM_DISPATCH_GUARD_LANE_BUDGET_S=<n>  wall-clock budget for the lane
 #                                        inventory (default 30)
 # Test seams (never set in production; they exist so the rules can be proven by
@@ -175,10 +176,12 @@ fi
 #
 # Only `dead` and `missing` are proofs of absence, exactly as fm-backend.sh's
 # contract states; `ambiguous` and `unreadable` count as live so a transient
-# endpoint problem can never silently under-count the cap. A lane the classifier
-# cannot place at all (`unverified`) is disclosed in the log rather than counted,
-# because counting unplaceable history forever is the wedge this rule must not
-# recreate.
+# endpoint problem can never silently under-count the cap. Unknown backend
+# activity also counts as working. Herdr's native busy-state is the only signal
+# that can prove a live lane idle; other backends return unknown and stay counted.
+# Idle releases a slot only for this inventory: the next spawn re-reads current
+# state, so a lane that resumes working consumes its slot again. A meta with an
+# unresolved target is unknown, not absent, and therefore counts against the cap.
 #
 # Per-lane classification costs a subprocess per meta (~10ms tmux, ~80ms
 # herdr), so the inventory runs under a wall-clock budget. An inventory that
@@ -204,6 +207,25 @@ lane_target() {  # <backend> <target>
   esac
 }
 
+# fm_dispatch_guard_lane_classify: classify one recorded lane as absent, idle,
+# or working. Only a positive native idle verdict releases capacity; every
+# unknown/unreadable verdict counts as working.
+fm_dispatch_guard_lane_classify() {  # <backend> <target>
+  local backend=$1 target=$2 presence activity
+  presence=$(fm_backend_agent_state "$backend" "$target")
+  case "$presence" in
+    dead|missing) printf 'absent'; return 0 ;;
+  esac
+  activity=$(fm_backend_busy_state "$backend" "$target")
+  if [ "$activity" = idle ]; then
+    printf 'idle'
+  elif [ "$presence" = unverified ]; then
+    printf 'unverified'
+  else
+    printf 'working'
+  fi
+}
+
 # fm_dispatch_guard_lane_cap: resolve the live-lane ceiling. Precedence:
 # FM_DISPATCH_GUARD_MAX_LANES, then the home-local gitignored
 # config/dispatch-max-lanes knob (same LOCAL-settings family as config/calm and
@@ -218,31 +240,65 @@ fm_dispatch_guard_lane_cap() {
   printf '%s' "$cap"
 }
 
+# Resolve the provider from the recorded model's provider prefix where present,
+# otherwise use the recorded harness as the provider identity.
+fm_dispatch_guard_provider_of_meta() {  # <meta-file>
+  local harness model
+  harness="$(sed -n 's/^harness=//p' "$1" | head -n 1)"
+  model="$(sed -n 's/^model=//p' "$1" | head -n 1)"
+  case "$model" in
+    */*) printf '%s' "${model%%/*}" ;;
+    *) printf '%s' "${harness:-unknown}" ;;
+  esac
+}
+
+fm_dispatch_guard_provider_cap() {
+  local cap="${FM_DISPATCH_GUARD_MAX_PROVIDER_LANES:-}"
+  if [ -z "$cap" ] && [ -n "${FM_HOME:-}" ] && [ -r "${FM_HOME}/config/dispatch-max-provider-lanes" ]; then
+    cap=$(tr -dc '0-9' < "${FM_HOME}/config/dispatch-max-provider-lanes")
+  fi
+  case "$cap" in ''|*[!0-9]*) cap="$(fm_dispatch_guard_lane_cap)" ;; esac
+  printf '%s' "$cap"
+}
+
 if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   budget="${FM_DISPATCH_GUARD_LANE_BUDGET_S:-30}"
   case "$budget" in ''|*[!0-9]*) budget=30 ;; esac
   started=$SECONDS
   live=0
+  idle=0
   incomplete=0
+  declare -A provider_live=()
+  declare -A provider_idle=()
   for meta in "${FM_HOME}"/state/*.meta; do
     [ -e "$meta" ] || continue
     backend="$(fm_backend_of_meta "$meta")"
     raw_target="$(fm_backend_target_of_meta "$meta")"
     target="$(lane_target "$backend" "$raw_target")"
+    provider="$(fm_dispatch_guard_provider_of_meta "$meta")"
     if [ -z "$target" ]; then
-      # A meta with no resolvable endpoint is not a lane this guard can place.
-      # Disclosed rather than silently dropped.
+      # A meta with no resolvable endpoint is unknown and must not free a slot.
       log_event "LANE_UNRESOLVED meta=$(basename "$meta")"
+      live=$((live + 1))
+      provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 ))
       continue
     fi
     if [ $((SECONDS - started)) -ge "$budget" ]; then
       incomplete=1
       break
     fi
-    case "$(fm_backend_agent_state "$backend" "$target")" in
-      dead|missing) : ;;                       # proven gone
-      unverified) log_event "LANE_UNVERIFIED meta=$(basename "$meta") backend=${backend}" ;;
-      *) live=$((live + 1)) ;;                 # alive, ambiguous, or unreadable
+    case "$(fm_dispatch_guard_lane_classify "$backend" "$target")" in
+      absent) : ;;                             # proven gone
+      idle)
+        idle=$((idle + 1))
+        provider_idle["$provider"]=$(( ${provider_idle["$provider"]:-0} + 1 )) ;;
+      unverified)
+        log_event "LANE_UNVERIFIED meta=$(basename "$meta") backend=${backend}"
+        live=$((live + 1))
+        provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 )) ;;
+      *)
+        live=$((live + 1))
+        provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 )) ;; # working, ambiguous, or unknown
     esac
   done
   if [ "$incomplete" = 1 ]; then
@@ -251,8 +307,14 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   # Live-lane ceiling.
   cap=$(fm_dispatch_guard_lane_cap)
   if [ "$live" -ge "$cap" ]; then
-    refuse "${live} live crewmate lanes already exist, counted per window/pane rather than per session (cap ${cap}). Stop one, or raise FM_DISPATCH_GUARD_MAX_LANES deliberately. Do not fan out on one host."
+    refuse "${live} working or unknown crewmate lanes and ${idle} idle lanes exist, counted per window/pane rather than per session (cap ${cap}). Stop one, or raise FM_DISPATCH_GUARD_MAX_LANES deliberately. Do not fan out on one host."
   fi
+  provider_cap="$(fm_dispatch_guard_provider_cap)"
+  for provider in "${!provider_live[@]}"; do
+    if [ "${provider_live[$provider]}" -ge "$provider_cap" ]; then
+      refuse "${provider_live[$provider]} working or unknown lanes occupy provider '${provider}' (cap ${provider_cap}); stop one or raise FM_DISPATCH_GUARD_MAX_PROVIDER_LANES deliberately."
+    fi
+  done
 fi
 
 # ---------------------------------------------------------------------------

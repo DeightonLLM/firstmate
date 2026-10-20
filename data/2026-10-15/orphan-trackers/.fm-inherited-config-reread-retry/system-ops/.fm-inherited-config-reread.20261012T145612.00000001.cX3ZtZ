@@ -1,0 +1,52 @@
+These inherited config files changed. Re-read and apply their exact contents at every future intake. They are defaults/rules and do not remove your judgment to choose differently when warranted.
+
+config/crew-dispatch.json
+-----BEGIN config/crew-dispatch.json-----
+{
+  "rules": [
+    {
+      "when": "The task requires genuinely difficult, high-ambiguity, architectural, or multi-component implementation.",
+      "use": {
+        "harness": "pi",
+        "model": "MiniMax-M3",
+        "effort": "medium"
+      },
+      "why": "Reserve MiniMax-M3 for difficult implementation; the primary Firstmate/Codex performs review."
+    },
+    {
+      "when": "The task requires live news, current events, X/Twitter data, market sentiment, or web-connected research.",
+      "use": {
+        "harness": "grok",
+        "model": "grok-4.5",
+        "effort": "high"
+      },
+      "why": "Grok Build is bundled with X subscription and provides live web search and X API access without token charges."
+    },
+    {
+      "when": "The task is simple, low-risk, low-ambiguity bounded work, including browser automation/evidence capture under a precise procedure, and fresh applicable MiniMax effective remaining quota is above 50%. Captain directs Highspeed for new M2.7 work in this range; substantive diagnosis/complex fixes use the separately authorized MCode M3.1 Preview path, not this rule.",
+      "use": {
+        "harness": "pi",
+        "model": "minimax/MiniMax-M2.7-highspeed",
+        "effort": "medium"
+      },
+      "why": "Captain-approved temporary Highspeed routing. Recheck quota at every intake; at 50% or below use regular M2.7. Current general-scope quota is not proven model-specific accounting. Preserve running assignments; no permission changes or runtime fallback. Speed is distinct from reasoning effort."
+    },
+    {
+      "when": "The task is routine day-to-day coding, bug fixing, test writing, refactoring, or feature implementation and the preceding Captain Highspeed rule does not apply.",
+      "use": {
+        "harness": "pi",
+        "model": "MiniMax-M2.7",
+        "effort": "medium"
+      },
+      "why": "Regular MiniMax-M2.7 remains the safe routine/default profile, including when applicable quota is 50% or below. Captain directs Highspeed above that threshold for bounded work through the preceding rule. Explicit current M3.1 MCode substantive-work instructions supersede the legacy M3 routing; never select retired M3 or silently substitute native M2.7 for substantive MCode work."
+    }
+  ],
+  "default": [
+    {
+      "harness": "pi",
+      "model": "MiniMax-M2.7",
+      "effort": "medium"
+    }
+  ]
+}
+-----END config/crew-dispatch.json-----

@@ -1,0 +1,7 @@
+working: inventorying docs and reading document headers
+blocked: docs/README.md already exists and the brief forbids modifying existing docs
+needs-decision: preserve existing docs/README.md or authorize replacing it with the requested index
+DEFAULT: DECISION key=docs-discoverability-20261015b: PRESERVE the existing docs/README.md. It is a committed warehouse contract from 2026-10-04 (commit 7cd64bad) and must not be overwritten. Write your index to a NEW file docs/README-index.md instead, and add a single cross-reference line to the existing README only if you can do so without altering its meaning. If you cannot add the line safely, leave docs/README.md completely untouched and say so in your report. You are authorized to write docs/README-index.md and your report only. Everything else in the brief stands. Do not ask again on this point.
+resolved: preserve docs/README.md and create new docs/README-index.md [key=docs-discoverability-20261015b]
+blocked: required decision-hold completion attestation would write task metadata outside the authorized index/report scope
+blocked: fm-decision-hold.sh complete docs-discoverability-20261015b --none failed: open structured decision docs-discoverability-20261015b/default has no captain-held inventory entry

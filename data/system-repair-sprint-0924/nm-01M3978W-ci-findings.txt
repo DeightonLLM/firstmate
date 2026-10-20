@@ -1,0 +1,10 @@
+# no-mistakes CI gate findings (run 01M3978W5AQNG1VV6J02GEN)
+
+## Finding 1: ci-1
+- ID: ci-1
+- Severity: warning
+- File: (none)
+- Action: ask-user
+- Description: CI checks could not be read from the provider: gh api workflow runs for head commit: unknown flag: --slurp
+
+The gh CLI in this environment does not support the --slurp flag used by the CI check script. PR is created at https://github.com/DeightonLLM/firstmate/pull/3 but CI status cannot be verified.

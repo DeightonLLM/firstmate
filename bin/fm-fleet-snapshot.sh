@@ -20,7 +20,12 @@
 #     requires_child_metadata, blocked_by_ids, unresolved_blocker_ids, and
 #     captain_actionable fields. Repeated blocker tokens remain ordered; a blocker
 #     resolves only when its structured record is Done, and missing ids stay open.
-#   tasks[]: one row per state/<id>.meta, sorted by id.
+#   tasks[]: one row per non-Done state/<id>.meta, sorted by id.
+#     Metadata for a structured task already marked Done is excluded even when a
+#     close path left its state files behind.
+#     Each row also carries an additive liveness classification (live, stale, or
+#     unknown) derived from the backend agent probe, never from metadata
+#     presence alone.
 #     current_state is parsed from bin/fm-crew-state.sh <id> and preserves
 #     state, source, detail, and raw line separately.
 #     paths.status_log.last_event is historical wake-event data only, never
@@ -221,8 +226,8 @@ crew_state_json() {  # <id>
       esac
       ;;
   esac
-  jq -n --arg raw "$raw" --arg state "$state" --arg source "$source" --arg detail "$detail" \
-    '{state:$state,source:$source,detail:$detail,raw:$raw}'
+  printf '%s\n%s\n%s\n%s\n' "$raw" "$state" "$source" "$detail" | jq -Rn \
+    '[inputs] as $fields | {state:$fields[1],source:$fields[2],detail:$fields[3],raw:$fields[0]}'
 }
 
 status_event_json() {  # <status-log>
@@ -233,13 +238,11 @@ status_event_json() {  # <status-log>
     verb=$(status_line_verb "$raw")
     note=$(status_line_note "$raw")
   fi
-  jq -n \
+  printf '%s\n%s\n' "$raw" "$note" | jq -Rn \
     --arg path "$log" \
-    --arg raw "$raw" \
     --arg verb "$verb" \
-    --arg note "$note" \
     --argjson present "$(bool_json "$present")" \
-    '{path:$path,present:$present,kind:"event_history",last_event:{state:$verb,note:$note,raw:$raw}}'
+    '[inputs] as $lines | {path:$path,present:$present,kind:"event_history",last_event:{state:$verb,note:$lines[1],raw:$lines[0]}}'
 }
 
 first_pr_url_in_file() {  # <file>
@@ -399,7 +402,7 @@ backlog_json() {  # [<backlog-path>] - defaults to this home's $BACKLOG
 
 task_json_lines() {
   local meta id kind harness mode yolo project worktree home projects backend target status_log report_path
-  local pr pr_source event_json current_json endpoint_exists agent_alive meta_json status_json report_json worktree_json home_json
+  local pr pr_source event_json current_json endpoint_exists endpoint_probe agent_alive agent_state liveness_status liveness_reason meta_json status_json report_json worktree_json home_json
   local last_event_raw current_state current_source pending_decision blocked_event report_present=0 pr_from_status
   local open_decisions_tsv open_decisions_json
 
@@ -468,16 +471,54 @@ task_json_lines() {
     blocked_event=$(printf '%s' "$open_decisions_json" | jq 'if any(.[]; .verb == "blocked") then 1 else 0 end')
 
     endpoint_exists=null
+    endpoint_probe=unknown
+    agent_state=unverified
+    liveness_status=unknown
+    liveness_reason="no recorded endpoint"
+    agent_alive=not_checked
     if [ -n "$target" ]; then
       if fm_backend_target_exists "$backend" "$target" "fm-$id" >/dev/null 2>&1; then
-        endpoint_exists=true
+        endpoint_probe=present
       else
-        endpoint_exists=false
+        endpoint_probe=unavailable
       fi
-    fi
-    agent_alive=not_checked
-    if [ "$kind" = secondmate ] && [ -n "$target" ]; then
-      agent_alive=$(fm_backend_agent_alive "$backend" "$target" 2>/dev/null || printf unknown)
+      agent_state=$(fm_backend_agent_state "$backend" "$target" 2>/dev/null || printf unreadable)
+      case "$agent_state" in
+        alive)
+          endpoint_exists=true
+          liveness_status=live
+          liveness_reason="endpoint present and agent alive"
+          ;;
+        dead)
+          endpoint_exists=true
+          liveness_status=stale
+          liveness_reason="endpoint present but agent is not alive"
+          ;;
+        missing)
+          if [ "$endpoint_probe" = present ]; then
+            endpoint_exists=true
+            liveness_status=unknown
+            liveness_reason="endpoint probes disagree about presence"
+            agent_state=unreadable
+          else
+            endpoint_exists=false
+            liveness_status=stale
+            liveness_reason="endpoint absent"
+          fi
+          ;;
+        *)
+          if [ "$endpoint_probe" = present ]; then endpoint_exists=true; fi
+          liveness_status=unknown
+          liveness_reason="endpoint or agent probe could not determine liveness ($agent_state)"
+          ;;
+      esac
+      if [ "$kind" = secondmate ]; then
+        case "$agent_state" in
+          alive) agent_alive=alive ;;
+          dead|missing) agent_alive=dead ;;
+          *) agent_alive=unknown ;;
+        esac
+      fi
     fi
 
     [ -f "$report_path" ] && report_present=1 || report_present=0
@@ -487,7 +528,11 @@ task_json_lines() {
     if [ -n "$worktree" ]; then worktree_json=$(path_present_json "$worktree"); else worktree_json=$(jq -n '{path:null,present:false}'); fi
     if [ -n "$home" ]; then home_json=$(path_present_json "$home"); else home_json=$(jq -n '{path:null,present:false}'); fi
 
-    jq -n \
+    last_event_raw_json=$(printf '%s' "$last_event_raw" | jq -Rs .)
+    printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+      "$current_json" "$meta_json" "$status_json" "$report_json" "$worktree_json" "$home_json" \
+      "$endpoint_exists" "$open_decisions_json" "$(bool_json "$pending_decision")" \
+      "$(bool_json "$blocked_event")" "$(bool_json "$report_present")" "$last_event_raw_json" | jq -s \
       --arg id "$id" \
       --arg kind "$kind" \
       --arg harness "$harness" \
@@ -502,20 +547,15 @@ task_json_lines() {
       --arg pr "$pr" \
       --arg pr_source "$pr_source" \
       --arg agent_alive "$agent_alive" \
+      --arg agent_state "$agent_state" \
+      --arg liveness_status "$liveness_status" \
+      --arg liveness_reason "$liveness_reason" \
       --arg observed_at "$SNAPSHOT_NOW" \
-      --arg last_event_raw "$last_event_raw" \
-      --argjson current_state "$current_json" \
-      --argjson meta_path "$meta_json" \
-      --argjson status_log "$status_json" \
-      --argjson report "$report_json" \
-      --argjson worktree_path "$worktree_json" \
-      --argjson home_path "$home_json" \
-      --argjson endpoint_exists "$endpoint_exists" \
-      --argjson open_decisions "$open_decisions_json" \
-      --argjson pending_decision "$(bool_json "$pending_decision")" \
-      --argjson blocked_event "$(bool_json "$blocked_event")" \
-      --argjson report_present "$(bool_json "$report_present")" \
-      '{
+      '.[0] as $current_state | .[1] as $meta_path | .[2] as $status_log | .[3] as $report
+       | .[4] as $worktree_path | .[5] as $home_path | .[6] as $endpoint_exists
+       | .[7] as $open_decisions | .[8] as $pending_decision | .[9] as $blocked_event
+       | .[10] as $report_present | .[11] as $last_event_raw
+       | {
         id:$id,
         kind:$kind,
         harness:($harness // ""),
@@ -533,10 +573,12 @@ task_json_lines() {
         secondmate_projects:($projects | if . == "" then [] else split(",") | map(gsub("^[[:space:]]+|[[:space:]]+$"; "")) | map(select(. != "")) end),
         current_state:($current_state + {observed_at:$observed_at,freshness:"fresh"}),
         endpoint:{target:($target | if . == "" then null else . end),exists:$endpoint_exists,agent_alive:$agent_alive,
+          agent_state:$agent_state,
           status:(if $endpoint_exists == false then "absent"
                   elif $agent_alive == "alive" or $agent_alive == "dead" then $agent_alive
                   else "unknown" end),
           observed_at:$observed_at,freshness:"fresh"},
+        liveness:{status:$liveness_status,reason:$liveness_reason,observed_at:$observed_at},
         pr:{url:($pr | if . == "" then null else . end),source:$pr_source},
         hints:{
           pending_decision:$pending_decision,
@@ -561,12 +603,11 @@ task_json_lines() {
 
 # Main-home current-inventory validity: same orphan / unstructured-current checks
 # used by secondmate_home_summary_json, without inventing live task rows.
-# Meta inventory remains the sole source of live workers; this object only
-# discloses backlog↔task inconsistency for renderers (Bearings omitted/gates).
+# Structured Done records are excluded from TASKS_JSON before inventory checks,
+# so leftover metadata cannot keep a closed task in the current-worker projection.
 main_inventory_json() {  # <backlog-json> <tasks-json>
-  jq -n \
-    --argjson backlog "$1" \
-    --argjson tasks "$2" '
+  printf '%s\n%s\n' "$1" "$2" | jq -s '
+    .[0] as $backlog | .[1] as $tasks |
     ([ $backlog.records[]?
        | select((.state == "in_flight" or .state == "queued") and (.structured | not)) ]) as $unstructured_current
     | ([ $backlog.records[]?
@@ -592,18 +633,17 @@ main_inventory_json() {  # <backlog-json> <tasks-json>
 # This mode never reads parent events or terminal text and never aggregates
 # nested secondmates.
 secondmate_home_summary_json() {  # <backlog-json> <tasks-json>
-  jq -n \
+  printf '%s\n%s\n' "$1" "$2" | jq -s \
     --arg generated "$SNAPSHOT_NOW" \
     --arg home "$FM_HOME" \
     --argjson child_n "$FM_SNAPSHOT_SECONDMATE_CHILDREN" \
     --argjson queued_n "$FM_SNAPSHOT_SECONDMATE_QUEUED" \
     --argjson decisions_n "$FM_SNAPSHOT_SECONDMATE_DECISIONS" \
     --argjson landed_n "$FM_SNAPSHOT_SECONDMATE_LANDED_PER_HOME" \
-    --argjson backlog "$1" \
-    --argjson tasks "$2" '
-    def trunc($n):
+    'def trunc($n):
       tostring | gsub("\\s+"; " ")
       | if length > $n then .[:$n] + "…" else . end;
+    .[0] as $backlog | .[1] as $tasks |
     ([ $backlog.records[]?
        | select((.state == "in_flight" or .state == "queued") and (.structured | not)) ]) as $unstructured_current
     | ([ $backlog.records[]? | select(.state == "in_flight" and .structured) ]) as $owned_in_flight
@@ -1011,8 +1051,8 @@ terminal_evidence_json() {  # <parent-task-json> <event-note> <evidence-contradi
 }
 
 parent_evidence_reconciliation_json() {  # <summary-json> <activities-json> <decisions-json>
-  jq -n --argjson summary "$1" --argjson activities "$2" --argjson decisions "$3" '
-    def keyed: . != null and . != "" and . != "default";
+  printf '%s\n%s\n%s\n' "$1" "$2" "$3" | jq -s \
+    'def keyed: . != null and . != "" and . != "default";
     def result($e; $matches; $complete; $surface):
       $e + {
         verdict:(if ($e.key | keyed | not) then "inconclusive"
@@ -1022,6 +1062,7 @@ parent_evidence_reconciliation_json() {  # <summary-json> <activities-json> <dec
         compared_to:$surface,
         matched:(if ($e.key | keyed) then ($matches[0] // null) else null end)
       };
+    .[0] as $summary | .[1] as $activities | .[2] as $decisions |
     ([ $activities[] as $e
        | if $e.verb == "working" then
            ([ $summary.active_children[]
@@ -1076,7 +1117,8 @@ secondmate_current_json() {  # <parent-tasks-json>
   local activity_scan activities decisions reconciliation provenance freshness reason summary summary_rc summary_bytes summary_valid summary_reason summary_invalidity state current_reason terminal terminal_contradiction contradiction
   local records='[]' seen_homes=''
   registry=$(registry_secondmates_json) || return 1
-  union=$(jq -n --argjson registry "$registry" --argjson tasks "$tasks" '
+  union=$(printf '%s\n%s\n' "$registry" "$tasks" | jq -s '
+    .[0] as $registry | .[1] as $tasks |
     ($registry.records // []) as $registered
     | (($registered | map(.id)) // []) as $registered_ids
     | ([ $registered[] as $r
@@ -1200,12 +1242,13 @@ secondmate_current_json() {  # <parent-tasks-json>
           '{provenance:"parent-direct-report-terminal",trust:"untrusted-supplement",captured:false,observed_at:$observed,freshness:"not-collected",reason:"no useful contradiction check",lines:0,bytes:0,event_note_seen:false,contradiction:false}')
       fi
       if printf '%s' "$terminal" | jq -e '.contradiction == true' >/dev/null; then contradiction=true; fi
-      record=$(jq -n \
+      record=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
+        "$summary" "$decisions" "$activities" "$activity_scan" "$reconciliation" "$terminal" | jq -s \
         --arg id "$id" --arg home "$home" --arg state "$state" --arg current_reason "$current_reason" --arg observed "$SNAPSHOT_NOW" \
-        --argjson registered "$registered" --argjson summary "$summary" --argjson summary_valid "$summary_valid" --argjson decisions "$decisions" \
-        --argjson activities "$activities" --argjson activity_scan "$activity_scan" \
-        --argjson reconciliation "$reconciliation" --argjson terminal "$terminal" --argjson contradiction "$contradiction" \
-        --arg event_raw "$event_raw" --arg event_note "$event_note" --argjson event_age "$event_age" '
+        --argjson registered "$registered" --argjson summary_valid "$summary_valid" \
+        --argjson contradiction "$contradiction" --arg event_raw "$event_raw" --arg event_note "$event_note" --argjson event_age "$event_age" \
+        '.[0] as $summary | .[1] as $decisions | .[2] as $activities | .[3] as $activity_scan
+         | .[4] as $reconciliation | .[5] as $terminal |
         {id:$id,home:$home,registered:$registered,
          current:{state:$state,reason:($current_reason | if . == "" then null else . end)},invalidity:$summary.invalidity,
          provenance:{selected:"structured-home",structured_home:$home,summary_valid:$summary_valid,
@@ -1230,11 +1273,11 @@ secondmate_current_json() {  # <parent-tasks-json>
         terminal=$(jq -n --arg observed "$SNAPSHOT_NOW" \
           '{provenance:"parent-direct-report-terminal",trust:"untrusted-supplement",captured:false,observed_at:$observed,freshness:"not-collected",reason:"no parent event to compare",lines:0,bytes:0,event_note_seen:false,contradiction:false}')
       fi
-      record=$(jq -n \
+      record=$(printf '%s\n%s\n%s\n%s\n' "$activities" "$activity_scan" "$decisions" "$terminal" | jq -s \
         --arg id "$id" --arg home "$home" --arg reason "$reason" --arg observed "$SNAPSHOT_NOW" \
         --arg provenance "$provenance" --arg freshness "$freshness" --arg event_raw "$event_raw" --arg event_note "$event_note" \
-        --argjson registered "$registered" --argjson event_age "$event_age" --argjson activities "$activities" --argjson activity_scan "$activity_scan" \
-        --argjson decisions "$decisions" --argjson terminal "$terminal" '
+        --argjson registered "$registered" --argjson event_age "$event_age" \
+        '.[0] as $activities | .[1] as $activity_scan | .[2] as $decisions | .[3] as $terminal |
         {id:$id,home:($home | if . == "" then null else . end),registered:$registered,
          current:{state:"unknown",reason:$reason},invalidity:null,
          provenance:{selected:$provenance,structured_home:($home | if . == "" then null else . end),parent_event_role:"fallback-only-not-current"},
@@ -1243,22 +1286,21 @@ secondmate_current_json() {  # <parent-tasks-json>
          parent_event:{raw:$event_raw,note:$event_note,age_seconds:$event_age,open_activities:$activities,open_decisions:$decisions,activity_scan:$activity_scan},
          terminal_evidence:$terminal,contradiction:false}')
     fi
-    records=$(jq -n --argjson records "$records" --argjson record "$record" '$records + [$record]')
+    records=$(printf '%s\n%s\n' "$records" "$record" | jq -s '.[0] + [.[1]]')
   done <<EOF
 $rows
 EOF
-  jq -n \
-    --argjson registry "$(printf '%s' "$union" | jq '.registry')" \
-    --argjson records "$records" \
+  printf '%s\n%s\n' "$(printf '%s' "$union" | jq '.registry')" "$records" | jq -s \
     --argjson total_registered "$total_registered" \
     --argjson total "$total" \
     --argjson shown "$shown" \
     --argjson truncated "$truncated" \
-    '{registry:$registry,records:$records,total_registered:$total_registered,total:$total,shown:$shown,truncated:$truncated}'
+    '.[0] as $registry | .[1] as $records
+     | {registry:$registry,records:$records,total_registered:$total_registered,total:$total,shown:$shown,truncated:$truncated}'
 }
 
 secondmate_landed_from_current_json() {  # <secondmate-current-json>
-  jq -n --argjson current "$1" '
+  printf '%s\n' "$1" | jq -s '.[0] as $current |
     {records:[ $current.records[]
       | select(.provenance.selected == "structured-home") as $mate
       | $mate.landed[]
@@ -1292,6 +1334,11 @@ scout_report_lines() {
 
 BACKLOG_JSON=$(backlog_json) || { echo "fm-fleet-snapshot: backlog read failed" >&2; exit 1; }
 TASKS_JSON=$(task_json_lines) || { echo "fm-fleet-snapshot: task snapshot failed" >&2; exit 1; }
+TASKS_JSON=$(printf '%s\n%s\n' "$TASKS_JSON" "$BACKLOG_JSON" | jq -s '
+  .[0] as $tasks | .[1] as $backlog | $tasks
+  | map(. as $task | select(.kind == "secondmate" or
+    (any($backlog.records[]?; .structured == true and .id == $task.id and .state == "done") | not)))
+') || { echo "fm-fleet-snapshot: closed-task filtering failed" >&2; exit 1; }
 
 if [ "$OUTPUT_MODE" = secondmate-home-summary ]; then
   secondmate_home_summary_json "$BACKLOG_JSON" "$TASKS_JSON" \
@@ -1307,7 +1354,9 @@ SECONDMATE_CURRENT_JSON=$(secondmate_current_json "$TASKS_JSON") \
 SECONDMATE_LANDED_JSON=$(secondmate_landed_from_current_json "$SECONDMATE_CURRENT_JSON") \
   || { echo "fm-fleet-snapshot: secondmate landed projection failed" >&2; exit 1; }
 
-jq -n \
+printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
+  "$BACKLOG_JSON" "$TASKS_JSON" "$MAIN_INVENTORY_JSON" "$SCOUT_REPORTS_JSON" \
+  "$SECONDMATE_CURRENT_JSON" "$SECONDMATE_LANDED_JSON" | jq -s \
   --arg generated "$SNAPSHOT_NOW" \
   --arg fm_home "$FM_HOME" \
   --arg fm_root "$FM_ROOT" \
@@ -1315,24 +1364,20 @@ jq -n \
   --arg data "$DATA" \
   --arg config "$CONFIG" \
   --arg projects "$PROJECTS" \
-  --argjson backlog "$BACKLOG_JSON" \
-  --argjson tasks "$TASKS_JSON" \
-  --argjson main_inventory "$MAIN_INVENTORY_JSON" \
-  --argjson scout_reports "$SCOUT_REPORTS_JSON" \
-  --argjson secondmate_current "$SECONDMATE_CURRENT_JSON" \
-  --argjson secondmate_landed "$SECONDMATE_LANDED_JSON" \
-  'def backlog_by_id($id): ($backlog.records[]? | select(.structured == true and .id == $id) | .) // null;
-   def task_by_id($id): ($tasks[]? | select(.id == $id) | .) // null;
-   def report_kind($id): (task_by_id($id).kind // backlog_by_id($id).kind // "scout");
-   {
+  'def backlog_by_id($id; $backlog): ($backlog.records[]? | select(.structured == true and .id == $id) | .) // null;
+   def task_by_id($id; $tasks): ($tasks[]? | select(.id == $id) | .) // null;
+   def report_kind($id; $backlog; $tasks): (task_by_id($id; $tasks).kind // backlog_by_id($id; $backlog).kind // "scout");
+   .[0] as $backlog | .[1] as $tasks | .[2] as $main_inventory
+   | .[3] as $scout_reports | .[4] as $secondmate_current | .[5] as $secondmate_landed
+   | {
      schema:"fm-fleet-snapshot.v1",
      generated:$generated,
      fm_home:$fm_home,
      roots:{fm_root:$fm_root,state:$state,data:$data,config:$config,projects:$projects},
      backlog:$backlog,
-     tasks:($tasks | map(. + {backlog:backlog_by_id(.id)})),
+     tasks:($tasks | map(. + {backlog:backlog_by_id(.id; $backlog)})),
      main_inventory:$main_inventory,
-     scout_reports:($scout_reports | map(. + {kind:report_kind(.id)})),
+     scout_reports:($scout_reports | map(. + {kind:report_kind(.id; $backlog; $tasks)})),
      secondmate_current:$secondmate_current,
      secondmate_landed:$secondmate_landed,
      secondmate_guidance:{

@@ -1,0 +1,1 @@
+blocked: report written, but required decision-hold completion gate would mutate the prohibited primary backlog; existing owner must reconcile it
