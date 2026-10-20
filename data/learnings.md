@@ -97,3 +97,60 @@ If a task seems to need that host or the staging IP, stop and report the exact n
 
 **Staging host remains OPEN and unresolved.** The cert expiry and the HTTP 500 are two separate faults,
 and renewing the certificate will not fix the 500.
+
+- 2026-10-19 — Run `quota-axi --json` BEFORE every dispatch/model choice, not after a failure. Dispatched the
+  Whoosh full-page acceptance lane to Luna without checking quota; the openai-codex five_hour window was
+  already at 0% with `runway: exhausted_now` (resets 05:41Z) and the lane died mid-capture on
+  "usage limit reached". Cost: one interrupted run plus a relaunch on M2.7. Standing rule: 0% +
+  exhausted_now = do not dispatch to that provider; a mid-run quota death is not retried on the same
+  provider, and projected reset times are not runway. Captain flagged this miss directly. <!--a:2026-10-19-->
+- 2026-10-19 — A worker looping on `edit` failures with the same "oldText must match exactly" error is reusing stale text, not hitting a
+  guard. This happened twice on the same day with different providers (Luna, then MCode M2.7). When the third identical failure appears, the
+  productive move is a corrective steer: re-read the current bytes, apply ONE edit with a short unique span, syntax-check immediately, and if
+  that fails stop editing and hand back the exact current function text. Do not escalate the file rewrite, do not switch to sed/perl to bypass
+  the edit tool, and do not read it as a permission problem. <!--a:2026-10-19-->
+- 2026-10-19 — **Before writing any fix, list the branches and read their commits.** I wrote and pushed a
+  z-index "fix" for a Core bug that had already been fixed two days earlier on
+  `fix/add-leads-modal-nesting` (`f26d4d8`), then spent a verification lane proving what was already known.
+  The work was correct; it was **undiscoverable because nobody wrote down which branch held what.** A fix
+  for the same symptom on a branch makes that branch the source of truth, not an invitation to write a new
+  one. Durable record created: `docs/core-saas-branch-state-map.md`. <!--a:2026-10-19-->
+- 2026-10-19 — **Audit the target before trusting any measurement taken against it.** An entire day of Whoosh
+  pixel-parity work produced confident, well-formatted numbers measured against a "reference" site that was
+  failing **38 of 52 subresources, including 9 fonts.** Nothing in the output looked wrong. Fixing the target
+  flipped the verdict's SIGN — the port was not 260px too tall, it was 677px short. A broken target is worse
+  than no measurement because it looks like data. Rule 1 of `AGENT-FLEET-KNOWLEDGE.md`. <!--a:2026-10-19-->
+- 2026-10-19 — **When a counterfactual overshoots, you have two opposite-signed errors.** Removing the chat
+  widget dropped the page 946px when the actual gap was 260px. That overshoot was the signal that the
+  candidate was also ~686px MISSING that the reference had; the two errors cancelled in the total. Rank
+  section deltas by SIGN, not magnitude — a net number hides both. <!--a:2026-10-19-->
+- 2026-10-19 — **A lane that stops to ask about a contradictory instruction is correct behaviour, not
+  stalling.** Three separate times a lane caught a brief of mine whose declared write boundary excluded a
+  path the same brief required writing to. Each time the fix belonged in the brief, not in telling the lane
+  to pick an interpretation. Fix: mandated boundary wording in `config/crew-dispatch.json`, plus
+  `bin/fm-brief-preflight.sh` which rejects the contradiction and has executable negative controls. <!--a:2026-10-19-->
+- 2026-10-19 — **A hypothesis that closes 0px of a measured gap is refuted — record it and move on.** Two
+  plausible theories (a missing WordPress page template, a duplicated chat widget) were each built and each
+  measured at 0px. A refuted hypothesis is a real result; do not keep tuning it. <!--a:2026-10-19-->
+- 2026-10-19 — **Never route multiple client tenants to one shared origin to make a dashboard "work".** An
+  agents-dashboard build would have served Core, Elevate and Whoosh from a single service — crossing client
+  confidentiality boundaries, with workspace isolation already recorded as UNRESOLVED. The correct deliverable
+  was a gateway that serves the one evidenced tenant and **explicitly refuses** the other two. The refusal is
+  the feature. <!--a:2026-10-19-->
+- 2026-10-19 — **Long pixel comparison is expected, not a hang.** Full-page PNG decode in pure Python runs
+  minutes per invocation. Two lanes in one day looped on a 180s-timeout comparator instead of writing their
+  reports from evidence already on disk; one lost its entire run to the 30-minute timeout. Direct the lane to
+  write from what it holds — a lane that times out with no report is worth nothing. <!--a:2026-10-19-->
+- 2026-10-19 — **Every branch gets a remote, immediately.** Seven branches in Core existed on no remote at
+  all, including a mobile fix and a manifest-hardening pass — real work living only on borrowed laptops. All
+  seven were pushed to `origin/archive/…` the same day. Unpushed branches are not "in progress", they are
+  **lost with the machine**. <!--a:2026-10-19-->
+- 2026-10-19 — **`document.fonts.status === 'loaded'` is not proof the intended font loaded.** It is
+  compatible with the target face having 404'd and a fallback being used, which changes line wrapping and
+  therefore element height. This made a reference's footer 124px untrustworthy as a target. Assert the
+  actual `font-family` computed on the element, or verify the font URL's HTTP status. <!--a:2026-10-19-->
+
+- 2026-10-19 — Dispatch panels render a bare agent name for a direct single-child launch. To get a lane name the Captain can see, dispatch as
+  a workflow whose child `key` IS the convention lane key and whose `label` is human-readable (`runs.all([{ key, label, agent, task }])`), via
+  `subagent({ workflow: "<script path>" })`. A workflow string that is a script PATH works; pasting the fenced ```js block into the workflow
+  argument does not and fails with ENOENT. <!--a:2026-10-19-->
