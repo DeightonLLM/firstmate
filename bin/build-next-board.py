@@ -290,6 +290,22 @@ def render(items, residuals, ledger, claims, repo, now):
         out.append("| `%s` | %d |" % (s, counts.get(s, 0)))
     out.append("")
 
+    out.append("## IN FLIGHT — lanes holding a live claim right now")
+    out.append("")
+    active = [c for c in claims if "ACTIVE" in (c.get("state") or "").upper()]
+    done_claims = [c for c in claims if "DONE" in (c.get("state") or "").upper()]
+    if active:
+        for c in active:
+            out.append("- `%s` — %s — %s" % (c["lane"], c["scope"][:90], c["state"][:110]))
+    else:
+        out.append("_no active claims_")
+    if done_claims:
+        out.append("")
+        out.append("Claims released this cycle:")
+        for c in done_claims:
+            out.append("- `%s` — %s" % (c["lane"], c["state"][:110]))
+    out.append("")
+
     out.append("## NOW — work a lane can start today, no further authority needed")
     out.append("")
     if now_work:
