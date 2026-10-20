@@ -73,6 +73,75 @@ def git(repo, *args):
     return p.stdout.strip()
 
 
+BACKLOG_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s+(.*)$")
+
+
+def parse_backlog(repo):
+    """data/backlog.md is the live queue the coordinator maintains.
+
+    Each row: - [ ] slug - Title (repo: X) (kind: ship|scout|captain|docs) (priority: N)
+    (since: DATE) (hold: ...) (hold-kind: ...) blocked-by: ... (artifact: ...)
+    """
+    text = ""
+    local = pathlib.Path(repo) / "data" / "backlog.md"
+    if local.is_file():
+        try:
+            text = local.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            text = ""
+    if not text.strip():
+        text = git(repo, "show", "origin/main:data/backlog.md") or ""
+    if not text.strip():
+        return []
+
+    out = []
+    for line in text.splitlines():
+        m = BACKLOG_RE.match(line)
+        if not m:
+            continue
+        done = m.group(1).lower() == "x"
+        body = m.group(2).strip()
+        slug = body.split(" - ")[0].strip()
+        title = body.split(" - ", 1)[1].strip() if " - " in body else body
+        kind = (re.search(r"\(kind:\s*([^)]*)\)", body) or [None, "ship"])[1].strip()
+        prio = (re.search(r"\(priority:\s*(\d+)\)", body) or [None, "2"])[1]
+        repo_name = (re.search(r"\(repo:\s*([^)]*)\)", body) or [None, ""])[1].strip()
+        since = (re.search(r"\(since:\s*([0-9-]+)\)", body) or [None, ""])[1]
+        hold = (re.search(r"\(hold:\s*(.*?)\)(?:\s|\Z)", body) or [None, None])[1]
+        blocked_by = (re.search(r"blocked-by:\s*([A-Za-z0-9._-]+)", body) or [None, None])[1]
+        artifact = (re.search(r"\(artifact:\s*([^)]*)\)", body) or [None, None])[1]
+        if hold and not blocked_by:
+            blocked_by = "hold"
+
+        if done:
+            state = "VERIFIED-DONE"
+        elif kind == "captain":
+            state = "NEEDS-CAPTAIN-DECISION"
+        elif blocked_by or hold:
+            state = "BLOCKED"
+        else:
+            state = "OPEN-WORKABLE"
+
+        next_action = ""
+        if state == "NEEDS-CAPTAIN-DECISION":
+            next_action = (hold or title)[:300]
+        elif state == "BLOCKED":
+            next_action = "blocked-by %s: %s" % (blocked_by or "?", (hold or title)[:220])
+        elif state == "OPEN-WORKABLE":
+            next_action = title
+        else:
+            next_action = "closed%s" % (" (artifact: %s)" % artifact if artifact else "")
+
+        out.append({
+            "slug": slug, "title": title, "priority": "P%s" % prio, "state": state,
+            "next_action": next_action, "owner": "hetz-firstmate" if repo_name else "unassigned",
+            "captain_question": (hold or title)[:300] if state == "NEEDS-CAPTAIN-DECISION" else None,
+            "source": "backlog", "evidence": [{"cmd": "data/backlog.md",
+                                                "result": "row since %s, kind %s" % (since or "?", kind)}],
+        })
+    return out
+
+
 def collect(repo, stale_days, now):
     tracker_dir = pathlib.Path(repo) / "data" / "tracker"
     live = read_json(tracker_dir / "live-state-20261020.json")
@@ -105,6 +174,14 @@ def collect(repo, stale_days, now):
                 "source": "tracker",
                 "evidence": [],
             })
+
+    # the live backlog is the real queue - merge it in, keeping tracker rows first
+    backlog = parse_backlog(repo)
+    seen = {i["slug"] for i in items}
+    for b in backlog:
+        if b["slug"] not in seen:
+            items.append(b)
+            seen.add(b["slug"])
 
     # contract check: every open item needs a next action and an owner
     for it in items:
@@ -200,6 +277,9 @@ def render(items, residuals, ledger, claims, repo, now):
     out.append("> The rule: every item has a state, every open item has a next action and an owner. "
                "A lane that finishes without leaving the next step visible has failed the contract, "
                "and this board says so out loud in **CONTRACT-GAP** rather than letting it go quiet.")
+    out.append("")
+    out.append("Sources: `data/tracker/live-state-20261020.json` (verified states, when present), "
+               "`data/tracker/tickets.jsonl`, and the live queue `data/backlog.md`.")
     out.append("")
     out.append("| state | count |")
     out.append("|---|---|")
