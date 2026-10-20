@@ -157,7 +157,9 @@ test_absent_inbox_fails_closed_with_remediation() {
 test_transport_failure_still_reports_real_rc() {
   local fakebin out
   fakebin=$(make_ssh_stub 1)
-  out=$(run_send "$fakebin" "hello from the controller")
+  # run_send takes the stub's exit code as its second argument, so the stub and
+  # the sender agree on which failure they are exercising.
+  out=$(run_send "$fakebin" 1 "hello from the controller")
   assert_contains "$out" "ssh rc=1" \
     "a transport failure no longer reports its real ssh return code"
   assert_not_contains "$out" "absent" \
