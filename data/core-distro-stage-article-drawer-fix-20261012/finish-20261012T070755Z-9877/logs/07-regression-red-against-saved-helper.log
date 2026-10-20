@@ -1,0 +1,78 @@
+PASS actual wpautop product card stays inside one named link
+PASS product card paragraph boundary is balanced
+PASS optional leading wpautop paragraph is removed without imbalance
+PASS nested disabled CTA button becomes one named navigational link
+PASS missing product video source is removed
+PASS unclosed product video is explicitly closed before overlay content
+PASS product poster is rewritten to the local staged asset
+PASS breadcrumb nav receives its missing closing tag
+PASS contact heading level is corrected without changing its wording
+PASS contact card text stays inside its named phone link
+PASS contact renderer emits no empty phone link after paragraph repair
+PASS contact low-contrast text color is corrected
+PASS contact duplicate textarea closer is removed
+PASS resources inert PDF closer is repaired
+PASS already-correct inert span leaves the following CTA close intact
+PASS resources repair is idempotent on correct generated content and preserves its CTA
+PASS render helper preserves balanced about source fragment
+PASS render helper preserves balanced aluminum-seals source fragment
+PASS render helper preserves balanced blog source fragment
+PASS render helper preserves balanced compliance source fragment
+PASS render helper preserves balanced contact source fragment
+PASS render helper preserves balanced faq source fragment
+PASS render helper preserves balanced glass-vials source fragment
+PASS render helper preserves balanced products source fragment
+PASS render helper preserves balanced register source fragment
+PASS render helper preserves balanced resources source fragment
+PASS render helper preserves balanced rubber-stoppers source fragment
+PASS blog section heading is sequential
+PASS blog helper text has the audited readable color
+PASS resources heading level is sequential
+PASS register helper text has the audited readable color
+PASS unrelated route content is left unchanged
+PASS homepage disables only Astra scroll-to-top
+PASS other pages retain Astra scroll-to-top setting
+PASS closed drawer overlay receives inert and aria-hidden
+PASS drawer exclusion attributes are applied exactly once
+PASS closed drawer markup and links are preserved, not stripped
+PASS header breadcrumb nav is left unchanged by the drawer fix
+PASS unrelated overlay elements are left unchanged
+PASS drawer fix preserves authored body copy verbatim
+PASS drawer fix does not mutate its input string
+PASS drawer exclusion is idempotent across repeated render passes
+PASS open drawer panel receives no focus exclusion
+PASS canonical about fragment excludes its closed drawer exactly once
+PASS canonical about differs from stored content only by the drawer exclusion
+PASS canonical aluminum-seals fragment excludes its closed drawer exactly once
+PASS canonical aluminum-seals differs from stored content only by the drawer exclusion
+PASS canonical blog fragment excludes its closed drawer exactly once
+PASS canonical blog keeps its stored anchor and heading content
+PASS canonical compliance fragment excludes its closed drawer exactly once
+PASS canonical compliance differs from stored content only by the drawer exclusion
+PASS canonical contact fragment excludes its closed drawer exactly once
+PASS canonical contact keeps its stored anchor and heading content
+PASS canonical faq fragment excludes its closed drawer exactly once
+PASS canonical faq differs from stored content only by the drawer exclusion
+PASS canonical glass-vials fragment excludes its closed drawer exactly once
+PASS canonical glass-vials differs from stored content only by the drawer exclusion
+PASS canonical products fragment excludes its closed drawer exactly once
+PASS canonical products keeps its stored anchor and heading content
+PASS canonical register fragment excludes its closed drawer exactly once
+PASS canonical register keeps its stored anchor and heading content
+PASS canonical resources fragment excludes its closed drawer exactly once
+PASS canonical resources keeps its stored anchor and heading content
+PASS canonical rubber-stoppers fragment excludes its closed drawer exactly once
+PASS canonical rubber-stoppers differs from stored content only by the drawer exclusion
+PASS protected duplicate route glass-vials-2 receives no new drawer transform
+PASS protected duplicate route rubber-stoppers-2 receives no new drawer transform
+PASS protected duplicate route aluminum-seals-2 receives no new drawer transform
+PASS protected duplicate route glass-vials-3 receives no new drawer transform
+PASS protected duplicate route rubber-stoppers-3 receives no new drawer transform
+PASS protected duplicate route aluminum-seals-3 receives no new drawer transform
+PASS protected duplicate route glass-vials-4 receives no new drawer transform
+PASS protected duplicate route rubber-stoppers-4 receives no new drawer transform
+PASS protected duplicate route aluminum-seals-4 receives no new drawer transform
+FAIL unrelated hidden fixed overlay is not excluded in place of the drawer
+FAIL substring class match does not trigger the drawer exclusion
+
+SUMMARY failures=2

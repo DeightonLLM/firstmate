@@ -704,6 +704,23 @@ EOF
   pass "home seeding refuses project-less conversion of a populated home"
 }
 
+test_home_seed_accepts_registry_without_project_clones() {
+  local home sub out
+  home="$TMP_ROOT/registry-only-projectless-home"
+  sub="$TMP_ROOT/registry-only-projectless-subhome"
+  mkdir -p "$home/data" "$home/state" "$sub/data"
+  mark_firstmate_home "$sub"
+  printf '%s\n' '- phantom [direct-PR] - stale pool registry (added 2026-06-22)' > "$sub/data/projects.md"
+
+  out=$(FM_HOME="$home" FM_SECONDMATE_CHARTER='firstmate self-development' \
+    FM_SECONDMATE_SCOPE='firstmate repo work' \
+    "$ROOT/bin/fm-home-seed.sh" fdev "$sub" --no-projects) \
+    || fail "project-less seed refused a registry without project clones"
+  [ -d "$sub/projects" ] || fail "project-less seed did not create the empty projects directory"
+  [ -z "$(ls -A "$sub/projects")" ] || fail "project-less seed unexpectedly created project clones"
+  pass "home seeding accepts registry-only stale project metadata"
+}
+
 test_home_seed_refuses_projectless_home_with_uninspectable_projects() {
   local home sub err
   home="$TMP_ROOT/no-projects-uninspectable-home"
@@ -2616,11 +2633,12 @@ test_home_seed_rolls_back_failed_clone
 test_home_seed_refuses_missing_filled_charter
 test_home_seed_refuses_placeholder_charter
 test_home_seed_refuses_empty_charter_fields
+test_home_seed_refuses_projectless_conversion_of_populated_home
+test_home_seed_accepts_registry_without_project_clones
 test_home_seed_no_projects_end_to_end
 test_secondmate_spawn_resolves_punctuated_registry_projects
 test_secondmate_spawn_refuses_ambiguous_and_mismatched_registry_bindings
 test_home_seed_refuses_projectful_reused_charter_for_projectless_home
-test_home_seed_refuses_projectless_conversion_of_populated_home
 test_home_seed_refuses_projectless_home_with_uninspectable_projects
 test_home_seed_refuses_projectless_home_with_symlinked_projects
 test_home_seed_refuses_projectless_home_with_non_directory_projects

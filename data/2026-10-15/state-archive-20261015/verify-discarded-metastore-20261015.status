@@ -1,0 +1,2 @@
+working: preflight complete; beginning host worktree inventory and read-only survival audit
+blocked: report written, but shared decision-hold completion gate requires tasks-axi and task-metadata/status writes, both forbidden by the read-only task boundary; no done attestation made

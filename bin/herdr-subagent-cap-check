@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# herdr-subagent-cap-check — pre-spawn hook for the Herdr subagent cap.
+#
+# FIRSTMATE_OP v1: refuse spawn when 6 subagent panes are already open.
+# Codex coordinator counts separately (max 7 total).
+#
+# Usage:
+#   herdr-subagent-cap-check [WORKSPACE]
+#
+# Exit codes:
+#   0   = OK to spawn
+#   64  = cap reached (caller MUST abort spawn)
+#   3   = herdr unavailable / cannot count
+#   2   = usage error
+#
+# This hook is the canonical precheck. fm-spawn, the Herdr dispatch preflight
+# (for new-pane creates), and any supervisor that auto-spawns MUST call it.
+
+set -euo pipefail
+
+# Ensure standard user local bin is in PATH for herdr lookup across hosts
+if [ -n "${HOME:-}" ] && [ -d "$HOME/.local/bin" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+
+# Portably locate cap.sh: env override -> sibling lib -> canonical /root/lib
+cap_lib="${SUBAGENT_CAP_LIB:-}"
+if [ -z "$cap_lib" ]; then
+  self_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+  if [ -r "$self_dir/../lib/subagent-cap/cap.sh" ]; then
+    cap_lib="$self_dir/../lib/subagent-cap/cap.sh"
+  elif [ -r /root/lib/subagent-cap/cap.sh ]; then
+    cap_lib="/root/lib/subagent-cap/cap.sh"
+  fi
+fi
+
+if [ -n "$cap_lib" ] && [ -r "$cap_lib" ]; then
+  . "$cap_lib"
+else
+  printf 'herdr-subagent-cap-check: cap library not found\n' >&2
+  exit 3
+fi
+
+ws="${1:-}"
+
+if [ "${HERDR_SUBAGENT_CAP_BYPASS:-0}" = "1" ]; then
+  printf 'SUBAGENT-CAP: bypass set (HERDR_SUBAGENT_CAP_BYPASS=1) — cap not enforced\n' >&2
+  exit 0
+fi
+
+# Cap check is strictly non-mutating: do not close or reap panes during precheck
+if subagent_cap_assert_can_spawn "$ws"; then
+  exit 0
+fi
+
+# Cap reached — refuse.
+exit 64

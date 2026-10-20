@@ -1048,12 +1048,55 @@ test_wedge_escalation_marks_demand_deep_inspection_after_threshold() {
     else
       grep -F "demand-deep-inspection" "$out" >/dev/null || fail "round $n (threshold) did not demand deep inspection: $(cat "$out")"
     fi
+    # Each watcher exit is the consumer boundary; drain before simulating the
+    # next supervisor poll so the next still-wedged escalation is eligible.
+    FM_STATE_OVERRIDE="$state" "$DRAIN" >/dev/null 2>&1 || fail "could not drain after wedge round $n"
     n=$((n + 1))
   done
   [ "$(cat "$state/.wedge-escalations-$key" 2>/dev/null || echo 0)" = 3 ] || fail "escalation counter did not persist across consecutive rounds"
   unset FM_FAKE_CREW_STATE
   pass "consecutive wedge escalations on the same pane accumulate and demand deep inspection at the threshold"
 }
+
+test_wedge_escalation_suppresses_only_while_stale_record_is_queued() (
+  local dir state window key since_file escalation_file count
+  dir=$(make_case wedge-queued-dedupe)
+  state="$dir/state"
+  window="test:fm-wedge-queued"
+  key="$window"
+  since_file="$state/.stale-since-test"
+  escalation_file="$state/.wedge-escalations-test"
+  export FM_STATE_OVERRIDE="$state"
+  export FM_WAKE_QUEUE="$state/.wake-queue"
+  export FM_WAKE_QUEUE_LOCK="$state/.wake-queue.lock"
+  export FM_STALE_ESCALATE_SECS=1 FM_WEDGE_DEMAND_INSPECT_COUNT=1
+  # shellcheck source=bin/fm-wake-lib.sh
+  . "$ROOT/bin/fm-wake-lib.sh"
+  # shellcheck source=bin/fm-watch.sh
+  . "$WATCH"
+  # shellcheck disable=SC2329
+  wake() { :; }
+
+  # Each call represents an elapsed poll tick; force the same still-wedged
+  # window past the timer threshold and count actual durable queue records.
+  printf '2\n' > "$escalation_file"
+  for _ in 1 2 3 4; do
+    echo $(( $(date +%s) - 500 )) > "$since_file"
+    wedge_timer_check "$window" "$since_file" "non-terminal stale" "$escalation_file"
+  done
+  count=$(awk -F '\t' -v key="$key" '$3 == "stale" && $4 == key { n++ } END { print n+0 }' "$FM_WAKE_QUEUE")
+  [ "$count" -eq 1 ] || { echo "expected 1 queued append after repeated ticks; got $count" >&2; exit 1; }
+  awk -F '\t' -v key="$key" '$3 == "stale" && $4 == key && $5 ~ /demand-deep-inspection/ { found=1 } END { exit !found }' "$FM_WAKE_QUEUE" \
+    || { echo "threshold escalation omitted demand-deep-inspection" >&2; exit 1; }
+
+  FM_STATE_OVERRIDE="$state" "$DRAIN" >/dev/null 2>&1 || { echo "queue drain failed" >&2; exit 1; }
+  [ -z "$(fm_wake_queued_keys stale)" ] || { echo "stale key remained queued after drain" >&2; exit 1; }
+  echo $(( $(date +%s) - 500 )) > "$since_file"
+  wedge_timer_check "$window" "$since_file" "non-terminal stale" "$escalation_file"
+  count=$(awk -F '\t' -v key="$key" '$3 == "stale" && $4 == key { n++ } END { print n+0 }' "$FM_WAKE_QUEUE")
+  [ "$count" -eq 1 ] || { echo "still-wedged pane did not append again after drain; got $count" >&2; exit 1; }
+  echo "PASS: queued stale append suppressed on repeat ticks, deep-inspection retained, and post-drain re-escalation works"
+)
 
 test_wedge_escalation_resets_when_pane_becomes_active() {
   local dir state fakebin out capture_file window key pane_hash sig pid
@@ -1286,6 +1329,7 @@ test_busy_pane_repeated_escalation_reaches_demand_deep_inspection() {
     else
       grep -F "demand-deep-inspection" "$out" >/dev/null || fail "busy turn-age round $n (threshold) did not demand deep inspection: $(cat "$out")"
     fi
+    FM_STATE_OVERRIDE="$state" "$DRAIN" >/dev/null 2>&1 || fail "could not drain after busy turn-age round $n"
     n=$((n + 1))
   done
   [ "$(cat "$state/.wedge-escalations-$key" 2>/dev/null || echo 0)" = 3 ] || fail "busy turn-age escalation counter did not persist across consecutive rounds"
@@ -1816,6 +1860,7 @@ test_terminal_stale_surfaced
 test_stale_terminal_status_overridden_by_active_run
 test_nonterminal_stale_provably_working_absorbed_then_escalated
 test_wedge_escalation_marks_demand_deep_inspection_after_threshold
+test_wedge_escalation_suppresses_only_while_stale_record_is_queued || exit 1
 test_wedge_escalation_resets_when_pane_becomes_active
 test_busy_pane_below_turn_age_bound_is_absorbed
 test_busy_pane_stable_hash_escalates_past_turn_age_bound

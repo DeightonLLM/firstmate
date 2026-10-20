@@ -1,0 +1,14 @@
+test_button_inside_link_becomes_one_styled_link (test_extract_lighthouse_fixes.LighthouseMarkupFixesTest.test_button_inside_link_becomes_one_styled_link) ... ok
+test_extract_pipeline_emits_balanced_inert_markup (test_extract_lighthouse_fixes.LighthouseMarkupFixesTest.test_extract_pipeline_emits_balanced_inert_markup) ... ok
+test_pdf_neutralization_replaces_the_complete_link (test_extract_lighthouse_fixes.LighthouseMarkupFixesTest.test_pdf_neutralization_replaces_the_complete_link) ... ok
+test_product_media_and_empty_links_are_local_or_removed (test_extract_lighthouse_fixes.LighthouseMarkupFixesTest.test_product_media_and_empty_links_are_local_or_removed) ... ok
+test_route_heading_and_contrast_fixes_preserve_words (test_extract_lighthouse_fixes.LighthouseMarkupFixesTest.test_route_heading_and_contrast_fixes_preserve_words) ... ok
+test_textarea_is_emitted_once_and_source_text_is_not_exposed (test_extract_lighthouse_fixes.LighthouseMarkupFixesTest.test_textarea_is_emitted_once_and_source_text_is_not_exposed) ... ok
+test_verifier_rejects_nested_and_empty_links (test_extract_lighthouse_fixes.LighthouseMarkupFixesTest.test_verifier_rejects_nested_and_empty_links) ... ok
+test_verifier_rejects_unbalanced_tags (test_extract_lighthouse_fixes.LighthouseMarkupFixesTest.test_verifier_rejects_unbalanced_tags) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.004s
+
+OK
+EXIT=0

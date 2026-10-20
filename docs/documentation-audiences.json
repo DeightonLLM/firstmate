@@ -260,6 +260,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/merge-packet.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/orca-backend.md",
       "audience": "operator-current"
     },
@@ -300,7 +304,15 @@
       "audience": "agent-runtime"
     },
     {
+      "path": "docs/ticket-board.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/tmux-backend.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/todo-prefix-canonical-format.md",
       "audience": "operator-current"
     },
     {
@@ -346,6 +358,14 @@
     {
       "path": "skills/stow/SKILL.md",
       "audience": "public-product"
+    },
+    {
+      "path": "docs/domain-identity.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/upstream-drift.md",
+      "audience": "operator-current"
     }
   ]
 }

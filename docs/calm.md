@@ -17,9 +17,14 @@ While Calm is off, Pi's stock working row is left exactly as Pi renders it.
 Calm hides collapsed thinking labels, the shells for Pi's seven built-in tools, the `fm_watch_arm_pi` tool shell, and canonically classified Firstmate operational user rows.
 The operational inputs remain ordinary user-role messages, while Pi's transcript layout renders their complete rows at zero height.
 The session-start nudge remains on its existing non-displayed custom-message path.
+Calm also collapses routine rows of the lean-ctx tool surface, meaning every tool whose name starts with `ctx_` plus `lean_ctx` itself, as lean-ctx matches that surface when it lists its own active tools.
+Because lean-ctx owns those tool definitions, Calm reaches them through the supported tool-renderer resolver API and its own resolver chain instead of wrapping definitions it does not own, so a non-`ctx_*` tool keeps its stock presentation.
+An errored `ctx_*` result is never hidden: errors and refusals stay visible so they remain discoverable, and an error with no inherited renderer raises instead of collapsing into an empty row.
+Export rendering keeps the stock presentation for the `ctx_*` surface, so an exported Calm session still shows the full rows.
 
 Calm changes presentation only.
 Tool execution, input delivery, ordering, model context, session storage, diagnostics, and `/export` and `/share` operation remain unchanged.
+lean-ctx's own cache, compression, tool definitions and permission enforcement are untouched by the `ctx_*` coverage.
 Every hidden Firstmate input remains available to the model and in serialized session data and exported artifacts.
 Legacy operational custom messages remain in session data and Pi's sidebar tree, although the main HTML transcript may omit them.
 Toggling Calm off restores ordinary rendering, and `Ctrl+O` expansion state is preserved.
@@ -27,6 +32,7 @@ Toggling Calm off restores ordinary rendering, and `Ctrl+O` expansion state is p
 Pi's supported presentation API does not expose a global transcript filter.
 Expanded reasoning and its reserved spacing, built-in tool images, user-bash rows, skill and summary rows, generic status notices, and arbitrary custom-tool or extension rows remain visible.
 These are supported-API boundaries rather than hidden-content failures.
+The `ctx_*` coverage is an explicit per-tool renderer selection through the supported resolver API, not a global transcript filter, so it does not widen that boundary.
 
 ## Pi compatibility
 
@@ -36,7 +42,7 @@ If Pi removes one of those seams, Calm logs a diagnostic naming the unavailable 
 
 [`calm-mode-feasibility.md`](calm-mode-feasibility.md) owns the version-scoped renderer taxonomy and empirical evidence.
 [`configuration.md`](configuration.md#pi-calm-preference-configcalm) owns the persisted preference file and resolution rules.
-`.pi/extensions/lib/fm-calm-visibility.ts` owns the visibility policy, `.pi/extensions/lib/fm-calm-operational-user-layout.ts` owns the zero-height operational-user row adapter, and `.pi/extensions/lib/fm-calm-working-ship.ts` owns the animated working presentation.
+`.pi/extensions/lib/fm-calm-visibility.ts` owns the visibility policy, `.pi/extensions/lib/fm-calm-operational-user-layout.ts` owns the zero-height operational-user row adapter, `.pi/extensions/lib/fm-calm-working-ship.ts` owns the animated working presentation, and `.pi/extensions/lib/fm-calm-ctx-renderer.ts` owns the lean-ctx `ctx_*` renderer.
 
 Regression entry points:
 

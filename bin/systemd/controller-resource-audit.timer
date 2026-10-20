@@ -1,0 +1,16 @@
+[Unit]
+Description=Run the Controller read-only resource audit every six hours
+Documentation=file:///root/bin/controller-resource-audit.sh
+
+[Timer]
+# The documented cadence: every six hours on the 00:00/06:00/12:00/18:00 UTC
+# boundaries. bin/controller-resource-audit.sh --check-timer-unit verifies this
+# line against the sampler's own boundary math; a drifted interval is refused.
+OnCalendar=*-*-* 0/6:00:00
+AccuracySec=1min
+# Catch up one missed run after downtime, then return to the six-hour cadence.
+# No OnUnitActiveSec/OnUnitInactiveSec pair may shorten the calendar above.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,55 @@
+# Build lane — close unauthenticated Elevate internal console
+
+Date: 2026-10-18
+
+## Result
+
+No production configuration was changed. The target is reachable over the tailnet for HTTP, but host-shell access is denied by the Tailscale SSH policy for the only tested local account (`hd2admin`). Therefore I could not inspect the origin process, its configuration, or safely apply/verify an origin-side restriction. I did not guess a config path, firewall manager, or ACL policy.
+
+## Findings
+
+- This worker runs on `brandon-compute` as `hd2admin` (UID 1000).
+- Route lookup for `100.69.211.43` selects `tailscale0` via source `100.106.6.22`.
+- `http://100.69.211.43:8000/` is directly reachable and returns `HTTP/1.1 200 OK`, `Server: nginx`; there is no `WWW-Authenticate` response header. This establishes that Nginx answers the direct Tailscale-IP request, but not which local process/upstream or configuration file serves it.
+- SSH port 22 is reachable, but Tailscale SSH returned: `tailscale: tailnet policy does not permit you to SSH as user "hd2admin"`. This is an authorization/policy block, not a network reachability failure.
+- Public checks remain as required: agents root = 401; `/embed/` = 200; `/api/embed/` = 200; `https://elevatesci.com/` = 200. Existing public authentication was not changed.
+
+## Access required / blocked work
+
+A tailnet administrator must authorize an approved SSH identity for this host (or provide an approved privileged shell session), including `sudo` access if the chosen host-side correction requires it. Do not broaden this to an untrusted identity. Once access is granted, inspect the actual listener, service/container, Nginx configuration, and host firewall/ACL before selecting the smallest safe restriction. No origin configuration was available to back up, and no origin mutation was attempted.
+
+No exact production mutation command can responsibly be supplied from this evidence: the listener's Nginx response is known, but its configuration, upstream, firewall manager, and whether the intended authenticated access is local-only or tailnet-ACL-based are unknown. Guessing a config path or adding a firewall rule could disrupt unrelated service or leave the endpoint exposed. The exact unblock is: have the tailnet administrator authorize the designated operator account for Tailscale SSH to `100.69.211.43`; then run the read-only discovery commands below in that host session before preparing/backing up the actual configuration.
+
+## Read-only discovery commands for the authorized host session
+
+```sh
+hostname; id
+sudo ss -ltnp '( sport = :8000 )'
+sudo nginx -T
+sudo systemctl --no-pager --type=service --state=running
+sudo nft list ruleset
+```
+
+These commands identify the actual listener/fronting configuration and active network policy. Before any subsequent change, copy each file actually selected for editing to a sibling named with a UTC timestamp and `.bak` suffix; apply only an approved loopback bind, authenticated Nginx location, or verified Tailscale ACL restriction. Then verify from an untrusted network that port 8000 is non-routable or returns 401, and repeat the four public-route probes recorded below.
+
+## Commands run and evidence
+
+1. `hostname; id; ...; tailscale status --peers=false; ip route get 100.69.211.43`
+   - Output: `brandon-compute`; `uid=1000(hd2admin)`; Tailscale status listed `100.106.6.22 brandon-compute`; route: `100.69.211.43 dev tailscale0 ... src 100.106.6.22`.
+2. `curl -sS -D - --max-time 8 -o /dev/null http://100.69.211.43:8000/`
+   - Output: `HTTP/1.1 200 OK`; `Server: nginx`; no `WWW-Authenticate` header.
+3. `timeout 12 ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null hd2admin@100.69.211.43 'hostname; id; sudo -n true ...'`
+   - Output: `tailscale: tailnet policy does not permit you to SSH as user "hd2admin"`; connection closed by port 22; exit 255.
+4. `for port in 22 8000 80 443; do timeout 2 bash -c "</dev/tcp/100.69.211.43/$port" ...; done`
+   - Output: all four ports reported open; this is a TCP reachability check, not proof of authorization or service identity.
+5. `for p in https://agents.elevatesci.com/ https://agents.elevatesci.com/embed/ https://agents.elevatesci.com/api/embed/ https://elevatesci.com/; do curl -sS -L -o /dev/null --max-time 12 -w '%{http_code} %{url_effective}\\n' "$p"; done`
+   - Output: `401 https://agents.elevatesci.com/`; `200 https://agents.elevatesci.com/embed/`; `200 https://agents.elevatesci.com/api/embed/`; `200 https://elevatesci.com/`.
+6. `git status --short` before writing this report
+   - Output: pre-existing unrelated untracked paths `core-distro-saas-clean` and `firstmate`; no staged files were reported.
+
+## Backup and verification record
+
+- Production configuration backup: none; no host configuration was accessible or changed.
+- This report is a newly created audit artifact (it did not exist before this write); no prior report content was overwritten.
+- Verify report: `test -s data/audit/2026-10-18-build-close-elevate-console.md && sha256sum data/audit/2026-10-18-build-close-elevate-console.md && git diff --cached --exit-code`
+- Remaining blocker: Tailscale SSH authorization/approved host shell access. Public auth wall and public routes remain unchanged and match their required response codes.

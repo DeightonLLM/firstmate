@@ -1,0 +1,5 @@
+working [at=1791043807]: Inspecting task inbox and outbound-delivery implementation.
+working [at=1791045725]: The tested sender and checksum-verifiable receipt state are implemented; I am validating the change.
+needs-decision [at=1791048861]: no-mistakes review awaits a decision on removing its unused fake scp test shim; report contains the exact finding and current evidence.
+resolved [key=default] [at=1791048956]: answered: AUTHORIZE: Remove the unused fakebin/scp shim from tests/fm-outbound-order.test.sh lines 100-130 and 132 as the smallest simplification. Then continue the no- [truncated]
+needs-decision [at=1791049847]: no-mistakes Review asks whether receipts are monotonic and whether the remote ack file proves worker acceptance; exact findings are in the updated report.

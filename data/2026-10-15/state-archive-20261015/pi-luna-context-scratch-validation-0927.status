@@ -1,0 +1,2 @@
+working [at=1790467107]: Verifying provider-scoped override lookup and catalog data
+done [at=1790467141]: Confirmed diagnosis; override mechanism correct; isolated CLI test gap is auth requirement; smallest patch is adding providers.openai-codex.modelOverrides.gpt-6-luna

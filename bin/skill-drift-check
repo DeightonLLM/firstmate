@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# skill-drift-check — fail-closed installed-skill integrity gate.
+#
+# The manifest is an explicit local baseline. It detects added, removed, or
+# byte-changed SKILL.md files before an agent starts or a lane prompt is sent.
+# Updating the baseline is deliberate (`--refresh`) and is never implicit.
+set -euo pipefail
+
+PROG="${0##*/}"
+MANIFEST="${SKILL_DRIFT_MANIFEST:-/root/agent-work/skill-integrity/manifest.tsv}"
+# Active user trees plus bundled extension skill trees.  Runtime-specific
+# variants are intentionally kept as separate roots so the manifest records
+# them without pretending Codex, Pi, Senpi, Antigravity, and Copilot resolve
+# the same skill namespace.
+ROOT_SPEC="${SKILL_DRIFT_ROOTS:-/root/.codex/skills:/root/.agents/skills:/root/.codex/plugins/cache/openai-curated-remote:/root/.pi/agent/skills:/root/.senpi/agent/skills:/root/.senpi/agent/npm/node_modules/context-mode/skills:/root/.senpi/agent/npm/node_modules/context-mode/configs/antigravity-cli/skills:/root/.senpi/agent/npm/node_modules/context-mode/configs/copilot-cli/skills:/root/.senpi/agent/npm/node_modules/pi-subagents/skills}"
+# Only roots that share one effective loader namespace are collision-checked.
+# Codex/Senpi frontend-design and client-specific context-mode variants are
+# separate runtimes; Pi/Senpi user skill trees are the shared mirror surface.
+COLLISION_ROOT_SPEC="${SKILL_DRIFT_COLLISION_ROOTS:-/root/.pi/agent/skills:/root/.senpi/agent/skills}"
+
+usage() {
+  printf 'usage: %s --check | --refresh\n' "$PROG"
+  printf '  --check    compare installed SKILL.md files with the pinned baseline\n'
+  printf '  --refresh  explicitly replace the baseline with the current installed set\n'
+}
+
+mode=""
+case "${1:-}" in
+  --check) mode=check ;;
+  --refresh) mode=refresh ;;
+  -h|--help) usage; exit 0 ;;
+  *) usage >&2; exit 64 ;;
+esac
+
+tmp="$(mktemp)"
+sorted="${tmp}.sorted"
+baseline="${tmp}.baseline"
+collisions="${tmp}.collisions"
+collision_sorted="${tmp}.collision-sorted"
+trap 'rm -f "$tmp" "$sorted" "$baseline" "$collisions" "$collision_sorted"' EXIT
+
+collect_root() {
+  local root="$1" file rel digest
+  [ -d "$root" ] || return 0
+  while IFS= read -r -d '' file; do
+    rel="${file#"$root"/}"
+    digest="$(sha256sum "$file" | awk '{print $1}')"
+    printf '%s\t%s\t%s\n' "$root" "$rel" "$digest"
+  done < <(find "$root" -type f -name 'SKILL.md' -print0 | sort -z)
+}
+
+IFS=: read -r -a roots <<< "$ROOT_SPEC"
+for root in "${roots[@]}"; do
+  collect_root "$root"
+done > "$tmp"
+
+sort "$tmp" > "$sorted"
+count="$(wc -l < "$sorted" | tr -d ' ')"
+if [ "$count" -eq 0 ]; then
+  printf '%s: REFUSED: no SKILL.md files found in configured roots\n' "$PROG" >&2
+  exit 78
+fi
+
+# Multiple agents may expose the same relative skill path in one effective
+# loader namespace.  Identical copies are harmless; different content is an
+# unresolved mirror collision and must block both checking and refresh until an
+# owner is chosen.  Runtime-specific roots are intentionally excluded from
+# this comparison but remain pinned in the full manifest above.
+: > "$collision_sorted"
+IFS=: read -r -a collision_roots <<< "$COLLISION_ROOT_SPEC"
+for root in "${collision_roots[@]}"; do
+  [ -n "$root" ] || continue
+  awk -F '\t' -v wanted="$root" '$1 == wanted {print}' "$sorted" >> "$collision_sorted"
+done
+sort -o "$collision_sorted" "$collision_sorted"
+awk -F '\t' '
+  {
+    root=$1; rel=$2; digest=$3
+    if (!(rel in first_digest)) {
+      first_digest[rel]=digest
+      first_root[rel]=root
+      next
+    }
+    if (digest != first_digest[rel] && !(rel in reported)) {
+      printf "SKILL_COLLISION: path=%s roots=%s,%s hashes=%s,%s\n", \
+        rel, first_root[rel], root, substr(first_digest[rel], 1, 12), substr(digest, 1, 12)
+      reported[rel]=1
+    }
+  }
+' "$collision_sorted" > "$collisions"
+if [ -s "$collisions" ]; then
+  cat "$collisions" >&2
+  printf '%s: REFUSED: conflicting duplicate skill paths require review\n' "$PROG" >&2
+  exit 79
+fi
+
+if [ "$mode" = refresh ]; then
+  mkdir -p "$(dirname "$MANIFEST")"
+  {
+    printf '# skill-drift-manifest-v1\n'
+    printf '# Generated only by explicit: %s --refresh\n' "$PROG"
+    cat "$sorted"
+  } > "$MANIFEST"
+  chmod 600 "$MANIFEST"
+  printf 'SKILL_DRIFT_BASELINE_REFRESHED: files=%s manifest=%s\n' "$count" "$MANIFEST"
+  exit 0
+fi
+
+if [ ! -r "$MANIFEST" ]; then
+  printf 'SKILL_DRIFT: baseline missing: %s\n' "$MANIFEST" >&2
+  printf 'Recovery requires an explicit reviewed `%s --refresh`.\n' "$PROG" >&2
+  exit 78
+fi
+
+grep -v '^#' "$MANIFEST" | sed '/^[[:space:]]*$/d' | sort > "$baseline"
+if ! cmp -s "$baseline" "$sorted"; then
+  printf 'SKILL_DRIFT: installed skill set or hash differs from baseline\n' >&2
+  diff -u "$baseline" "$sorted" | sed -n '1,100p' >&2 || true
+  exit 79
+fi
+
+printf 'SKILL_DRIFT_CHECK_PASS: files=%s manifest=%s\n' "$count" "$MANIFEST"

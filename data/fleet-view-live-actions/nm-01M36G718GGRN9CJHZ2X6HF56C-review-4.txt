@@ -1,0 +1,6 @@
+id: review-4
+severity: error
+file: bin/fm-fleet-view.sh
+line: 65
+description: Round 1's fix introduced a non-exhaustive partition. The intent requires "be able to steer each worker," but a real `awaiting_approval`/`fix_review` run produces `current_state.state=parked` without `pending_decision` (bin/fm-crew-state.sh:1050-1059). It is excluded by `is_active` (line 64), omitted from `is_needs_attention` (line 65), and rejected by `is_captain_held` when the flag is false (line 66), so it appears in none of the rendered sections (lines 102-136) and has no visible steer command. Add parked-task coverage to Needs attention; the added fixture only covers parked with an open decision (tests/fm-fleet-snapshot-view.test.sh:1204-1212).
+authority: ask-user

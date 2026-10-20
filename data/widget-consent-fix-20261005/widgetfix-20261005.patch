@@ -1,0 +1,131 @@
+# ============================================================================
+# widgetfix-20261005.patch
+# Elevate AnythingLLM embed widget — 2 presentation fixes (iPhone send button,
+# circular logo). Applies to brandon:3001, embed d65f0fde.
+#
+# STATUS: *** ALREADY DEPLOYED AND LIVE ***  (applied 2026-10-05 ~01:14 UTC)
+#   Served proof: http://100.106.6.22:3001/embed/anythingllm-chat-widget.min.js
+#                 returns 669,742 B  md5 600c9693a845885d1d6a1a0551d3027a
+#   Identical over https://agents.elevatesci.com/embed/anythingllm-chat-widget.min.js
+#   This patch is retained for REVERT / re-apply / audit, not for first deployment.
+#
+# FILE TO EDIT (host-side bind mount — do NOT edit inside the container):
+#   /home/hd2admin/hd2stack-anythingllm/branding/anythingllm-chat-widget.min.js
+#   -> bind-mounted to /app/server/public/embed/anythingllm-chat-widget.min.js (rw)
+#   Stock image copies in the containerd overlayfs snapshots are NOT served; do not touch.
+#
+# --- RE-APPLY (idempotent re-deploy, brandon-side) -------------------------
+#   F=/home/hd2admin/hd2stack-anythingllm/branding/anythingllm-chat-widget.min.js
+#   cp -a "$F" "$F.bak-widgetfix-20261005"                 # 1. backup
+#   cd "$(dirname "$F")" && patch -u "$F" widgetfix-20261005.patch   # 2. apply
+#   # 3. RELOAD: none required — bind-mounted static file, served immediately.
+#   #    Do NOT restart the container; RestartCount must stay 0.
+#
+# --- VERIFY (runs from ANY host, no ssh needed) ----------------------------
+#   curl -s -m 8 http://100.106.6.22:3001/embed/anythingllm-chat-widget.min.js \
+#     | md5sum     # expect 600c9693a845885d1d6a1a0551d3027a
+#   curl -s -m 8 http://100.106.6.22:3001/embed/anythingllm-chat-widget.min.js \
+#     | grep -c widgetfix-20261005     # expect 4
+#
+# --- REVERT (one command, byte-exact) ------------------------------------
+#   F=/home/hd2admin/hd2stack-anythingllm/branding/anythingllm-chat-widget.min.js
+#   cp -a "$F.bak-widgetfix-20261005" "$F"
+#   # -> md5 back to 15a8e92b87ff30ab32ad7498a9e4db4d  (666,040 B)
+#
+# BROWSER NOTE: asset has no cache-bust hash in its filename. Hard reload /
+# private tab required on the iPhone, else the old CSS is served from cache.
+# ============================================================================
+
+--- anythingllm-chat-widget.min.js.bak-widgetfix-20261005	2026-09-26 20:51:25.887362913 +0100
++++ anythingllm-chat-widget.min.js	2026-10-05 02:14:48.679599973 +0100
+@@ -155,3 +155,90 @@
+     /* never break the widget */
+   }
+ })();
++
++/* widgetfix-20261005 — Elevate AnythingLLM embed widget (brandon:3001, embed d65f0fde)
++ * Two presentation-only fixes. No behaviour, no API, no config, no data touched.
++ *
++ * (1) MOBILE / iPHONE — send button falls off-screen.
++ *     Cause: the shipped widget contains ZERO viewport-safety CSS — no viewport-fit,
++ *     no env(safe-area-inset-*), no dvh/svh, no visualViewport handling (verified by
++ *     grep over the whole bundle). On iOS the home-indicator strip and the on-screen
++ *     keyboard both overlay the bottom of the panel, so the submit row falls beneath
++ *     them. Fix: safe-area padding + sticky submit row + 44px touch target + dvh.
++ *     env() is used with a 0px fallback on purpose: it degrades to 0 on hosts that do
++ *     NOT set viewport-fit=cover, so this is safe on desktop and non-notch devices.
++ *
++ * (2) LOGO — header logo renders stretched.
++ *     Cause: no object-fit anywhere in the bundle (verified: zero matches). The bubble
++ *     icon is a fixed 36x36 box (allm-w-9 allm-h-9) and the header logo is capped only
++ *     by inline max-width/max-height, so a non-square brand image is squashed. Fix:
++ *     object-fit:cover + border-radius:50% + aspect-ratio:1/1 so the crop can never
++ *     distort at any box size.
++ *
++ * REVERT: restore anythingllm-chat-widget.min.js.bak-widgetfix-20261005
++ * (this block is appended, so revert == truncate the file to the backup).
++ */
++(function () {
++  "use strict";
++  var ID = "widgetfix-20261005";
++  if (document.getElementById(ID)) return;
++  var css = [
++    "/* widgetfix-20261005 */",
++    /* ---- (2) LOGO: circular crop, never distorts ---- */
++    "#anything-llm-header img,",
++    "#anything-llm-icon {",
++    "  object-fit: cover !important;",
++    "  border-radius: 50% !important;",
++    "  aspect-ratio: 1 / 1 !important;",
++    "  flex: 0 0 auto !important;",
++    "  -webkit-flex-shrink: 0 !important;",
++    "  flex-shrink: 0 !important;",
++    "  width: 40px !important;",
++    "  height: 40px !important;",
++    "  max-width: 40px !important;",
++    "  max-height: 40px !important;",
++    "  background: transparent !important;",
++    "}",
++    /* ---- (1) MOBILE / iPHONE: keep the send button reachable ---- */
++    "@media screen and (max-width: 768px), (pointer: coarse) {",
++    "  #anything-llm-embed-chat-container,",
++    "  #anything-llm-chat {",
++    "    height: 100dvh !important;",
++    "    max-height: 100dvh !important;",
++    "    padding-bottom: env(safe-area-inset-bottom, 0px) !important;",
++    "  }",
++    "  #send-message-button {",
++    "    position: relative !important;",
++    "    z-index: 6 !important;",
++    "    min-width: 44px !important;",
++    "    min-height: 44px !important;",
++    "    flex-shrink: 0 !important;",
++    "    touch-action: manipulation !important;",
++    "    -webkit-tap-highlight-color: transparent !important;",
++    "  }",
++    "  #anything-llm-chat form,",
++    "  #anything-llm-embed-chat-container form {",
++    "    position: sticky !important;",
++    "    bottom: 0 !important;",
++    "    z-index: 5 !important;",
++    "    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)) !important;",
++    "    background: inherit !important;",
++    "  }",
++    "  #message-input {",
++    "    max-height: 40vh !important;",
++    "  }",
++    "  #scroll-to-bottom-button {",
++    "    bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;",
++    "  }",
++    "}"
++  ].join("\n");
++  try {
++    var el = document.createElement("style");
++    el.id = ID;
++    el.setAttribute("data-widgetfix", "20261005");
++    el.appendChild(document.createTextNode(css));
++    (document.head || document.documentElement).appendChild(el);
++  } catch (_e) {
++    /* never break the widget */
++  }
++})();

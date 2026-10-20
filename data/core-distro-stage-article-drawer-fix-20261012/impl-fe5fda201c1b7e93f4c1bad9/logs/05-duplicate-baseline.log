@@ -1,0 +1,28 @@
+=== ORIGINAL-HELPER BASELINE COMPARISON (evidence/dump-render.php) ===
+original helper: originals/theme/stage-content-fixes.php  (510cd7ef5d75cf4c8d278dcd6f175e6bac1ed9c805a3573a6f754e7985f7f098)
+modified helper: theme/stage-content-fixes.php            (a3ca090d574decf8933dbc929215bb1d2b3ee4de40d2d9984de5053ade3722a7)
+
+--- PROTECTED DUPLICATE ROUTES: new helper output MUST be byte-identical to original helper ---
+route|fragment|verdict|inert_count|aria_hidden_count
+glass-vials-2|build/pages/glass-vials.html|IDENTICAL|0|0
+rubber-stoppers-2|build/pages/rubber-stoppers.html|IDENTICAL|0|0
+aluminum-seals-2|build/pages/aluminum-seals.html|IDENTICAL|0|0
+glass-vials-3|build/pages/glass-vials.html|IDENTICAL|0|0
+rubber-stoppers-3|build/pages/rubber-stoppers.html|IDENTICAL|0|0
+aluminum-seals-3|build/pages/aluminum-seals.html|IDENTICAL|0|0
+glass-vials-4|build/pages/glass-vials.html|IDENTICAL|0|0
+rubber-stoppers-4|build/pages/rubber-stoppers.html|IDENTICAL|0|0
+aluminum-seals-4|build/pages/aluminum-seals.html|IDENTICAL|0|0
+route|fragment|verdict|inert_count|aria_hidden_count
+about|build/pages/about.html|DIFFERS_AS_EXPECTED|1|1
+aluminum-seals|build/pages/aluminum-seals.html|DIFFERS_AS_EXPECTED|1|1
+blog|build/pages/blog.html|DIFFERS_AS_EXPECTED|1|1
+compliance|build/pages/compliance.html|DIFFERS_AS_EXPECTED|1|1
+contact|build/pages/contact.html|DIFFERS_AS_EXPECTED|1|1
+faq|build/pages/faq.html|DIFFERS_AS_EXPECTED|1|1
+glass-vials|build/pages/glass-vials.html|DIFFERS_AS_EXPECTED|1|1
+products|build/pages/products.html|DIFFERS_AS_EXPECTED|1|1
+register|build/pages/register.html|DIFFERS_AS_EXPECTED|1|1
+resources|build/pages/resources.html|DIFFERS_AS_EXPECTED|1|1
+rubber-stoppers|build/pages/rubber-stoppers.html|DIFFERS_AS_EXPECTED|1|1
+OVERALL_DUPLICATE_PROOF_OK=1

@@ -1,0 +1,19 @@
+diff --git a/bin/fm-watch.sh b/bin/fm-watch.sh
+index 70d28100..0ed086c9 100755
+--- a/bin/fm-watch.sh
++++ b/bin/fm-watch.sh
+@@ -387,9 +387,12 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
+       if [ "$age" -ge "$STALE_ESCALATE_SECS" ]; then
+         n=$(( $(cat "$escalation_file" 2>/dev/null || echo 0) + 1 ))
+         echo "$n" > "$escalation_file"
+-        reason="stale: $win (idle ${age}s, possible wedge, escalation $n)"
++        # Keep this wake's content stable while the pane remains in the same
++        # stale state. The queue deduplicates by reason text, so an age or
++        # counter in the reason would turn every poll into a distinct wake.
++        reason="stale: $win (possible wedge)"
+         if [ "$n" -ge "$FM_WEDGE_DEMAND_INSPECT_COUNT" ]; then
+-          reason="stale: $win (idle ${age}s, possible wedge, escalation $n, demand-deep-inspection: same pane has wedge-escalated $n times in a row - do not re-absorb on the run-step/pane state alone)"
++          reason="stale: $win (possible wedge, demand-deep-inspection: same pane has wedge-escalated $n times in a row - do not re-absorb on the run-step/pane state alone)"
+         fi
+         fm_wake_append stale "$win" "$reason" || exit 1
+         rm -f "$since_file"

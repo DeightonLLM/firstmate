@@ -1,0 +1,214 @@
+
+=== home desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/\""
+IMAGES: result: "\"[{\\\"alt\\\":\\\"Pharmaceutical laboratory\\\",\\\"src\\\":\\\"https://staging.core-distro.com/images/hero-lab-v2.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1440},{\\\"alt\\\":\\\"Pharmaceutical API research\\\",\\\"src\\\":\\\"https://staging.core-distro.com/images/about-pharma-700.webp\\\",\\\"loaded\\\":true,\\\"width\\\":576},{\\\"alt\\\":\\\"Sterile pharmaceutical vials\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/vials-packaging-v2-FtC8yx2YBeCk6KMQG7aQaT.webp\\\",\\\"loaded\\\":false,\\\"width\\\":0},{\\\"alt\\\":\\\"Pharmaceutical automation equipment\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/automation-machine-v2-2tkCd2A5buQzp5NiPCK3mF.webp\\\",\\\"loaded\\\":false,\\\"width\\\":0},{\\\"alt\\\":\\\"Quality assurance and compliance\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/compliance-quality-v2-dGjmfHRCo2LWgPapJcNkMe.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920}]\""
+CONSOLE:
+## Console messages
+Showing 1-1 of 1 (Page 1 of 1).
+msgid=29 [issue] A form field element should have an id or name attribute (count: 2)
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== home mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/\""
+IMAGES: result: "\"[{\\\"alt\\\":\\\"Pharmaceutical laboratory\\\",\\\"src\\\":\\\"https://staging.core-distro.com/images/hero-lab-v2.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1440},{\\\"alt\\\":\\\"Pharmaceutical API research\\\",\\\"src\\\":\\\"https://staging.core-distro.com/images/about-pharma-700.webp\\\",\\\"loaded\\\":true,\\\"width\\\":576},{\\\"alt\\\":\\\"Sterile pharmaceutical vials\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/vials-packaging-v2-FtC8yx2YBeCk6KMQG7aQaT.webp\\\",\\\"loaded\\\":false,\\\"width\\\":0},{\\\"alt\\\":\\\"Pharmaceutical automation equipment\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/automation-machine-v2-2tkCd2A5buQzp5NiPCK3mF.webp\\\",\\\"loaded\\\":false,\\\"width\\\":0},{\\\"alt\\\":\\\"Quality assurance and compliance\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/compliance-quality-v2-dGjmfHRCo2LWgPapJcNkMe.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920}]\""
+CONSOLE:
+## Console messages
+Showing 1-1 of 1 (Page 1 of 1).
+msgid=30 [issue] A form field element should have an id or name attribute (count: 2)
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== about desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/about\""
+IMAGES: result: "\"[{\\\"alt\\\":\\\"Core Distro laboratory\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/hero-lab-v2-CEX4ZupLmGvsQeHosrNp5d.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920},{\\\"alt\\\":\\\"Core Distro quality\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/compliance-quality-v2-dGjmfHRCo2LWgPapJcNkMe.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920}]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== about mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/about\""
+IMAGES: result: "\"[{\\\"alt\\\":\\\"Core Distro laboratory\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/hero-lab-v2-CEX4ZupLmGvsQeHosrNp5d.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920},{\\\"alt\\\":\\\"Core Distro quality\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/compliance-quality-v2-dGjmfHRCo2LWgPapJcNkMe.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920}]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== products desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/products\""
+IMAGES: result: "\"[{\\\"alt\\\":\\\"Sterile pharmaceutical vials\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/vials-packaging-v2-FtC8yx2YBeCk6KMQG7aQaT.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920}]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== products mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/products\""
+IMAGES: result: "\"[{\\\"alt\\\":\\\"Sterile pharmaceutical vials\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/vials-packaging-v2-FtC8yx2YBeCk6KMQG7aQaT.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920}]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== blog desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/blog\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+Showing 1-2 of 2 (Page 1 of 1).
+msgid=34 [issue] A form field element should have an id or name attribute (count: 2)
+msgid=35 [error] Failed to load resource: the server responded with a status of 500 (Internal Server Error) (0 args)
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== blog mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/blog\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+Showing 1-2 of 2 (Page 1 of 1).
+msgid=36 [issue] A form field element should have an id or name attribute (count: 2)
+msgid=37 [error] Failed to load resource: the server responded with a status of 500 (Internal Server Error) (0 args)
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== contact desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/contact\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+Showing 1-2 of 2 (Page 1 of 1).
+msgid=38 [issue] No label associated with a form field (count: 6)
+msgid=39 [issue] An element doesn’t have an autocomplete attribute (count: 4)
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== contact mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/contact\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+Showing 1-2 of 2 (Page 1 of 1).
+msgid=41 [issue] No label associated with a form field (count: 6)
+msgid=42 [issue] An element doesn’t have an autocomplete attribute (count: 4)
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== resources desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/resources\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== resources mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/resources\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== faq desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/faq\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== faq mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/faq\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== compliance desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/compliance\""
+IMAGES: result: "\"[{\\\"alt\\\":\\\"Quality compliance documentation\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/compliance-quality-v2-dGjmfHRCo2LWgPapJcNkMe.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920}]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== compliance mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/compliance\""
+IMAGES: result: "\"[{\\\"alt\\\":\\\"Quality compliance documentation\\\",\\\"src\\\":\\\"https://d2xsxph8kpxj0f.cloudfront.net/310519663704493629/gW496Yb3TdmRhrkcieiR6Z/compliance-quality-v2-dGjmfHRCo2LWgPapJcNkMe.webp\\\",\\\"loaded\\\":true,\\\"width\\\":1920}]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== admin desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/admin\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== admin mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/admin\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+<no console messages found>
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== register desktop 1440x900 ===
+URL: result: "\"https://staging.core-distro.com/register\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+Showing 1-2 of 2 (Page 1 of 1).
+msgid=47 [issue] No label associated with a form field (count: 7)
+msgid=48 [issue] An element doesn’t have an autocomplete attribute (count: 2)
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type
+
+=== register mobile 390x844 ===
+URL: result: "\"https://staging.core-distro.com/register\""
+IMAGES: result: "\"[]\""
+CONSOLE:
+## Console messages
+Showing 1-2 of 2 (Page 1 of 1).
+msgid=49 [issue] No label associated with a form field (count: 7)
+msgid=50 [issue] An element doesn’t have an autocomplete attribute (count: 2)
+help[2]:
+  Run `chrome-devtools-axi console-get <id>` to see a specific message
+  Run `chrome-devtools-axi console --type error` to filter by type

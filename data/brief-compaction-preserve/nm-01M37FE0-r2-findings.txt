@@ -1,0 +1,39 @@
+ask-user findings from no-mistakes fix-review gate for fm/brief-compaction-preserve (run 01M37FE0KRAGN1HCNDSXNTNC8C, fix-review after round 1):
+
+These are restatements of the already-resolved nm-01M378SDH themes, with the same product decisions already made in messages 009 and 011:
+- worker-brief-subagent-policy-conflict → bounded independent children, no recursive delegation (message 009)
+- intent-missing-live-todo-state → real visible Pi todo (message 009)
+- intent-missing-completion-restart → deferred: no completion-restart subsystem (message 013)
+- worker-brief-incomplete-rule-preservation → pointer-only approach, not full brief preservation (message 013)
+
+New restatements (review-1 through review-4) expand the same four themes:
+---
+id: review-1
+severity: error
+file: .pi/extensions/lib/fm-worker-brief-fragment.ts
+line: 111
+description: The fragment only emits a reminder at .pi/extensions/lib/fm-worker-brief-fragment.ts:111; the hook only reads files and returns summary text. No live todo state is created, updated, or verified. Decide whether prompt-only containment is authorized or a real live-state mechanism is required.
+authority: ask-user
+
+---
+id: review-2
+severity: error
+file: .pi/extensions/fm-worker-brief-preserve.ts
+line: 79
+description: The required criterion says "When jobs finish, restart the agents." The changed code registers only session_before_compact; it adds no job-completion/settled handler, relaunch invocation, or restart path. Decide whether this required completion-triggered restart is intentionally deferred or must be implemented before merge.
+authority: ask-user
+
+---
+id: review-3
+severity: error
+file: .pi/extensions/lib/fm-worker-brief-fragment.ts
+description: The hook validates only that state/<id>.meta and data/<id>/launch-brief.md are nonempty, then appends a fixed fragment; it never reads or verifies the actual brief content. A real --herdr-lab launch includes mandatory lifecycle rules at bin/fm-brief.sh:367-388, and ship/scout briefs include task intent, delivery, inbox, and DoD rules at bin/fm-brief.sh:259-265,501-568. Decide whether this short fixed fragment is authorized or whether the full brief/rules must be preserved or verified.
+authority: ask-user
+
+---
+id: review-4
+severity: error
+file: .pi/extensions/lib/fm-worker-brief-fragment.ts
+line: 112
+description: The durable fragment says "use pi-subagents by default" while the authoritative worker contract says "Do the assigned work yourself ... do not delegate the task." After compaction the worker receives both policies. Resolve which policy the durable fragment must carry.
+authority: ask-user

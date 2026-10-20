@@ -1,0 +1,17 @@
+window=default:w2N:p2
+endpoint_task_id=reliability-reporting-20261012
+worktree=/home/hd2admin/.treehouse/kun-agent-workspace-46aafc/11/kun-agent-workspace
+project=/home/hd2admin/kun-agent-workspace
+harness=pi
+kind=scout
+mode=no-mistakes
+yolo=off
+tasktmp=/tmp/fm-reliability-reporting-20261012
+model=openai-codex/gpt-6-luna
+effort=medium
+busy_gen=g1791833719.3645093.31901
+backend=herdr
+herdr_session=default
+herdr_workspace_id=w2N
+herdr_tab_id=w2N:t2
+herdr_pane_id=w2N:p2

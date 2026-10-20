@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# LOCAL LOAD SHIELD (2026-10-04, captain order — system-critical load incident):
+# dubz = delegate/monitor only, 4 cores. Refuse dispatch while 15-min loadavg >= nproc
+# (persistent saturation). Override: LOAD_GATE_BYPASS=1 (logged, like QUOTA_GATE_BYPASS).
+if [ "${LOAD_GATE_BYPASS:-0}" = "1" ]; then
+  echo "LOAD_GATE_BYPASS $(date -u +%FT%TZ) 15min=$(awk '{print $3}' /proc/loadavg) cores=$(nproc)" >> /root/.config/quota-gate-bypass.log
+elif [ "$(awk '{print int($3)}' /proc/loadavg)" -ge "$(nproc)" ]; then
+  echo "load-gate: dubz 15-min load $(awk '{print $3}' /proc/loadavg) >= $(nproc) cores — dispatch refused; worker lanes belong on hd2stack (LOAD_GATE_BYPASS=1 to override)" >&2
+  exit 64
+fi
+
+# quota-dispatch-gate — deterministic pre-dispatch quota gate (2026-10-04,
+# operator order: make the quota rule impossible to bypass).
+#
+# Usage: quota-dispatch-gate [provider]
+#   provider: codex|agy|minimax|zai (optional; omitted = ANY-provider mode:
+#   pass if at least one of the four has usable headroom).
+#
+# Reads quota-axi output cached no older than QUOTA_GATE_MAX_AGE_S (default
+# 600s) at /tmp/quota-gate-last.json; refreshes by running quota-axi
+# --no-credential-refresh when stale. Fails closed:
+#   exit 0  = headroom confirmed (prints "<provider>=<pct>%")
+#   exit 64 = below threshold or unusable data (unless QUOTA_GATE_BYPASS=1,
+#             which is logged to /root/.config/quota-gate-bypass.log)
+#   exit 65 = quota-axi itself failed
+set -u
+THRESHOLD=${QUOTA_GATE_THRESHOLD:-15}
+MAX_AGE=${QUOTA_GATE_MAX_AGE_S:-600}
+CACHE=/tmp/quota-gate-last.json
+PROVIDER=${1:-}
+
+if [ "${QUOTA_GATE_BYPASS:-0}" = "1" ]; then
+  mkdir -p /root/.config
+  printf '%s BYPASS provider=%s\n' "$(date -Is)" "${PROVIDER:-any}" >> /root/.config/quota-gate-bypass.log
+  echo "quota-gate: BYPASS used (logged)"
+  exit 0
+fi
+
+[ -s "$CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$CACHE") )) -le "$MAX_AGE" ] || {
+  quota-axi --json --no-credential-refresh > "$CACHE.tmp" 2>/dev/null || { echo "quota-gate: quota-axi failed; dispatch refused" >&2; exit 65; }
+  mv "$CACHE.tmp" "$CACHE"
+}
+[ -s "$CACHE" ] || { echo "quota-gate: no quota data; dispatch refused" >&2; exit 65; }
+
+pct() { # provider -> best effectivePercentRemaining across its rows
+  jq -r --arg p "$1" '[.providers[]? | select(.provider == $p) | .quotaSemantics.effectiveAvailability[]? | .effectivePercentRemaining // -1] | max // -1' "$CACHE" 2>/dev/null
+}
+check() {
+  local p=$1 v
+  v=$(pct "$p")
+  case "$v" in ''|*[!0-9.-]*) echo "quota-gate: $p unreadable; dispatch refused" >&2; return 1 ;; esac
+  if [ "${v%.*}" -ge "$THRESHOLD" ] 2>/dev/null || awk -v a="$v" -v b="$THRESHOLD" 'BEGIN{exit !(a>=b)}'; then
+    echo "quota-gate: $p=${v}% ok"
+    return 0
+  fi
+  echo "quota-gate: $p=${v}% below ${THRESHOLD}% — dispatch refused; pick another provider or wait for reset" >&2
+  return 1
+}
+
+if [ "${1:-}" = "pick" ]; then
+  # Abundance-first provider selection (operator order 2026-10-04): print the
+  # provider with the most remaining headroom. Gemini (agy, weekly pool) is
+  # preferred for routine implementation/fix work so five-hour windows
+  # (codex/zai) are protected. Still fails closed when everything is low.
+  best=""; bestv=-1
+  for p in agy minimax codex; do
+    v=$(pct "$p")
+    case "$v" in ''|*[!0-9.-]*) continue ;; esac
+    if awk -v a="$v" -v b="$bestv" 'BEGIN{exit !(a>b)}'; then best="$p"; bestv="$v"; fi
+  done
+  if [ -n "$best" ] && awk -v a="$bestv" -v b="$THRESHOLD" 'BEGIN{exit !(a>=b)}'; then
+    echo "$best"
+    exit 0
+  fi
+  echo "quota-gate: pick — no provider above ${THRESHOLD}%" >&2
+  exit 64
+fi
+
+if [ -n "$PROVIDER" ]; then
+  check "$PROVIDER" || exit 64
+  exit 0
+fi
+# ANY mode: at least one of the four usable
+for p in codex agy minimax zai; do
+  if check "$p" 2>/dev/null; then exit 0; fi
+done
+echo "quota-gate: no provider has headroom — dispatch refused" >&2
+exit 64

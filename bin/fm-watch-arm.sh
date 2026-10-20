@@ -32,6 +32,12 @@
 #   watcher: FAILED - cycle ended without an actionable reason
 #                                                        - a clean cycle ended with no wake and no
 #                                                          verified healthy successor
+#   watcher: FAILED - recorded watch lock owner is unverified (pid <N>)
+#                                                        - the recorded lock may still belong to a
+#                                                          live watcher this home cannot attribute,
+#                                                          so it is escalated and never stolen
+#                                                          (the same applies when the stale lock
+#                                                          could not be retired)
 # It NEVER reports started/attached/healthy off a stale beacon or a dead/reused pid: a
 # stale-beacon or dead-pid holder either self-heals (the fresh child steals the
 # dead lock per the singleton self-eviction/steal path and is confirmed) or this
@@ -212,15 +218,98 @@ cycle_mark_predecessor_successor() {
   fm_lock_release "$CYCLE_LOG_LOCK"
 }
 
-clear_stale_recorded_watcher_lock() {
-  local lock_home lock_path lock_identity
-  lock_home=$(cat "$WATCH_LOCK/fm-home" 2>/dev/null || true)
-  lock_path=$(cat "$WATCH_LOCK/watcher-path" 2>/dev/null || true)
-  lock_identity=$(cat "$WATCH_LOCK/pid-identity" 2>/dev/null || true)
-  [ "$lock_home" = "$FM_HOME" ] || return 0
-  [ "$lock_path" = "$WATCH" ] || return 0
-  [ -n "$lock_identity" ] || return 0
+# --- Recorded watch-lock ownership ------------------------------------------
+#
+# The recorded watch lock names the watcher that owns it. Whether that lock
+# still has a live owner is a liveness-and-identity question, never a
+# file-presence question: the recorded identity is compared with the live
+# process's current identity, and a lock whose recorded identity never landed
+# falls back to the live process's own command line. A recorded owner that is
+# provably gone leaves a stale lock that must not block every later arm, while
+# an owner this arm cannot attribute or verify is escalated, never stolen.
+
+# watch_lock_owner_state <lock-pid>: print live, stale, or unknown.
+watch_lock_owner_state() {
+  local lock_pid=$1 recorded_home recorded_path recorded_identity current_identity command
+  # A recorded pid that is not alive is a recorded owner that is gone.
+  fm_pid_alive "$lock_pid" || { printf 'stale\n'; return 0; }
+  # Only this home's own watcher lock is judged any further: a lock this arm
+  # cannot attribute to this home's watcher is never touched.
+  recorded_home=$(cat "$WATCH_LOCK/fm-home" 2>/dev/null || true)
+  recorded_path=$(cat "$WATCH_LOCK/watcher-path" 2>/dev/null || true)
+  [ "$recorded_home" = "$FM_HOME" ] || { printf 'unknown\n'; return 0; }
+  [ "$recorded_path" = "$WATCH" ] || { printf 'unknown\n'; return 0; }
+  recorded_identity=$(cat "$WATCH_LOCK/pid-identity" 2>/dev/null || true)
+  if [ -n "$recorded_identity" ]; then
+    current_identity=$(fm_pid_identity "$lock_pid" 2>/dev/null || true)
+    if [ -n "$current_identity" ] && [ "$current_identity" = "$recorded_identity" ]; then
+      printf 'live\n'
+    else
+      # The recorded identity names a process that is no longer this pid, so
+      # the recorded owner is gone and this pid was reused by something else.
+      printf 'stale\n'
+    fi
+    return 0
+  fi
+  # No recorded identity: the live process's own command line decides whether
+  # a watcher can still own this lock.
+  command=$(ps -p "$lock_pid" -o command= 2>/dev/null || true)
+  case "$command" in
+    *"$WATCH"*) printf 'live\n' ;;
+    *fm-watch.sh*) printf 'unknown\n' ;;
+    '') printf 'unknown\n' ;;
+    *) printf 'stale\n' ;;
+  esac
+}
+
+# Retire a recorded watch lock whose owner is provably gone.
+#
+# The shared lock primitive owns the grace window, the steal mutex, and the
+# owner re-check, but it can only reclaim a lock whose recorded pid is dead: it
+# holds no identity evidence, so it must refuse to steal from a live pid. The
+# arm holds that evidence, so it supplies the proof the primitive lacks - and
+# it still takes the shared steal mutex and re-checks the recorded owner under
+# it, so the primitive's own guarded reclaim stays serialised against this
+# one instead of racing it.
+reclaim_stale_recorded_watcher_lock() {
+  local lock_pid=$1 recorded_pid i
+  i=0
+  while ! fm_lock_try_acquire "$WATCH_LOCK.steal"; do
+    [ "$i" -lt 20 ] || return 1
+    sleep 0.02
+    i=$((i + 1))
+  done
+  recorded_pid=$(cat "$WATCH_LOCK/pid" 2>/dev/null || true)
+  if [ "$recorded_pid" != "$lock_pid" ]; then
+    fm_lock_release "$WATCH_LOCK.steal"
+    return 1
+  fi
   fm_lock_remove_path "$WATCH_LOCK" || true
+  fm_lock_release "$WATCH_LOCK.steal"
+  return 0
+}
+
+# A recorded lock whose owner is provably gone must not block every later arm:
+# retire it through the shared guarded reclaim before the watcher is forked.
+# An owner this arm cannot attribute or verify is escalated instead, because a
+# live owner is never stolen.
+retire_stale_recorded_watcher_lock() {
+  local lock_pid=$1 owner_state
+  # An absent recorded pid is a mid-acquire window the shared primitive owns.
+  [ -n "$lock_pid" ] || return 0
+  owner_state=$(watch_lock_owner_state "$lock_pid")
+  case "$owner_state" in
+    live) return 0 ;;
+    unknown)
+      echo "watcher: FAILED - recorded watch lock owner is unverified (pid $lock_pid); inspect $WATCH_LOCK before re-arming"
+      return 1
+      ;;
+  esac
+  if ! reclaim_stale_recorded_watcher_lock "$lock_pid"; then
+    echo "watcher: FAILED - could not retire the stale recorded watch lock (pid $lock_pid); inspect $WATCH_LOCK before re-arming"
+    return 1
+  fi
+  return 0
 }
 
 # A watcher is "healthy" iff the lock names a live process that is genuinely THIS
@@ -334,20 +423,16 @@ esac
 if [ "$mode" = restart ]; then
   # Home-scoped stop: only the watcher pid recorded in THIS home's lock.
   lock_pid=$(cat "$WATCH_LOCK/pid" 2>/dev/null || true)
-  if fm_pid_alive "$lock_pid"; then
-    if fm_watcher_lock_matches_pid "$STATE" "$WATCH" "$lock_pid" "$FM_HOME"; then
-      kill -TERM "$lock_pid" 2>/dev/null || true
-      # Wait for it to actually exit before relaunching, so the fresh watcher
-      # either takes a released lock or reclaims a now-dead-pid stale lock instead
-      # of seeing the dying one as a live holder and no-opping.
-      i=0
-      while [ "$i" -lt 50 ] && fm_pid_alive "$lock_pid"; do
-        sleep 0.1
-        i=$((i + 1))
-      done
-    else
-      clear_stale_recorded_watcher_lock
-    fi
+  if fm_pid_alive "$lock_pid" && [ "$(watch_lock_owner_state "$lock_pid")" = live ]; then
+    kill -TERM "$lock_pid" 2>/dev/null || true
+    # Wait for it to actually exit before relaunching, so the fresh watcher
+    # either takes a released lock or reclaims a now-dead-pid stale lock instead
+    # of seeing the dying one as a live holder and no-opping.
+    i=0
+    while [ "$i" -lt 50 ] && fm_pid_alive "$lock_pid"; do
+      sleep 0.1
+      i=$((i + 1))
+    done
   fi
 fi
 
@@ -362,6 +447,12 @@ if [ "$mode" = arm ] && healthy_watcher; then
   attach_and_wait "$HEALTHY_PID"
   exit $?
 fi
+
+# A recorded lock whose owner is provably gone must not block every later arm,
+# so it is retired through the shared guarded reclaim before the watcher is
+# forked. An owner this arm cannot attribute or verify is escalated here.
+recorded_lock_pid=$(cat "$WATCH_LOCK/pid" 2>/dev/null || true)
+retire_stale_recorded_watcher_lock "$recorded_lock_pid" || exit 1
 
 # Start a watcher as a tracked child and confirm it before settling in. The child
 # stays our child for its whole life: we wait on it, so killing this arm (the

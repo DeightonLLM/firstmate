@@ -1,0 +1,17 @@
+{
+  "schema": "fm-contributions.v1",
+  "task": "system-repair-sprint-0924",
+  "records": [
+    {
+      "url": "https://github.com/DeightonLLM/firstmate/pull/3",
+      "kind": "pr",
+      "checked_at": "2026-10-06T01:43:28Z",
+      "observation": null,
+      "verdict": null,
+      "seen": [],
+      "pending": [],
+      "notified": [],
+      "error": "forge observation unavailable or changed during read"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+PASS HOME_METRIC_CONTRAST_SOURCE: homepage metric labels no longer use the Lighthouse-failing green
+PASS HOME_FOOTER_HEADING_LEVEL: homepage footer headings do not skip from the page heading outline to h4
+PASS SHARED_FOOTER_HEADING_LEVEL: shared page footer uses sequential section headings
+PASS NO_NESTED_INTERACTIVE_PRODUCTS: build/pages/products.html contains no <a><button> nesting
+PASS BALANCED_TAGS_PRODUCTS: build/pages/products.html has matching non-void opening/closing tags
+PASS NO_NESTED_INTERACTIVE_ABOUT: build/pages/about.html contains no <a><button> nesting
+PASS BALANCED_TAGS_ABOUT: build/pages/about.html has matching non-void opening/closing tags
+PASS NO_NESTED_INTERACTIVE_COMPLIANCE: build/pages/compliance.html contains no <a><button> nesting
+PASS BALANCED_TAGS_COMPLIANCE: build/pages/compliance.html has matching non-void opening/closing tags
+PASS NO_NESTED_INTERACTIVE_CONTACT: build/pages/contact.html contains no <a><button> nesting
+PASS BALANCED_TAGS_CONTACT: build/pages/contact.html has matching non-void opening/closing tags
+PASS HEADING_ORDER_CONTACT: build/pages/contact.html has no skipped heading level
+PASS NO_NESTED_INTERACTIVE_RESOURCES: build/pages/resources.html contains no <a><button> nesting
+PASS BALANCED_TAGS_RESOURCES: build/pages/resources.html has matching non-void opening/closing tags
+PASS HEADING_ORDER_RESOURCES: build/pages/resources.html has no skipped heading level
+PASS NO_NESTED_INTERACTIVE_BLOG: build/pages/blog.html contains no <a><button> nesting
+PASS BALANCED_TAGS_BLOG: build/pages/blog.html has matching non-void opening/closing tags
+PASS HEADING_ORDER_BLOG: build/pages/blog.html has no skipped heading level
+PASS NO_NESTED_INTERACTIVE_FAQ: build/pages/faq.html contains no <a><button> nesting
+PASS BALANCED_TAGS_FAQ: build/pages/faq.html has matching non-void opening/closing tags
+PASS NO_NESTED_INTERACTIVE_GLASS-VIALS: build/pages/glass-vials.html contains no <a><button> nesting
+PASS BALANCED_TAGS_GLASS-VIALS: build/pages/glass-vials.html has matching non-void opening/closing tags
+PASS NO_NESTED_INTERACTIVE_RUBBER-STOPPERS: build/pages/rubber-stoppers.html contains no <a><button> nesting
+PASS BALANCED_TAGS_RUBBER-STOPPERS: build/pages/rubber-stoppers.html has matching non-void opening/closing tags
+PASS NO_NESTED_INTERACTIVE_ALUMINUM-SEALS: build/pages/aluminum-seals.html contains no <a><button> nesting
+PASS BALANCED_TAGS_ALUMINUM-SEALS: build/pages/aluminum-seals.html has matching non-void opening/closing tags
+PASS NO_NESTED_INTERACTIVE_REGISTER: build/pages/register.html contains no <a><button> nesting
+PASS BALANCED_TAGS_REGISTER: build/pages/register.html has matching non-void opening/closing tags
+PASS PRODUCTS_VIDEO_LOCAL_ASSETS: products content does not request the unavailable MP4 or root-relative poster
+PASS PRODUCTS_CARD_CONTRAST: product card labels receive a light foreground on their dark surface
+PASS RENDER_FIX_HELPER: a tested render-time helper exists for existing private staging page records
+PASS RENDER_FIX_HOOK: the private staging theme applies the content fixes without writing page records
+PASS ASTRA_SCROLL_FLAG: Astra scroll-to-top localization is disabled where its markup is intentionally absent
+PASS ROUTE_CONTRAST_OVERRIDES: contrast fixes are scoped to the affected staging routes
+
+SUMMARY passed=34 failed=0
+EXIT=0

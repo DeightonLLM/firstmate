@@ -385,6 +385,13 @@ wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-
     *)
       age=$(( $(date +%s) - since ))
       if [ "$age" -ge "$STALE_ESCALATE_SECS" ]; then
+        local queued_win
+        while IFS= read -r queued_win; do
+          if [ "$queued_win" = "$win" ]; then
+            triage_log "suppressed repeated wedge escalation while stale wake remains queued: $win"
+            return 0
+          fi
+        done < <(fm_wake_queued_keys stale)
         n=$(( $(cat "$escalation_file" 2>/dev/null || echo 0) + 1 ))
         echo "$n" > "$escalation_file"
         reason="stale: $win (idle ${age}s, possible wedge, escalation $n)"
@@ -741,9 +748,9 @@ event_wait_or_sleep() {
     # progress: the watcher is alive and mid-sweep, not dead.
     _win_n=$((_win_n + 1))
     if [ $((_win_n % 10)) -eq 1 ]; then
-      touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
+      touch "$STATE/.last-watcher-beat" 2>/dev/null || true
     fi
-    touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
+    touch "$STATE/.last-watcher-beat" 2>/dev/null || true
     b=$(window_backend "$w")
     fm_backend_has_push "$b" || continue
     # Secondmate endpoints are supervised via status writes, not pane/agent
@@ -889,7 +896,7 @@ while :; do
   # No conversation scraping; unresolved records are never silently expired.
   fm_pending_reply_tick "$STATE" || true
   _wphase pending_reply_tick
-  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
+  touch "$STATE/.last-watcher-beat" 2>/dev/null || true
 
   # Process-to-event liveness repair. This never discovers a result by polling:
   # each registered source has its own child blocking on that source, and this
@@ -897,7 +904,7 @@ while :; do
   # whose owner is gone. It is a no-op with nothing registered.
   if [ -d "$STATE/procevent" ]; then
     timeout 30 env FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-procevent.sh" reconcile >/dev/null 2>&1 || true
-  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
+  touch "$STATE/.last-watcher-beat" 2>/dev/null || true
   fi
   # Then deliver any queued-but-unsurfaced result, including one a runner
   # published while this watcher was between cycles.
@@ -979,7 +986,7 @@ while :; do
   # costs a full firstmate turn each. The re-scan also picks up a newer
   # signature for an already-pending file (last write wins below).
   pending=$(scan_signals)
-  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
+  touch "$STATE/.last-watcher-beat" 2>/dev/null || true
   if [ -n "$pending" ]; then
     sleep "$SIGNAL_GRACE"
     pending=$(printf '%s\n%s' "$pending" "$(scan_signals)")
@@ -1045,8 +1052,8 @@ EOF
   # the window re-enters supervision automatically). An empty/failed map falls
   # back to the per-window decay probes below - fail-closed to old behavior.
   _cyc0=$SECONDS
-  echo "$(date -u +%FT%TZ) sweep_start" >> /root/agent-work/deightonllm-firstmate/state/.watch-cycle.log
-  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat
+  echo "$(date -u +%FT%TZ) sweep_start" >> "$STATE/.watch-cycle.log"
+  touch "$STATE/.last-watcher-beat"
   FM_WIN_STATUS_MAP=
   FM_HERDR_BIN=$(command -v herdr 2>/dev/null || true)
   [ -n "$FM_HERDR_BIN" ] || [ -x /root/.local/bin/herdr ] && FM_HERDR_BIN=${FM_HERDR_BIN:-/root/.local/bin/herdr}
@@ -1083,6 +1090,14 @@ EOF
         rm -f "$STATE/.win-dead-$dkey" 2>/dev/null || true
       else
         touch "$STATE/.win-dead-$dkey"
+        # A window absent from a successful bulk pane list is gone. Clear its
+        # per-window tracking state here; otherwise the .stale-since-/.wedge-
+        # escalations-/.hash-/.count- trackers outlive the pane and later sweeps
+        # keep escalating a condition that can never change (2026-10-16: reaped
+        # lanes produced stale wakes indefinitely after the pane was closed).
+        rm -f "$STATE/.hash-$dkey" "$STATE/.count-$dkey" \
+              "$STATE/.stale-$dkey" "$STATE/.stale-since-$dkey" \
+              "$STATE/.wedge-escalations-$dkey" "$STATE/.paused-$dkey" 2>/dev/null || true
         continue
       fi
     fi
@@ -1332,9 +1347,9 @@ EOF
     fi
   fi
 
-  echo "$(date -u +%FT%TZ) cycle_end dur=$(( SECONDS - ${_cyc0:-$SECONDS} ))s" >> /root/agent-work/deightonllm-firstmate/state/.watch-cycle.log
+  echo "$(date -u +%FT%TZ) cycle_end dur=$(( SECONDS - ${_cyc0:-$SECONDS} ))s" >> "$STATE/.watch-cycle.log"
   _wphase heartbeat
-  touch /root/agent-work/deightonllm-firstmate/state/.last-watcher-beat 2>/dev/null || true
+  touch "$STATE/.last-watcher-beat" 2>/dev/null || true
   # Terminal wait: a bounded native-event wait for push-capable homes (herdr),
   # else the blind poll sleep. See event_wait_or_sleep.
   event_wait_or_sleep

@@ -1,0 +1,17 @@
+default:w2C:p2	/home/hd2admin/kun-agent-workspace/state/backup-dr.meta	backup-dr
+default:w37:p2	/home/hd2admin/kun-agent-workspace/state/brief-worklocation-template-fix.meta	brief-worklocation-template-fix
+default:w2:pX	/home/hd2admin/kun-agent-workspace/state/cbd-g5-source-refresh-0924.meta	cbd-g5-source-refresh-0924
+default:w2D:p2	/home/hd2admin/kun-agent-workspace/state/cbddata-ops.meta	cbddata-ops
+default:w2:p14	/home/hd2admin/kun-agent-workspace/state/core-live-widget-source-0924.meta	core-live-widget-source-0924
+default:w2E:p2	/home/hd2admin/kun-agent-workspace/state/core-ops.meta	core-ops
+default:w2:p0	/home/hd2admin/kun-agent-workspace/state/core-stream-a-checkpoint-0924.meta	core-stream-a-checkpoint-0924
+default:w2:p28	/home/hd2admin/kun-agent-workspace/state/core-v3-product-acceptance-minimax-test-0927.meta	core-v3-product-acceptance-minimax-test-0927
+default:w2:p27	/home/hd2admin/kun-agent-workspace/state/core-v3-product-acceptance-spec-0927.meta	core-v3-product-acceptance-spec-0927
+default:w4H:p2	/home/hd2admin/kun-agent-workspace/state/decision-hold-gate-diagnosis-20261015.meta	decision-hold-gate-diagnosis-20261015
+default:w2F:p2	/home/hd2admin/kun-agent-workspace/state/elevate-p0-repair.meta	elevate-p0-repair
+default:w2G:p2	/home/hd2admin/kun-agent-workspace/state/hetzner-compute.meta	hetzner-compute
+default:w2H:p2	/home/hd2admin/kun-agent-workspace/state/system-ops.meta	system-ops
+default:w2:p19	/home/hd2admin/kun-agent-workspace/state/system-repair-sprint-0924.meta	system-repair-sprint-0924
+default:w2J:p2	/home/hd2admin/kun-agent-workspace/state/whoosh-ops.meta	whoosh-ops
+default:w2:pP	/home/hd2admin/kun-agent-workspace/state/window-cleanup-inventory-0923.meta	window-cleanup-inventory-0923
+default:w51:p2	/home/hd2admin/kun-agent-workspace/state/wo0005-3-merge-recommendation.meta	wo0005-3-merge-recommendation

@@ -1,0 +1,57 @@
+{
+  "_mode": {
+    "active": "Codex-only",
+    "contract": "Captain directive 2026-10-18T02:35Z: MiniMax 5h window measured at 6% remaining. All delegated work routes to openai-codex/gpt-6-luna until the MiniMax window recovers. Re-measure quota-axi before reverting; do not assume recovery. Codex measured 96% five_hour / 99% weekly."
+  },
+  "rules": [
+    {
+      "when": "The task requires genuinely difficult, high-ambiguity, architectural, or multi-component implementation.",
+      "use": {
+        "harness": "pi",
+        "model": "openai-codex/gpt-6-luna",
+        "effort": "high",
+        "fast": true
+      },
+      "why": "Mode B worker lane: difficult/ambiguous work runs on gpt-6-luna at high effort. Per the Captain's multi-cycle observation Luna is the only model that comfortably survives a 5-hour re-up cycle, sometimes landing mid-60% remaining, where M3.1, GLM 5.3 and Sol cannot. It is not unlimited: gpt-6-luna is served by the openai-codex account whose quota scope is all_models and shares its window with Sol. Stop intake only when a fresh quota-axi reading shows the window actually exhausted or unreadable; a projected exhaustion time is not grounds to refuse because the projection extrapolates current-session burn and drifts. In Mode A this same work runs on minimax/MiniMax-M3.1-Flash-Preview and Luna becomes the async reviewer."
+    },
+    {
+      "when": "The task requires live news, current events, X/Twitter data, market sentiment, or web-connected research.",
+      "use": {
+        "harness": "pi",
+        "model": "openai-codex/gpt-6-luna",
+        "effort": "high",
+        "fast": true
+      },
+      "why": "Captain Luna6-only override. Use Luna 6 with available research tools; missing tool capability is a disclosed blocker, never an automatic model fallback."
+    },
+    {
+      "when": "The task is routine day-to-day coding, bug fixing, test writing, refactoring, or feature implementation, including simple low-risk bounded work and browser evidence capture under a precise procedure.",
+      "use": {
+        "harness": "pi",
+        "model": "openai-codex/gpt-6-luna",
+        "effort": "medium",
+        "fast": true
+      },
+      "why": "Mode B worker lane: bounded/routine work runs on gpt-6-luna at medium effort; escalate to high only for ambiguous investigation or design. Never select MiniMax M2.5 / M2.7 / M2.7-highspeed: the provider retires those families 2026-10-19 for new users and 2026-11-18 outright. In Mode A this work runs on minimax/MiniMax-M3.1-Flash-Preview."
+    },
+    {
+      "when": "A worker requests independent review of its own completed work, or a review gate must run without blocking the worker.",
+      "use": {
+        "harness": "pi",
+        "agent": "reviewer",
+        "model": "openai-codex/gpt-6-luna",
+        "effort": "high",
+        "fast": true
+      },
+      "why": "Captain Luna6-only override. A fresh independent Luna 6 agent reviews; the reviewer is never the author. Pass the exact Luna model explicitly to override any older reviewer-agent default. Keep reviews async and consume their native completion notifications."
+    }
+  ],
+  "default": [
+    {
+      "harness": "pi",
+      "model": "openai-codex/gpt-6-luna",
+      "effort": "high",
+      "fast": true
+    }
+  ]
+}

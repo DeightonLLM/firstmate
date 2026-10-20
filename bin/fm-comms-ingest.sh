@@ -124,7 +124,7 @@ digest_of() {
 # an uncorrelated reply is still received, it just cannot auto-match an
 # expectation.
 corr_of() {
-  grep -aoE 'corr=[A-Za-z0-9._-]{8,}' -- "$1" 2>/dev/null | head -1
+  grep -aoE 'corr=[A-Fa-f0-9]{16}' -- "$1" 2>/dev/null | head -1
 }
 
 # One bounded, single-line, control-character-free summary of the reply.
@@ -149,6 +149,7 @@ cmd_scan() {
 
   local status_file lock receipts handled ingested=0 file name sha corr short_sha
   local summary bytes corr_part line
+  local max_bytes=1048576
   base=$(receipts_dir "$id") || exit 1
   status_file="$STATE/$id.status"
   receipts="$base/receipts.tsv"
@@ -171,6 +172,12 @@ cmd_scan() {
       # Report it so a broken pickup cannot hide behind a clean exit status.
       if ! valid_name "$name"; then
         printf 'malformed: %s (unusable reply name)\n' "$name"
+        continue
+      fi
+      bytes=$(wc -c <"$file" 2>/dev/null | tr -d ' ')
+      case "$bytes" in ''|*[!0-9]*) bytes=0 ;; esac
+      if [ "$bytes" -gt "$max_bytes" ]; then
+        printf 'oversize: %s (%s bytes, limit %s)\n' "$name" "$bytes" "$max_bytes"
         continue
       fi
       sha=$(digest_of "$file")
@@ -196,15 +203,13 @@ cmd_scan() {
 
       corr=$(corr_of "$file")
       summary=$(summary_of "$file")
-      bytes=$(wc -c <"$file" 2>/dev/null | tr -d ' ')
-      case "$bytes" in ''|*[!0-9]*) bytes=0 ;; esac
       corr_part=''
       [ -n "$corr" ] && corr_part=" $corr"
 
       # A typed no-verb signal line: no captain-relevant verb, so the watcher
       # treats it as a signal to surface rather than a verdict to absorb.
       short_sha=$(printf '%s' "$sha" | cut -c1-12)
-      line="comms-received: $id $name sha=$short_sha bytes=$bytes$corr_part | $summary"
+      line="comms-received: $id $name sha=$short_sha bytes=$bytes$corr_part | untrusted-reply-text: $summary"
       printf '%s\n' "$line" >>"$status_file" || die "cannot write $status_file"
       printf '%s\t%s\n' "$sha" "$name" >>"$receipts" || die "cannot write $receipts"
 

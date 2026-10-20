@@ -1,0 +1,1 @@
+blocked: required Controller acknowledgment and arming instruction are outside isolated checkout; lean-ctx path escape prevents source verification

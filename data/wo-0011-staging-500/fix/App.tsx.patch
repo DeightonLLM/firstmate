@@ -1,0 +1,25 @@
+--- App.tsx.orig	2026-07-16 12:57:56.956636278 +0000
++++ App.tsx	2026-10-16 12:32:23.502306593 +0000
+@@ -1,6 +1,6 @@
+ import { Toaster } from "@/components/ui/sonner";
+ import { TooltipProvider } from "@/components/ui/tooltip";
+-import NotFound from "@/pages/NotFound";
++import NotFound from "@/components/pages/NotFoundPage";
+ import { Route, Switch } from "wouter";
+ import ErrorBoundary from "./components/ErrorBoundary";
+ import { ThemeProvider } from "./contexts/ThemeContext";
+@@ -9,10 +9,10 @@
+ import About from "./pages/About";
+ import Compliance from "./pages/Compliance";
+ import Contact from "./pages/Contact";
+-import GlassVials from "./pages/products/GlassVials";
+-import RubberStoppers from "./pages/products/RubberStoppers";
+-import AluminumSeals from "./pages/products/AluminumSeals";
+-import AutomationEquipment from "./pages/products/AutomationEquipment";
++import GlassVials from "./GlassVials";
++import RubberStoppers from "./RubberStoppers";
++import AluminumSeals from "./AluminumSeals";
++import AutomationEquipment from "./AutomationEquipment";
+ import ClientRegister from "./pages/ClientRegister";
+ import Resources from "./pages/Resources";
+ import Admin from "./pages/Admin";

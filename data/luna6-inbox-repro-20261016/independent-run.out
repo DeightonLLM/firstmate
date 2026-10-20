@@ -1,0 +1,9 @@
+PASS fresh-surfaced expected=1 actual=1 exit=0
+PASS unacknowledged-next-sweep-silent expected='' actual='' exit=0
+PASS exact-ack expected=acknowledged: actual=acknowledged: exit=0
+PASS acked-next-sweep-silent expected='' actual='' exit=0
+PASS timestamp-preserving-arrival-silent expected='' actual='' exit=0
+PASS duplicate-emitted-once expected=1 actual=1 exit=0
+PASS changed-bytes-refused expected=refused: actual=refused: exit=1
+PASS outbound-suppressed expected=0 actual=0 exit=0
+SUMMARY PASS=8 FAIL=0

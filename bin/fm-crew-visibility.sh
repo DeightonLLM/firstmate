@@ -76,9 +76,12 @@ LOG="$STATE/$ID.status"
 # reason to invent one. This is also what makes the check inert on an idle home.
 [ -f "$META" ] || exit 0
 
-GRACE=${FM_CREW_VISIBILITY_GRACE_SEC:-300}
+# A full test suite legitimately runs 11+ minutes on this host, so the old
+# 300s first-report grace cried "silent" on healthy lanes roughly once a
+# minute. Raised to 900s; still far below the 1800s stale bound.
+GRACE=${FM_CREW_VISIBILITY_GRACE_SEC:-900}
 STALE=${FM_CREW_VISIBILITY_STALE_SEC:-1800}
-case "$GRACE" in ''|*[!0-9]*) GRACE=300 ;; esac
+case "$GRACE" in ''|*[!0-9]*) GRACE=900 ;; esac
 case "$STALE" in ''|*[!0-9]*) STALE=1800 ;; esac
 # Both halves disabled: the whole check is off.
 [ "$GRACE" -le 0 ] && [ "$STALE" -le 0 ] && exit 0

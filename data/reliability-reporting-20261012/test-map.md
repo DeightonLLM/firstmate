@@ -1,0 +1,23 @@
+Captain, I confirmed the repository root is `/home/hd2admin/.treehouse/kun-agent-workspace-46aafc/11/kun-agent-workspace` and base HEAD is `cecba8b34cc8f33b67d2a522306696bb17e1f4fc`. The working tree was clean. I inspected tests and source only; I did not run tests or access live/private state.
+
+## Behavioral coverage
+
+- **Publication and correlated delivery:** `tests/fm-pending-reply.test.sh:657-680` exercises `fm-send` to a secondmate, checking the embedded marker/correlation token and a durable pending record marked delivered. `tests/fm-send-secondmate-marker.test.sh:85-121` independently checks secondmate marking and record creation; lines `123-148` cover exact task-ID selection and already-marked input. Unmarked ordinary-task input creates no expectation at `tests/fm-pending-reply.test.sh:572-589`.
+- **Authentic correlated reply processing:** `tests/fm-pending-reply.test.sh:99-119` proves a missing report cannot resolve, the matching `done [corr=…]` line does resolve, and resolution is idempotent. Lines `483-504` reject stale/wrong correlation, unrelated `working`, and uncorrelated `done` lines. `tests/fm-pending-reply.test.sh:617-642` covers status-pointed document and helper reports. The matcher itself accepts exact `corr=` presence and rejects the parent’s own missed-report escalation line: `bin/fm-pending-reply-lib.sh:393-405`; the resolver requires a delivered record or delivery-confirmation marker and records the resolution source: `bin/fm-pending-reply-lib.sh:460-503`.
+- **One-recovery behavior:** `tests/fm-pending-reply.test.sh:122-165` simulates request-turn busy→idle without a report, asserts one recovery send contains the original correlation and a repost request, then asserts a second send is refused. Lines `167-233` cover failed/interrupted recovery attempts: no reinjection, explicit delivery-failure/unknown escalation, and no false sent timestamp. Lines `235-257` prove a correlated recovery reply resolves the original expectation. Lines `259-335` cover second missed turn, one durable escalation, and retry after escalation publication failure. The end-to-end tick sequence is at lines `845-879`.
+- **Delivery versus reply success:** `tests/fm-pending-reply.test.sh:337-352` confirms transport delivery alone leaves the record awaiting a reply. Lines `389-481` cover durable delivery-confirmation fallback, preserving uncertainty rather than inventing delivery, escalation on unresolved uncertainty, and accepting a late correlated report.
+- **Turn-completion evidence:** `tests/fm-pending-reply.test.sh:643-656` asserts unknown backend state does not prove completion while busy→idle does. Lines `681-729` cover unknown-state capture fallback for tmux/zellij; lines `731-755` scope Kimi capture to its recorded harness. Source transitions are implemented in `bin/fm-pending-reply-lib.sh:506-540`, `625-675`, and `876-963`.
+
+## Plausible missing behavioral coverage
+
+- **Substantive completion content:** The resolver treats any nonempty line containing the matching token as acknowledgement, except lines containing `pending-reply-missed` (`bin/fm-pending-reply-lib.sh:398-405`). Tests use descriptive `done` text, but do not appear to test whether a bare correlation token or otherwise empty/non-substantive report should count. If “substantive completion” is intended as a behavioral requirement, this is the clearest uncovered case.
+- **Authentication:** In this pending-reply suite, I found no behavior-level test for authenticating who authored a correlated parent status line. Coverage proves correlation matching, not author identity. Whether authentication belongs here or in an upstream status-writing/authentication contract remains unclear.
+- **Precise publication/delivery failure boundary:** Existing tests cover undelivered-record immutability and delivery-confirmation recovery (`tests/fm-pending-reply.test.sh:354-387`, `389-481`) and failed transport discard (`880-900`). A test explicitly asserting the full `fm-send` transport-failure path leaves no falsely delivered expectation would strengthen coverage, if that path is in scope.
+
+## Evidence paths
+
+- `tests/fm-pending-reply.test.sh` — principal scenario coverage cited above.
+- `tests/fm-send-secondmate-marker.test.sh` — independent marker-routing and send-shape coverage.
+- `bin/fm-pending-reply-lib.sh` — correlation matcher, resolver, delivery, and recovery implementation.
+
+This is a bounded test map, not an exhaustive audit; the observations above are plausible gaps, not confirmed defects.

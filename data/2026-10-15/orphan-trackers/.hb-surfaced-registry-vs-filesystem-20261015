@@ -1,0 +1,1 @@
+blocked: Report is written and filesystem evidence is reconciled, but the required decision-hold completion gate would run tasks-axi and write task metadata outside the only permitted external write paths; the gate remains unverified.

@@ -1,0 +1,1 @@
+blocked: report delivered; originating decision-hold completion attestation must be run by firstmate because it writes task metadata outside this scout’s permitted write set

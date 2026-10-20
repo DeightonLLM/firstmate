@@ -5,7 +5,8 @@
 // /fork, reload) as well as terminal quit. This extension binds one generation per
 // session activation. Only the active live generation may start, stop, rearm, or
 // clear the arm child. Replacement session_start (or a fresh factory bind) activates
-// a new live generation so monitoring can arm again without restarting Pi. Terminal
+// a new live generation, and that replacement generation arms the watcher again so
+// supervision never depends on the model remembering a re-arm step. Terminal
 // quit leaves the final generation stopped so late callbacks cannot rearm. Stale
 // callbacks from a prior generation are no-ops against the active replacement.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -98,9 +99,18 @@ const armReadyTimeoutMs = positiveInteger(
 const armRetireTimeoutMs = positiveInteger("FM_WATCH_ARM_RETIRE_TIMEOUT_MS", 1000);
 const repairOnlyHint = "call fm_watch_arm_pi again only after a later notification says the cycle is missing, failed, or unhealthy";
 const shuttingDownMessage = "watcher: not armed - Pi session is shutting down";
+// Pi reports the session_start reason. "startup" is the process's first session,
+// where the model still owes the one required first-cycle arm call. Every other
+// reason is a same-process session replacement, and Pi retired the generation
+// that owned the watcher, so the replacement generation has to arm again.
+const replacementSessionReasons = new Set(["new", "resume", "fork", "reload"]);
 
 let nextGenerationId = 0;
 let activeGeneration: SessionGeneration | null = null;
+// The arm child the retired generation killed. The replacement arm inherits it
+// as its predecessor so the arm layer records the handover instead of leaving
+// the retired cycle orphaned with successor=none.
+let retiredArmPid = "";
 const armReadiness = new WeakMap<ChildProcess, Promise<boolean>>();
 const armClose = new WeakMap<ChildProcess, Promise<void>>();
 
@@ -208,7 +218,10 @@ function stopGeneration(generation: SessionGeneration): void {
   generation.stopping = true;
   if (generation.retryTimer) clearTimeout(generation.retryTimer);
   generation.retryTimer = null;
-  if (generation.child) generation.child.kill("SIGTERM");
+  if (generation.child) {
+    retiredArmPid = String(generation.child.pid ?? "");
+    generation.child.kill("SIGTERM");
+  }
   generation.child = null;
 }
 
@@ -453,10 +466,22 @@ export default function (pi: ExtensionAPI) {
     };
   }
 
-  pi.on?.("session_start", () => {
-    if (generation.stopping) generation = createGeneration();
+  pi.on?.("session_start", (event) => {
+    const reason = String((event as { reason?: unknown })?.reason ?? "");
+    const replacing = generation.stopping;
+    if (replacing) generation = createGeneration();
     activateGeneration(generation);
     markLoaded();
+    const predecessor = retiredArmPid;
+    retiredArmPid = "";
+    if (!replacing && !replacementSessionReasons.has(reason)) return;
+    // A replacement session retired the generation that owned the watcher, so
+    // the replacement generation arms the sanctioned arm path again. startArm
+    // is already idempotent: while this generation owns an arm child or a
+    // scheduled continuity retry it reports an ownership-based no-op instead of
+    // spawning a competing arm, so a live watcher is left untouched.
+    const result = startArm(generation, predecessor);
+    if (!result.ok) surfaceFailure(generation, result.message);
   });
   pi.on?.("session_shutdown", () => {
     stopGeneration(generation);

@@ -1011,6 +1011,185 @@ test_msys_pid_identity_uses_proc() {
   pass "MSYS process identity uses compatible /proc fields"
 }
 
+test_arm_retires_stale_lock_with_destroyed_identity() {
+  # A recorded watch lock whose owner directory was cleaned of its identity
+  # record names a live pid that is not this home's watcher. The recorded
+  # owner is provably gone, so that stale lock must not block every later arm.
+  local dir state fakebin armout armpid live owner lock_pid i
+  dir=$(make_case arm-retire-destroyed-identity)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  armout="$dir/arm.out"
+  mark_pr_check_migration_complete "$state"
+  sleep 300 &
+  live=$!
+  # The production lock shape: a symlink to an owner directory. The owner
+  # directory was cleaned of its identity record, so the recorded pid is alive
+  # but is not this home's watcher.
+  owner="$state/.watch.lock.owner.test"
+  mkdir -p "$owner"
+  ln -s "$owner" "$state/.watch.lock"
+  printf '%s\n' "$live" > "$owner/pid"
+  printf '%s\n' "$dir" > "$owner/fm-home"
+  printf '%s\n' "$WATCH" > "$owner/watcher-path"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH_ARM" > "$armout" &
+  armpid=$!
+  i=0
+  while [ "$i" -lt 80 ]; do
+    grep -qF 'watcher: started pid=' "$armout" 2>/dev/null && break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  grep -qF 'watcher: started pid=' "$armout" \
+    || fail "arm did not start a watcher behind a stale lock whose identity record was cleaned: $(cat "$armout")"
+  lock_pid=$(cat "$state/.watch.lock/pid" 2>/dev/null || true)
+  [ -n "$lock_pid" ] || fail "arm left no watcher lock behind"
+  [ "$lock_pid" != "$live" ] || fail "the stale recorded pid was reused as the new watcher pid"
+  is_live_non_zombie "$lock_pid" || fail "the confirmed watcher is not actually alive"
+  # Negative control: the process that merely inherited the recorded pid is
+  # never signalled, so the stale lock is retired rather than its holder.
+  is_live_non_zombie "$live" || fail "arm killed the unrelated live process behind the stale lock"
+  kill "$armpid" "$lock_pid" 2>/dev/null || true
+  wait "$armpid" 2>/dev/null || true
+  kill "$live" 2>/dev/null || true
+  wait "$live" 2>/dev/null || true
+  pass "arm retires a stale watch lock whose owner identity record was cleaned"
+}
+
+test_arm_does_not_steal_live_recorded_lock() {
+  # The recorded lock names a live process and carries that process's real
+  # identity, so the recorded owner is alive. A live lock is never stolen: the
+  # arm must leave the lock and its holder exactly as they were.
+  local dir state fakebin armout armpid live identity status i
+  dir=$(make_case arm-no-steal-live-lock)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  armout="$dir/arm.out"
+  mark_pr_check_migration_complete "$state"
+  sleep 300 &
+  live=$!
+  identity=$(FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_pid_identity "$2"' _ "$LIB" "$live") \
+    || fail "could not identify the live lock holder"
+  mkdir -p "$state/.watch.lock"
+  printf '%s\n' "$live" > "$state/.watch.lock/pid"
+  printf '%s\n' "$dir" > "$state/.watch.lock/fm-home"
+  printf '%s\n' "$WATCH" > "$state/.watch.lock/watcher-path"
+  printf '%s\n' "$identity" > "$state/.watch.lock/pid-identity"
+  touch -t 200001010000 "$state/.last-watcher-beat"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 FM_ARM_CONFIRM_TIMEOUT=1 "$WATCH_ARM" > "$armout" 2>&1 &
+  armpid=$!
+  wait_for_exit "$armpid" 120
+  status=$?
+  [ "$status" -ne 0 ] && [ "$status" -ne 124 ] || fail "arm did not fail behind a live recorded lock (status $status)"
+  grep -qF 'watcher: FAILED' "$armout" || fail "arm did not print a typed FAILED line behind a live recorded lock"
+  ! grep -qF 'watcher: started' "$armout" || fail "arm stole a live recorded lock"
+  # Negative control: the live lock and its holder survive untouched.
+  [ "$(cat "$state/.watch.lock/pid" 2>/dev/null || true)" = "$live" ] || fail "arm replaced the live recorded lock"
+  [ "$(cat "$state/.watch.lock/pid-identity" 2>/dev/null || true)" = "$identity" ] || fail "arm rewrote the live recorded lock identity"
+  is_live_non_zombie "$live" || fail "arm killed the live lock holder"
+  kill "$live" 2>/dev/null || true
+  wait "$live" 2>/dev/null || true
+  pass "arm never steals a live recorded watch lock"
+}
+
+test_arm_reclaim_keeps_steal_serialisation_and_grace() {
+  # Two guards on the arm's reclaim of a recorded watch lock:
+  # (1) the shared steal mutex serialises the reclaim against the guarded
+  #     reclaim path, so a held mutex blocks the retirement instead of racing
+  #     it;
+  # (2) the mid-acquire grace for a lock that carries no recorded pid stays
+  #     with the shared primitive, so the arm does not retire that window.
+  local dir state fakebin armout live holder status i
+  dir=$(make_case arm-reclaim-steal-serialisation)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  armout="$dir/arm.out"
+  mark_pr_check_migration_complete "$state"
+  sleep 300 &
+  live=$!
+  mkdir -p "$state/.watch.lock"
+  printf '%s\n' "$live" > "$state/.watch.lock/pid"
+  printf '%s\n' "$dir" > "$state/.watch.lock/fm-home"
+  printf '%s\n' "$WATCH" > "$state/.watch.lock/watcher-path"
+  # A live holder of the shared steal mutex: the arm must wait for it and then
+  # refuse rather than retire the lock without it.
+  FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_lock_try_acquire "$2" || exit 1; sleep 60' _ "$LIB" "$state/.watch.lock.steal" &
+  holder=$!
+  i=0
+  while [ "$i" -lt 50 ] && [ ! -e "$state/.watch.lock.steal/pid" ]; do
+    sleep 0.1
+    i=$((i + 1))
+  done
+  [ -e "$state/.watch.lock.steal/pid" ] || fail "the steal mutex holder did not take the shared mutex"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH_ARM" > "$armout" 2>&1
+  status=$?
+  [ "$status" -ne 0 ] || fail "arm exited zero although the shared steal mutex was held"
+  grep -qF 'watcher: FAILED' "$armout" || fail "arm did not report a typed failure while the steal mutex was held"
+  [ "$(cat "$state/.watch.lock/pid" 2>/dev/null || true)" = "$live" ] \
+    || fail "arm retired the recorded lock without the shared steal mutex"
+  is_live_non_zombie "$live" || fail "arm killed the live lock holder"
+  kill "$holder" 2>/dev/null || true
+  wait "$holder" 2>/dev/null || true
+  kill "$live" 2>/dev/null || true
+  wait "$live" 2>/dev/null || true
+
+  dir=$(make_case arm-reclaim-mid-acquire-grace)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  armout="$dir/arm.out"
+  mark_pr_check_migration_complete "$state"
+  mkdir -p "$state/.watch.lock"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_LOCK_STALE_AFTER=600 FM_ARM_CONFIRM_TIMEOUT=1 FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH_ARM" > "$armout" 2>&1
+  status=$?
+  [ "$status" -ne 0 ] || fail "arm exited zero behind a mid-acquire lock with no recorded pid"
+  [ -d "$state/.watch.lock" ] || fail "arm retired a mid-acquire lock that carries no recorded pid"
+  pass "arm reclaim keeps the shared steal serialisation and the mid-acquire grace"
+}
+
+test_arm_escalates_unverifiable_recorded_lock_owner() {
+  # The recorded lock names a live process that runs a watcher script this
+  # home cannot attribute to its own watcher. That process may still own a
+  # watcher lock, so the arm must escalate rather than reclaim the lock.
+  local dir state fakebin armout live status i
+  dir=$(make_case arm-escalate-unverifiable-owner)
+  state="$dir/state"
+  fakebin="$dir/fakebin"
+  armout="$dir/arm.out"
+  mark_pr_check_migration_complete "$state"
+  # A live watcher script that is not this home's watcher.
+  mkdir -p "$dir/other"
+  cat > "$dir/other/fm-watch.sh" <<'SH'
+#!/usr/bin/env bash
+sleep 60
+SH
+  chmod +x "$dir/other/fm-watch.sh"
+  "$dir/other/fm-watch.sh" &
+  live=$!
+  i=0
+  while [ "$i" -lt 50 ]; do
+    ps -p "$live" -o command= 2>/dev/null | grep -qF 'fm-watch.sh' && break
+    sleep 0.1
+    i=$((i + 1))
+  done
+  mkdir -p "$state/.watch.lock"
+  printf '%s\n' "$live" > "$state/.watch.lock/pid"
+  printf '%s\n' "$dir" > "$state/.watch.lock/fm-home"
+  printf '%s\n' "$WATCH" > "$state/.watch.lock/watcher-path"
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$state" FM_POLL=5 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 "$WATCH_ARM" > "$armout" 2>&1
+  status=$?
+  [ "$status" -ne 0 ] || fail "arm exited zero although the recorded lock owner could not be verified"
+  grep -qF 'watcher: FAILED - recorded watch lock owner is unverified' "$armout" \
+    || fail "arm did not escalate the unverifiable recorded lock owner: $(cat "$armout")"
+  ! grep -qF 'watcher: started' "$armout" || fail "arm reported started behind an unverifiable recorded lock"
+  # Negative control: the unverifiable lock and its holder survive untouched.
+  [ "$(cat "$state/.watch.lock/pid" 2>/dev/null || true)" = "$live" ] \
+    || fail "arm reclaimed a lock whose owner it could not verify"
+  is_live_non_zombie "$live" || fail "arm killed the live watcher it could not attribute"
+  kill "$live" 2>/dev/null || true
+  wait "$live" 2>/dev/null || true
+  pass "arm escalates an unverifiable recorded lock owner instead of reclaiming it"
+}
+
 test_singleton_start
 test_pid_identity_is_locale_invariant
 test_proc_pid_identity_ignores_wall_clock_and_detects_pid_reuse
@@ -1037,5 +1216,9 @@ test_arm_hup_cleans_child_and_temp_output
 test_arm_propagates_immediate_wake_before_confirmation
 test_arm_waits_for_peer_beacon_after_child_stands_down
 test_arm_fails_loud_when_no_fresh_watcher_confirmable
+test_arm_retires_stale_lock_with_destroyed_identity
+test_arm_does_not_steal_live_recorded_lock
+test_arm_reclaim_keeps_steal_serialisation_and_grace
+test_arm_escalates_unverifiable_recorded_lock_owner
 test_cycle_exit_ledger_links_successor_and_stays_bounded
 test_stopped_watcher_is_live_but_stale_then_exit_is_classified

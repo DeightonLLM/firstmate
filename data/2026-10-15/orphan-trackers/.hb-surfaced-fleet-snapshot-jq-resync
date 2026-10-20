@@ -1,0 +1,1 @@
+done: jq arg-limit fix landed as 097d98cb in main; fleet view renders, snapshot 444810 bytes; tests fm-fleet-snapshot-view and fm-bearings-snapshot exit 0 verified by firstmate in primary sandbox
