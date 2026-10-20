@@ -111,7 +111,7 @@
   If you cannot verify something, mark UNVERIFIED.
 
   Report: data/wo0005-3-merge-recommendation/report.md. YOUR CHAT REPLY IS NOT THE DELIVERABLE.
-- [ ] domain-expertise-20261013 - Implement domain expertise files and executable secondmate queues data/domain-expertise-20261013/report.md (kind: docs) (since 2026-10-13)
+- [ ] domain-expertise-20261013 - Implement domain expertise files and executable secondmate queues data/domain-expertise-20261013/report.md (repo: firstmate) (kind: docs) (since 2026-10-13)
   # Domain expertise and execution batch
 
   Captain explicitly authorized durable domain-specific expertise for all seven existing secondmates, dedicated warehouse files, and parallel execution of accepted work on 2026-10-13.
@@ -201,7 +201,7 @@
   ## Live dependencies
   Controller reply requested at exact /home/hd2admin/controller-replies/2026-10-13-controller-durable-recovery-and-cleanup-handoff.md; not received yet. Fresh quota needed before child launches. Shared source admission/delivery ambiguity remains a real blocker, not authority to improvise.
 
-- [ ] controller-watcher-tdd - Controller watcher TDD: stale heartbeat + owned arm child recovery in Firstmate source (kind: ship) (since 2026-10-03)
+- [ ] controller-watcher-tdd - Controller watcher TDD: stale heartbeat + owned arm child recovery in Firstmate source (repo: firstmate) (kind: ship) (since 2026-10-03)
 - [x] mm-saas-fastpath-benchmark-0926 (done 2026-09-26 — benchmark report delivered: from-brandon-compute/20260925T-mm-perf-benchmark.md; NEW warm 4.2ms/7q vs OLD 174ms/47-104q) - Benchmark Music Metrics fastpath using delivered local snapshot data/mm-saas-fastpath-benchmark-0926/report.md blocked-by: local-scout-spawn-source-0926 (repo: SAAS) (kind: scout) (priority: 3) (since 2026-09-26)
 - [x] hd2-embed-prep-local-preview-0926 (done 2026-09-26 — report delivered: 20260925T-hd2-embed-prep.md + preview at data/hd2-embed-prep-local-preview-0926/) - Prepare HD2-branded local-only embed preview for Core and Elevate data/hd2-embed-prep-local-preview-0926/report.md blocked-by: local-scout-spawn-source-0926 (repo: core-distro-saas-clean) (kind: scout) (priority: 3) (since 2026-09-26)
 - [ ] elevate-ops-source-map - Locate the BR-ELEVATE-OPS-001 source and mock-test lane (repo: firstmate) (kind: scout) (priority: 4) (since 2026-09-23) (hold: Awaiting source owner to provide repository, tests, and build or test command) (hold-kind: external)
@@ -320,7 +320,7 @@
   Second, the admin list overview takes about 15 seconds for the admin account because it aggregates city counts across 21 lists and 949k rows with one full scan per list, and the fix needs a per-list city summary table, which is a schema change.
   The Captain's own 2-minute site check is specified in the HD2 inbound message of 2026-10-20: sign in at `https://data.core-distro.com/login.php` as `admin@core-distro.com`, open Lead Engine, click Top Cities, and expect the panel under a second with Top 100 pre-selected and the status line `Total in US: 2000 | Covered: 1 | New (all): 1999 | In this preset: 100 | Beyond preset limit: 1899 across 34 states.`, then Top 200, then the map, and expect the 15 second wait on the list overview to be the known open item and not a regression.
   Acceptance: the deployed app serves the merged canonical, the browser regression passes against the deployed surface, the per-list city summary table exists or the Captain accepts the 15 second overview, and the Captain's site check is recorded.
-- [ ] rotate-exposed-provider-keys-20261020 - Rotate the exposed RapidAPI and Replicate keys (kind: captain) (since 2026-10-20)
+- [ ] rotate-exposed-provider-keys-20261020 - Rotate the exposed RapidAPI and Replicate keys (repo: firstmate) (kind: captain) (since 2026-10-20)
   Both keys were reported as exposed in the HD2 inbound message on 2026-10-20.
   No value has been read, stored or rotated by the fleet, and this is deliberately tracked rather than acted on.
   Acceptance: the Captain confirms rotation, and the rotated values never enter the repo, the backlog or any report.
@@ -328,7 +328,7 @@
   The primary checkout is on `main` at `395f2ab0` with 36 dirty paths and is now 5 commits behind `origin/main` at `aa490138`.
   It also carries local copies of `bin/fm-herdr-agent-report.sh`, `bin/fm-install-mcode-herdr-agent.sh`, `tests/fm-herdr-agent-report.test.sh` and `extensions/mcode-herdr-agent/`, which are now tracked upstream, so a future fast-forward will refuse to overwrite them.
   Acceptance: the primary checkout is fast-forwarded onto `origin/main` with its dirty paths intact and no file left behind that the fast-forward would overwrite.
-- [ ] core-elevate-chatbot-rollout - Implement HD2-branded local-model chatbots for Core and Elevate blocked-by: local-chatbot-trial-map-and-benchmark-core-elevate-chatbots-d1 (kind: ship) (priority: 1) (since 2026-09-23) (hold: Dubz now reports that the controller crawled and ingested nine Core pages, then requests a coverage audit; that external report is not locally verified. Prior direct instruction prohibits access to AnythingLLM, port 3001, production runtime or config, credentials, and external sites. Option A: explicitly authorize only a read-only audit of /tmp/core-crawl/manifest.csv, the requested local HTTP API and chat queries using the local credential, and targeted public-page reads if a gap requires them; no uploads, embedding updates, container operations, or Elevate ingestion. Option B: maintain the no-access boundary and treat the controller's claims as unverified. No manifest read, site request, credential read, API call, upload, embedding update, chat test, or runtime inspection has occurred here.) (hold-kind: captain)
+- [ ] core-elevate-chatbot-rollout - Implement HD2-branded local-model chatbots for Core and Elevate blocked-by: local-chatbot-trial-map-and-benchmark-core-elevate-chatbots-d1 (repo: core-distro-saas-clean) (kind: ship) (priority: 1) (since 2026-09-23) (hold: Dubz now reports that the controller crawled and ingested nine Core pages, then requests a coverage audit; that external report is not locally verified. Prior direct instruction prohibits access to AnythingLLM, port 3001, production runtime or config, credentials, and external sites. Option A: explicitly authorize only a read-only audit of /tmp/core-crawl/manifest.csv, the requested local HTTP API and chat queries using the local credential, and targeted public-page reads if a gap requires them; no uploads, embedding updates, container operations, or Elevate ingestion. Option B: maintain the no-access boundary and treat the controller's claims as unverified. No manifest read, site request, credential read, API call, upload, embedding update, chat test, or runtime inspection has occurred here.) (hold-kind: captain)
   Captain hold set: 2026-09-26T16:42:39Z
 
   Resolution recorded by fm-captain-hold.
@@ -536,7 +536,7 @@
   Origin: local-alert-logging-20261018
   Decision key: one-log-cycle
   State: awaiting captain decision.
-- [ ] deferred-noncore-20261018 - Defer non-Core work while Core Distro is sole product focus (kind: coordination) (since 2026-10-18)
+- [ ] deferred-noncore-20261018 - Defer non-Core work while Core Distro is sole product focus (repo: firstmate) (kind: coordination) (since 2026-10-18)
   # Deferred non-Core work — Captain priority reset
 
   Captain directs Core Distro end-to-end PRD completion as the sole product focus now; only urgent system/harness repairs remain active alongside it. This is prioritization, not cancellation, acceptance, merge, write approval or discard authority.
