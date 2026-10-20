@@ -57,12 +57,17 @@ set -u
 # Build anchored regex patterns (anchored so partial matches are not accepted).
 _model_pat='m2\.7h|m2\.7|m3\.1f|luna6|glm5\.3f|gem38f|pi'
 _surface_pat='dubz|hd2|brandon|evps|firstmate'
+# Lane keys are <harness>-<model>-<host>-<task> per AGENT-TODO-PROMPT-STYLE.md
+# (Captain renewed 2026-10-18). The harness segment is NOT optional: without it a
+# mcode lane and a pi lane are indistinguishable, which is exactly the confusion
+# the contract exists to prevent.
+_harness_pat='pi|mcode|claude|codex|opencode|grok|kimi|agy|minimax-code'
 
 # Lane key: <model>-<surface>-<task>
 #   model: one of the canonical aliases (may contain '.' like m2.7)
 #   surface: one of the canonical aliases
 #   task: any lowercase alphanumeric with hyphens (may include '.')
-_lane_key_pat="^($_model_pat)-($_surface_pat)-[a-z0-9.-]+$"
+_lane_key_pat="^($_harness_pat)-($_model_pat)-($_surface_pat)-[a-z0-9.-]+$"
 
 # UUID pattern for run_id field (8-4-4-4-12 hex digits).
 _uuid_pat='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
@@ -78,7 +83,7 @@ check_one() {
   # Empty line: skip silently.
   [ -n "$input" ] || return 0
 
-  # Try lane-key format: <model>-<surface>-<task>
+  # Try legacy direct lane-key format: <model>-<surface>-<task>.
   if printf '%s\n' "$input" | grep -qE "^($_model_pat)-($_surface_pat)-[a-z0-9.-]+$"; then
     return 0
   fi
@@ -116,6 +121,10 @@ check_registry_file() {
   local file=$1
   local line_num=0
   local failed=0
+  # Enforces the documented guarantee that a run_id identifies exactly one lane.
+  # The UUID shape test below cannot catch reuse, which is how three lanes came
+  # to share one workflow id unnoticed.
+  local _seen_ids=$'\n'
 
   while IFS= read -r line || [ -n "$line" ]; do
     line_num=$((line_num + 1))
@@ -147,12 +156,23 @@ check_registry_file() {
     # shellcheck disable=SC2034
     local _task=$5 _state=$6 _output=$7
 
-    # Validate run_id is a UUID.
+    # Validate run_id is a UUID, and that no earlier row already claims it.
     if ! printf '%s\n' "$run_id" | grep -qE "$_uuid_pat"; then
       printf '%s: line %d: run_id is not a valid UUID: %s\n' \
         "$file" "$line_num" "$run_id" >&2
       failed=1
     fi
+
+    case "$_seen_ids" in
+      *$'\n'"$run_id"$'\n'*)
+        printf '%s: line %d: run_id %s is already claimed by an earlier row; a run_id identifies one lane\n' \
+          "$file" "$line_num" "$run_id" >&2
+        failed=1
+        ;;
+      *)
+        _seen_ids=$_seen_ids$run_id$'\n'
+        ;;
+    esac
 
     # Validate lane_key format.
     if ! printf '%s\n' "$lane_key" | grep -qE "$_lane_key_pat"; then
@@ -162,7 +182,7 @@ check_registry_file() {
     else
       # Cross-check: lane_key model segment must match the model column.
       local key_model
-      key_model=$(extract_segment "$lane_key" 1) || key_model=""
+      key_model=$(extract_segment "$lane_key" 2) || key_model=""
       if [ -n "$key_model" ] && [ "$key_model" != "$model" ]; then
         printf '%s: line %d: lane_key model segment "%s" disagrees with model column "%s"\n' \
           "$file" "$line_num" "$key_model" "$model" >&2
@@ -171,7 +191,7 @@ check_registry_file() {
 
       # Cross-check: lane_key surface segment must match the surface column.
       local key_surface
-      key_surface=$(extract_segment "$lane_key" 2) || key_surface=""
+      key_surface=$(extract_segment "$lane_key" 3) || key_surface=""
       if [ -n "$key_surface" ] && [ "$key_surface" != "$surface" ]; then
         printf '%s: line %d: lane_key surface segment "%s" disagrees with surface column "%s"\n' \
           "$file" "$line_num" "$key_surface" "$surface" >&2

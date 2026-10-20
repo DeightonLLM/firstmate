@@ -259,9 +259,13 @@ Never both present a likely-enough solution and launch a parallel design exercis
 A diagnostic request, report, recommendation, or implementation-ready finding is evidence, not authorization to change code.
 Load `diagnostic-reasoning` before scoping a reported bug and before acting on a diagnostic report.
 
-Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately with no concurrency cap when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
+The primary firstmate is the only dispatch authority in this fleet: only the primary launches agents, and only the primary holds merge, approval, and captain-gated authority. A worker, second mate, or lane never launches another agent on its own initiative and never inherits that authority.
+On the Hetz surface this primary keeps 4-6 independent lanes in flight and dispatches them in waves; serial dispatch is a defect, not caution. That launch amount belongs to the Hetz surface alone — do not apply it to, or change the launch amount of, any other surface or agent.
+Independence requires disjoint write boundaries: isolate work in separate worktrees, output directories, or disposable resources rather than serializing it.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
+Every agent definition a lane can reach carries the authority rule above.
+[`AGENT-TODO-PROMPT-STYLE.md`](AGENT-TODO-PROMPT-STYLE.md) is the sole owner of the naming contract for task subjects, lane labels and lane keys; follow it rather than duplicating its format here.
 
 ### Mandatory To-Do List gate
 
@@ -619,12 +623,12 @@ When updating this file, preserve every safety boundary and keep the always-load
 ## Delegation-first execution (captain directive 2026-09-26)
 - Execution work is DELEGATED BY DEFAULT: MiniMax 2.7 subagents via `mcode exec "<self-contained bounded task>"` (headless) do implementation/analysis; Gemini reviews every deliverable via `agy --model "Gemini 3.8 Flash (Medium)" --print`.
 - The controller (Codex/Pi) coordinates, spot-verifies, and handles only captain-gated actions. Solo implementation requires a stated reason (credential gate, sub-minute task, or no delegable boundary).
-- Hetz/brandon compute is the parallel muscle: batch independent jobs as brandon lanes (max 3 concurrent) with coordination headers (objective, boundary, evidence path, model lane, stop condition); AGY-review before closeout. Reports route to the controller, never relayed through the operator.
+- Hetz/brandon compute is the parallel muscle: batch independent jobs as brandon lanes with coordination headers (objective, boundary, evidence path, model lane, stop condition); AGY-review before closeout. Reports route to the controller, never relayed through the operator. Concurrent target is six per provider per the swarm protocol below; this sentence sets the Brandon role, not a lane count ceiling.
 
 ## Deterministic swarm protocol (captain directive 2026-09-26) — study → plot → execute parallel
 - For EVERY non-trivial task: (1) STUDY the surface (paths, access, constraints), (2) PLOT the swarm: disjoint lanes with objective/boundary/evidence-path/model-lane/stop-condition, (3) EXECUTE lanes concurrently, never serially.
 - Lane types: MiniMax 2.7 (`mcode exec`) for implementation on accessible surfaces; hetz/brandon lanes for parallel compute-bound work; controller for coordination + captain-gated actions only. Gemini (AGY) reviews deliverables before closeout.
-- Default swarm size: 2-4 disjoint lanes + coordinator. Prefer existing subdomains/routes/infra over new DNS. Backups precede any live mutation (fail-closed).
+- Default swarm size: SIX useful concurrent lanes + coordinator (captain directive 2026-10-18). Maximum SIX working agents PER PROVIDER, not six globally. Below-six needs a concrete recorded reason in the task brief. Prefer existing subdomains/routes/infra over new DNS. Backups precede any live mutation (fail-closed).
 
 - BOOT: read `CONTROLLER_STATE.md` and `BOARD.md` **at the root of the firstmate home you are in** (`/home/hd2admin/kun-agent-workspace/`) before any task work. Keep both current — they are the durable memory; the captain must never re-explain basics. A `/root/agent-work/...` path is Controller-local, unreadable to this account, and never a task input: if a brief names it, treat the file as absent and carry on rather than stalling.
 
@@ -636,7 +640,7 @@ When updating this file, preserve every safety boundary and keep the always-load
 ## War-room rule (captain directive 2026-09-26)
 - ONE consolidated view per host: all active lane panes/windows live in the host's default tmux server under a 'war-room' session (or the primary agent TUI layout). Per-task tmux servers are torn down on task close — never leave stale sockets (verify with: for s in /tmp/tmux-*; do tmux -S $s list-sessions; done).
 - The captain must be able to see every running lane in one place; if a lane is invisible, that is a defect — fix visibility before adding work.
-- Working lanes per host: **2x2 grid MAX, equal splits** (captain directive 2026-10-05). A fifth worker pane or unequal split ratios is a defect; finished lanes get the next ticket in place (warm-pane re-feed), never a new pane while a 2x2 slot exists.
+- Working panes per host for VISIBLE panel layout: **2x2 grid MAX, equal splits** (captain directive 2026-10-05). A fifth visible pane or unequal split ratios is a defect for panel-management purposes; finished panes get the next ticket in place (warm-pane re-feed), never a new pane while a 2x2 slot exists. This constrains the physical tmux/Herdr layout shown in the panel, not the async dispatch ceiling: six concurrent async lanes can run across fewer visible panes via sequential queue flow.
 
 ## Mechanical lane protocol (captain directive 2026-10-05 — supersedes looser habits, always applied)
 1. STUDY the real queue first: reconcile BOARD.md, CONTROLLER_STATE.md, the backlog, staged tickets, live panes, and available code surfaces. Classify every task as done, blocked, duplicated, or eligible; invent no filler work.

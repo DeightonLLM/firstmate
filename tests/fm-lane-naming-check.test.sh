@@ -292,7 +292,7 @@ test_registry_missing_field() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123	m2.7-hd2-build	m2.7	hd2	build	running	https://...
+abc123	mcode-m2.7-hd2-build	m2.7	hd2	build	running	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "registry with 6 fields must exit non-zero, got $rc: $out"
@@ -310,7 +310,7 @@ test_registry_model_disagrees() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123-def	m2.7-hd2-build	gem38f	hd2	build	running	https://...
+abc123-def	mcode-m2.7-hd2-build	gem38f	hd2	build	running	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "model disagreement must exit non-zero, got $rc: $out"
@@ -328,7 +328,7 @@ test_registry_surface_disagrees() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123-def	m2.7-hd2-build	m2.7	brandon	build	running	https://...
+abc123-def	mcode-m2.7-hd2-build	m2.7	brandon	build	running	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "surface disagreement must exit non-zero, got $rc: $out"
@@ -362,7 +362,7 @@ test_registry_non_uuid_run_id() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-not-a-uuid	m2.7-hd2-build	m2.7	hd2	build	running	https://...
+not-a-uuid	mcode-m2.7-hd2-build	m2.7	hd2	build	running	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "non-UUID run_id must exit non-zero, got $rc: $out"
@@ -380,14 +380,46 @@ test_registry_valid_multi_row() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123de-f123-4567-8901-abcdef123456	m2.7-hd2-build	m2.7	hd2	build	running	https://...
-abc123de-f234-5678-9012-bcdef1234567	m3.1f-dubz-comms	m3.1f	dubz	comms	done	https://...
-abc123de-f345-6789-0123-cdef12345678	luna6-brandon-audit	luna6	brandon	audit	idle	https://...
+abc123de-f123-4567-8901-abcdef123456	mcode-m2.7-hd2-build	m2.7	hd2	build	running	https://...
+abc123de-f234-5678-9012-bcdef1234567	mcode-m3.1f-dubz-comms	m3.1f	dubz	comms	done	https://...
+abc123de-f345-6789-0123-cdef12345678	mcode-luna6-brandon-audit	luna6	brandon	audit	idle	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -eq 0 ] || fail "valid multi-row registry should pass, got exit $rc: $out"
   rm -rf "$tmp"
   pass "valid multi-row registry passes"
+}
+
+# test_registry_duplicate_run_id_rejected: every registry row must have its own run id.
+test_registry_duplicate_run_id_rejected() {
+  local tmp out rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
+  cat > "$tmp/registry.tsv" <<'EOF'
+# run_id	lane_key	model	surface	task	state	output
+abc123de-f123-4567-8901-abcdef123456	mcode-m2.7-hd2-build	m2.7	hd2	build	running	first
+abc123de-f123-4567-8901-abcdef123456	mcode-m2.7-hd2-review	m2.7	hd2	review	running	second
+EOF
+  out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
+  [ "$rc" -ne 0 ] || fail "duplicate run_id must be rejected, got exit $rc: $out"
+  printf '%s\n' "$out" | grep -qi "already claimed" \
+    || fail "duplicate run_id diagnostic must explain the collision: $out"
+  rm -rf "$tmp"
+  pass "registry duplicate run_id is rejected"
+}
+
+# test_registry_distinct_run_ids_accepted: distinct recorded runs may coexist.
+test_registry_distinct_run_ids_accepted() {
+  local tmp out rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
+  cat > "$tmp/registry.tsv" <<'EOF'
+# run_id	lane_key	model	surface	task	state	output
+abc123de-f123-4567-8901-abcdef123456	mcode-m2.7-hd2-build	m2.7	hd2	build	running	first
+def234ef-f234-5678-9012-bcdef1234567	mcode-m2.7-hd2-review	m2.7	hd2	review	running	second
+EOF
+  out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "distinct run_ids should pass, got exit $rc: $out"
+  rm -rf "$tmp"
+  pass "registry distinct run_ids are accepted"
 }
 
 # test_registry_does_not_edit: the check must never modify the registry file.
@@ -396,7 +428,7 @@ test_registry_does_not_edit() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-bad-run-id	m2.7-hd2-build	m2.7	hd2	build	running	https://...
+bad-run-id	mcode-m2.7-hd2-build	m2.7	hd2	build	running	https://...
 EOF
   bash "$CHECK" "$tmp/registry.tsv" > /dev/null 2>&1 || true
   grep -q "bad-run-id" "$tmp/registry.tsv" \
@@ -457,23 +489,29 @@ test_self_check_configured_model_has_alias() {
 test_self_check_proves_alias_removed_causes_failure() {
   local tmp out rc
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-alias-sim.XXXXXX")
-  # Remove m2.7h from the alias regex, simulating the Q2 defect state
-  # (validator had m2.7 but workers ran m2.7-highspeed).
-  # The _model_pat uses 'm2\.7h' (literal backslash-dot). In BRE, \. matches
-  # a literal dot, and . matches any char. To match the literal backslash-dot
-  # in the file, use '\\.' (escaped backslash in pattern) then 'h'.
-  sed 's/m2\\.7h/m2.7/g' "$CHECK" > "$tmp/patched-check.sh"
+  cat > "$tmp/dispatch.json" <<'JSON'
+{"default":{"model":"minimax/MiniMax-M2.7-highspeed"}}
+JSON
+  # First establish that the live checker accepts this configured alias.
+  out=$(bash "$CHECK" --self-check "$tmp/dispatch.json" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "self-check must accept configured m2.7h before mutation; got $rc: $out"
+  # Remove precisely the literal alias token; no regex wildcard is introduced.
+  python3 - "$CHECK" "$tmp/patched-check.sh" <<'PY_PATCH'
+from pathlib import Path
+import sys
+source, destination = map(Path, sys.argv[1:])
+text = source.read_text()
+token = "_model_pat='m2\\.7h|"
+assert text.count(token) == 1, "expected exactly one canonical m2.7h token"
+destination.write_text(text.replace(token, "_model_pat='", 1))
+PY_PATCH
   chmod +x "$tmp/patched-check.sh"
-  out=$(bash "$tmp/patched-check.sh" --self-check "$ROOT/config/crew-dispatch.json" 2>&1)
-  rc=$?
+  out=$(bash "$tmp/patched-check.sh" --self-check "$tmp/dispatch.json" 2>&1); rc=$?
   rm -rf "$tmp"
-  # After GREEN, --self-check exists; the patched alias set has no m2.7h,
-  # so the self-check must report the mismatch and exit non-zero.
-  [ "$rc" -ne 0 ] || fail "self-check must exit non-zero when m2.7h alias is absent; got $rc"
-  # Error must name the missing alias or the unaliased model.
-  printf '%s\n' "$out" | grep -qiE 'm2\.7|highspeed|alias|model' \
-    || fail "self-check error must name the missing alias or unaliased model: $out"
-  pass "self-check fails (non-zero) when m2.7h alias is absent: mechanism proven"
+  [ "$rc" -ne 0 ] || fail "self-check must reject configured m2.7h when that alias is removed"
+  printf '%s\n' "$out" | grep -qiE 'm2\.7h|highspeed|alias|model' \
+    || fail "self-check error must identify the missing alias/model: $out"
+  pass "self-check accepts configured m2.7h, then rejects it when the alias is removed"
 }
 
 # test_self_check_reports_orphaned_aliases: the self-check must name any
@@ -533,6 +571,8 @@ for _t in \
   test_registry_lane_key_not_lowercase \
   test_registry_non_uuid_run_id \
   test_registry_valid_multi_row \
+  test_registry_duplicate_run_id_rejected \
+  test_registry_distinct_run_ids_accepted \
   test_registry_does_not_edit; do
   echo "# RUN: $_t"
   if ! "$_t"; then

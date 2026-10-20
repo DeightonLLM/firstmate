@@ -1,6 +1,6 @@
 # Comms and lane-naming contract
 
-Owner: this file. Both surfaces mirror it; if a mirror disagrees with a copy, the copy that disagrees is wrong.
+Owner: this file owns the comms and delivery facts below; [`AGENT-TODO-PROMPT-STYLE.md`](../AGENT-TODO-PROMPT-STYLE.md) owns the naming format.
 Status: 2026-10-17. Unlanded in this repository; mirrors confirm receipt by returning the exact sha256.
 
 ## 1. What "delivered" means
@@ -30,18 +30,15 @@ A notification is not delivery. A "delivered" report is not receipt. If you cann
 - If a path is unreadable, that is a reader or access fact, not proof the file does not exist. Report the exact path and the exact refusal.
 - Read the inbound queue before asking for anything that may already have been delivered.
 
-## 4. Lane naming
+## 4. Lane naming validation
 
-The async panel renders only the lane key. An unnamed lane is invisible to the operator, which is the defect this rule prevents.
+[`AGENT-TODO-PROMPT-STYLE.md`](../AGENT-TODO-PROMPT-STYLE.md) owns the naming format; the validator enforces only part of that contract and is not its definition.
 
-- Lane key: `<model>-<surface>-<task>`, lowercase, no spaces. Example: `m2.7-brandon-widget-sizing`.
-- Model aliases: `m2.7h`, `m2.7`, `m3.1`, `m3.1f`, `luna6`, `glm5.3f`, `gem38f`, `pi`.
-  `m2.7h` is MiniMax M2.7 Highspeed, the tier live worker lanes actually run.
-- Surface aliases: `brandon`, `hd2`, `dubz`, `evps`, `firstmate`.
-- To-Do board line: `[<model> @ <surface>[/<pane>}] <action> — <state>`.
-- Dispatch async lanes as a workflow whose per-child key is the lane key, so the panel shows the name. A direct single-child dispatch shows only the agent kind and is not acceptable for work the operator must watch.
-- The operator's durable registry is `data/async-lanes.tsv`: run id, lane key, model, surface, task, state, output. Write the row at dispatch, update it at every phase change, and never delete a row while the run exists.
-- `bin/fm-lane-naming-check.sh` validates lane keys, board lines, and the registry file. It is not yet wired into a launcher, so it reports rather than blocks. Treat that as known-open, not as enforcement.
+When given a registry file, `bin/fm-lane-naming-check.sh` requires each `lane_key` to match `<harness>-<model>-<host>-<task>`, with a recognized harness segment, and checks the model and host against the row's model and surface fields.
+The registry check also requires each `run_id` to be a UUID unique to one row; duplicate IDs are rejected, as verified by the negative control in `tests/fm-lane-naming-check.test.sh`.
+
+Known defect: direct single-key input still accepts a key without a harness segment, so a key rejected in the registry can pass when supplied directly to the checker.
+The existing test's passing assertion for `m2.7-hd2-build` exercises this legacy direct-input behavior; closing this gap is a separate change that needs its own test and the Captain's merge authorization.
 
 ## 5. Model visibility and cost
 
