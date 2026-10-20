@@ -107,7 +107,10 @@ The system-ops home is on the upstream `kunchenguid` lineage at a detached HEAD 
 The mcode-runner home and the boardkeeper home are on feature branches that are not ancestors of the primary's `main`, so they are skipped for the same reason.
 
 The honest fix here is a lineage and ownership decision, not a force.
-The choices are to retire the stale lineage and seed a fresh home from the primary's `main`, to merge that lineage into the primary under an explicit owner decision, or to accept the home as permanently off-line and stop counting it as a live agent.
+**Measure which side is behind before choosing a direction.** Measured against upstream `kunchenguid/firstmate` on 2026-10-20, our primary `main` is 657 commits behind upstream while the system-ops home is only 234 behind upstream and 423 ahead of us, so the home is the side closer to upstream and our primary is the stale fork.
+The two sides also carry different contracts: upstream and the secondmate homes open with "This is the supervisor contract for primary firstmates and persistent secondmates" and carry the secondmate parent-channel rule, while our primary opens "You are the first mate" and carries local directives upstream does not have.
+Copying the primary's file over a secondmate home would delete the supervisor contract, and copying upstream over the primary would delete the local directives, so a blind sync in either direction is a contract loss rather than a fix.
+The choices are therefore to reconcile the two contract lineages deliberately and carry the missing sections across by hand, to declare our fork authoritative and re-seed the secondmate homes from it while re-adding the secondmate-specific contract sections, or to accept a home as permanently off-line and stop counting it as a live agent.
 Whichever the Captain picks, it belongs to the captain and the primary, and this tool only reports the state and builds the identity mechanism.
 Forcing a fast-forward, stashing the dirty paths, or discarding them would destroy the exact evidence the decision needs, so the tool does not offer it.
 
