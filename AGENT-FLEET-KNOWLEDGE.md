@@ -95,7 +95,8 @@ A home carries its own identity in its own directory, using the harness's own pe
 A shared parent instruction file reaches every agent below it, so it may carry a fleet-wide tool or safety note and must never carry domain identity, scope, or charter.
 "I read the startup files" is not evidence that they are synced or domain-specific, so prove it per home by measuring which context file that home's agent actually loads and whether that file's content matches the authority for that home.
 A fleet-wide verdict must be printed by a tool, state a reason for every failure, and exit non-zero when a home fails.
-A stale or diverged home is reported and escalated as a lineage decision, never forced, because forcing discards unlanded work.
+A home on a different contract lineage is reported and escalated as a lineage decision, never forced, because forcing discards unlanded work.
+Measure which side of a divergence is behind before calling either side stale, because the home that looks older by date can be the one that is ahead.
 The check must be re-runnable, because a one-time manual audit decays into a false claim.
 Evidence: `data/learnings.md` (2026-10-20, section "agent startup context"); `data/captain-shared.md` section 4 (2026-10-20); Pi's shipped context-file resolver at `/home/hd2admin/.nvm/versions/node/v22.23.2/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:116` with the ancestor walk at lines 168-190.
 

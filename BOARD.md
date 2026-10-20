@@ -48,9 +48,12 @@ the agent directory `~/.pi/agent/` currently holds no context file at all. Upstr
 resolver at
 `/home/hd2admin/.nvm/versions/node/v22.23.2/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/resource-loader.js:116`,
 ancestor walk at lines 168-190.
-**Measured state 2026-10-20:** secondmate homes carry a month-old, mutually divergent startup context; no
-`AGENTS.override.md` exists on any home; a shared parent file reaches every domain; two live homes sit on a
-diverged lineage the local fast-forward contract will not force. Source: `data/learnings.md` (2026-10-20).
+**Measured state 2026-10-20:** no `AGENTS.override.md` exists on any home; the agent directory holds no context
+file; a shared parent file reaches every domain; the two live homes sit on a contract lineage our primary does
+not share, and the local fast-forward contract will not force them. **The homes are not simply stale: measured
+against upstream `kunchenguid/firstmate`, our primary is 657 commits behind upstream while a secondmate home is
+only 234 behind and 423 ahead of us, and the two sides carry different contracts.** Reconciling them is a
+lineage decision, not a copy. Source: `data/learnings.md` (2026-10-20).
 **Detector, landing in a parallel lane:** the re-runnable per-home domain-identity check is being built as
 `bin/fm-domain-identity.sh`, with its contract to live in `docs/domain-identity.md`. Read that contract there
 before claiming any home is synced.
