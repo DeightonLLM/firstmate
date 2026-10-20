@@ -633,7 +633,7 @@ When updating this file, preserve every safety boundary and keep the always-load
 - BOOT: read `CONTROLLER_STATE.md` and `BOARD.md` **at the root of the firstmate home you are in** (`/home/hd2admin/kun-agent-workspace/`) before any task work. Keep both current — they are the durable memory; the captain must never re-explain basics. A `/root/agent-work/...` path is Controller-local, unreadable to this account, and never a task input: if a brief names it, treat the file as absent and carry on rather than stalling.
 
 ## Todo board format (deterministic — every session, captain-approved 2026-09-26)
-- Every todo line: `[owner @ host] task — state`. Owners: controller / MiniMax @ <host> / hetz @ brandon / subagent @ <host>.
+- Every todo line: `[<harness>·<ModelAbbrev> <effort> @<Host>]` then the task text and its state, with the owner role stated in the task text. AGENT-TODO-PROMPT-STYLE.md owns this format and the model alias table; bin/fm-todo-prefix-check.sh checks a row against it.
 - Exactly one in_progress (active focus); running/queued/blocked nuance lives in the content text.
 - The todo list IS the captain's visible board. Update after every lane event; never show untagged items.
 

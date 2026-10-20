@@ -27,15 +27,18 @@ Use the session-read section first. Open dispatch/blocker guidance when its trig
 - [`calm.md`](calm.md) — Pi Calm presentation behavior, persistence, and limits.
 - [`calm-mode-feasibility.md`](calm-mode-feasibility.md) — version-scoped Calm implementation evidence and supported API boundaries.
 - [`decision-hold-lifecycle.md`](decision-hold-lifecycle.md) — deterministic mechanism for recording and completing unresolved investigation decisions.
+- [`ticket-board.md`](ticket-board.md) — one-screen read-only view over the ticket system: what needs the Captain's input, what is under way, and what is planned.
 - [`subagent-guard.md`](subagent-guard.md) — guard preventing an untracked primary-session delegation bypass.
 - [`arm-pretool-check.md`](arm-pretool-check.md) — command-shape seatbelt for arming the watcher safely.
 - [`cd-guard.md`](cd-guard.md) — seatbelt against persistent shell directory changes into project clones.
 - [`turnend-guard.md`](turnend-guard.md) — primary turn-boundary backstop when required supervision is absent.
 - [`wedge-alarm.md`](wedge-alarm.md) — away-mode injection-stall alerts and supported channels.
 - [`sessionstart-nudge.md`](sessionstart-nudge.md) — native hook behavior that nudges the canonical session-start command.
+- [`todo-prefix-canonical-format.md`](todo-prefix-canonical-format.md) — canonical To-Do board prefix and lane-key format, its model alias table, and the checker that enforces them.
 - [`scripts.md`](scripts.md) — purpose map for `bin/` scripts; each script header/help remains authoritative for exact use.
 - [`provider-routing.md`](PROVIDER-ROUTING.md) — AFK provider schedule and quota-routing policy.
 - [`gitlab-merge-watch.md`](gitlab-merge-watch.md) — recorded GitLab merge-watch verification and its evidence limits.
+- [`merge-packet.md`](merge-packet.md) - the read-only merge packet reporter, which carries branch identity, diff, blast radius, the byte-identical-copy invariant check, proven conflicts, rollback commands, and the single merge decision the Captain is asked to make.
 - [`verification/runtime-backends.md`](verification/runtime-backends.md) — version-scoped evidence for active backend guarantees.
 - [`verification/supervision.md`](verification/supervision.md) — evidence for session-start, turn-end, watcher continuity, and wedge-alarm guarantees.
 - [`verification/dispatch-auth.md`](verification/dispatch-auth.md) — reusable evidence for provider-family, credential-surface, and quota reasoning.

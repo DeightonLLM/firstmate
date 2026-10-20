@@ -6,17 +6,20 @@ This file owns the naming format for the native task list, lane labels and board
 
 ## Required visible prefix
 
-Every task subject starts with `[<harness>·<model> @<execution-host> | <owner-role>]`.
-Use the actual harness and exact model or an unambiguous abbreviation documented alongside its exact identifier.
-Include configured effort only when measured; use `effort=unknown` if relevant but unavailable.
+Every task subject starts with `[<harness>·<ModelAbbrev> <effort> @<Host>]`.
+Use the actual harness and a documented short alias for the exact model identifier.
+Include the measured effort token, or the literal `unknown` when the effort is not measurable.
 The host is where the owner runs, not the remote target being investigated.
+State the owner role in the task text, not in the prefix.
 End each subject with the concrete state and dependency, such as `waiting on HD2 evidence` or `blocked on Captain approval`.
 
 Examples:
 
-- `[pi·GPT6.1-sol @brandon | controller] Reconcile ticket evidence — waiting on HD2`
-- `[mcode·M2.7-Highspeed @brandon | worker] Implement scoped fixture — queued, depends on access`
-- `[mcode·M3.1 @brandon | lead] Reconcile worker results — running`
+- `[pi·luna6 m @brandon] Reconcile ticket evidence - waiting on HD2`
+- `[mcode·m2.7h m @brandon] Implement scoped fixture - queued, depends on access`
+- `[mcode·m3.1 m @brandon] Reconcile worker results - running`
+
+The canonical format, its model alias table and the machine checker live in `docs/todo-prefix-canonical-format.md` and `bin/fm-todo-prefix-check.sh`.
 
 A controller-owned blocked item names the controller, not a hypothetical future worker.
 Never label a completed run or an unassigned task as a running worker.
@@ -28,7 +31,7 @@ Do not confuse Highspeed with reasoning effort.
 ## Lane keys and dispatch
 
 Use `<harness>-<model>-<host>-<task>` for lane keys, lowercase and without spaces.
-Use readable model abbreviations such as `m27-highspeed` and `m31`; record exact catalog identifiers in the dispatch evidence.
+Use the documented model aliases from `docs/todo-prefix-canonical-format.md`, such as `m2.7h` and `m3.1`; record exact catalog identifiers in the dispatch evidence.
 Captain permits MCode MiniMax M2.7 Highspeed asynchronous workers directly, or a MCode M3.1 lead coordinating M2.7 workers and reviewing within the same run.
 Do not infer an exact catalog identifier, silently substitute a model, or invent a persistent second mate from a one-shot lead.
 Every worker receives this naming contract before work starts.
