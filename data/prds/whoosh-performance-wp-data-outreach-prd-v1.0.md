@@ -2,8 +2,8 @@
 
 **Client:** Brandon / Whoosh Performance  
 **Primary domain:** `whooshperformance.com`  
-**Prepared for:** the Captain  
-**Orchestration and technical acceptance:** the Captain  
+**Prepared for:** Dubz / CrispR  
+**Orchestration and technical acceptance:** Dubz / CrispR  
 **Development and infrastructure implementation:** Saad  
 **Design, brand touch-ups, and social imagery:** Sawar  
 **Business and final production approval:** Eric and Brandon  
@@ -31,7 +31,7 @@ All system alerts, failure notifications, backup reports, certificate warnings, 
 
 The delivery chain is intentionally simple:
 
-1. **the Captain orchestrates the entire project.**
+1. **Dubz orchestrates the entire project.**
 2. **Saad performs all development and infrastructure work.**
 3. **Sawar performs the approved visual touch-ups and creates every web and social asset needed for launch across Instagram, Facebook, X/Twitter, and LinkedIn.**
 4. **Eric and Brandon approve scope, customer-facing content, launch, and any material change.**
@@ -55,7 +55,7 @@ This PRD defines the complete delivery plan for:
 - Producing all approved website and reusable social-media imagery needed for launch.
 - Testing, documenting, launching, and handing off the system.
 
-the Captain must convert this PRD into small, reviewable task packets for Saad and Sawar. Work is complete only when the acceptance criteria and evidence requirements in this document are satisfied.
+Dubz must convert this PRD into small, reviewable task packets for Saad and Sawar. Work is complete only when the acceptance criteria and evidence requirements in this document are satisfied.
 
 ---
 
@@ -118,7 +118,7 @@ The audit must identify the exact DNS and provider requirements for:
 - Sending-domain alignment
 - Provider ownership and account administrator
 
-No DNS record associated with Aspire may be deleted, flattened, proxied, or replaced until Saad documents its purpose and the Captain approves the change.
+No DNS record associated with Aspire may be deleted, flattened, proxied, or replaced until Saad documents its purpose and Dubz approves the change.
 
 ### 2.4 Website and Social Asset Package
 
@@ -156,7 +156,7 @@ These observations are discovery inputs, not a conclusion that the underlying sy
 - Make deployment, backup, restore, and rollback repeatable.
 - Route all operational notifications to `info@whooshperformance.com`.
 - Produce every approved website and social asset needed for launch in the correct formats and platform sizes.
-- Give the Captain a clear orchestration, review, evidence, and acceptance process.
+- Give Dubz a clear orchestration, review, evidence, and acceptance process.
 
 ### 3.2 Success Definition
 
@@ -172,7 +172,7 @@ The project is successful when:
 - Backups arrive on Namecheap, are encrypted, and can be restored.
 - Operational alerts reach `info@whooshperformance.com`.
 - Sawar's final exports are approved and ready for the four named social networks.
-- the Captain, Eric, and Brandon have a concise handoff pack and know how to recover the system.
+- Dubz, Eric, and Brandon have a concise handoff pack and know how to recover the system.
 
 ---
 
@@ -200,7 +200,7 @@ The following are excluded unless separately approved:
 
 ## 5. Mandatory Discovery Gates
 
-No production change begins until Gates A-E are complete and the Captain has reviewed the findings.
+No production change begins until Gates A-E are complete and Dubz has reviewed the findings.
 
 ### Gate A — Account and Server Inventory
 
@@ -252,7 +252,7 @@ Saad identifies:
 - Required plugins with owner and purpose.
 - PHP and database version requirements.
 
-If the source cannot be located, Saad stops the migration build and reports the missing asset list to the Captain. He must not reconstruct business content from guesses.
+If the source cannot be located, Saad stops the migration build and reports the missing asset list to Dubz. He must not reconstruct business content from guesses.
 
 ### Gate D — Data and Aspire Service Audit
 
@@ -334,7 +334,7 @@ flowchart TD
 | `data.whooshperformance.com` | Scraping/enrichment service | Hetzner dedicated server | Documented UI/API behavior; authenticated where required |
 | `lc.whooshperformance.com` | Aspire mail/tracking domain | Aspire-required destination | Provider-defined behavior; do not improvise |
 
-Do not create `api`, `app`, `admin`, `staging`, or `status` hostnames unless the audited application needs them and the Captain approves them.
+Do not create `api`, `app`, `admin`, `staging`, or `status` hostnames unless the audited application needs them and Dubz approves them.
 
 ### 6.3 Failure Behavior
 
@@ -408,7 +408,7 @@ Do not create `api`, `app`, `admin`, `staging`, or `status` hostnames unless the
 └── logs/
 ```
 
-Use Docker Compose if it matches the existing KVM8 operating model. If Whoosh is deployed natively, Saad must document an equally reproducible build, backup, and rollback process. the Captain approves the final method after Gate A.
+Use Docker Compose if it matches the existing KVM8 operating model. If Whoosh is deployed natively, Saad must document an equally reproducible build, backup, and rollback process. Dubz approves the final method after Gate A.
 
 ### 7.2 Hetzner Dedicated Server — Data Compute Plane
 
@@ -477,7 +477,7 @@ Components not found in the audit are omitted rather than invented.
 └── logs/
 ```
 
-The Namecheap VPS is a backup/recovery target. It is not automatically a production failover host unless its capacity is tested and the Captain approves a separate DR design.
+The Namecheap VPS is a backup/recovery target. It is not automatically a production failover host unless its capacity is tested and Dubz approves a separate DR design.
 
 ---
 
@@ -540,7 +540,7 @@ Saad will:
 7. Implement responsive behavior.
 8. Add only necessary plugins.
 9. Validate forms, analytics, metadata, redirects, and performance.
-10. Obtain the Captain review before production deployment.
+10. Obtain Dubz review before production deployment.
 
 ### 9.2 Basic Touch-Ups
 
@@ -603,7 +603,7 @@ Material changes to brand, layout, copy, page count, conversion flow, or navigat
 ### 10.2 DNS Change Rules
 
 - Saad drafts the change set.
-- the Captain reviews the exact before/after record table.
+- Dubz reviews the exact before/after record table.
 - Eric or Brandon approves nameserver or material mail changes.
 - TTL is reduced in advance when a controlled migration requires it.
 - Records are changed in a maintenance window.
@@ -708,7 +708,7 @@ Rules:
 
 - Pinned images or versions.
 - Non-root runtime where practical.
-- No privileged containers without the Captain approval.
+- No privileged containers without Dubz approval.
 - No application container access to the host Docker socket.
 - Explicit networks, volumes, CPU, memory, and process limits.
 - Health checks and restart limits.
@@ -736,9 +736,9 @@ Rules:
 
 ```mermaid
 flowchart TD
-    T[the Captain Task Packet] --> B[Saad or Sawar Work Branch]
+    T[Dubz Task Packet] --> B[Saad or Sawar Work Branch]
     B --> R[Evidence and Self-Test]
-    R --> D[the Captain Review]
+    R --> D[Dubz Review]
     D --> S[Staging / Draft Review]
     S --> A[Eric / Brandon Approval if Customer-Facing]
     A --> P[Production Release]
@@ -753,8 +753,8 @@ flowchart TD
 - One logical change per pull request.
 - No direct production-branch commits.
 - Saad does not approve his own infrastructure or code changes.
-- Sawar's assets require the Captain review and Eric/Brandon visual approval before public use.
-- the Captain approves merge and deployment readiness.
+- Sawar's assets require Dubz review and Eric/Brandon visual approval before public use.
+- Dubz approves merge and deployment readiness.
 - Production releases use a tag or immutable commit reference.
 - Every production change includes rollback instructions.
 
@@ -810,7 +810,7 @@ Rollback order:
 5. Restore the previous data-service release/configuration.
 6. Reapply the prior Aspire DNS set if a reviewed DNS change caused the issue.
 
-No destructive database restore or DNS rollback occurs without the Captain approval and a verified target.
+No destructive database restore or DNS rollback occurs without Dubz approval and a verified target.
 
 ---
 
@@ -927,7 +927,7 @@ Alerts must include service, environment, UTC timestamp, short error, current im
 - Certificate expiry at 30, 14, and 7 days.
 - WordPress security update available longer than the approved maintenance SLA.
 
-the Captain may tune thresholds from measured baselines, but alerting may not simply be disabled to reduce noise.
+Dubz may tune thresholds from measured baselines, but alerting may not simply be disabled to reduce noise.
 
 ### 14.4 Logging
 
@@ -973,7 +973,7 @@ Initial target, adjusted after storage inventory:
 - Monthly: 3 copies.
 - Quarterly release/configuration archive: 4 copies.
 
-Retention must fit actual Namecheap capacity. the Captain approves any reduction after Saad documents the tradeoff.
+Retention must fit actual Namecheap capacity. Dubz approves any reduction after Saad documents the tradeoff.
 
 ### 15.4 Encryption and Verification
 
@@ -1024,7 +1024,7 @@ Targets become commitments only after a successful drill.
 6. Restore WordPress files and database.
 7. Apply the approved release manifest.
 8. Run private smoke tests.
-9. Restore DNS/origin routing after the Captain approval.
+9. Restore DNS/origin routing after Dubz approval.
 10. Monitor and send recovery notice to `info@whooshperformance.com`.
 11. Complete incident report.
 
@@ -1047,7 +1047,7 @@ Targets become commitments only after a successful drill.
 3. Identify whether the failure is DNS, TLS, redirect/tracking, authentication, or provider-side.
 4. Restore only the affected known-good record set.
 5. Validate SPF, DKIM, DMARC, tracking, bounce, and unsubscribe functions.
-6. Resume sending only after the Captain and Brandon approve.
+6. Resume sending only after Dubz and Brandon approve.
 
 ### 16.5 DR Drills
 
@@ -1069,13 +1069,13 @@ Each drill records owner, start/end time, backup/release used, RPO, RTO, failure
 |---|---|---|---|
 | Eric | HD2 business/project authority | Scope direction, priorities, client-facing approval with Brandon, major change approval | Day-to-day coding or visual production |
 | Brandon | Client/business owner | Brand/content truth, account ownership confirmation, final launch acceptance | Technical implementation details |
-| the Captain | Orchestrator and technical owner | Task breakdown, sequencing, technical decisions, reviews, merge/deploy gates, risk tracking, final technical acceptance, communication to the boys | Unreviewed expansion of business scope |
+| Dubz / CrispR | Orchestrator and technical owner | Task breakdown, sequencing, technical decisions, reviews, merge/deploy gates, risk tracking, final technical acceptance, communication to the boys | Unreviewed expansion of business scope |
 | Saad | Development and infrastructure implementer | Audit, WordPress build, migration, Nginx, DNS change drafts, security, data-service validation, monitoring, backup, restore, technical QA, documentation | Final business approval or independent production approval |
 | Sawar | Design and asset producer | Visual audit, all approved website imagery, basic site touch-up specifications/assets, platform exports, reusable social templates, asset organization | Server access, DNS, WordPress deployment, code, copy approval, social publishing |
 
-### 17.2 the Captain's Orchestration Duties
+### 17.2 Dubz's Orchestration Duties
 
-the Captain must:
+Dubz must:
 
 - Create the project board and phase order.
 - Give Saad and Sawar written task packets with inputs, output, acceptance tests, and deadline.
@@ -1115,13 +1115,13 @@ the Captain must:
 - Final PNG/JPG/WebP exports as appropriate.
 - Asset index listing name, platform, dimensions, and intended use.
 
-The package is complete only when every asset in the Captain's approved website and social asset inventory has a final source file, platform/web export, clear filename, dimensions, and intended-use entry. Use one consistent approved visual direction; do not turn this into a separate brand-strategy or Figma project.
+The package is complete only when every asset in Dubz's approved website and social asset inventory has a final source file, platform/web export, clear filename, dimensions, and intended-use entry. Use one consistent approved visual direction; do not turn this into a separate brand-strategy or Figma project.
 
 ### 17.5 Work Rules
 
 - One task packet, one owner, one branch/folder, one review.
 - No one approves their own production work.
-- No production DNS, database, or credential change without the Captain approval.
+- No production DNS, database, or credential change without Dubz approval.
 - Customer-facing visual/content changes require Eric/Brandon approval.
 - Destructive actions require a verified backup and explicit approval.
 - Credentials are never copied into task output.
@@ -1193,8 +1193,8 @@ Repository rules:
 
 - No secret values.
 - Protected production branch.
-- the Captain review required for infrastructure, DNS, security, deployment, and shared changes.
-- Sawar may own asset branches; the Captain reviews package structure and Eric/Brandon approve public-facing results.
+- Dubz review required for infrastructure, DNS, security, deployment, and shared changes.
+- Sawar may own asset branches; Dubz reviews package structure and Eric/Brandon approve public-facing results.
 - Required checks must pass before merge.
 - Every production release has a manifest and rollback note.
 - Large source images use the approved large-file or asset-storage method rather than uncontrolled Git history.
@@ -1205,7 +1205,7 @@ Repository rules:
 
 ### Phase 0 — Freeze and Baseline
 
-**Owner:** the Captain orchestrates; Saad executes  
+**Owner:** Dubz orchestrates; Saad executes  
 
 Tasks:
 
@@ -1222,7 +1222,7 @@ Exit gate:
 
 ### Phase 1 — Inventory and Discovery
 
-**Owner:** Saad; reviewed by the Captain  
+**Owner:** Saad; reviewed by Dubz  
 
 Tasks:
 
@@ -1236,11 +1236,11 @@ Tasks:
 
 Exit gate:
 
-- the Captain approves the discovery report; Eric/Brandon approve any scope/content question.
+- Dubz approves the discovery report; Eric/Brandon approve any scope/content question.
 
 ### Phase 2 — Security, Access, and Network Foundation
 
-**Owner:** Saad; approved by the Captain  
+**Owner:** Saad; approved by Dubz  
 
 Tasks:
 
@@ -1277,7 +1277,7 @@ Exit gate:
 
 ### Phase 4 — Website and Social Asset Package
 
-**Owner:** Sawar; orchestrated by the Captain  
+**Owner:** Sawar; orchestrated by Dubz  
 
 Tasks:
 
@@ -1290,11 +1290,11 @@ Tasks:
 
 Exit gate:
 
-- the Captain confirms package completeness; Eric/Brandon approve visuals.
+- Dubz confirms package completeness; Eric/Brandon approve visuals.
 
 ### Phase 5 — Data Service Validation and Repair
 
-**Owner:** Saad; approved by the Captain  
+**Owner:** Saad; approved by Dubz  
 
 Tasks:
 
@@ -1328,7 +1328,7 @@ Exit gate:
 
 ### Phase 7 — Monitoring, Backup, and Recovery
 
-**Owner:** Saad; reviewed by the Captain  
+**Owner:** Saad; reviewed by Dubz  
 
 Tasks:
 
@@ -1345,7 +1345,7 @@ Exit gate:
 
 ### Phase 8 — Pre-Launch QA and Failure Testing
 
-**Owner:** the Captain coordinates; Saad executes technical QA; Sawar corrects visual assets  
+**Owner:** Dubz coordinates; Saad executes technical QA; Sawar corrects visual assets  
 
 Tests:
 
@@ -1363,11 +1363,11 @@ Tests:
 
 Exit gate:
 
-- No critical issue remains; the Captain approves launch readiness.
+- No critical issue remains; Dubz approves launch readiness.
 
 ### Phase 9 — Production Launch and Handoff
 
-**Owner:** the Captain controls launch; Saad deploys; Eric and Brandon approve  
+**Owner:** Dubz controls launch; Saad deploys; Eric and Brandon approve  
 
 Tasks:
 
@@ -1517,7 +1517,7 @@ The project is production-ready only when all applicable boxes are checked.
 
 ### Design and Social
 
-- [ ] Sawar's visual audit reviewed by the Captain
+- [ ] Sawar's visual audit reviewed by Dubz
 - [ ] Website touch-up assets implemented and approved
 - [ ] Instagram exports delivered
 - [ ] Facebook exports delivered
@@ -1541,7 +1541,7 @@ The project is production-ready only when all applicable boxes are checked.
 
 - [ ] Saad confirms implementation reality and provides evidence pack
 - [ ] Sawar confirms asset package completion
-- [ ] the Captain approves technical acceptance
+- [ ] Dubz/CrispR approves technical acceptance
 - [ ] Eric approves HD2 delivery acceptance
 - [ ] Brandon approves customer-facing production acceptance
 - [ ] Final handoff summary delivered
@@ -1577,7 +1577,7 @@ At minimum:
 
 ## 23. Decision Register
 
-the Captain must record at least:
+Dubz must record at least:
 
 - **ADR-001:** Hostinger KVM8 as the WordPress public plane.
 - **ADR-002:** Hetzner dedicated server as the scraping/enrichment plane.
@@ -1596,7 +1596,7 @@ Every ADR records context, decision, owner, date, alternatives, consequences, an
 
 ---
 
-## 24. Final Instruction to the Captain
+## 24. Final Instruction to Dubz
 
 Keep this project controlled and practical.
 
@@ -1613,4 +1613,4 @@ The standard is not the number of plugins, dashboards, services, or design files
 - Every production change is reviewed, reversible, and supported by evidence.
 - Eric and Brandon receive a short, clear handoff rather than a large unexplained technical dump.
 
-A 10/10 result is a clean WordPress launch, stable data and outreach services, a complete polished web/social asset package, and an operating system that the Captain can confidently hand to Saad and Sawar without ambiguity.
+A 10/10 result is a clean WordPress launch, stable data and outreach services, a complete polished web/social asset package, and an operating system that Dubz can confidently hand to Saad and Sawar without ambiguity.

@@ -4,14 +4,14 @@
 **Domain:** `core-distro.com`
 **Prepared for:** the Captain
 **PRD baseline:** `BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` (v3.0, 2026-08-04), canonical copy at `docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md`
-**Status:** UNKNOWN — architecture conflict requires Captain-ordered ADR before PRD-v3 scope is defined; production runs on Namecheap/PHP, not Hostinger/Hetzner as PRD v3 §§7.1–7.2 target
+**Status:** UNKNOWN — architecture conflict requires Captain-ordered ADR before PRD-v3 scope is defined. The 2026-10-12 traceability record places public PHP endpoints on Namecheap and `agents` on Contabo; production origin/deployment topology remains unresolved, including whether Contabo is an origin behind Namecheap.
 **Last updated:** 2026-10-17
 
 > **Source-label key:**
 > - `[PER v3]` — v3 states it (v3 is dated 2026-08-04 and may be stale)
 > - `[PER TRACEABILITY]` — the ledger states it with its own status and date
-> - `[VERIFIED TODAY]` — measured this session, command and output cited
-> - `[OPEN CONFLICT]` — v3 and the ledger or other sources disagree; recorded both
+> - `[PER dated evidence]` — a dated report or ledger records the observation; not a fresh measurement unless explicitly stated
+> - `[OPEN CONFLICT]` — sources disagree; recorded without reconciliation
 
 ---
 
@@ -24,7 +24,7 @@ This is a focused domain implementation. It is not a full redesign, a new applic
 The required placement depends on the architecture decision that the Captain has ordered as an ADR first:
 
 - **If PRD-v3 is adopted:** Hostinger KVM8 as public/control plane and Hetzner as compute plane, per v3 §§7.1–7.2.
-- **If PRD-v3 is not adopted for Core Distro:** existing Namecheap/PHP 8.2 production and Contabo deployment continue, with separate hardening and backup work.
+- **If PRD-v3 is not adopted for Core Distro:** retain the currently evidenced public Namecheap/PHP 8.2 endpoint and Contabo `agents` endpoint pending an origin/deployment map; the actual origin relationship is UNKNOWN.
 
 No architecture or migration decision is made until the Captain orders and approves the ADR.
 
@@ -89,18 +89,12 @@ the Captain must convert this PRD into small, reviewable task packets for Saad. 
 **Actual application [PER TRACEABILITY — BR-AUD-002/report.md]:**
 
 - Multi-tenant SaaS B2B lead-generation platform
-- PHP production on Contabo cPanel
+- PHP production code/runtime and public endpoints measured on Namecheap; the relationship to Contabo hosting/origin is unresolved.
 - Next.js staging on AminoVPS (`srv1137994-aminolifesciences`)
-- MySQL/Percona 8.4 database
-- Authenticated sessions, subscriptions, credits
-- Business-data searches via RapidAPI
-- AI-powered enrichment via Replicate
-- CRM sync via GoHighLevel
-- CSV export workflows
-- Queue-like city jobs
-- Shared codebase with CBD-Data via `DeightonLLM/core-distro-saas-clean`
+- MySQL/Percona 8.4 database; exact host is not established in the cited traceability row.
+- BR-AUD-002 is recorded as supporting authentication/lead-list data and queue-like jobs. Subscriptions, credits, RapidAPI/Replicate/GoHighLevel integrations, CSV workflows, and shared-repository identity are not independently substantiated by the workspace-available source record and remain UNKNOWN here.
 
-> **[OPEN CONFLICT — description accuracy]:** The pharmaceutical/lab-supply description in v3 §2.1 is directly contradicted by BR-AUD-002's application audit. The v3 description appears to be a mis-classification. This PRD records the BR-AUD-002 description as the operational reality.
+> **[OPEN CONFLICT — description accuracy]:** v3 §2.1 and the BR-AUD-002 ledger summary give conflicting product descriptions. The BR-AUD-002 report itself is not present in this workspace for direct inspection, so neither description is elevated as verified operational reality. Preserve the conflict pending recovery of the report and source audit.
 
 **Compliance note [PER v3 §2.1]:** The infrastructure must not assume that Core Distro processes protected health information. If PHI, prescription data, or regulated patient data is later introduced, the project must stop and receive a separate compliance and security architecture review.
 
@@ -122,6 +116,8 @@ the Captain must convert this PRD into small, reviewable task packets for Saad. 
 
 > **[PER TRACEABILITY — PRD_TRACEABILITY.md `coredistro-canary`]:**
 > Status: `BLOCKED` (OPERATOR_INPUT); `leadlists.php` SHA-256 `6f91999dafae7f85951f31455e339c375030fb71eb6c1ad9f474bdf71bce83d3`; backlog of 36,823 jobs paused; synthetic 1-job canary awaits explicit operator signal. Source: `MINI_SPRINT_PREPARATION_REPORT.md` §3.
+>
+> **[OPEN CONFLICT — attributed 2026-10-18 reports]:** The Brandon reply dated 2026-10-18 claims the public site is WordPress 7.1.3 on Hetzner behind Hostinger nginx/Cloudflare and reports a compliant client embed GET returning HTTP/2 200 with `{"history":[]}`. A separate bounded, unauthenticated GET evidence report observed at 2026-10-18 02:13 UTC records apex and `www` serving identical Next.js HTML (SHA-256 `a7fed7da3c85b8424084a80639e80d128f8367c703379c5911bd9650e62465ca`) with two `llm.hd2.ai` references and the internal embed ID, while the claimed client stream-chat route returned 404. These vantage/time reports conflict; neither resolves full deployment topology. The 200 empty-history response, if observed at another time, is route/history reachability only and does not establish chat generation or SLA. The reply's 847 ms TTFT claim has no raw token-stream evidence here; this GET-only audit cannot validate TTFT. The reply calls `xmlrpc.php` exposed, while the 02:13 UTC GET returned 403; that does not establish XML-RPC service exposure or exploitability. Keep all as dated, attributed evidence pending the underlying captures and authorized route checks.
 
 ### 2.3 PRD-v3 Target Architecture
 
@@ -1083,10 +1079,12 @@ The following ADRs must be created before PRD-v3 implementation can proceed. Sou
 
 | Field | Value |
 |---|---|
-| Reported defect | ChatWidget/AnythingLLM streaming chat returns "Invalid session ID" on the staging Next.js front |
-| Source found | **None.** No source in cited evidence for this specific wording. `BOARD.md` line 16 records "the shipped widget carries baseApiUrl=https://llm.hd2.ai and that stream-chat route returns 404" — this references the HD2 AnythingLLM at `llm.hd2.ai`, a different system, and reports a 404, not "Invalid session ID" |
-| Measurement date | Not sourced in any cited evidence |
-| PRD disposition | **UNKNOWN** — defect is unconfirmed in cited sources. An owner must be assigned and the defect must be reproduced with evidence before it can be accepted as a PRD item. Do not treat as an accepted defect. Do not claim completion. |
+| Reported defect | ChatWidget/AnythingLLM streaming behavior; staging wording and route remain unverified |
+| Source found | **OPEN CONFLICT.** The 2026-10-18 Brandon reply reports zero `llm.hd2.ai` references and client route HTTP/2 200 with `{"history":[]}` using embed `fd029baa-22fd-4a3a-b074-40c7a00daf30`. Independent bounded GET evidence observed at 02:13 UTC reports two `llm.hd2.ai` references and internal embed ID `0ec57bfa-7368-42ef-bdb6-d7959bc4f1e2` in apex/www HTML; the claimed client route returned 404. Evidence file: `/home/hd2admin/.pi/agent/sessions/--home-hd2admin-kun-agent-workspace--/subagent-artifacts/outputs/5d168080-eb59-40f6-b2bb-5a1c231cc274/data/audit/seven-blocker-unblocked-evidence.task-1.md`. Distinct vantage/time observations are preserved; neither is silently promoted to the current final state. |
+| Deployment topology | **OPEN CONFLICT.** The 2026-10-12 traceability baseline records Namecheap PHP endpoints and Contabo `agents`; the 2026-10-18 reply claims WordPress 7.1.3 on Hetzner behind Hostinger nginx and Cloudflare. The 02:13 UTC public response is Next.js HTML, which conflicts with that reply, but does not independently establish full origin topology. Its cited decision document is absent at the exact referenced path. |
+| Route and generation | Reply's 200 `{"history":[]}` and GET 404 in the 02:13 UTC evidence are conflicting route/history observations; neither proves chat generation. No chat POST was performed. The reply's 847 ms TTFT remains unverified and cannot be inferred from GET/HEAD. |
+| `xmlrpc.php` | Reply characterizes it as exposed; bounded 02:13 UTC GET returned 403. This establishes neither a working XML-RPC service nor exploitability; status remains unresolved. |
+| PRD disposition | **UNKNOWN / OPEN CONFLICT** — do not infer a working chat turn, SLA, accepted deployment topology, or final route state. Reconcile with dated raw captures from the relevant vantage and owner-verified architecture evidence. No production repair or chat POST is authorized by this record. |
 
 ---
 

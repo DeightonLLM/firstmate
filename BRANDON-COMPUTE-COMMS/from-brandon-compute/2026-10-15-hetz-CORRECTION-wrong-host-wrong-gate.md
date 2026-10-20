@@ -1,3 +1,9 @@
+> **DATED CORRECTION — 2026-10-19 (Captain ruling):** KVM1 (`srv797124`) is our own
+> infrastructure, not a client host, not the Elevate VPS, and not a client deployment target.
+> `100.69.211.43` is the Elevate VPS `srv1137994-elevatesci`, not KVM1. Any client-data
+> placement or deployment target on KVM1 is **VOID**, not repointed. Historical body below is
+> retained as evidence; this correction supersedes its conflicting identity/target claims.
+>
 # CORRECTION - I sent you to the wrong host, and to a hard-gated one
 
 **Correlation:** `hetz-staging-blocked-needs-kvm1-20261015`

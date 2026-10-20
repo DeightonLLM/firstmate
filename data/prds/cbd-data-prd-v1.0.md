@@ -21,16 +21,27 @@ HD2 will implement CBD-Data's public application on Hostinger, its scraping, enr
 
 CBD-Data is the **heaviest scraping, enrichment, queue, export, and data-volume workload** of the four projects. Its product functions are:
 
-- B2B business search by keyword and location  
-- Automated website visits and data acquisition  
-- Email, phone, social-profile, and contact enrichment  
-- Lead-list management  
-- CSV export  
-- Public share links  
-- CRM integration  
-- API access for larger plans  
+- B2B business search by keyword and location
+- Automated website visits and data acquisition
+- Email, phone, social-profile, and contact enrichment
+- Lead-list management
+- CSV export
+- Public share links
+- CRM integration
+- API access for larger plans
 
-Source: v3 PRD §2.4 "CBD-Data" (2026-08-04). These are stated scope requirements from the v3 PRD; Gate C (Application Audit) must verify which of these are currently implemented and which require new work.
+Source: canonical v3 §2.4 (2026-08-04). These are scope requirements, not implementation evidence. Current implementation and acceptance are UNKNOWN for each function until Gate C evidence is recorded.
+
+| v3 §2.4 function | Current implementation / target acceptance |
+|---|---|
+| B2B search by keyword/location | UNKNOWN — no function-specific accepted evidence cited |
+| Website visits/data acquisition | UNKNOWN — audit scope reported; target acceptance not established |
+| Contact enrichment | UNKNOWN — audit scope reported; full product acceptance not established |
+| Lead-list management | UNKNOWN — no function-specific accepted evidence cited |
+| CSV export | UNKNOWN — audit scope reported; user-facing acceptance not established |
+| Public share links | UNKNOWN — acceptance criterion/evidence not separately cited |
+| CRM integration | UNKNOWN — acceptance criterion/evidence not separately cited |
+| Larger-plan API access | UNKNOWN — acceptance criterion/evidence not separately cited |
 
 ### 0.2 Phase 5 Placement Rationale
 
@@ -54,10 +65,10 @@ CBD-Data has real Next/PHP source at `projects/cbd-data.com/` and accepted local
 
 ## 1. Current State
 
-Each row carries a provenance label:  
-- **[VERIFIED TODAY]** — measured live; command and output cited  
-- **[PER v3]** — stated in v3 PRD dated 2026-08-04; may be stale; v3 §X cited  
-- **[PER TRACEABILITY]** — sourced from PRD_TRACEABILITY.md ledger; last-verified date cited
+Each row carries a provenance label:
+- **[VERIFIED TODAY]** — fresh measurement with command/output cited; none in this PRD repair
+- **[PER v3]** — product scope or target requirement from canonical v3 dated 2026-08-04; not implementation evidence
+- **[PER TRACEABILITY]** — ledger status/date/scope only; not broader acceptance
 
 ### 1.1 Source and Evidence
 
@@ -65,7 +76,7 @@ Each row carries a provenance label:
 |---|---|---|---|
 | Real Next/PHP project source at `projects/cbd-data.com/` | `EVIDENCED` | [PER TRACEABILITY] | `cbd-data-source-and-audit`; last verified 2026-09-15; BR-AUD-005 accepted; manifest line 11 |
 | Scraping, enrichment, queue, export, storage, compute placement discovery audited | `EVIDENCED` | [PER TRACEABILITY] | `cbd-data-source-and-audit`; last verified 2026-09-15; BR-AUD-005; PRD_DELIVERY_MAP.md CBD-Data row |
-| Bounded broker/runtime slice — private RabbitMQ `/cbddata` virtual host bootstrap on `brandon-compute` + deterministic `cbd_initial_job_status()` local status helper | `EVIDENCED` | [PER TRACEABILITY] | `cbd-data-enrichment-gap`; last verified 2026-09-18; Gate-CBD-ENRICH-003 evidence.md, decision-and-rollback.md, tdd-evidence.md |
+| Bounded broker/runtime slice — private RabbitMQ `/cbddata` virtual host bootstrap on `brandon-compute` + deterministic `cbd_initial_job_status()` local status helper | `EVIDENCED` (run-record claim; not independently reverified) | [PER TRACEABILITY] | `cbd-data-enrichment-gap`; run date 2026-09-18; `status.txt` retained. `evidence.md` was reconstructed 2026-10-11 from that record; see its provenance warning. |
 | RED/GREEN/REFACTOR evidence and full local-suite CHECK_PASS for bounded broker slice | `UNKNOWN` | [OPEN CONFLICT] | Human traceability and delivery-map text report a pass, but structured `prd_traceability.yaml` says the underlying outputs were not retained and marks those claims unverified. Settle with retained raw test output and independent-check artifact, or authoritative reconciliation of the structured-ledger warning; do not treat reconstructed claims as accepted proof. |
 | Local restore/backup documents and tests | `EVIDENCED` | [PER TRACEABILITY] | `cbd-data-source-and-audit`; last verified 2026-09-15; PRD_DELIVERY_MAP.md CBD-Data row |
 
@@ -84,11 +95,11 @@ Each row carries a provenance label:
 
 | Item | Status | Provenance | Notes |
 |---|---|---|---|
-| Local worker canary | `EVIDENCED` (local) | [PER TRACEABILITY] | `cbd-worker-canary`; last verified 2026-09-15; `data/cbd-worker-canary/report.md` |
-| Historical placement of `cbd-worker.service` on `srv1137994-aminolifesciences` (AminoVPS) | `EVIDENCED` (historical, 2026-09-15) | [PER TRACEABILITY] | SERVICE_CATALOG.md `cbd-worker`; BR-INV-001/report.md §Host 1. Current service activity is `UNKNOWN`: dated catalogue/inventory and older canary readings conflict; settle with a fresh read-only service-state check. |
+| Local worker canary | `EVIDENCED` (historical local canary record; current worker state UNKNOWN) | [PER TRACEABILITY] | `cbd-worker-canary`; ledger date 2026-09-15. The available 2026-08-02 canary reconciliation reports AminoVPS access unavailable and service inactive/disabled as attested 2026-07-31; this conflicts with the later catalogue summary and is not a current measurement. |
+| Historical recorded placement of `cbd-worker.service` on `srv1137994-aminolifesciences` (AminoVPS) | `EVIDENCED` (catalogue record dated 2026-09-15; activity UNKNOWN) | [PER TRACEABILITY] | SERVICE_CATALOG.md `cbd-worker`; conflicts with `docs/system-context/evidence/cbd-worker-canary/report.md` (dated 2026-08-02; reports service inactive/disabled as attested 2026-07-31 and access unavailable). Neither is a current measurement. |
 | AminoVPS Tailscale IP `100.69.211.43` | `EVIDENCED` | [PER TRACEABILITY] | BR-INV-001/report.md §Host 1; SERVICE_CATALOG.md `cbd-worker` |
 | **AminoVPS placement differs from the v3 Hetzner target** | `EVIDENCED` | [PER TRACEABILITY + PER v3 §2.4] | SERVICE_CATALOG.md `cbd-worker` and PRD_TRACEABILITY.md `cbd-worker-canary` describe AminoVPS as legacy; canonical v3 §2.4 assigns compute workloads to Hetzner. This establishes the target mismatch, not current service liveness or migration authorization. |
-| Live worker placement on AminoVPS is AUTHORIZATION-blocked | `BLOCKED` (AUTHORIZATION) | [PER TRACEABILITY] | PRD_TRACEABILITY.md `cbd-worker-canary`; PRD_DELIVERY_MAP.md unresolved area 2 |
+| Current AminoVPS worker activity / placement | `UNKNOWN`; further live access is authorization/access-gated | [PER TRACEABILITY] | PRD_TRACEABILITY.md `cbd-worker-canary`; PRD_DELIVERY_MAP.md unresolved area 2; dated canary report records access failure and inactive/disabled state. |
 | PRD-v3 target worker placement on Hetzner | `UNKNOWN` | [PER TRACEABILITY] | No accepted migration plan or authorization; PRD_DELIVERY_MAP.md unresolved area 2 |
 | Worker denial of cross-project queue access | `UNKNOWN` | [PER TRACEABILITY] | `platform-isolation`; PRD_DELIVERY_MAP.md unresolved area 3 |
 | Worker denial of Hostinger internal database access | `UNKNOWN` | [PER TRACEABILITY] | `platform-isolation`; PRD_DELIVERY_MAP.md unresolved area 3 |
@@ -169,13 +180,13 @@ Each row carries a provenance label:
 | Real Next/PHP source at `projects/cbd-data.com/` | [PER TRACEABILITY] `cbd-data-source-and-audit`; last verified 2026-09-15; BR-AUD-005 | Full Gate C audit, application stack on Hostinger, deployment pipeline |
 | Bounded broker/runtime slice on `brandon-compute` | [PER TRACEABILITY] Gate-CBD-ENRICH-003; last verified 2026-09-18 | Publisher/consumer adapter, project_id, idempotency, durable persistence, Gate-004 authorization |
 | Local restore/backup documents and tests | [PER TRACEABILITY] `cbd-data-source-and-audit`; last verified 2026-09-15 | Live encrypted off-host backup to Namecheap, real restore test, RPO/RTO measurement |
-| Live `cbd-worker.service` on AminoVPS | [PER TRACEABILITY] SERVICE_CATALOG.md `cbd-worker`; last verified 2026-09-15 | This is legacy placement, not v3 target; requires migration authority |
+| Historical catalogue record places `cbd-worker.service` on AminoVPS | [PER TRACEABILITY] SERVICE_CATALOG.md `cbd-worker`, dated 2026-09-15; conflicting 2026-08-02 canary report says inactive/disabled as attested 2026-07-31 | Current activity UNKNOWN; this legacy host is not the v3 target; placement change requires ADR/authorization. The 2026-10-18 Brandon reply reports `cbd-data.com` live/healthy on AminoVPS; attribution only, not independent verification of this worker or current placement. |
 
 ### 2.2 Not Proven (PRD-Wide Acceptance Not Shown)
 
 - **No end-to-end Hostinger-to-Hetzner job flow.** Gate-CBD-ENRICH-003 proves only the bounded broker slice and local status helper. The full flow (Hostinger API → PostgreSQL job record → publish to Hetzner RabbitMQ `/cbddata` → Hetzner worker → scoped ingest → acknowledgment) is not accepted. Source: [PER TRACEABILITY] PRD_DELIVERY_MAP.md CBD-Data row; `cbd-data-enrichment-gap`.
 - **No production cutover authorization.** Gate-004 is BLOCKED (AUTHORIZATION). Gate-004 and cutover remain unauthorized. Source: [PER TRACEABILITY] `cbd-data-enrichment-gap`.
-- **No v3 target placement.** Live placement on AminoVPS is documented and working, but it is not the PRD-v3 target (Hetzner compute plane). Migration requires separate authority. Source: [PER TRACEABILITY] `cbd-worker-canary`; PRD_DELIVERY_MAP.md unresolved area 2.
+- **No v3 target placement.** A historical catalogue record places `cbd-worker.service` on AminoVPS, but the 2026-08-02 canary report records inactive/disabled status as attested 2026-07-31 and unavailable access. Current worker activity is UNKNOWN; placement is not the PRD-v3 target (Hetzner compute plane). Migration requires separate authority. The 2026-10-18 Brandon reply designates `cbd-campaign/L2` as a target branch and reports the site live/healthy on AminoVPS; both are attributed statements, not independent measurements, and branch designation does not prove branch contents or worker activity. Gate-004 remains HELD/BLOCKED; cutover and production authorization remain ungranted. Source: [PER TRACEABILITY] `cbd-worker-canary`; SERVICE_CATALOG.md `cbd-worker`; PRD_DELIVERY_MAP.md unresolved area 2; attributed reply dated 2026-10-18.
 - **No application database, PgBouncer, file namespaces, frontend, or API on Hostinger.** Canonical application architecture is unresolved (PHP/MySQL vs PostgreSQL/PgBouncer). No accepted ADR maps existing software to the v3 target. Source: [PER TRACEABILITY] PRD_DELIVERY_MAP.md unresolved area 2.
 - **No cross-project isolation evidence.** No accepted evidence proves four RabbitMQ vhosts, worker denial tests, project-scoped ingest, file namespaces, database roles, or Qdrant collection isolation end-to-end. Source: [PER TRACEABILITY] `platform-isolation`; PRD_DELIVERY_MAP.md unresolved area 3.
 - **No live production backup to Namecheap.** No live encrypted off-host provider assignment, per-project target proof, real restore, measured RPO/RTO, or DR drill evidence. Source: [PER TRACEABILITY] `backup-dr`; PRD_DELIVERY_MAP.md unresolved area 6.
@@ -285,7 +296,7 @@ Current evidence is PHP/MySQL and mixed deployment. The v3 target is Hostinger P
 
 ### 5.4 Worker Placement Authority — BLOCKED (AUTHORIZATION)
 
-Current `cbd-worker.service` runs on AminoVPS (`srv1137994-aminolifesciences`, Tailscale IP `100.69.211.43`). This is documented and working, but it is **not the v3 PRD target** (Hetzner compute plane). The two placements must not be conflated.
+The 2026-09-15 service-catalogue record places `cbd-worker.service` on AminoVPS (`srv1137994-aminolifesciences`, Tailscale IP `100.69.211.43`), while the 2026-08-02 canary reconciliation reports it inactive/disabled as attested 2026-07-31 and records unavailable access. Current activity is **UNKNOWN**; neither record proves a live worker today. AminoVPS is not the v3 target (Hetzner compute plane); do not conflate historical placement with target delivery.
 
 **What would unblock it:** ADR-CBD-002 and explicit authorization from Eric and Dubz for the chosen placement. A migration plan if Hetzner is selected.
 
@@ -612,7 +623,7 @@ Gate-CBD-ENRICH-003 proves only the bounded broker/runtime slice. Without a publ
 
 ### 9.3 AminoVPS vs Hetzner Placement Ambiguity — MEDIUM (Named Blocker)
 
-Current `cbd-worker.service` runs on AminoVPS. This is documented and working, but it is not the v3 PRD target. Live placement authority must not be conflated with v3 PRD compliance.
+The service catalogue records `cbd-worker.service` on AminoVPS as of 2026-09-15; the dated canary report (2026-08-02) instead records the service inactive/disabled as attested 2026-07-31 and unavailable access. Current activity is UNKNOWN. Historical AminoVPS placement is not the v3 PRD target; do not conflate it with current service state or v3 target delivery.
 
 **Mitigation:** Do not present AminoVPS placement as v3-compliant. Track migration to Hetzner as ADR-CBD-002 with explicit authorization.
 
@@ -759,9 +770,9 @@ Gate-004 and cutover remain unauthorized per PRD_TRACEABILITY.md `cbd-data-enric
 
 | Label | Meaning | Applied where |
 |---|---|---|
-| **[VERIFIED TODAY]** | Measured live; command and output cited | None in current PRD — no live verification performed this session |
-| **[PER v3]** | Stated in v3 PRD dated 2026-08-04; may be stale | §0.1, §0.3, §0.2, §3 scope, §4 non-goals, §8 phases, §9 risk §13.2, §20.4 acceptance criteria source, §21 global criteria source |
-| **[PER TRACEABILITY]** | Sourced from PRD_TRACEABILITY.md ledger with last-verified date | All status values, blocker names, evidence citations in §§1, 2, 5, 6, 7 |
+| **[VERIFIED TODAY]** | Fresh measurement with command and output cited | None; no live verification was performed for this PRD repair |
+| **[PER v3]** | Scope or target requirement in canonical v3, dated 2026-08-04; not implementation evidence | §0.1 product scope, §0.2/§0.3 planning and placement, §3–§4 scope, rollout, and acceptance criteria |
+| **[PER TRACEABILITY]** | Ledger status/date/scope only; not broader acceptance | Statuses and blocker references in §§1, 2, 5–7. Gate-003 details rely on retained 2026-09-18 `status.txt`; reconstructed evidence notes lost raw test/checker output and leaves TDD/check acceptance UNKNOWN. |
 
 ---
 
