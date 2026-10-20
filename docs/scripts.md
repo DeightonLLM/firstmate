@@ -27,7 +27,6 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-test-isolation-proof.sh` | Concurrent isolation proof and proven-isolated candidate set owner |
 | `fm-ensure-agents-md.sh` | Ensure a project's real `AGENTS.md`, its `CLAUDE.md` symlink, and the canonical self-governance section |
 | `fm-coord-drift-check.sh` | Verify documented production host coordinates against live external DNS and fail loudly on drift |
-| `fm-helper-permissions-check.sh` | Audit helper permission rules and containment configurations against tracked rules |
 | `fm-guard.sh`            | Warn on primary-checkout tangles, pending queued wakes, and stale watcher liveness   |
 | `fm-primary-scope-lib.sh` | Shared marker-or-plain-checkout primary-home predicate for tracked hooks             |
 | `fm-session-lock-lib.sh` | Shared session-lock harness identity (ancestry walk and holder liveness) for fm-lock.sh and the Claude Stop auto-arm |
@@ -59,6 +58,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-secondmate-report.sh` | Optional helper to append a correlated parent status or document-pointer report       |
 | `fm-comms-ingest.sh`     | Receive, receipt, and acknowledge remote file-drop replies from one or more source folders |
 | `fm-hetz-send.sh`        | Send one outbound Hetz message and report the real `ssh` return code                   |
+| `fm-comms-notify.sh`     | Send immediate guarded notification for delivered inter-home communication via Herdr   |
 | `fm-gate-refuse-lib.sh`  | Shared no-mistakes gate-context refusal for fleet lifecycle entrypoints               |
 | `fm-watch-arm.sh`        | Verified home-scoped watcher arm wrapper with loud cycle endings and bounded lifecycle ledger |
 | `fm-watch-checkpoint.sh` | Run one bounded foreground watcher checkpoint for Codex-style supervision            |
@@ -105,5 +105,3 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-public-followup-lib.sh` | Shared relay-activation gate, O(1) presence checks, and private transport paths for promised public replies |
 | `fm-public-followup.sh`  | Reconcile typed terminal work results into a public commitment and deliver its final reply once |
 | `fm-public-followup-emit.sh` | Report one typed terminal work result into the home that owes the public reply    |
-| `lane-todo-dash.sh` | Render the interactive lane and ticket dashboard as a self-contained artifact; `serve` hosts it on Tailscale with a local feedback inbox, and `review`/`reply`/`end` run its Lavish chat-back through `fm-procevent-lavish.sh` so board feedback returns as a registered process-to-event wake |
-| `fm-lavish-enforcement.sh` | Render, review, or inspect the offline Lavish enforcement surface, truthful capacity holder defect counts, and machine-readable guard inventory |

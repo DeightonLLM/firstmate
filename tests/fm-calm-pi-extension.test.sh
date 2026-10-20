@@ -22,7 +22,39 @@ if [ -z "$PI_PACKAGE_DIR" ]; then
     PI_PACKAGE_DIR="$(npm root -g 2>/dev/null)/@earendil-works/pi-coding-agent"
   fi
 fi
+# These fixtures import TypeScript sources directly, so they run under Node's type
+# stripping. Node 24 announces that path with an ExperimentalWarning on stderr, which
+# the output-equality assertions below would otherwise read as extension output. The
+# warning says nothing about the extension, so silence just that one code.
+PI_NODE_FLAGS=(--disable-warning=ExperimentalWarning)
+
+# Pi's own runtime dependencies are not guaranteed to sit under the package directory.
+# npm nests them there, while pnpm and hoisted installs put them beside it or at the
+# workspace root. Resolve each dependency by walking up from the package directory
+# instead of assuming one layout: a fixture that links a non-existent path creates a
+# broken symlink and then fails later with an unrelated ERR_MODULE_NOT_FOUND.
+resolve_pi_dependency() {
+  local name=$1 dir=$PI_PACKAGE_DIR candidate step
+  for step in 1 2 3 4; do
+    candidate="$dir/node_modules/$name"
+    if [ -d "$candidate" ]; then
+      (cd "$candidate" && pwd)
+      return 0
+    fi
+    dir=$(dirname "$dir")
+  done
+  return 1
+}
+PI_TUI_DIR=$(resolve_pi_dependency "@earendil-works/pi-tui") ||
+  fail "installed Pi dependency @earendil-works/pi-tui not found near $PI_PACKAGE_DIR"
+PI_TYPEBOX_DIR=$(resolve_pi_dependency "typebox") ||
+  fail "installed Pi dependency typebox not found near $PI_PACKAGE_DIR"
 TMUX_SOCKET="fm-calm-$$"
+# This host loads /root/bin/agent-shell-guard.sh through BASH_ENV (see /usr/local/bin/pi),
+# which defines env() as a refused command. A pane launched with `env A=1 pi` therefore
+# dies with BLOCKED_BY_AGENT_SECRET_GUARD / exit 126 before Pi ever starts, and every
+# E2E case below would report a Calm failure that never happened. Plain prefix
+# assignments are equivalent for this purpose and are not intercepted.
 TMUX_SESSION="fm-calm-e2e"
 # Verified against Pi 0.81.1 and 0.82.0 (docs/calm-mode-feasibility.md). This is
 # known-good evidence, not a support ceiling: the fixtures below run against whatever
@@ -43,9 +75,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Boot-readiness budget for a real Pi process. 120 x 0.05s = 6s was enough for the
+# Pi versions these tests were written against; Pi 1.3.0 with an extension loaded
+# measures ~17s to the composer on a warm host, so the probe used to give up mid-boot
+# and report a Calm failure that never happened.
+PI_BOOT_WAIT_TRIES=${PI_BOOT_WAIT_TRIES:-900}
 wait_for_text() {
   local file=$1 text=$2 i=0
-  while [ "$i" -lt 120 ]; do
+  while [ "$i" -lt "$PI_BOOT_WAIT_TRIES" ]; do
     # Include recent scrollback: expanding a long restored transcript can move
     # the asserted tool output above the current viewport while the footer and
     # editor remain visible.
@@ -104,15 +141,15 @@ test_home_resolution() {
   cp "$WORKING_SHIP" "$fixture/project/.pi/extensions/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$fixture/project/.pi/extensions/lib/fm-operational-input.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/project/node_modules/@earendil-works/pi-coding-agent"
-  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/project/node_modules/@earendil-works/pi-tui"
-  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/project/node_modules/typebox"
+  ln -s "$PI_TUI_DIR" "$fixture/project/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_TYPEBOX_DIR" "$fixture/project/node_modules/typebox"
   printf '%s\n' '{"type":"module"}' >"$fixture/project/package.json"
 
   out=$(cd "$fixture/launch-cwd" && \
     EXT="$fixture/project/.pi/extensions/fm-calm.ts" \
     OVERRIDE_HOME="$fixture/override" \
     EXTENSION_HOME="$fixture/project" \
-    node --input-type=module 2>&1 <<'JS'
+    node "${PI_NODE_FLAGS[@]}" --input-type=module 2>&1 <<'JS'
 import { existsSync, readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -222,14 +259,14 @@ test_pi_compat_degraded_adapter() {
   cp "$WORKING_SHIP" "$fixture/project/.pi/extensions/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$fixture/project/.pi/extensions/lib/fm-operational-input.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/project/node_modules/@earendil-works/pi-coding-agent"
-  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/project/node_modules/@earendil-works/pi-tui"
-  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/project/node_modules/typebox"
+  ln -s "$PI_TUI_DIR" "$fixture/project/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_TYPEBOX_DIR" "$fixture/project/node_modules/typebox"
   printf '%s\n' '{"type":"module"}' >"$fixture/project/package.json"
 
   out=$(cd "$fixture/project" && \
     EXT="$fixture/project/.pi/extensions/fm-calm.ts" \
     PI_PACKAGE_DIR="$PI_PACKAGE_DIR" \
-    node --input-type=module 2>&1 <<'JS'
+    node "${PI_NODE_FLAGS[@]}" --input-type=module 2>&1 <<'JS'
 import { pathToFileURL } from "node:url";
 
 const packageRoot = process.env.PI_PACKAGE_DIR;
@@ -329,7 +366,7 @@ test_pi_compat_missing_adapter_exports() {
     'export class UserMessageComponent {}' \
     >"$fixture/project/node_modules/@earendil-works/pi-coding-agent/index.js"
 
-  out=$(cd "$fixture/project" && node --input-type=module 2>&1 <<'JS'
+  out=$(cd "$fixture/project" && node "${PI_NODE_FLAGS[@]}" --input-type=module 2>&1 <<'JS'
 const assistant = await import("./.pi/extensions/lib/fm-calm-assistant-layout.ts");
 const operational = await import("./.pi/extensions/lib/fm-calm-operational-user-layout.ts");
 
@@ -380,8 +417,8 @@ test_rendering_and_session_lifecycle() {
   cp "$ROOT/.pi/extensions/lib/fm-operational-input.ts" "$fixture/lib/fm-operational-input.ts"
   cp "$WATCH_EXT" "$fixture/fm-primary-pi-watch.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
-  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
-  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
+  ln -s "$PI_TUI_DIR" "$fixture/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_TYPEBOX_DIR" "$fixture/node_modules/typebox"
   printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
   cat >"$fixture/operational-input-probe.sh" <<'SH'
 #!/usr/bin/env bash
@@ -390,7 +427,7 @@ exec "$FM_OPERATIONAL_INPUT_OWNER" "$@"
 SH
   chmod +x "$fixture/operational-input-probe.sh"
 
-  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" WATCH_EXT="$fixture/fm-primary-pi-watch.ts" FM_HOME="$fixture/home" FM_OPERATIONAL_INPUT_SCRIPT="$fixture/operational-input-probe.sh" FM_OPERATIONAL_INPUT_OWNER="$OPERATIONAL_INPUT" FM_OPERATIONAL_INPUT_CALLS="$fixture/operational-input-calls" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" node --input-type=module 2>&1 <<'JS'
+  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" WATCH_EXT="$fixture/fm-primary-pi-watch.ts" FM_HOME="$fixture/home" FM_OPERATIONAL_INPUT_SCRIPT="$fixture/operational-input-probe.sh" FM_OPERATIONAL_INPUT_OWNER="$OPERATIONAL_INPUT" FM_OPERATIONAL_INPUT_CALLS="$fixture/operational-input-calls" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" PI_TUI_DIR="$PI_TUI_DIR" node "${PI_NODE_FLAGS[@]}" --input-type=module 2>&1 <<'JS'
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -402,9 +439,23 @@ const [{ AssistantMessageComponent }, { CustomEntryComponent }, { ToolExecutionC
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/components/user-message.js`).href),
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/interactive-mode.js`).href),
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/theme/theme.js`).href),
-  import(pathToFileURL(`${packageRoot}/node_modules/@earendil-works/pi-tui/dist/index.js`).href),
+  import(pathToFileURL(`${process.env.PI_TUI_DIR}/dist/index.js`).href),
   import(pathToFileURL(`${packageRoot}/dist/core/export-html/tool-renderer.js`).href),
 ]);
+// Stock Pi built-in tool definitions. Pi 0.81/0.82 built-ins shipped no renderCall or
+// renderResult, so "no tool definition" and "the stock tool definition" rendered
+// identically. Pi 1.3.0 built-ins carry their own renderers, so an absent definition
+// now exercises Pi's fallback text path and is no longer a stock-rendering baseline.
+const piCodingAgent = await import(pathToFileURL(`${packageRoot}/dist/index.js`).href);
+const stockToolDefinitions = {
+  read: piCodingAgent.createReadToolDefinition,
+  bash: piCodingAgent.createBashToolDefinition,
+  edit: piCodingAgent.createEditToolDefinition,
+  write: piCodingAgent.createWriteToolDefinition,
+  grep: piCodingAgent.createGrepToolDefinition,
+  find: piCodingAgent.createFindToolDefinition,
+  ls: piCodingAgent.createLsToolDefinition,
+};
 initTheme("dark");
 setCapabilities({ images: null, trueColor: true, hyperlinks: false });
 
@@ -544,7 +595,8 @@ const renderUi = { requestRender() {} };
 const rows = [];
 for (const [name, args, result] of cases) {
   const wrapped = tools.find((tool) => tool.name === name);
-  const baseline = new ToolExecutionComponent(name, `baseline-${name}`, args, { showImages: false }, undefined, renderUi, process.cwd());
+  const stockDefinition = stockToolDefinitions[name](process.cwd());
+  const baseline = new ToolExecutionComponent(name, `baseline-${name}`, args, { showImages: false }, stockDefinition, renderUi, process.cwd());
   const actual = new ToolExecutionComponent(name, `wrapped-${name}`, args, { showImages: false }, wrapped, renderUi, process.cwd());
   for (const row of [baseline, actual]) {
     row.markExecutionStarted();
@@ -1160,6 +1212,11 @@ export default function (pi: ExtensionAPI): void {
 }
 TS
 
+# Pi 1.3.0 resolves a relative -e argument against the pane's base directory rather
+# than the shell's working directory, so a `cd $project` inside the pane command does not
+# move where a relative extension path is resolved from. Pi then exits with
+# "Extension path does not exist" before the composer appears. Pass absolute paths so
+# these E2E cases load the fixture extensions they mean to load.
   run_followup_case() {
     case_name=$1
     calm_state=$2
@@ -1172,13 +1229,13 @@ TS
     tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
     if [ "$calm_state" = absent ]; then
       rm -f "$home/config/calm"
-      extensions='-e ./followup-e2e.ts'
+      extensions='-e $project/followup-e2e.ts'
     elif [ "$calm_state" = default ]; then
       rm -f "$home/config/calm"
-      extensions='-e ./.pi/extensions/fm-calm.ts -e ./followup-e2e.ts'
+      extensions='-e $project/.pi/extensions/fm-calm.ts -e $project/followup-e2e.ts'
     else
       printf '%s\n' "$calm_state" >"$home/config/calm"
-      extensions='-e ./.pi/extensions/fm-calm.ts -e ./followup-e2e.ts'
+      extensions='-e $project/.pi/extensions/fm-calm.ts -e $project/followup-e2e.ts'
     fi
     if [ -z "$session_arg" ]; then
       session_arg="--session-dir '$sessions/$label'"
@@ -1188,9 +1245,9 @@ TS
     fi
 
     tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 160 -y 36 \
-      "cd '$project' && env FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-context-files --no-skills --no-prompt-templates --no-extensions $extensions $session_arg; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
+      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-context-files --no-skills --no-prompt-templates --no-extensions $extensions $session_arg; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
     i=0
-    while [ "$i" -lt 120 ]; do
+    while [ "$i" -lt "$PI_BOOT_WAIT_TRIES" ]; do
       pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
       printf '%s\n' "$pane" | grep -Fq 'followup-e2e.ts' && break
       sleep 0.05
@@ -1316,7 +1373,7 @@ JS
     tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
     printf '%s\n' on >"$home/config/calm"
     tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 160 -y 36 \
-      "cd '$project' && env FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-context-files --no-skills --no-prompt-templates --no-extensions -e ./.pi/extensions/fm-calm.ts -e ./followup-e2e.ts --session '$exact_session'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
+      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-context-files --no-skills --no-prompt-templates --no-extensions -e '$project/.pi/extensions/fm-calm.ts' -e '$project/followup-e2e.ts' --session '$exact_session'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
     i=0
     while [ "$i" -lt 120 ]; do
       pane=$(tmux -L "$TMUX_SOCKET" capture-pane -p -t "$TMUX_SESSION" -S - 2>/dev/null || true)
@@ -1474,7 +1531,7 @@ TS
     local session_arg=$1
     tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
     tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 100 -y 44 \
-      "cd '$project' && env FM_HOME='$home' PI_CODING_AGENT_DIR='$config' PI_OFFLINE=1 pi --approve --no-context-files --no-prompt-templates --no-extensions -e ./.pi/extensions/fm-calm.ts -e ./geometry-provider.ts $session_arg; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
+      "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' PI_OFFLINE=1 pi --approve --no-context-files --no-prompt-templates --no-extensions -e '$project/.pi/extensions/fm-calm.ts' -e '$project/geometry-provider.ts' $session_arg; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 20"
   }
 
   capture_geometry_viewport() {
@@ -1484,7 +1541,7 @@ TS
 
   wait_for_geometry_text() {
     local file=$1 text=$2 attempt=0
-    while [ "$attempt" -lt 120 ]; do
+    while [ "$attempt" -lt "$PI_BOOT_WAIT_TRIES" ]; do
       capture_geometry_viewport "$file" || true
       grep -Fq "$text" "$file" 2>/dev/null && return 0
       sleep 0.05
@@ -1631,17 +1688,17 @@ test_working_ship_geometry_and_lifecycle() {
   cp "$WORKING_SHIP" "$fixture/lib/fm-calm-working-ship.ts"
   cp "$PI_OPERATIONAL_INPUT" "$fixture/lib/fm-operational-input.ts"
   ln -s "$PI_PACKAGE_DIR" "$fixture/node_modules/@earendil-works/pi-coding-agent"
-  ln -s "$PI_PACKAGE_DIR/node_modules/@earendil-works/pi-tui" "$fixture/node_modules/@earendil-works/pi-tui"
-  ln -s "$PI_PACKAGE_DIR/node_modules/typebox" "$fixture/node_modules/typebox"
+  ln -s "$PI_TUI_DIR" "$fixture/node_modules/@earendil-works/pi-tui"
+  ln -s "$PI_TYPEBOX_DIR" "$fixture/node_modules/typebox"
   printf '%s\n' '{"type":"module"}' >"$fixture/package.json"
 
-  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" node --input-type=module 2>&1 <<'JS'
+  out=$(cd "$fixture" && EXT="$fixture/fm-calm.ts" FM_HOME="$fixture/home" PI_PACKAGE_DIR="$PI_PACKAGE_DIR" PI_TUI_DIR="$PI_TUI_DIR" node "${PI_NODE_FLAGS[@]}" --input-type=module 2>&1 <<'JS'
 import { pathToFileURL } from "node:url";
 
 const packageRoot = process.env.PI_PACKAGE_DIR;
 const [{ initTheme, theme }, { visibleWidth, setCapabilities }] = await Promise.all([
   import(pathToFileURL(`${packageRoot}/dist/modes/interactive/theme/theme.js`).href),
-  import(pathToFileURL(`${packageRoot}/node_modules/@earendil-works/pi-tui/dist/index.js`).href),
+  import(pathToFileURL(`${process.env.PI_TUI_DIR}/dist/index.js`).href),
 ]);
 initTheme("dark");
 setCapabilities({ images: null, trueColor: true, hyperlinks: false });
@@ -2740,7 +2797,7 @@ TS
 JSON
 
   tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 180 -y 44 \
-    "cd '$project' && env FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
+    "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
   wait_for_text "$default_snapshot" "The deterministic tool example is complete." \
     || fail "Pi calm E2E did not reach the restored session transcript"
   assert_contains "$(cat "$default_snapshot")" "CALM_E2E_OUTPUT" "calm mode was not off by default"
@@ -3289,7 +3346,7 @@ JS
   tmux -L "$TMUX_SOCKET" kill-session -t "$TMUX_SESSION" 2>/dev/null || true
 
   tmux -L "$TMUX_SOCKET" new-session -d -s "$TMUX_SESSION" -x 180 -y 44 \
-    "cd '$project' && env FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
+    "cd '$project' && FM_HOME='$home' PI_CODING_AGENT_DIR='$config' FM_OPERATIONAL_INPUT_SCRIPT='$OPERATIONAL_INPUT' PI_OFFLINE=1 pi --approve --no-skills --no-prompt-templates --no-context-files --session '$session_file'; rc=\$?; printf '\nPI_EXIT=%s\n' \"\$rc\"; sleep 30"
   wait_for_text "$restarted_snapshot" "CALM_WORKING_E2E_RESPONSE" \
     || fail "Pi did not restore the persisted session after restart"
   assert_not_contains "$(cat "$restarted_snapshot")" "CALM_E2E_OUTPUT" "restart/resume reset Calm and restored a tool row"

@@ -49,6 +49,15 @@ A missed-reply escalation includes the complete first sighting path and line num
 - No second watcher or standalone scanner: a lightweight ledger pass runs inside the existing inactive-outcome command on every watcher poll and reuses its receipts and upstream append.
 - No orphan lifecycle: teardown refuses instead of removing an undelivered outcome, the same way it refuses on other unlanded conditions.
 
+## Direct post-delivery notification
+
+While periodic polling (5 minutes) provides an eventual-consistency fallback, inter-home communication (Controller-to-secondmate and secondmate-to-Controller) triggers immediate guarded notifications via `bin/fm-comms-notify.sh`.
+
+- **Delivery vs Notification separation**: The durable file write (file copy/rsync/scp) occurs first. A notification failure never marks the file transfer as failed or rolls back the delivered file.
+- **Guard and state awareness**: Notifications resolve recipient agents dynamically (`herdr agent list` / `pane list`) without relying on hardcoded pane numbers. If the recipient is active or blocked, the notification is deferred to a pending queue (`$STATE/comms-pending-notify/<route>/<sha>.pending`) without interrupting the running agent (no Ctrl-C or Esc).
+- **Deduplication and idempotency**: Messages are content-hashed (SHA-256) into a notify ledger (`$STATE/comms-notify-ledger.tsv`). Retries or identical messages across mirrored paths never prompt the agent multiple times.
+- **Drain on idle**: Deferred notifications are automatically drained once the recipient transitions back to `idle` or `interactive_ready`.
+
 ## Regression coverage
 
 `tests/fm-inactive-reconcile.test.sh` covers the ledger delivery against real ledgers with no harness: immediate done and failed delivery with note, PR, mode, posture, and report pointer, once-only delivery across polls, a ship `done:` withheld while its named head exists only in the worker copy, a pending one still delivered after teardown removes that copy, a line still being appended, later routine status prose not minting a fresh parent event because the inactive receipt identity binds structured fields only, the remote route, the yield of the inactive path to a terminal ledger, and the real watcher poll driving it.

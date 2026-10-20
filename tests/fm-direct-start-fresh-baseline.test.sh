@@ -32,6 +32,7 @@ mkdir -p "$fake_bin" "$TMP_ROOT/home/data" "$TMP_ROOT/home/state" "$TMP_ROOT/hom
 cat > "$fake_bin/pi" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
+  '--version') printf 'pi 0.16.9\n' ;;
   'update --self --no-approve') printf 'PI_CLI_UPDATED\n' ;;
   'update --extensions --no-approve') printf 'PI_EXTENSIONS_UPDATED\n' ;;
   *) printf 'PI_UNEXPECTED_CALL: %s\n' "$*" >&2; exit 2 ;;
@@ -46,10 +47,10 @@ fi
 printf 'HERDR_STARTED %s\n' "$*"
 EOF
 chmod +x "$fake_bin/pi" "$fake_bin/herdr"
-printf '%s\n' '{"defaultProvider":"openai-codex","defaultModel":"gpt-5.6-luna"}' > "$TMP_ROOT/pi-settings.json"
+printf '%s\n' '{"defaultProvider":"zai","defaultModel":"glm-5.3-flash"}' > "$TMP_ROOT/pi-settings.json"
 
 direct_out=$(
-  HERDR_ENV=1 HERDR_SKIP_SKILL_DRIFT_CHECK=1 HERDR_REAP_BEFORE_START=0 \
+  HERDR_ENV=1 HERDR_SKIP_SKILL_DRIFT_CHECK=1 HERDR_REAP_BEFORE_START=0 QUOTA_GATE_BYPASS=1 \
   HERDR_FRESH_BASELINE_SCRIPT="$ROOT/bin/fm-session-start.sh" \
   FM_HOME="$TMP_ROOT/home" FM_BASELINE_ROOT="$ROOT" \
   PI_AGENT_SETTINGS="$TMP_ROOT/pi-settings.json" \
@@ -66,7 +67,7 @@ pass 'direct fresh launch emits shared baseline manifest before Herdr start'
 missing="$TMP_ROOT/missing-baseline-helper"
 direct_status=0
 direct_fail=$(
-  HERDR_ENV=1 HERDR_SKIP_SKILL_DRIFT_CHECK=1 HERDR_REAP_BEFORE_START=0 \
+  HERDR_ENV=1 HERDR_SKIP_SKILL_DRIFT_CHECK=1 HERDR_REAP_BEFORE_START=0 QUOTA_GATE_BYPASS=1 \
   HERDR_FRESH_BASELINE_SCRIPT="$missing" \
   PI_AGENT_SETTINGS="$TMP_ROOT/pi-settings.json" \
   PATH="$fake_bin:$PATH" AGENT_START_FRESH_PI_BIN="$fake_bin/pi" \
