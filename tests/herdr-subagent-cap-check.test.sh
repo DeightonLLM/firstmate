@@ -126,8 +126,12 @@ MOCK
 
   [ "$rc" -eq 64 ] || fail "cap-check at cap must exit 64, got $rc: $out"
   assert_contains "$out" "ERR_SUBAGENT_CAP_REACHED" "refusal marker present"
-  assert_contains "$out" "subagent_count=6" "census subagent count present"
-  assert_contains "$out" "max_sub=6" "census max subagent count present"
+  # The cap census is surfaced by the canonical cap library, which names the
+  # count and the bound the way the library itself does: "open_subagent=6" and
+  # "MAX_SUBAGENT_PANES=6". The check is that the real census reaches the
+  # operator, not that one particular wording survives a library change.
+  assert_contains "$out" "open_subagent=6" "census subagent count present"
+  assert_contains "$out" "MAX_SUBAGENT_PANES=6" "census max subagent count present"
   pass "cap check reports refusal and real pane census at capacity"
 }
 

@@ -48,7 +48,18 @@ if [ "${HERDR_SUBAGENT_CAP_BYPASS:-0}" = "1" ]; then
   exit 0
 fi
 
-# Cap check is strictly non-mutating: do not close or reap panes during precheck
+# Cap check is strictly non-mutating: do not close or reap panes during precheck.
+#
+# The census is taken first so that "herdr unavailable / cannot count" (exit 3,
+# as this hook's own contract says) stays distinct from "cap reached" (exit
+# 64). The library's assert helper folds an unavailable census into a zero
+# count, so without this probe a check that never happened would be reported
+# as "OK to spawn" and the caller would learn nothing about it.
+if ! subagent_cap_count_open_subagent "$ws" >/dev/null 2>&1; then
+  printf 'server unavailable: cannot count open subagent panes\n' >&2
+  exit 3
+fi
+
 if subagent_cap_assert_can_spawn "$ws"; then
   exit 0
 fi
