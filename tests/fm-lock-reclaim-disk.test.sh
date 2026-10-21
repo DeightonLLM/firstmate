@@ -33,9 +33,27 @@ FAIL=0
 ok()  { PASS=$((PASS + 1)); printf 'PASS  %s\n' "$1"; }
 bad() { FAIL=$((FAIL + 1)); printf 'FAIL  %s\n' "$1"; }
 
-# The fixture lives on the ROOT filesystem, so the reclaim's own df reading
-# sees the bytes this test creates and frees.
-WORK="$(mktemp -d /root/fm-reclaim-disk-test.XXXXXX)"
+# The fixture must live on the ROOT filesystem, so the reclaim's own df reading
+# sees the bytes this test creates and frees. The original harness hardcoded
+# /root, which only a root user can create, so the suite could not run as an
+# ordinary user. Pick the first WRITABLE directory that is on the root
+# filesystem instead, and keep the root behaviour where it is available.
+root_dev="$(df -P / 2>/dev/null | awk 'NR==2 {print $1}')"
+pick_work_base() {
+  local d dev
+  for d in /root /var/tmp /tmp "$HOME" "$ROOT"; do
+    [ -n "$d" ] && [ -d "$d" ] || continue
+    [ -w "$d" ] || continue
+    dev="$(df -P "$d" 2>/dev/null | awk 'NR==2 {print $1}')"
+    [ -n "$dev" ] && [ "$dev" = "$root_dev" ] || continue
+    printf '%s\n' "$d"
+    return 0
+  done
+  return 1
+}
+work_base="$(pick_work_base)" \
+  || { printf 'FAIL  no writable directory on the root filesystem\n'; exit 1; }
+WORK="$(mktemp -d "$work_base/fm-reclaim-disk-test.XXXXXX")"
 cleanup() {
   [ -n "${WRITER_PID:-}" ] && kill "$WRITER_PID" 2>/dev/null
   rm -rf "$WORK" 2>/dev/null
