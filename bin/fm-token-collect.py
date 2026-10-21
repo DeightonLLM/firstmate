@@ -53,7 +53,14 @@ except ImportError:  # pragma: no cover - Python < 3.9 fallback
 
 sys.dont_write_bytecode = True
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+_SELF = pathlib.Path(__file__).resolve()
+REPO_ROOT = _SELF.parent.parent
+# The collector is installed into the runtime directory beside the board it
+# feeds, so there it sits two levels below the repo root instead of one. The
+# root is resolved the same way wherever the script runs, so the installed
+# copy and the tracked copy read the same ledger and write the same band.
+if _SELF.parent.name == "next-board-publish":
+    REPO_ROOT = _SELF.parent.parent.parent
 DEFAULT_OUT_REL = "data/next-board-publish/token-band.json"
 DEFAULT_LEDGER_REL = "data/tracker-tokens-20261019/ledger/usage.json"
 
