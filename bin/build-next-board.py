@@ -41,6 +41,10 @@ STATES = ["VERIFIED-DONE", "OPEN-WORKABLE", "BLOCKED", "NEEDS-CAPTAIN-DECISION",
 OWNER_DEFAULT = "unassigned"
 NEXT_RE = re.compile(r"^\s*[-*]?\s*\**NEXT\**\s*[:：]", re.M | re.I)
 VERDICT_RE = re.compile(r"^\s*VERDICT\s*:", re.M)
+# The line-anchored twin of VERDICT_RE, used only to READ a verdict. VERDICT_RE's
+# leading \s* can span a newline, so its match offset does not point at the verdict's
+# own line; this one always does.
+VERDICT_LINE_RE = re.compile(r"^[ \t]*(?:\*\*)?VERDICT[ \t]*:[ \t]*(.*)$", re.M)
 
 
 def read_json(path):
@@ -74,6 +78,31 @@ def git(repo, *args):
 
 
 BACKLOG_RE = re.compile(r"^\s*-\s*\[( |x|X)\]\s+(.*)$")
+
+
+def verdict_text(text):
+    """The artifact's own verdict, read from its verdict LINE.
+
+    The old extraction took the first "VERDICT:" anywhere in the file, so an artifact
+    that merely mentioned verdicts in prose won over its real verdict - e.g. a report
+    whose verdict was "FAIL, must not run as written" was rendered as
+    "PASS` or `VERDICT: FAIL <reason>`, two-branch stop condition."
+
+    The detection rule stays VERDICT_RE (the contract's own regex, which the publisher
+    also calls). The extraction uses a line-anchored twin, because VERDICT_RE's leading
+    \\s* can span a newline and so its match offset does not reliably point at the
+    verdict's own line.
+    """
+    match = VERDICT_LINE_RE.search(text)
+    if match:
+        value = match.group(1)
+    else:
+        fallback = VERDICT_RE.search(text)
+        if not fallback:
+            return ""
+        value = text[fallback.end():].split("\n", 1)[0]
+    value = value.strip().strip("*").strip("`").strip()
+    return value[:160].strip()
 
 
 def parse_backlog(repo):
@@ -230,7 +259,7 @@ def collect(repo, stale_days, now):
                     continue
                 seen_artifacts.add(artifact)
                 residuals.append({"artifact": artifact,
-                                  "verdict": (re.findall(r"VERDICT\s*:\s*([^\n]{0,80})", text) or [""])[0].strip(),
+                                  "verdict": verdict_text(text),
                                   "next_line": None})
 
     # ledger: push attempts, cleared and refused

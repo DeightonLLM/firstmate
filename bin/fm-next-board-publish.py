@@ -448,6 +448,16 @@ font-size:.7rem;font-weight:700;border:1px solid var(--line)}
 .kv dd{margin:0;font-family:var(--mono);font-size:.82rem;overflow-wrap:anywhere}
 .note{font-size:.82rem;color:var(--text-2);margin:10px 0 0;line-height:1.5}
 .empty{color:var(--text-2);font-style:italic}
+details.fold{border:1px solid var(--line);border-radius:10px;margin-top:12px;
+background:rgba(255,255,255,.015)}
+details.fold>summary{cursor:pointer;padding:9px 12px;font-size:.86rem;font-weight:600;
+list-style:none;display:flex;gap:8px;align-items:center}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::before{content:"▸";color:var(--text-2);font-size:.78rem;
+transition:transform .12s ease}
+details.fold[open]>summary::before{transform:rotate(90deg)}
+details.fold>summary:hover{color:var(--brand-ice)}
+details.fold>.foldbody{padding:2px 12px 12px}
 .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .bar a.btn{text-decoration:none;padding:6px 12px;border-radius:8px;background:var(--surface-2);
 border:1px solid var(--line);font-size:.82rem}
@@ -482,6 +492,29 @@ ul.talklog li{border:1px solid var(--line);border-radius:10px;padding:10px 12px;
 
 def esc(value):
     return html.escape(str(value if value is not None else ""), quote=True)
+
+
+def fold(summary, body, open_=False):
+    """A collapsed disclosure block.
+
+    The board is a working surface, not an archive. Long lists (closed work, contract
+    gaps, residual artifacts) stay on the page - the Captain's data is never dropped -
+    but they fold away by default so the page opens on the signposts instead of a wall
+    of rows. The summary always carries the count, so a folded block never hides that
+    something is behind it.
+    """
+    if not body:
+        return ""
+    return ('<details class="fold"%s><summary>%s</summary>'
+            '<div class="foldbody">%s</div></details>'
+            % (" open" if open_ else "", summary, body))
+
+
+def data_rows(table_html):
+    """How many data rows a rendered table holds, ignoring its header row."""
+    if not table_html:
+        return 0
+    return max(0, table_html.count("<tr>") - 1)
 
 
 def freshness_banner(age_seconds):
@@ -571,7 +604,12 @@ def ticket_state(row):
 
 
 def render_queue(queue, tracker_rows):
-    """The Captain's own ticket set: every ticket the queue holds, P0 first."""
+    """The Captain's own ticket set: every ticket the queue holds, P0 first.
+
+    Every ticket is still rendered - the queue is never truncated - but only P0 is
+    expanded. P1 and P2 fold away behind a count, so the page opens on what is on
+    fire rather than on forty rows of context.
+    """
     by_seq = {str(r.get("sequence")): r for r in tracker_rows}
     by_priority = {}
     for ticket in queue:
@@ -589,31 +627,39 @@ def render_queue(queue, tracker_rows):
         tickets = by_priority.get(priority, [])
         if not tickets:
             continue
-        blocks.append('<div style="margin-top:14px">')
-        blocks.append('<h2 style="font-size:.9rem;color:var(--text-2);text-transform:uppercase;'
-                      'letter-spacing:.07em">%s — %d ticket(s)</h2>' % (priority, len(tickets)))
-        blocks.append('<table><thead><tr><th>prio</th><th>Ticket</th><th>Area</th><th>State</th>'
-                      '<th>Done looks like</th><th>Owner</th></tr></thead><tbody>')
+        rows = []
         for ticket in sorted(tickets, key=lambda t: t["sequence"]):
             row = by_seq.get(ticket["sequence"], {})
             state, next_action, owner, question = ticket_state(row)
             slug = "%s-%s" % (ticket["sequence"], ticket["slug"])
-            priority = (ticket.get("priority") or "P2").lower()
+            pill = (ticket.get("priority") or "P2").lower()
             cell = ('<code>%s</code>' % esc(slug))
             if question:
-                cell += '<br><span class="warn">%s</span>' % esc(question[:180])
-            blocks.append(
+                cell += '<br><span class="warn">%s</span>' % esc(truncate(question, 150))
+            rows.append(
                 '<tr><td><span class="pill %s">%s</span></td><td class="mono">%s</td><td>%s</td>'
                 '<td class="state">%s</td><td>%s</td><td class="mono">%s</td></tr>' % (
-                    esc(priority), esc((ticket.get("priority") or "P2")), cell,
+                    esc(pill), esc(ticket.get("priority") or "P2"), cell,
                     esc(ticket.get("area") or "-"), esc(state),
-                    esc((next_action or "-")[:200]), esc(owner or "unassigned")))
-        blocks.append("</tbody></table></div>")
+                    esc(truncate(next_action or "-", 110)), esc(owner or "unassigned")))
+        table = ('<table><thead><tr><th>prio</th><th>Ticket</th><th>Area</th><th>State</th>'
+                 '<th>Done looks like</th><th>Owner</th></tr></thead><tbody>'
+                 + "".join(rows) + "</tbody></table>")
+        heading = ("%s — %d ticket(s)" % (priority, len(tickets)))
+        if priority == "P0":
+            blocks.append('<div style="margin-top:14px">')
+            blocks.append('<h2 style="font-size:.9rem;color:var(--text-2);text-transform:uppercase;'
+                          'letter-spacing:.07em">%s</h2>' % heading)
+            blocks.append(table)
+            blocks.append("</div>")
+        else:
+            blocks.append(fold(heading, table))
     if not queue:
         blocks.append('<p class="empty">No tickets found in the queue file.</p>')
     blocks.append('<p class="note">Source of truth: <code>%s</code> — the board file '
                   '<code>ticket-intake</code> owns. This table is read from it on every '
-                  'publish; it is never a transcribed copy.</p>' % esc(QUEUE_BOARD_REL))
+                  'publish; it is never a transcribed copy. P1 and P2 are folded — open them '
+                  'to read the full list.</p>' % esc(QUEUE_BOARD_REL))
     blocks.append("</section>")
     return "".join(blocks)
 
@@ -638,99 +684,130 @@ def render_next(board_json):
                   '<span>%s &nbsp;%d</span>' % (esc(k), v)
                   for k, v in sorted(counts.items())) + "</div>"]
 
+    # How many rows stay open on the page. The signposts (NOW, the Captain's own
+    # questions, BLOCKED) stay open because they are what the page is for. The
+    # long tail (contract gaps, closed work, residual artifacts) folds behind a count,
+    # and every count is shown so nothing is silently dropped.
+    OPEN_NOW = 8
+    OPEN_CAPTAIN = 6
+
     now = bucket("OPEN-WORKABLE")
-    blocks.append("<h2 style='margin-top:16px'>NOW — a lane can start this today</h2>")
+    blocks.append("<h2 style='margin-top:16px'>NOW — a lane can start this today "
+                  "<span class='muted'>(%d item(s))</span></h2>" % len(now))
     if now:
+        def now_row(item):
+            return ('<tr><td class="mono">%s</td><td class="mono">%s</td><td>%s</td>'
+                    '<td class="mono">%s</td></tr>' % (
+                        esc(item.get("priority")), esc(item.get("slug")),
+                        esc(truncate(item.get("next_action") or "", 110)),
+                        esc(item.get("owner"))))
+
+        ordered = sorted(now, key=prio_key)
         blocks.append('<table><thead><tr><th>prio</th><th>item</th><th>done looks like</th>'
-                      '<th>owner</th></tr></thead><tbody>')
-        for item in sorted(now, key=prio_key):
-            blocks.append('<tr><td class="mono">%s</td><td class="mono">%s</td><td>%s</td>'
-                          '<td class="mono">%s</td></tr>' % (
-                              esc(item.get("priority")), esc(item.get("slug")),
-                              esc((item.get("next_action") or "")[:160]),
-                              esc(item.get("owner"))))
-        blocks.append("</tbody></table>")
+                      '<th>owner</th></tr></thead><tbody>'
+                      + "".join(now_row(i) for i in ordered[:OPEN_NOW]) + "</tbody></table>")
+        if len(ordered) > OPEN_NOW:
+            rest = ('<table><thead><tr><th>prio</th><th>item</th><th>done looks like</th>'
+                    '<th>owner</th></tr></thead><tbody>'
+                    + "".join(now_row(i) for i in ordered[OPEN_NOW:]) + "</tbody></table>")
+            blocks.append(fold("…and %d more workable item(s)" % (len(ordered) - OPEN_NOW),
+                               rest))
     else:
         blocks.append('<p class="empty">none</p>')
 
     captain = [i for i in items
                if i.get("state") == "NEEDS-CAPTAIN-DECISION" or i.get("captain_question")]
-    blocks.append("<h2 style='margin-top:16px'>ONLY YOU CAN UNBLOCK — one question each</h2>")
+    captain.sort(key=prio_key)
+    blocks.append("<h2 style='margin-top:16px'>ONLY YOU CAN UNBLOCK — one question each "
+                  "<span class='muted'>(%d question(s))</span></h2>" % len(captain))
     if captain:
-        blocks.append("<ul>")
-        for item in sorted(captain, key=prio_key):
+        def question_line(item):
             question = item.get("captain_question") or item.get("next_action") or item.get("title")
-            blocks.append('<li><code>%s</code> — %s</li>' % (
-                esc(item.get("slug")), esc(str(question)[:220])))
-        blocks.append("</ul>")
+            return '<li><code>%s</code> — %s</li>' % (esc(item.get("slug")),
+                                                      esc(truncate(question, 200)))
+
+        blocks.append("<ul>" + "".join(question_line(i) for i in captain[:OPEN_CAPTAIN])
+                      + "</ul>")
+        if len(captain) > OPEN_CAPTAIN:
+            rest = "<ul>" + "".join(question_line(i) for i in captain[OPEN_CAPTAIN:]) + "</ul>"
+            blocks.append(fold("…and %d more question(s) waiting on you"
+                               % (len(captain) - OPEN_CAPTAIN), rest))
     else:
         blocks.append('<p class="empty">none</p>')
 
     blocked = bucket("BLOCKED")
-    blocks.append("<h2 style='margin-top:16px'>BLOCKED — blocker and recovery condition</h2>")
+    blocks.append("<h2 style='margin-top:16px'>BLOCKED — blocker and recovery condition "
+                  "<span class='muted'>(%d item(s))</span></h2>" % len(blocked))
     if blocked:
         blocks.append("<ul>")
         for item in sorted(blocked, key=prio_key):
             blocks.append('<li><code>%s</code> (%s) — %s</li>' % (
                 esc(item.get("slug")), esc(item.get("priority")),
-                esc((item.get("next_action") or item.get("title") or "")[:220])))
+                esc(truncate(item.get("next_action") or item.get("title") or "", 200))))
         blocks.append("</ul>")
     else:
         blocks.append('<p class="empty">none</p>')
 
     gaps = bucket("CONTRACT-GAP")
-    blocks.append("<h2 style='margin-top:16px'>CONTRACT-GAP — no next action or no owner</h2>")
+    gap_body = ""
     if gaps:
-        blocks.append("<ul>")
-        for item in sorted(gaps, key=prio_key)[:60]:
+        items_html = []
+        for item in sorted(gaps, key=prio_key):
             reason = "; ".join(item.get("gaps") or ["missing state, next action or owner"])
-            blocks.append('<li><code>%s</code> (%s) — %s</li>' % (
+            items_html.append('<li><code>%s</code> (%s) — %s</li>' % (
                 esc(item.get("slug")), esc(item.get("priority")), esc(reason)))
-        blocks.append("</ul>")
-        if len(gaps) > 60:
-            blocks.append('<p class="muted">…and %d more</p>' % (len(gaps) - 60))
+        gap_body = "<ul>" + "".join(items_html) + "</ul>"
     else:
-        blocks.append('<p class="empty">none — every item has a next action and an owner</p>')
+        gap_body = '<p class="empty">none — every item has a next action and an owner</p>'
+    blocks.append(fold("CONTRACT-GAP — no next action or no owner (%d item(s))" % len(gaps),
+                       gap_body))
 
     done = bucket("VERIFIED-DONE", "STALE-DUPLICATE")
-    blocks.append("<h2 style='margin-top:16px'>CLOSED</h2>")
+    done_body = ""
     if done:
-        blocks.append("<ul>")
-        for item in sorted(done, key=prio_key)[:40]:
-            blocks.append('<li><code>%s</code> — %s</li>' % (
-                esc(item.get("slug")), esc((item.get("next_action") or item.get("title") or "")[:140])))
-        blocks.append("</ul>")
-        if len(done) > 40:
-            blocks.append('<p class="muted">…and %d more</p>' % (len(done) - 40))
+        items_html = []
+        for item in sorted(done, key=prio_key):
+            items_html.append('<li><code>%s</code> — %s</li>' % (
+                esc(item.get("slug")),
+                esc(truncate(item.get("next_action") or item.get("title") or "", 140))))
+        done_body = "<ul>" + "".join(items_html) + "</ul>"
     else:
-        blocks.append('<p class="empty">none</p>')
+        done_body = '<p class="empty">none</p>'
+    blocks.append(fold("CLOSED — finished work (%d item(s))" % len(done), done_body))
 
-    blocks.append("<h2 style='margin-top:16px'>RESIDUALS — artifacts with a VERDICT but no NEXT line</h2>")
+    # Residual artifacts: every one is still listed, but the fold keeps 86 rows off the
+    # Captain's first screen. Nothing is dropped - the fold opens onto the full
+    # register. The verdict is clipped to one line so a long report sentence cannot
+    # stretch a row.
+    residual_body = ""
     if residuals:
-        blocks.append("<ul>")
-        for residual in residuals:
-            blocks.append('<li><code>%s</code> — verdict: %s</li>' % (
-                esc(residual.get("artifact")), esc(residual.get("verdict") or "(unstated)")))
-        blocks.append("</ul>")
+        residual_body = "<ul>" + "".join(
+            '<li><code>%s</code> — verdict: %s</li>' % (
+                esc(residual.get("artifact")),
+                esc(truncate(residual.get("verdict") or "(unstated)", 140)))
+            for residual in residuals) + "</ul>"
     else:
-        blocks.append('<p class="empty">none</p>')
+        residual_body = '<p class="empty">none</p>'
+    blocks.append(fold("RESIDUALS — artifacts with a VERDICT but no NEXT line "
+                       "(%d artifact(s))" % len(residuals), residual_body))
 
     claims = board_json.get("claims") or []
-    blocks.append("<h2 style='margin-top:16px'>LIVE CLAIMS</h2>")
+    claim_body = ""
     if claims:
-        blocks.append("<ul>")
-        for claim in claims:
-            blocks.append('<li><code>%s</code> — %s — %s</li>' % (
-                esc(claim.get("lane")), esc(str(claim.get("scope") or "")[:80]),
-                esc(str(claim.get("state") or "")[:80])))
-        blocks.append("</ul>")
+        claim_body = "<ul>" + "".join(
+            '<li><code>%s</code> — %s — %s</li>' % (
+                esc(claim.get("lane")), esc(truncate(claim.get("scope") or "", 80)),
+                esc(truncate(claim.get("state") or "", 80)))
+            for claim in claims) + "</ul>"
     else:
-        blocks.append('<p class="empty">no claims board found</p>')
+        claim_body = '<p class="empty">no claims board found</p>'
+    blocks.append(fold("LIVE CLAIMS — who holds what right now (%d)" % len(claims), claim_body))
 
     blocks.append('<p class="note">Sources: <code>%s</code> (the queue), '
                   '<code>%s</code> (the tracker snapshot), <code>data/backlog.md</code> (the live '
-                  'queue) — all read by the existing builder <code>bin/build-next-board.py</code>.</p>'
-                  % (esc(QUEUE_BOARD_REL), esc(TRACKER_REL)))
+                  'queue) — all read by the existing builder <code>bin/build-next-board.py</code>. '
+                  'Folded blocks are collapsed, not removed: open any of them to read it in full.'
+                  '</p>' % (esc(QUEUE_BOARD_REL), esc(TRACKER_REL)))
     blocks.append("</section>")
     return "".join(blocks)
 
@@ -1189,10 +1266,14 @@ def render_token_band(state):
 
     blocks.append("<h2 style='margin-top:16px'>DAILY — every account, every day</h2>")
     blocks.append(render_heat_map(band))
-    blocks.append("<h2 style='margin-top:16px'>WEEKLY — the live quota windows</h2>")
-    blocks.append(render_quota_windows(band))
-    blocks.append("<h2 style='margin-top:16px'>ROLLOVER — what each reset restores</h2>")
-    blocks.append(render_rollover(band))
+    # The weekly total is the headline and stays open. The window list and the
+    # rollover detail are the same information at row level, so they fold.
+    windows_html = render_quota_windows(band)
+    rollover_html = render_rollover(band)
+    blocks.append(fold("WEEKLY — the live quota windows (%d window(s))"
+                       % data_rows(windows_html), windows_html))
+    blocks.append(fold("ROLLOVER — what each reset restores (%d row(s))"
+                       % data_rows(rollover_html), rollover_html))
     blocks.append('<p class="note">Source of truth: <code>%s</code>, written by '
                   '<code>bin/fm-token-collect.py</code>. The shape is owned by '
                   '<code>docs/next-board-token-and-chat-contract.md</code>. An unknown value is never '
@@ -1603,7 +1684,7 @@ def main():
                 continue
             if builder.NEXT_RE.search(text):
                 continue
-            verdict = (re.findall(r"VERDICT\s*:\s*([^\n]{0,80})", text) or [""])[0].strip()
+            verdict = builder.verdict_text(text)
             extra_residuals.append({"artifact": rel, "verdict": verdict, "next_line": None})
     if extra_residuals:
         board_json.setdefault("residuals", []).extend(extra_residuals)

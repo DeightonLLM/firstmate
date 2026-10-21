@@ -490,6 +490,56 @@ def run_live_checks(args):
     check("board names what only the Captain can decide",
           "ONLY YOU CAN UNBLOCK" in html or "ONLY THE CAPTAIN CAN UNBLOCK" in html)
 
+    # 5b. the page opens on the signposts, not on a wall of rows
+    #
+    # The board grew into 70 visible rows and 195 list items, which buried the
+    # signposts the Captain actually opens it for. The long lists now fold behind
+    # a disclosure. These checks fail if a fold ever stops counting, stops being
+    # collapsed by default, or starts hiding a ticket.
+    def folded_summaries():
+        return [re.sub(r"<[^>]+>", "", s)
+                for s in re.findall(r"<summary>(.*?)</summary>", html, re.S)]
+
+    def collapsed_bodies():
+        return re.findall(r'<details class="fold"(?![^>]*\sopen)[^>]*>(.*?)</details>',
+                          html, re.S)
+
+    summaries = folded_summaries()
+    check("the board folds its long lists away by default",
+          len(collapsed_bodies()) >= 4,
+          "%d collapsed disclosure(s)" % len(collapsed_bodies()))
+    uncounted = [s for s in summaries if not re.search(r"\d", s)]
+    check("every folded list states its count", not uncounted,
+          "; ".join(uncounted[:3]) if uncounted else "%d folded list(s)" % len(summaries))
+
+    for label in ("RESIDUALS", "CLOSED", "CONTRACT-GAP"):
+        found = any(label in s for s in summaries)
+        check("the %s list is folded, not expanded" % label, found,
+              "folded: %s" % [s[:50] for s in summaries if label in s][:1])
+
+    # Nothing is dropped: every ticket and every residual is still in the HTML,
+    # folded or not.
+    residuals = board.get("residuals", [])
+    missing_residuals = [r.get("artifact") for r in residuals
+                         if r.get("artifact") and r.get("artifact") not in html]
+    check("every residual artifact is still on the page", not missing_residuals,
+          ("%d residuals, missing: %s" % (len(residuals), ", ".join(missing_residuals[:4])))
+          if missing_residuals else "%d residuals" % len(residuals))
+
+    # The page must not open with a wall of rows.
+    opened = re.sub(r'<details class="fold"(?![^>]*\sopen)[^>]*>.*?</details>', "", html, flags=re.S)
+    open_rows = opened.count("<tr>")
+    open_items = opened.count("<li>")
+    check("the board opens with a readable number of rows", open_rows <= 40 and open_items <= 40,
+          "%d row(s) and %d list item(s) visible on open" % (open_rows, open_items))
+
+    # A residual's verdict is its own verdict line, not a sentence ABOUT verdicts.
+    bad_verdicts = [r.get("artifact") for r in residuals
+                    if "VERDICT:" in (r.get("verdict") or "")
+                    or (r.get("verdict") or "").strip().startswith("`")]
+    check("a residual's verdict is read from its own verdict line", not bad_verdicts,
+          "; ".join(bad_verdicts[:3]) if bad_verdicts else "%d residual(s)" % len(residuals))
+
     # 6. the tracker page reaches the board, and the board is served over HTTP
     if not args.skip_http:
         base = "http://%s:%d" % (args.bind, args.port)
