@@ -1,6 +1,14 @@
 # Backlog
 
 ## In flight
+- [ ] m3.1f-firstmate-teardownsuitenotblind - The teardown safety suite dies at its first failure, so 37 of its assertions never run; one of them asserts a string no code path emits (repo: firstmate) (kind: ship) (since 2026-10-21)
+  MEASURED 2026-10-21 by the firstmate, while landing the teardown row-closing fix (`3ad3c4b`).
+  `tests/lib.sh`'s `fail()` prints `not ok` and then `exit 1`, so the FIRST failing assertion ends the whole suite. `tests/fm-teardown.test.sh` invokes 39 test functions (46 assertions). Running it with the abort relaxed so every assertion executes gives: **pristine main = 39 passing, 7 failing**; **with the teardown fix = 40 passing, 2 failing** - the fix resolves five of the seven and adds its own isolation test.
+  The two that still fail are the SAME broken assertion, on both sides: `teardown did not preserve date-gate check` (and its `nm-origin` twin) grep the teardown's stdout for the string `check date gates`. **No code in `bin/` or `docs/` emits that string.** `git log -S` shows why: commit `cd73e75` ("fix(bin): retire terminal process events and surface queued wakes (#1500)") ADDED the assertion and REMOVED the code that printed the string, in the same commit. The assertion was born broken and has been failing ever since.
+  WHY IT MATTERS: the teardown is what closes a lane out and it refuses to tear down unlanded work. Its safety matrix (local-only fork remotes, squash-merge-then-delete, stale vs live index locks, herdr child and grandchild close retention) has been effectively unexercised, because the suite never gets past its second test. A green run of this suite today means nothing: it exits 1 at test two, and in CI a suite that dies early can read as "not run" rather than "failed".
+  WHAT TO DO: make the failure non-fatal for THIS suite - each assertion reports and the suite exits non-zero at the end if any failed - so the whole matrix runs and the summary is honest. Then decide what the date-gate assertion SHOULD assert: the intent was that the teardown preserves a pending date-gate check, which is a statement about the resulting STATE, not about stdout text; asserting on the state's survival would be the honest form, and asserting on a string that no code emits is not fixable by editing the expectation to match current behaviour.
+  NOT TOUCHED: the teardown row-closing fix itself, which landed with its own suite green (`tests/fm-backlog-mark-done.test.sh`, 5 assertions, all passing) and measurably better than the tree it landed on.
+
 - [ ] m3.1f-firstmate-diskceiling - The Captain's 80% disk ceiling is not enforced: the audit blocks at 85%, and nothing reads the verdict to gate placement; wire the real ceiling and put the warning on the live board (repo: deightonllm-firstmate) (kind: ship) (since 2026-10-21)
   # Disk ceiling - handed to the residual-queue secondmate, 2026-10-21
 
