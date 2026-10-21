@@ -14,6 +14,9 @@ set -u
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOARD="$SELF_DIR/lane-todo-board.sh"
+# The one documented way to purge own-scratch.
+# shellcheck source=bin/fm-scratch-lib.sh
+. "$SELF_DIR/fm-scratch-lib.sh"
 DASH="$SELF_DIR/lane-todo-dash.sh"
 
 TMP_ROOT=""
@@ -34,7 +37,7 @@ cleanup() {
     wait "$SERVER_PID" 2>/dev/null || true
   fi
   if [ -n "$TMP_ROOT" ] && [ -d "$TMP_ROOT" ]; then
-    rm -rf -- "$TMP_ROOT"
+    fm_purge_scratch "$TMP_ROOT" 2>/dev/null
   fi
 }
 trap cleanup EXIT

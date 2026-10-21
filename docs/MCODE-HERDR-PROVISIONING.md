@@ -199,7 +199,7 @@ Surface aliases: `dubz`, `hd2`, `brandon`, `evps`, `firstmate`.
 Task: lowercase alphanumeric with hyphens.
 
 The alias derivation rule is in `bin/fm-lane-naming-check.sh` and is single-stated there:
-a MiniMax model id like `minimax/MiniMax-M3.1-Flash-Preview` derives to `m3.1f` (family
+a MiniMax model id like `minimax/MiniMax-M3.1-Flash` derives to `m3.1f` (family
 plus a tier marker - `highspeed` -> `h`, `flash` -> `f`). Model ids from other providers
 have no programmatic rule; any alias claimed for them must be verified explicitly.
 
@@ -241,7 +241,7 @@ path.
 
 ```sh
 FM_DISPATCH_GUARD_LOAD_BYPASS=1 bin/fm-spawn.sh <lane-key> <project-dir> \
-  --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview --backend herdr [--scout]
+  --harness minimax-code --model minimax/MiniMax-M3.1-Flash --backend herdr [--scout]
 ```
 
 `--scout` makes it a knowledge-only lane: its deliverable is

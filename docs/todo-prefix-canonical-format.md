@@ -43,14 +43,14 @@ The alias table lives in exactly one place, `bin/fm-todo-prefix-check.sh`, and m
 
 | Alias | Exact catalog identifier |
 |---|---|
-| `m3.1f` | `minimax/MiniMax-M3.1-Flash-Preview` |
+| `m3.1f` | `minimax/MiniMax-M3.1-Flash` |
 | `m3.1` | `minimax/MiniMax-M3.1` |
 | `m2.7h` | `minimax/MiniMax-M2.7-highspeed` |
 | `m2.7` | `minimax/MiniMax-M2.7` |
 | `luna6` | `openai-codex/gpt-6-luna` |
 | `glm5.3f` | `zai/glm-5.3-flash` |
 | `gem38f` | `agy/gemini-3.8-flash-medium` |
-| `pi` | `minimax/MiniMax-M3.1-Flash-Preview`, the Pi session default model, kept as a legacy alias |
+| `pi` | `minimax/MiniMax-M3.1-Flash`, the Pi session default model, kept as a legacy alias |
 
 Alternate spellings resolve to the same canonical alias: `m31`, `m31f`, `m27`, `m27h`, `m27highspeed`, `g38f`.
 The cross-surface tracker writes its own abbreviations as `G38F` and `M31`, and the earlier version of the todo prompt style wrote `m27-highspeed` and `m31`, so the checker accepts those spellings in a board prefix.
@@ -126,7 +126,7 @@ The derivation rule, one canonical statement:
     minimax/MiniMax-M<family>[-<tier>]  ->  family + tier-marker
     tier-marker: 'highspeed' -> 'h', 'flash' -> 'f', bare or unrecognised -> ''
     minimax/MiniMax-M2.7-highspeed      -> m2.7h
-    minimax/MiniMax-M3.1-Flash-Preview  -> m3.1f
+    minimax/MiniMax-M3.1-Flash  -> m3.1f
     minimax/MiniMax-M3.1                -> m3.1
     minimax/MiniMax-M2.7                -> m2.7
 

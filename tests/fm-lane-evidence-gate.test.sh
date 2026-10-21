@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+GATE="${FM_LANE_EVIDENCE_GATE:-/root/bin/fm-lane-evidence-gate}"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+pass=0
+fail=0
+check() {
+  local label="$1" expected="$2" report="$3" out rc
+  set +e; out=$("$GATE" "$report" 2>&1); rc=$?; set -e
+  if [[ "$expected" == pass && $rc -eq 0 ]] && grep -q '^PASS:' <<< "$out"; then
+    printf 'PASS %s: %s\n' "$label" "$out"; pass=$((pass+1))
+  elif [[ "$expected" == fail && $rc -ne 0 && -n "$out" ]]; then
+    printf 'PASS %s: rejected (%s)\n' "$label" "$out"; pass=$((pass+1))
+  else
+    printf 'FAIL %s: exit=%s output=%s\n' "$label" "$rc" "$out"; fail=$((fail+1))
+  fi
+}
+large_report() { printf '%-1300s\n' 'report body' > "$1"; printf 'VERDICT: PASS evidence\n' >> "$1"; }
+check missing-report fail "$tmp/missing.md"
+printf 'tiny\nVERDICT: PASS\n' > "$tmp/small.md"; check undersized-report fail "$tmp/small.md"
+printf '%-1300s\n' body > "$tmp/no-verdict.md"; check missing-verdict fail "$tmp/no-verdict.md"
+large_report "$tmp/placeholder-one.md"; echo 'TODO: fill this' >> "$tmp/placeholder-one.md"; check placeholder-marker-one fail "$tmp/placeholder-one.md"
+large_report "$tmp/placeholder-two.md"; echo 'TBD later' >> "$tmp/placeholder-two.md"; check placeholder-marker-two fail "$tmp/placeholder-two.md"
+large_report "$tmp/truncated.md"; truncate -s -1 "$tmp/truncated.md"; check truncated-final-line fail "$tmp/truncated.md"
+large_report "$tmp/good.md"; check complete-verdict-report pass "$tmp/good.md"
+large_report "$tmp/endpoint-pass.md"; printf 'ENDPOINT-STATUS: done\nENDPOINT-URL: https://example.com\n' >> "$tmp/endpoint-pass.md"; check endpoint-done-passing-url pass "$tmp/endpoint-pass.md"
+large_report "$tmp/endpoint-fail.md"; printf 'ENDPOINT-STATUS: done\nENDPOINT-URL: https://endpoint-check-does-not-exist.invalid\n' >> "$tmp/endpoint-fail.md"; check endpoint-done-failing-url fail "$tmp/endpoint-fail.md"
+large_report "$tmp/endpoint-missing-url.md"; printf 'ENDPOINT-STATUS: done\n' >> "$tmp/endpoint-missing-url.md"; check endpoint-done-missing-url fail "$tmp/endpoint-missing-url.md"
+printf 'SUMMARY: %s passed, %s failed\n' "$pass" "$fail"
+(( fail == 0 ))

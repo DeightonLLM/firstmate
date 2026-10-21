@@ -18,7 +18,7 @@ YOUR FIRST TASK (in priority order after that):
 
 THE TRAPS THAT WILL BITE YOU (all were hit tonight, do not re-hit them):
 - The reap gate used to destroy LIVE crews because "no status file" was read as "not working". d80900d is the fix. Never re-introduce that.
-- minimax-code was undispatchable: registered in fm-harness.sh but no launch template in fm-spawn.sh. Fixed in 2583d79 and PROVEN LIVE on Brandon. Brandon's dispatch profile now defaults to minimax-code / MiniMax-M3.1-Flash-Preview on Brandon's OWN quota. Do not route Brandon client work to Gemini — its rate limits are the fastest-emptying window (664 HTTP 429s in one 8-agent fan-out). Gemini is hard-reasoning-only.
+- minimax-code was undispatchable: registered in fm-harness.sh but no launch template in fm-spawn.sh. Fixed in 2583d79 and PROVEN LIVE on Brandon. Brandon's dispatch profile now defaults to minimax-code / MiniMax-M3.1-Flash on Brandon's OWN quota. Do not route Brandon client work to Gemini — its rate limits are the fastest-emptying window (664 HTTP 429s in one 8-agent fan-out). Gemini is hard-reasoning-only.
 - Hetz lane ceiling is 7 and it is a RATE-LIMIT cap, not a compute cap. Raising it buys retries, not throughput.
 - mcode on Brandon deadlocks unattended crews on approval prompts without permissionMode: bypassPermissions in ~/.minimax/config.yaml (now set; backup at config.yaml.bak-20261012-perm). If a Brandon crew "stops", check for a pending approval prompt first.
 - Region-hopping to Singapore is a dead end: MiniMax has only cn and global regions, identical API rate limits in both. Hop on the quota-window axis (5h rolling, 7d weekly), not region. Evidence: data/minimax-regional-pricing-20261012/report.md on Brandon.

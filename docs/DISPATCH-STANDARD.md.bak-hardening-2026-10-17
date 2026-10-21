@@ -1,0 +1,58 @@
+# Dispatch standard — how work is sent to agents
+
+Captain order 2026-10-17, after a fan-out ran unnamed and streamed spinners instead of results.
+
+## The rule
+
+Every dispatched lane is a **named agent**, and the Captain is told **which named agent is running and
+what it is doing** before it starts and **what artifact it produced** after it ends. No anonymous
+fan-out. No generic `worker` label. No spinner wall in place of a result.
+
+## Why
+
+An unnamed fan-out gave the Captain a screen full of identical `worker` entries and no way to tell
+which lane was which, whether any were progressing, or what any of them produced. Three of four died
+with nothing written. A lane the Captain cannot name is a lane the Captain cannot supervise, and
+supervision by eye is the operating requirement.
+
+## Before dispatch
+
+1. The task exists in the real queue. No filler, no invented work.
+2. The work order is written to a file first, so the brief survives and can be reviewed.
+3. The brief states: objective, boundary, artifact path, acceptance command, stop condition.
+4. Lane naming is descriptive and self-identifying, carrying domain, owner surface and model.
+
+## Agent selection
+
+| Work | Agent | Model |
+|---|---|---|
+| Reviewing a plan, artifact or claim | `bounded-pi-checker` | GLM 5.3 Flash |
+| Implementation and execution | `bounded-pi-worker` | GPT-6 Luna |
+| Reading only, no writes | `scout` | session model, low effort |
+
+Each named agent appears in the Captain's view with its task. Never more than four lanes at once, per
+the layout standard: one is a single pane, two sit side by side, four are a 2x2 grid.
+
+## Sequence, always
+
+1. **Plan** written to a file.
+2. **Checker** reviews the plan against this standard and the Captain's stated rules. Verdict required.
+3. **Executor** runs the plan only if the checker passed.
+4. **Report** the artifact path and its `VERDICT:` line. Nothing is reported done without both.
+
+## Reporting
+
+- Starting: one line naming the agent, the model, the task, the expected artifact.
+- Ending: one line with the artifact path, its byte size, and its verdict line.
+- If a lane fails or is stopped, say so immediately and name what was lost. Never let a stopped lane
+  pass as finished.
+- Never report a dispatch as a result.
+
+## Hard boundaries, unchanged
+
+No spending, no credential mutation, no DNS, no registrar, no production deployment, no customer
+data, no unreviewed live rollout. Anything a human sees requires visual proof. Any endpoint the
+Captain will type must pass `/root/bin/fm-endpoint-check`. A lane closes only with an artifact and a
+`VERDICT:` line.
+
+VERDICT: PASS this standard is the contract; the checker owns whether a plan complies with it.

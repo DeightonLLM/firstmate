@@ -34,7 +34,7 @@ case "${1:-}" in
     fi
     [ "$#" -eq 1 ] || exit 2
     printf '%s\n' "$FM_HOME" >> "$FM_FAKE_PROCEVENT_SWEEP_LOG"
-    rm -f -- "$FM_HOME"/state/procevent/*.source "$FM_HOME"/state/procevent/*.runner
+    fm_purge_scratch "$FM_HOME"/state/procevent/*.source "$FM_HOME"/state/procevent/*.runner 2>/dev/null
     ;;
   reconcile)
     printf '%s\n' "$FM_HOME" >> "$FM_FAKE_PROCEVENT_REARM_LOG"
@@ -482,7 +482,7 @@ test_home_seed_refuses_empty_charter_fields() {
     || fail "seed did not explain empty charter refusal"
   [ ! -e "$subhome" ] || fail "empty charter seed left a generated subhome"
 
-  rm -rf "$home/data/design" "$subhome" "$err"
+  fm_purge_scratch "$home/data/design" "$subhome" "$err" 2>/dev/null
   FM_SECONDMATE_SCOPE='   ' scaffold_secondmate_charter "$home" design 'filled charter' alpha \
     || fail "empty scope fixture scaffold failed"
   if FM_HOME="$home" "$ROOT/bin/fm-home-seed.sh" design "$subhome" alpha >/dev/null 2>"$err"; then
@@ -1233,7 +1233,7 @@ test_home_seed_refuses_project_destinations_outside_subhome() {
   fm_git_init_commit "$home/projects/alpha"
   fm_git_add_origin "$home/projects/alpha" "$TMP_ROOT/remotes/symlink-alpha.git"
   git clone --quiet "$ROOT" "$subhome"
-  rm -rf "$subhome/projects"
+  fm_purge_scratch "$subhome/projects" 2>/dev/null
   ln -s "$sink" "$subhome/projects"
   printf '%s\n' '- alpha [direct-PR] - alpha project (added 2026-06-22)' > "$home/data/projects.md"
   scaffold_secondmate_charter "$home" design 'design domain' alpha || fail "charter scaffold failed for symlink destination seed test"
@@ -1261,10 +1261,10 @@ test_home_seed_refuses_operational_dirs_outside_subhome() {
   for opdir in data state config; do
     subhome="$TMP_ROOT/symlink-opdir-subhome-$opdir"
     sink="$home/data/symlink-opdir-$opdir"
-    rm -rf "$subhome" "$sink"
+    fm_purge_scratch "$subhome" "$sink" 2>/dev/null
     git clone --quiet "$ROOT" "$subhome"
     mkdir -p "$sink"
-    rm -rf "${subhome:?}/${opdir:?}"
+    fm_purge_scratch "${subhome:?}/${opdir:?}" 2>/dev/null
     ln -s "$sink" "$subhome/$opdir"
     if FM_HOME="$home" "$ROOT/bin/fm-home-seed.sh" design "$subhome" alpha >/dev/null 2>"$err"; then
       fail "seed accepted a subhome with $opdir symlinked outside the subhome"
@@ -1289,7 +1289,7 @@ test_home_seed_refuses_symlinked_leaf_files() {
   for leaf in data/projects.md data/charter.md .fm-secondmate-home; do
     subhome="$TMP_ROOT/symlink-leaf-subhome-${leaf//\//-}"
     sink="$home/data/symlink-leaf-${leaf//\//-}"
-    rm -rf "$subhome" "$sink"
+    fm_purge_scratch "$subhome" "$sink" 2>/dev/null
     git clone --quiet "$ROOT" "$subhome"
     mkdir -p "$(dirname "$subhome/$leaf")" "$(dirname "$sink")"
     expected=outside
@@ -1430,11 +1430,11 @@ test_secondmate_spawn_refuses_operational_dirs_outside_subhome() {
   for opdir in data state config projects; do
     subhome="$TMP_ROOT/spawn-opdir-subhome-$opdir"
     sink="$home/data/spawn-opdir-$opdir"
-    rm -rf "$subhome" "$sink"
+    fm_purge_scratch "$subhome" "$sink" 2>/dev/null
     mkdir -p "$subhome/data" "$subhome/state" "$subhome/config" "$subhome/projects" "$sink"
     printf 'domain\n' > "$subhome/.fm-secondmate-home"
     printf 'charter\n' > "$subhome/data/charter.md"
-    rm -rf "${subhome:?}/${opdir:?}"
+    fm_purge_scratch "${subhome:?}/${opdir:?}" 2>/dev/null
     ln -s "$sink" "$subhome/$opdir"
     if [ "$opdir" = data ]; then
       printf 'charter\n' > "$sink/charter.md"
@@ -2004,7 +2004,7 @@ case "${1:-}" in
       echo "fatal: Unable to create '$lock': File exists." >&2
       exit 128
     fi
-    [ -n "$target" ] && rm -rf -- "$target"
+    [ -n "$target" ] && fm_purge_scratch "$target" 2>/dev/null
     exit 0
     ;;
 esac
@@ -2043,7 +2043,7 @@ test_secondmate_force_teardown_allows_operational_dir_symlinks_inside_home() {
     subhome="$TMP_ROOT/symlink-inside-teardown-subhome-$opdir"
     target="$subhome/internal-$opdir"
     err="$TMP_ROOT/symlink-inside-teardown-$opdir.err"
-    rm -rf "$home" "$subhome"
+    fm_purge_scratch "$home" "$subhome" 2>/dev/null
     mkdir -p "$home/state" "$home/data" "$subhome" "$target"
     printf 'domain\n' > "$subhome/.fm-secondmate-home"
     ln -s "$target" "$subhome/$opdir"
@@ -2601,7 +2601,7 @@ EOF
   seed_secondmate_home_marker "$symlinkhome" symlink-sm
   symlinkhome_abs=$(cd "$symlinkhome" && pwd -P)
   mkdir -p "$outside"
-  rm -rf "$symlinkhome/data"
+  fm_purge_scratch "$symlinkhome/data" 2>/dev/null
   ln -s "$outside" "$symlinkhome/data"
   printf -- '- symlink-sm - bogus (home: %s; scope: bogus; projects: alpha; added 2026-06-22)\n' "$symlinkhome_abs" >> "$home/data/secondmates.md"
   cat > "$home/data/backlog.md" <<'EOF'

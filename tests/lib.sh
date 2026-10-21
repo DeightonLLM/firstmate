@@ -39,6 +39,31 @@ export FM_GATE_REFUSE_BYPASS=1
 # shellcheck disable=SC2034
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# The one documented way to purge own-scratch. The temp roots this library
+# registers are created by the test that runs it and are regenerable by
+# construction, so they must be unlinked for real. Plain `rm` on this host is a
+# recoverable-delete shim that MOVES the target into ~/.local/share/Trash -
+# which frees zero bytes on a single filesystem. The secondmate-safety suite
+# builds a ~330 MB tree per run, so every run MOVED that tree into the trash
+# instead of deleting it: the Controller reached 97% root from exactly this.
+if [ -r "$ROOT/bin/fm-scratch-lib.sh" ]; then
+  # shellcheck source=bin/fm-scratch-lib.sh
+  . "$ROOT/bin/fm-scratch-lib.sh"
+else
+  # A partial checkout (a fixture repo, or a worktree cut from an older
+  # base) may not carry bin/fm-scratch-lib.sh. Fall back to exactly the
+  # behaviour this file had before the purge helper existed, so a partial
+  # checkout is not a regression - it simply does not get the fix.
+  fm_purge_scratch() {
+    local p
+    for p in "$@"; do
+      [ -n "$p" ] || continue
+      rm -rf -- "$p" 2>/dev/null || true
+    done
+    return 0
+  }
+fi
+
 # --- reporters --------------------------------------------------------------
 
 fail() {
@@ -71,14 +96,22 @@ FM_TEST_CLEANUP_FILE="${TMPDIR:-/tmp}/.fm-test-cleanup-$$"
 
 fm_test_cleanup() {
   local d
+  # Own-scratch only: every path here was created by this test run and is
+  # regenerable, so it is unlinked for real. A recoverable-delete move into
+  # the trash would keep the bytes on the same filesystem and free nothing.
+  #
+  # --root "$ROOT" lets a test that made its scratch inside the repo (rather
+  # than under /tmp) still be cleaned. It only admits a mktemp-shaped entry
+  # that is a DIRECT child of the repo root, so it can never reach tracked
+  # material deeper in the tree.
   for d in "${FM_TEST_CLEANUP_DIRS[@]:-}"; do
-    [ -n "$d" ] && rm -rf "$d"
+    [ -n "$d" ] && fm_purge_scratch --root "$ROOT" "$d" 2>/dev/null
   done
   if [ -n "${FM_TEST_CLEANUP_FILE:-}" ] && [ -f "$FM_TEST_CLEANUP_FILE" ]; then
     while IFS= read -r d; do
-      [ -n "$d" ] && rm -rf "$d"
+      [ -n "$d" ] && fm_purge_scratch --root "$ROOT" "$d" 2>/dev/null
     done < "$FM_TEST_CLEANUP_FILE"
-    rm -f "$FM_TEST_CLEANUP_FILE"
+    fm_purge_scratch --root "$ROOT" "$FM_TEST_CLEANUP_FILE" 2>/dev/null
   fi
 }
 

@@ -1,57 +1,56 @@
 {
   "_mode": {
-    "active": "Codex-only",
-    "contract": "Captain directive 2026-10-18T02:35Z: MiniMax 5h window measured at 6% remaining. All delegated work routes to openai-codex/gpt-6-luna until the MiniMax window recovers. Re-measure quota-axi before reverting; do not assume recovery. Codex measured 96% five_hour / 99% weekly."
+    "active": "MiniMax-first",
+    "contract": "TEMPORARY Captain directive, 2026-10-21T06:10Z: until 2026-10-25, MiniMax M3.1 Flash is free, so all delegated work routes to minimax-code/minimax/MiniMax-M3.1-Flash. This replaces the Codex-only mode of 2026-10-18, whose own contract said to re-measure quota-axi before reverting and not to assume recovery. Re-measured 2026-10-21T04:48Z: minimax general 5h 95% remaining, 7d 73%; codex five_hour 70%, weekly 82% (shared with Sol). THIS DIRECTIVE EXPIRES ON 2026-10-25 - on that date the routing falls back to the standing rules below unless the Captain renews it. A renewal must be a fresh measurement plus a fresh Captain word, never a silent carry-over.",
+    "temporary": {
+      "id": "mcode-free-until-25th",
+      "reason": "MiniMax M3.1 Flash is free until 2026-10-25; route delegated work to the free tier instead of the paid codex account.",
+      "until": "2026-10-25T00:00:00Z",
+      "use": {
+        "harness": "minimax-code",
+        "model": "minimax/MiniMax-M3.1-Flash"
+      },
+      "renewal_rule": "Re-measure quota-axi before each dispatch wave. If the MiniMax 5h window is materially depleted, drop this override early rather than letting it ride to its expiry on a dead window. On expiry the routing falls back to the standing rules and the fleet says so."
+    }
   },
   "rules": [
     {
       "when": "The task requires genuinely difficult, high-ambiguity, architectural, or multi-component implementation.",
       "use": {
-        "harness": "pi",
-        "model": "openai-codex/gpt-6-luna",
-        "effort": "high",
-        "fast": true
+        "harness": "minimax-code",
+        "model": "minimax/MiniMax-M3.1-Flash"
       },
-      "why": "Mode B worker lane: difficult/ambiguous work runs on gpt-6-luna at high effort. Per the Captain's multi-cycle observation Luna is the only model that comfortably survives a 5-hour re-up cycle, sometimes landing mid-60% remaining, where M3.1, GLM 5.3 and Sol cannot. It is not unlimited: gpt-6-luna is served by the openai-codex account whose quota scope is all_models and shares its window with Sol. Stop intake only when a fresh quota-axi reading shows the window actually exhausted or unreadable; a projected exhaustion time is not grounds to refuse because the projection extrapolates current-session burn and drifts. In Mode A this same work runs on minimax/MiniMax-M3.1-Flash-Preview and Luna becomes the async reviewer."
+      "why": "Temporary override in force until 2026-10-25 (see _mode): MiniMax M3.1 Flash is free, so the hard work goes there rather than onto the paid codex account. This rule used to send hard work to openai-codex/gpt-6-luna at high effort because Luna is the model that comfortably survives a 5-hour re-up cycle. That remains the standing preference once the temporary override expires."
     },
     {
       "when": "The task requires live news, current events, X/Twitter data, market sentiment, or web-connected research.",
       "use": {
-        "harness": "pi",
-        "model": "openai-codex/gpt-6-luna",
-        "effort": "high",
-        "fast": true
+        "harness": "minimax-code",
+        "model": "minimax/MiniMax-M3.1-Flash"
       },
-      "why": "Captain Luna6-only override. Use Luna 6 with available research tools; missing tool capability is a disclosed blocker, never an automatic model fallback."
+      "why": "Temporary override in force until 2026-10-25 (see _mode). Previously a Captain Luna6-only override with the rule that a missing tool capability is a disclosed blocker, never an automatic model fallback; that rule still holds - report the missing capability instead of silently swapping models."
     },
     {
       "when": "The task is routine day-to-day coding, bug fixing, test writing, refactoring, or feature implementation, including simple low-risk bounded work and browser evidence capture under a precise procedure.",
       "use": {
-        "harness": "pi",
-        "model": "openai-codex/gpt-6-luna",
-        "effort": "medium",
-        "fast": true
+        "harness": "minimax-code",
+        "model": "minimax/MiniMax-M3.1-Flash"
       },
-      "why": "Mode B worker lane: bounded/routine work runs on gpt-6-luna at medium effort; escalate to high only for ambiguous investigation or design. Never select MiniMax M2.5 / M2.7 / M2.7-highspeed: the provider retires those families 2026-10-19 for new users and 2026-11-18 outright. In Mode A this work runs on minimax/MiniMax-M3.1-Flash-Preview."
+      "why": "Temporary override in force until 2026-10-25 (see _mode). Previously bounded/routine work ran on openai-codex/gpt-6-luna at medium effort, with the rule never to select the retired MiniMax M2.5 / M2.7 / M2.7-highspeed families (retired 2026-10-19 for new users, 2026-11-18 outright). M3.1 Flash is not one of those retired families."
     },
     {
       "when": "A worker requests independent review of its own completed work, or a review gate must run without blocking the worker.",
       "use": {
-        "harness": "pi",
-        "agent": "reviewer",
-        "model": "openai-codex/gpt-6-luna",
-        "effort": "high",
-        "fast": true
+        "harness": "minimax-code",
+        "model": "minimax/MiniMax-M3.1-Flash"
       },
-      "why": "Captain Luna6-only override. A fresh independent Luna 6 agent reviews; the reviewer is never the author. Pass the exact Luna model explicitly to override any older reviewer-agent default. Keep reviews async and consume their native completion notifications."
+      "why": "Temporary override in force until 2026-10-25 (see _mode). The review rules that survive it: the reviewer is never the author, the reviewer runs as a fresh independent lane, and it stays async so it never blocks the worker."
     }
   ],
   "default": [
     {
-      "harness": "pi",
-      "model": "openai-codex/gpt-6-luna",
-      "effort": "high",
-      "fast": true
+      "harness": "minimax-code",
+      "model": "minimax/MiniMax-M3.1-Flash"
     }
   ]
 }

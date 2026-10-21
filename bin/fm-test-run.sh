@@ -67,6 +67,29 @@ set -eu
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
+# The one documented way to purge own-scratch. The coverage guard's temp tree
+# and this runner's RUN_TMP are created here and are regenerable by
+# construction, so they must be unlinked for real. Plain `rm` on this host is a
+# recoverable-delete shim that MOVEs the target into ~/.local/share/Trash,
+# which frees zero bytes on a single filesystem.
+if [ -r "$ROOT/bin/fm-scratch-lib.sh" ]; then
+  # shellcheck source=bin/fm-scratch-lib.sh
+  . "$ROOT/bin/fm-scratch-lib.sh"
+else
+  # A partial checkout (a fixture repo, or a worktree cut from an older
+  # base) may not carry bin/fm-scratch-lib.sh. Fall back to exactly the
+  # behaviour this file had before the purge helper existed, so a partial
+  # checkout is not a regression - it simply does not get the fix.
+  fm_purge_scratch() {
+    local p
+    for p in "$@"; do
+      [ -n "$p" ] || continue
+      rm -rf -- "$p" 2>/dev/null || true
+    done
+    return 0
+  }
+fi
+
 MODE=
 LIST_ONLY=0
 LIST_FAMILIES=0
@@ -128,7 +151,7 @@ family_for_basename() {
     fm-send-popup-settle.test.sh|fm-send-settle.test.sh|\
     fm-subagent-pretool-check.test.sh|\
     fm-supervision-instructions.test.sh|fm-tmux-submit-busy.test.sh|fm-transition-lib.test.sh|\
-    fm-test-run.test.sh|fm-test-isolation-proof.test.sh)
+    fm-scratch-purge.test.sh|fm-test-run.test.sh|fm-test-isolation-proof.test.sh)
       printf '%s\n' pure-contract-unit
       ;;
     fm-daemon.test.sh|fm-guard-stale-banner.test.sh|fm-pi-watch-extension.test.sh|\
@@ -377,7 +400,7 @@ run_coverage_guard() {
   if [ -s "$tmp/shard_dups" ]; then
     log "coverage guard: portable parallel shards share scripts:"
     cat "$tmp/shard_dups" >&2
-    rm -rf "$tmp"
+    fm_purge_scratch "$tmp" 2>/dev/null
     return 1
   fi
   cat "$tmp/s1" "$tmp/s2" | LC_ALL=C sort -u >"$tmp/shards_union"
@@ -387,7 +410,7 @@ run_coverage_guard() {
     log "coverage guard: portable shards must equal the proven-isolated set"
     [ -z "$missing" ] || { log "missing from shards:"; printf '%s\n' "$missing" >&2; }
     [ -z "$extra" ] || { log "extra beyond proven:"; printf '%s\n' "$extra" >&2; }
-    rm -rf "$tmp"
+    fm_purge_scratch "$tmp" 2>/dev/null
     return 1
   fi
 
@@ -408,7 +431,7 @@ run_coverage_guard() {
     if [ -s "$tmp/overlap" ]; then
       log "coverage guard: overlap between $a and $b:"
       cat "$tmp/overlap" >&2
-      rm -rf "$tmp"
+      fm_purge_scratch "$tmp" 2>/dev/null
       return 1
     fi
   done
@@ -418,7 +441,7 @@ run_coverage_guard() {
   if [ -s "$tmp/union_dups" ]; then
     log "coverage guard: duplicate scripts across lanes:"
     cat "$tmp/union_dups" >&2
-    rm -rf "$tmp"
+    fm_purge_scratch "$tmp" 2>/dev/null
     return 1
   fi
   LC_ALL=C sort -u "$tmp/union_raw" >"$tmp/union"
@@ -428,7 +451,7 @@ run_coverage_guard() {
     log "coverage guard: union of portable shards + portable serial + Herdr must equal tests/*.test.sh"
     [ -z "$missing" ] || { log "missing from union:"; printf '%s\n' "$missing" >&2; }
     [ -z "$extra" ] || { log "extra beyond inventory:"; printf '%s\n' "$extra" >&2; }
-    rm -rf "$tmp"
+    fm_purge_scratch "$tmp" 2>/dev/null
     return 1
   fi
 
@@ -437,7 +460,7 @@ run_coverage_guard() {
     if ! cmp -s "$tmp/proven" "$tmp/proof_list"; then
       log "coverage guard: embedded proven-isolated set diverges from bin/fm-test-isolation-proof.sh --list"
       comm -3 "$tmp/proven" "$tmp/proof_list" >&2 || true
-      rm -rf "$tmp"
+      fm_purge_scratch "$tmp" 2>/dev/null
       return 1
     fi
   fi
@@ -447,7 +470,7 @@ run_coverage_guard() {
     "$(wc -l <"$tmp/shards_union" | tr -d ' ')" \
     "$(wc -l <"$tmp/serial" | tr -d ' ')" \
     "$(wc -l <"$tmp/herdr" | tr -d ' ')"
-  rm -rf "$tmp"
+  fm_purge_scratch "$tmp" 2>/dev/null
   return 0
 }
 
@@ -1146,7 +1169,7 @@ if [ "${#SCRIPTS[@]}" -eq 0 ]; then
     started=$(now_iso)
     mkdir -p "$(dirname "$JSON_PATH")"
     write_json_artifact "$JSON_PATH" "$started" "$started" "empty" 0 0 0 0 "$SELECTION_DESC" "$empty_rec" "$empty_fam"
-    rm -f "$empty_rec" "$empty_fam"
+    fm_purge_scratch "$empty_rec" "$empty_fam" 2>/dev/null
   fi
   exit 0
 fi
@@ -1170,7 +1193,7 @@ RUN_TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run.XXXXXX")
 RECORDS="$RUN_TMP/records.tsv"
 FAMILIES_TSV="$RUN_TMP/families.tsv"
 : >"$RECORDS"
-trap 'rm -rf "$RUN_TMP"' EXIT
+trap 'fm_purge_scratch "$RUN_TMP" 2>/dev/null' EXIT
 
 RUN_STARTED_ISO=$(now_iso)
 RUN_STARTED_MS=$(now_ms)

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT=/root/agent-work/deightonllm-firstmate
+EXT=/root/.pi/agent/extensions/02-production-gate.ts
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+# TypeScript is transpiled only into an isolated temporary directory; no runtime is reloaded.
+tsc "$EXT" --module commonjs --target es2022 --outDir "$TMP" --skipLibCheck --noEmitOnError false >/dev/null 2>&1 || true
+JS=$(find "$TMP" -name '02-production-gate.js' -print -quit)
+test -n "$JS" || { echo 'FAIL: production gate transpilation produced no module'; exit 1; }
+cat > "$TMP/run.js" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const gate = require(process.argv[2]);
+let handler;
+const pi = { on: (_event, callback) => { handler = callback; } };
+gate.default(pi);
+const call = async (toolName, input, hasUI = false) => handler({toolName, input}, {hasUI});
+const blocked = async (label, toolName, input) => {
+  const result = await call(toolName, input);
+  assert.equal(result?.block, true, `${label} must be blocked`);
+  console.log(`BLOCKED: ${label}`);
+};
+const allowed = async (label, toolName, input) => {
+  const result = await call(toolName, input);
+  assert.equal(result, undefined, `${label} must be allowed`);
+  console.log(`ALLOWED: ${label}`);
+};
+(async () => {
+  await blocked('scp mutation to business186', 'bash', {command:'scp file user@business186:/public_html/site.php; echo deploy'});
+  await blocked('ssh mutation to business184', 'bash', {command:'ssh user@business184 "rm /home/site/public_html/x"'});
+  await blocked('ssh mutation to business190', 'bash', {command:'ssh user@business190 "tee /home/site/public_html/x"'});
+  await blocked('ssh mutation to 100.106.6.22', 'bash', {command:'ssh user@100.106.6.22 "systemctl restart app"'});
+  await blocked('scp mutation to 100.92.152.109', 'bash', {command:'scp file user@100.92.152.109:/srv/site/x; deploy'});
+  await blocked('cPanel API port 2083', 'bash', {command:'curl -X POST https://business186:2083/execute/Fileman/upload_files'});
+  await blocked('operator unlock file direct write', 'write', {path:'/root/.pi/agent/PRODUCTION_UNLOCK', content:'1'});
+  await blocked('operator spend unlock bash touch', 'bash', {command:'touch /root/.pi/agent/SPEND_UNLOCK'});
+  await blocked('rsync to production host', 'bash', {command:'rsync -av ./ user@business190:/var/www/site/'});
+  await blocked('kubectl production mutation', 'bash', {command:'kubectl --context core-distro-production apply -f deployment.yaml'});
+  await blocked('mysql production mutation', 'bash', {command:'mysql -h business186 -e "DROP TABLE users"'});
+  await blocked('write to real client site path', 'write', {path:'/root/agent-work/projects/cbd-data.com/current-cbd-data/public_html/index.php', content:'x'});
+
+  for (const script of [
+    '/root/bin/hetz-comms-sync.sh',
+    '/root/bin/hd2-comms-sync.sh',
+    '/root/agent-work/deightonllm-firstmate/bin/fm-comms-ingest.sh',
+    '/root/agent-work/deightonllm-firstmate/bin/fm-comms-notify.sh',
+    '/root/bin/hetz-send-instant',
+  ]) await allowed(`sanctioned script ${path.basename(script)}`, 'bash', {command:script});
+  await allowed('dated Markdown drop into comms channel subdirectory', 'bash', {
+    command:"cat > /root/agent-work/deightonllm-firstmate/BRANDON-COMPUTE-COMMS/to-brandon-compute/widget-source/2026-10-17-gate-regression.md <<'EOF'\\nReference business190 in report only.\\nEOF",
+  });
+})().catch(error => { console.error(error); process.exitCode = 1; });
+NODE
+node "$TMP/run.js" "$JS"
+sha256sum /root/.pi/agent/extensions/00-spend-gate.ts

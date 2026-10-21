@@ -158,7 +158,7 @@ bin/fm-todo-prefix-check.sh --lane-key "<candidate-lane-key>"
 ```sh
 /root/bin/fm-dispatch-preflight <domain-surface-model-taskslug> <scout|bounded-pi-worker|bounded-pi-checker>
 FM_DISPATCH_GUARD_LOAD_BYPASS=1 bin/fm-spawn.sh <lane-key> <project-dir> \
-  --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview --backend herdr [--scout]
+  --harness minimax-code --model minimax/MiniMax-M3.1-Flash --backend herdr [--scout]
 ```
 
 The bypass flag is only for a host whose load is already saturated; it bypasses the

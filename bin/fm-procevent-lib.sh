@@ -31,6 +31,30 @@
 
 # Machine-wide claim root. Homes can share one underlying source store, so the
 # "one owner per canonical source" rule cannot live inside a single home.
+FM_PROCEVENT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The one documented way to purge own-scratch. The claim and inbox files
+# this library creates are regenerable by construction, so they are
+# unlinked for real: a plain `rm` on this host is a recoverable-delete
+# shim that MOVEs the target into ~/.local/share/Trash, which frees
+# zero bytes on a single filesystem.
+if [ -r "$FM_PROCEVENT_LIB_DIR/fm-scratch-lib.sh" ]; then
+  # shellcheck source=bin/fm-scratch-lib.sh
+  . "$FM_PROCEVENT_LIB_DIR/fm-scratch-lib.sh"
+else
+  # A partial checkout (a fixture repo, or a worktree cut from an older
+  # base) may not carry bin/fm-scratch-lib.sh. Fall back to exactly the
+  # behaviour this file had before the purge helper existed, so a partial
+  # checkout is not a regression - it simply does not get the fix.
+  fm_purge_scratch() {
+    local p
+    for p in "$@"; do
+      [ -n "$p" ] || continue
+      rm -rf -- "$p" 2>/dev/null || true
+    done
+    return 0
+  }
+fi
+
 fm_procevent_claim_root() {
   printf '%s\n' "${FM_PROCEVENT_CLAIM_ROOT:-${XDG_STATE_HOME:-$HOME/.local/state}/firstmate/procevent-claims}"
 }
@@ -207,11 +231,11 @@ fm_procevent_claim_acquire_locked() {
             status=1
           else
             stage="$old_reg_dir/.$id.$old_token.output"
-            if { [ -e "$stage" ] || [ -L "$stage" ]; } && ! rm -f -- "$stage"; then
+            if { [ -e "$stage" ] || [ -L "$stage" ]; } && ! fm_purge_scratch --root "$old_reg_dir" "$stage" 2>/dev/null; then
               status=1
             fi
           fi
-          [ "$status" -ne 0 ] || rm -f -- "$claim" || status=1
+          [ "$status" -ne 0 ] || fm_purge_scratch --root "$root" "$claim" 2>/dev/null || status=1
         else
           status=1
         fi
@@ -235,7 +259,7 @@ fm_procevent_claim_acquire_locked() {
       FM_PROCEVENT_CLAIM_TOKEN=$token
       FM_PROCEVENT_CLAIM_REG_IDENTITY=$reg_identity
     else
-      rm -f -- "$tmp"
+      fm_purge_scratch --root "$root" "$tmp" 2>/dev/null
     fi
   fi
   return "$status"
@@ -259,7 +283,7 @@ fm_procevent_claim_mark_terminal_locked() {
     && mv -f -- "$tmp" "$claim"; then
     return 0
   else
-    rm -f -- "$tmp"
+    fm_purge_scratch --root "$root" "$tmp" 2>/dev/null
     return 1
   fi
 }
@@ -274,7 +298,9 @@ fm_procevent_claim_release_locked() {
     && [ "$FM_PROCEVENT_CLAIM_HOME" = "$home" ] \
     && [ "$FM_PROCEVENT_CLAIM_PID" = "$pid" ] \
     && [ "$FM_PROCEVENT_CLAIM_TOKEN" = "$token" ]; then
-    rm -f -- "$claim"
+    # The claim root is the parent of the claim file; deriving it from the
+    # claim path keeps the scratch root correct without a second lookup.
+    fm_purge_scratch --root "$(dirname "$claim")" "$claim" 2>/dev/null
     return $?
   fi
   return 1
@@ -297,12 +323,12 @@ fm_procevent_capture() {
   dest="$inbox/$id.$seq.result"
   adapter_dest="$inbox/$id.$seq.adapter"
   tmp=$(umask 077; mktemp "$inbox/.capture.XXXXXX") || return 1
-  adapter_tmp=$(umask 077; mktemp "$inbox/.adapter.XXXXXX") || { rm -f -- "$tmp"; return 1; }
-  if ! cat "$src" > "$tmp"; then rm -f -- "$tmp" "$adapter_tmp"; return 1; fi
-  if ! printf '%s\n' "$adapter" > "$adapter_tmp"; then rm -f -- "$tmp" "$adapter_tmp"; return 1; fi
-  if ! chmod 0600 "$tmp" "$adapter_tmp"; then rm -f -- "$tmp" "$adapter_tmp"; return 1; fi
-  if ! mv -f -- "$adapter_tmp" "$adapter_dest"; then rm -f -- "$tmp" "$adapter_tmp"; return 1; fi
-  if ! mv -f -- "$tmp" "$dest"; then rm -f -- "$tmp" "$adapter_dest"; return 1; fi
+  adapter_tmp=$(umask 077; mktemp "$inbox/.adapter.XXXXXX") || { fm_purge_scratch --root "$inbox" "$tmp" 2>/dev/null; return 1; }
+  if ! cat "$src" > "$tmp"; then fm_purge_scratch --root "$inbox" "$tmp" "$adapter_tmp" 2>/dev/null; return 1; fi
+  if ! printf '%s\n' "$adapter" > "$adapter_tmp"; then fm_purge_scratch --root "$inbox" "$tmp" "$adapter_tmp" 2>/dev/null; return 1; fi
+  if ! chmod 0600 "$tmp" "$adapter_tmp"; then fm_purge_scratch --root "$inbox" "$tmp" "$adapter_tmp" 2>/dev/null; return 1; fi
+  if ! mv -f -- "$adapter_tmp" "$adapter_dest"; then fm_purge_scratch --root "$inbox" "$tmp" "$adapter_tmp" 2>/dev/null; return 1; fi
+  if ! mv -f -- "$tmp" "$dest"; then fm_purge_scratch --root "$inbox" "$tmp" "$adapter_dest" 2>/dev/null; return 1; fi
   printf '%s\n' "$dest"
 }
 
@@ -374,14 +400,14 @@ fm_procevent_mark_handled() {
   [ ! -L "$marker" ] || return 2
   tmp=$(umask 077; mktemp "$inbox/.handled.XXXXXX") || return 2
   if ! chmod 0600 "$tmp"; then
-    rm -f -- "$tmp"
+    fm_purge_scratch --root "$inbox" "$tmp" 2>/dev/null
     return 2
   fi
   if ln "$tmp" "$marker" 2>/dev/null; then
-    rm -f -- "$tmp"
+    fm_purge_scratch --root "$inbox" "$tmp" 2>/dev/null
     return 0
   fi
-  rm -f -- "$tmp"
+  fm_purge_scratch --root "$inbox" "$tmp" 2>/dev/null
   [ -f "$marker" ] && [ ! -L "$marker" ] && return 1
   return 2
 }

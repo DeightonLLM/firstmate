@@ -8,6 +8,28 @@
 # and semicolons, so field boundaries are anchored to the suffix markers rather
 # than to the first incidental punctuation.
 
+FM_SECONDMATE_REGISTRY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The one documented way to purge own-scratch. The parse snapshot this
+# library creates is regenerable by construction, so it is unlinked for
+# real rather than moved into the recoverable-delete trash.
+if [ -r "$FM_SECONDMATE_REGISTRY_LIB_DIR/fm-scratch-lib.sh" ]; then
+  # shellcheck source=bin/fm-scratch-lib.sh
+  . "$FM_SECONDMATE_REGISTRY_LIB_DIR/fm-scratch-lib.sh"
+else
+  # A partial checkout (a fixture repo, or a worktree cut from an older
+  # base) may not carry bin/fm-scratch-lib.sh. Fall back to exactly the
+  # behaviour this file had before the purge helper existed, so a partial
+  # checkout is not a regression - it simply does not get the fix.
+  fm_purge_scratch() {
+    local p
+    for p in "$@"; do
+      [ -n "$p" ] || continue
+      rm -rf -- "$p" 2>/dev/null || true
+    done
+    return 0
+  }
+fi
+
 SECONDMATE_REGISTRY_ID=
 SECONDMATE_REGISTRY_SUMMARY=
 SECONDMATE_REGISTRY_HOME=
@@ -117,7 +139,7 @@ secondmate_registry_validate_bindings() {
   snapshot="$tmp/registry"
   bindings="$tmp/bindings"
   if ! cat "$reg" > "$snapshot" 2>/dev/null || ! : > "$bindings"; then
-    rm -rf -- "$tmp"
+    fm_purge_scratch "$tmp" 2>/dev/null
     SECONDMATE_REGISTRY_ERROR="secondmate registry is unavailable or unsafe: $reg"
     return 1
   fi
@@ -125,7 +147,7 @@ secondmate_registry_validate_bindings() {
     case "$line" in
       "- "*)
         if ! secondmate_registry_parse_line "$line"; then
-          rm -rf -- "$tmp"
+          fm_purge_scratch "$tmp" 2>/dev/null
           SECONDMATE_REGISTRY_ERROR="malformed secondmate registry entry: $line"
           return 1
         fi
@@ -134,21 +156,21 @@ secondmate_registry_validate_bindings() {
         case "$home" in
           /*) ;;
           *)
-            rm -rf -- "$tmp"
+            fm_purge_scratch "$tmp" 2>/dev/null
             SECONDMATE_REGISTRY_ERROR="unsafe non-absolute secondmate home for $id: $home"
             return 1
             ;;
         esac
         case "$home" in
           *$'\t'*)
-            rm -rf -- "$tmp"
+            fm_purge_scratch "$tmp" 2>/dev/null
             SECONDMATE_REGISTRY_ERROR="unsafe secondmate home for $id"
             return 1
             ;;
         esac
         home_key=$("$resolver" "$home" 2>/dev/null || true)
         if [ -z "$home_key" ]; then
-          rm -rf -- "$tmp"
+          fm_purge_scratch "$tmp" 2>/dev/null
           SECONDMATE_REGISTRY_ERROR="unresolvable secondmate home for $id: $home"
           return 1
         fi
@@ -172,7 +194,7 @@ secondmate_registry_validate_bindings() {
     }
     END { exit bad ? 1 : 0 }
   ' "$bindings" 2>/dev/null) || {
-    rm -rf -- "$tmp"
+    fm_purge_scratch "$tmp" 2>/dev/null
     SECONDMATE_REGISTRY_ERROR="duplicate secondmate home assignment: $duplicate_homes"
     return 1
   }
@@ -187,7 +209,7 @@ secondmate_registry_validate_bindings() {
     }
     END { exit bad ? 1 : 0 }
   ' "$bindings" 2>/dev/null) || {
-    rm -rf -- "$tmp"
+    fm_purge_scratch "$tmp" 2>/dev/null
     SECONDMATE_REGISTRY_ERROR="duplicate secondmate id assignment: $duplicate_ids"
     return 1
   }
@@ -209,11 +231,11 @@ secondmate_registry_validate_bindings() {
     }
     END { exit bad ? 1 : 0 }
   ' "$bindings" 2>/dev/null) || {
-    rm -rf -- "$tmp"
+    fm_purge_scratch "$tmp" 2>/dev/null
     SECONDMATE_REGISTRY_ERROR="overlapping secondmate home assignment: $overlaps"
     return 1
   }
-  rm -rf -- "$tmp"
+  fm_purge_scratch "$tmp" 2>/dev/null
   if [ -n "$expected_id" ] && [ -z "$SECONDMATE_REGISTRY_MATCH_HOME" ]; then
     SECONDMATE_REGISTRY_ERROR="no registry binding for secondmate $expected_id"
     return 1

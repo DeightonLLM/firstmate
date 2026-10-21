@@ -4,6 +4,32 @@
 
 FM_WAKE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_WAKE_DEFAULT_ROOT="$(cd "$FM_WAKE_LIB_DIR/.." && pwd)"
+
+# The one documented way to purge own-scratch. This library deletes lock owner
+# dirs and lock pointers it created itself, so it must unlink them for real:
+# plain `rm` on this host is a recoverable-delete shim that MOVES the target
+# into ~/.local/share/Trash, which frees zero bytes on a single filesystem.
+# Measured 2026-10-21: the trash held 14.1 GB across 20,274 entries while df
+# stayed at 97% with 2.8 GB free, and the lock churn below alone accounted for
+# roughly 26 new trash entries per minute at idle.
+if [ -r "$FM_WAKE_LIB_DIR/fm-scratch-lib.sh" ]; then
+  # shellcheck source=bin/fm-scratch-lib.sh
+  . "$FM_WAKE_LIB_DIR/fm-scratch-lib.sh"
+else
+  # A partial checkout (a fixture repo, or a worktree cut from an older
+  # base) may not carry bin/fm-scratch-lib.sh. Fall back to exactly the
+  # behaviour this file had before the purge helper existed, so a partial
+  # checkout is not a regression - it simply does not get the fix.
+  fm_purge_scratch() {
+    local p
+    for p in "$@"; do
+      [ -n "$p" ] || continue
+      rm -rf -- "$p" 2>/dev/null || true
+    done
+    return 0
+  }
+fi
+
 FM_ROOT="${FM_ROOT_OVERRIDE:-${FM_ROOT:-$FM_WAKE_DEFAULT_ROOT}}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-${STATE:-$FM_HOME/state}}"
@@ -97,7 +123,11 @@ fm_watcher_healthy() {
 
 fm_lock_clean_known_files() {
   local lockdir=$1
-  rm -f \
+  # Own-scratch: these four names are lock-internal files this library wrote.
+  # Plain `rm` would move them into the trash instead of unlinking them, so
+  # every lock release leaked a "pid" entry into ~/.local/share/Trash. That
+  # was the dominant source of the trash flood (26 entries/min at idle).
+  fm_purge_scratch \
     "$lockdir/pid" \
     "$lockdir/fm-home" \
     "$lockdir/pid-identity" \
@@ -160,7 +190,8 @@ fm_lock_remove_stray_owner_link() {
   local lockdir=$1 ownerdir=$2 stray
   stray="$lockdir/$(basename "$ownerdir")"
   if [ -L "$stray" ] && fm_lock_points_to_owner "$stray" "$ownerdir"; then
-    rm -f "$stray" 2>/dev/null || true
+    # Own-scratch: a stray pointer this library created moments ago.
+    fm_purge_scratch "$stray" 2>/dev/null || true
   fi
 }
 
@@ -192,7 +223,8 @@ fm_lock_claim() {
   fi
   if fm_lock_claim_blocked_by_steal "$lockdir" "$allowed_steal_owner"; then
     if fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
-      rm -f "$lockdir" 2>/dev/null || true
+      # Own-scratch: the lock pointer this library is abandoning.
+      fm_purge_scratch "$lockdir" 2>/dev/null || true
     fi
     fm_lock_discard_owner "$ownerdir"
     return 1
@@ -232,7 +264,9 @@ fm_lock_try_create() {
     if [ -n "$allowed_steal_owner" ] || fm_lock_is_abandoned "$lockdir" 5; then
       local stale_owner
       stale_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
-      rm -f "$lockdir" 2>/dev/null || true
+      # Own-scratch: an abandoned lock pointer. Unlinked for real, not moved
+      # into the trash.
+      fm_purge_scratch "$lockdir" 2>/dev/null || true
       [ -n "$stale_owner" ] && fm_lock_discard_owner "$stale_owner"
     else
       fm_lock_discard_owner "$ownerdir"
@@ -250,7 +284,8 @@ fm_lock_try_create() {
       return 0
     fi
     if fm_lock_points_to_owner "$lockdir" "$ownerdir"; then
-      rm -f "$lockdir" 2>/dev/null || true
+      # Own-scratch: the lock pointer this library is abandoning.
+      fm_purge_scratch "$lockdir" 2>/dev/null || true
     fi
   else
     fm_lock_remove_stray_owner_link "$lockdir" "$ownerdir"
@@ -263,7 +298,8 @@ fm_lock_remove_path() {
   local lockdir=$1 ownerdir
   if [ -L "$lockdir" ]; then
     ownerdir=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
-    rm -f "$lockdir" 2>/dev/null || return 1
+    # Own-scratch: a lock pointer. Unlinked for real, not moved into the trash.
+    fm_purge_scratch "$lockdir" 2>/dev/null || return 1
     [ -n "$ownerdir" ] && fm_lock_discard_owner "$ownerdir"
     return 0
   fi
@@ -392,7 +428,10 @@ fm_lock_release() {
     pid=$(cat "$ownerdir/pid" 2>/dev/null || true)
     [ "$pid" = "$current" ] || return 0
     fm_lock_points_to_owner "$lockdir" "$ownerdir" || return 0
-    rm -f "$lockdir" 2>/dev/null || return 0
+    # Own-scratch: the lock pointer this call is releasing. Unlinked for real;
+    # a plain `rm` would relocate it into the recoverable-delete trash, which
+    # is where the fleet's per-minute lock churn was piling up.
+    fm_purge_scratch "$lockdir" 2>/dev/null || return 0
     fm_lock_discard_owner "$ownerdir"
     return 0
   fi

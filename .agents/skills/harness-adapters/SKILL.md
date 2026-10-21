@@ -467,8 +467,8 @@ still answers prompts. Full recipe and evidence:
 | Busy state | CREDITS a real semantic source: an mcode pane reports its own agent state (`idle` / `working` / `blocked`) to herdr, so `herdr pane list --workspace <ws>` is the authoritative liveness read. A pane with `agent_status: unknown` means the session hook or the status path is broken, not that the lane is idle. |
 | Status transport | Native append: `echo "<state>: <one short line>" >> state/<id>.status`. mcode is NOT in the lean-ctx replace-mode set - `bin/fm-brief.sh` carries `FM_HARNESS_LEAN_CTX_REPLACE="codex"`, and that set deliberately excludes every other verified harness. Never tell an mcode lane to use `ctx_shell`. |
 | Headless | FORBIDDEN for real task work. mcode lanes are visible, supervised and checkpointed; there is no `mcode exec` path for a crewmate. |
-| Launch | `bin/fm-spawn.sh <lane-key> <project-dir> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview --backend herdr [--scout]` |
-| Model | `minimax/MiniMax-M3.1-Flash-Preview` is the routed M3.1 Flash model. Lane-key alias `m3.1f`. Never route GLM, and never route M3.1 through Pi. |
+| Launch | `bin/fm-spawn.sh <lane-key> <project-dir> --harness minimax-code --model minimax/MiniMax-M3.1-Flash --backend herdr [--scout]` |
+| Model | `minimax/MiniMax-M3.1-Flash` is the routed M3.1 Flash model. Lane-key alias `m3.1f`. Never route GLM, and never route M3.1 through Pi. |
 | Label formats | THREE different ones: preflight label `<domain>-<surface>-<model>-<taskslug>`, spawn task id (lane key) `<model>-<surface>-<task>`, To-Do row prefix `[<harness>·<ModelAbbrev> <effort> @<Host>]`. Mixing them is the common dispatch failure. |
 | Supervision | `bash bin/fm-watch-arm.sh` as a tracked background task, re-armed every turn. |
 

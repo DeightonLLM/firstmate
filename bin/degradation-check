@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# degradation-check - detect the failure mode that compaction cannot fix.
+#
+# WHY (2026-10-15): a long session degraded at 37% of context. Outputs repeated, checks were
+# re-run, focus narrowed. Compaction was never involved and would never have caught it. The
+# only defence is to notice the loop and hand back.
+#
+# Call this once per substantive action with a short signature of what you are doing.
+# It counts repeats in a rolling window and refuses to stay silent past the limit.
+#
+# Usage: degradation-check <signature>
+#   exit 0  keep going
+#   exit 75 HANDOFF REQUIRED - repetition detected, write the handoff and hand back
+set -u
+
+FM_HOME="${FM_HOME:-/root/agent-work/deightonllm-firstmate}"
+LEDGER="${FM_DEGRADATION_LEDGER:-$FM_HOME/state/.degradation-signatures}"
+LIMIT="${FM_DEGRADATION_LIMIT:-3}"
+WINDOW="${FM_DEGRADATION_WINDOW:-40}"
+
+[ "$#" -ge 1 ] || { echo "usage: degradation-check <signature>" >&2; exit 2; }
+sig=$(printf '%s' "$1" | tr -c 'A-Za-z0-9._:-' '_' | cut -c1-120)
+mkdir -p "$(dirname "$LEDGER")" 2>/dev/null || exit 2
+printf '%s\t%s\n' "$(date +%s)" "$sig" >> "$LEDGER"
+
+# keep the ledger bounded
+[ "$(wc -l < "$LEDGER")" -gt 500 ] && tail -200 "$LEDGER" > "$LEDGER.tmp" && mv -f "$LEDGER.tmp" "$LEDGER"
+
+cutoff=$(( $(date +%s) - WINDOW ))
+recent=$(awk -F'\t' -v c="$cutoff" '$1 > c {print $2}' "$LEDGER" | tail -"$WINDOW")
+count=$(printf '%s\n' "$recent" | grep -cxF "$sig" || true)
+
+if [ "${count:-0}" -ge "$LIMIT" ]; then
+  [ -x /root/bin/guard-attest ] && /root/bin/guard-attest run degradation FIRED \
+      "signature repeated ${count}x in window: ${sig}" >/dev/null 2>&1 || true
+  printf 'degradation-check: HANDOFF REQUIRED — "%s" seen %s times in the last %ss. Repetition is the failure mode compaction does not catch. Write the handoff, hand back control, and stop.\n' \
+    "$sig" "$count" "$WINDOW" >&2
+  exit 75
+fi
+
+[ -x /root/bin/guard-attest ] && /root/bin/guard-attest run degradation CLEAR \
+  "repeats=${count} limit=${LIMIT}" >/dev/null 2>&1 || true
+exit 0

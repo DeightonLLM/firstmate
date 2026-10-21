@@ -175,6 +175,9 @@ if [ -n "$TELEMETRY" ]; then
 fi
 
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/fm-lint.XXXXXX") || exit 1
+# The one documented way to purge own-scratch.
+# shellcheck source=bin/fm-scratch-lib.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-scratch-lib.sh"
 ACTIVE_PIDS=()
 # shellcheck disable=SC2329 # Registered by the EXIT and signal traps below.
 fm_lint_cleanup() {
@@ -192,7 +195,7 @@ fm_lint_cleanup() {
   for pid in "${ACTIVE_PIDS[@]:-}"; do
     [ -n "$pid" ] && wait "$pid" 2>/dev/null || true
   done
-  rm -rf "$TMP_ROOT"
+  fm_purge_scratch "$TMP_ROOT" 2>/dev/null
 }
 trap fm_lint_cleanup EXIT
 trap 'exit 129' HUP

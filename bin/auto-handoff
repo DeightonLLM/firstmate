@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# auto-handoff - write the resume pointer from LIVE state, not from memory.
+#
+# WHY: state that lives only in a model's head is lost the moment the session degrades or
+# ends. This writes what is needed to resume, sourced from the files that are actually true:
+# the lane tracker, the ticket inbox, the backlog, the registered guards, and the ready lane
+# artifacts. If a source is missing it says so rather than inventing a value.
+#
+# Usage: auto-handoff <reason> [outfile]
+# Exit:  0 written, 1 could not write
+set -u
+
+FM_HOME="${FM_HOME:-/root/agent-work/deightonllm-firstmate}"
+REASON="${1:-unspecified}"
+OUT="${2:-$FM_HOME/data/HANDOFF-AUTO.md}"
+STATE="$FM_HOME/state"
+NOW=$(date -u +%FT%TZ)
+
+{
+  printf '# AUTO-HANDOFF — %s\n\n' "$NOW"
+  printf '**Reason:** %s\n\n' "$REASON"
+  printf 'Generated from live files. Where a source was missing this says MISSING, it does not guess.\n\n'
+
+  printf '## Tracked lanes (watcher or agent panes this session owns)\n\n'
+  if [ -f "$STATE/.factory-lanes.tsv" ]; then
+    printf '| lane | pane | state |\n|---|---|---|\n'
+    while IFS=$'\t' read -r lane machine pane; do
+      case "${lane:-}" in ''|lane|\#*) continue ;; esac
+      st=$(herdr --machine "$machine" pane list 2>/dev/null \
+           | jq -r --arg p "$pane" '.result.panes[]?|select(.pane_id==$p)|(.agent_status//"unknown")' 2>/dev/null | head -1)
+      printf '| %s | %s | %s |\n' "$lane" "$pane" "${st:-unknown}"
+    done < "$STATE/.factory-lanes.tsv"
+  else
+    printf 'MISSING: state/.factory-lanes.tsv\n'
+  fi
+
+  printf '\n## Open tickets in the inbox\n\n'
+  if [ -d "$FM_HOME/INBOX" ]; then
+    n=$(ls "$FM_HOME/INBOX"/*.md 2>/dev/null | wc -l | tr -d ' ')
+    printf 'Total: %s\n\n' "$n"
+    ls -t "$FM_HOME/INBOX"/*.md 2>/dev/null | head -12 | while read -r f; do printf -- '- %s\n' "$(basename "$f")"; done
+  else
+    printf 'MISSING: INBOX\n'
+  fi
+
+  printf '\n## Guard health\n\n```\n'
+  if [ -x /root/bin/guard-attest ]; then /root/bin/guard-attest status 2>&1; else printf 'MISSING: guard-attest\n'; fi
+  printf '```\n'
+
+  printf '\n## Surface readiness\n\n```\n'
+  if [ -x /root/bin/surface-readiness ]; then
+    /root/bin/surface-readiness --surface controller 2>&1 | tail -4
+  else
+    printf 'MISSING: surface-readiness\n'
+  fi
+  printf '```\n'
+
+  printf '\n## Verified artifacts awaiting landing\n\n'
+  if [ -d "$FM_HOME/data/imports-20261015" ]; then
+    ls "$FM_HOME/data/imports-20261015" 2>/dev/null | while read -r d; do
+      v=$(grep -m1 '^VERDICT:' "$FM_HOME/data/imports-20261015/$d/report.md" 2>/dev/null | cut -c1-90)
+      printf -- '- %s — %s\n' "$d" "${v:-no verdict}"
+    done
+  else
+    printf 'NONE: data/imports-20261015 absent\n'
+  fi
+
+  printf '\n## Resume order\n\n'
+  printf '1. Read BOARD.md and this file.\n2. Drain the wake queue once; handle only wakes that CHANGED state.\n3. Check guard health above. Any STALE guard is the first thing to fix.\n4. Continue the highest-priority open item for the owner named in the board.\n'
+} > "$OUT" 2>/dev/null || { echo "handoff write failed" >&2; exit 1; }
+
+[ -x /root/bin/guard-attest ] && /root/bin/guard-attest run auto-handoff FIRED "$REASON" >/dev/null 2>&1 || true
+printf 'auto-handoff: written %s\n' "$OUT"
+exit 0

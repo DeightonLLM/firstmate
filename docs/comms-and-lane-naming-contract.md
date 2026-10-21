@@ -69,7 +69,7 @@ The alias derivation rule (one canonical statement, one place):
   - tier-marker = keyword mapping of the **first** tier segment:
     `highspeed` -> `h`, `flash` -> `f`, bare/unrecognised -> `''`
   - Example: `minimax/MiniMax-M2.7-highspeed` -> `m2.7h`
-            `minimax/MiniMax-M3.1-Flash-Preview` -> `m3.1f`
+            `minimax/MiniMax-M3.1-Flash` -> `m3.1f`
             `minimax/MiniMax-M2.7` -> `m2.7`
 - **Other providers** (openai-codex, etc.): no programmatic rule defined.  Their model ids do not derive to lane-key aliases through the above rule.  Adding an alias for a non-MiniMax model requires explicit verification; do not guess.
 

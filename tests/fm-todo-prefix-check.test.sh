@@ -165,7 +165,7 @@ test_self_check_missing_alias_exits_two() {
 test_self_check_all_models_aliased_passes() {
   local file="$TMP_ROOT/dispatch-ok.json" out rc
   printf '{"default":{"model":"minimax/MiniMax-M2.7-highspeed"}}\n' > "$file"
-  printf '{"rules":[{"use":{"model":"minimax/MiniMax-M3.1-Flash-Preview"}}]}\n' >> "$file"
+  printf '{"rules":[{"use":{"model":"minimax/MiniMax-M3.1-Flash"}}]}\n' >> "$file"
   out=$(bash "$CHECK" --self-check "$file" 2>&1); rc=$?
   expect_exit 0 "$rc" 'a dispatch config whose models all have aliases must pass' || return 1
   return 0
