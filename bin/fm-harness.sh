@@ -28,7 +28,14 @@ set -u
 # Canonical list of verified harnesses. bin/fm-harness.sh is Firstmate's single
 # source of truth for verified agent harness adapters. Every other component
 # (fm-bootstrap.sh, fm-spawn.sh, etc.) defers to this definition.
-VERIFIED_HARNESSES=(claude codex opencode pi pi-signed grok kimi agy)
+#
+# minimax-code belongs here: this script already detects it in the ancestry
+# layer below, bin/fm-spawn.sh launches it, and bin/fm-control-lib.sh lists it.
+# Leaving it out of this array meant the dispatch-config validator rejected a
+# config that named it, while the spawn ran it happily - two owners of
+# "verified harness" disagreeing, and the narrower one winning in the wrong
+# place.
+VERIFIED_HARNESSES=(claude codex opencode pi pi-signed grok kimi agy minimax-code)
 
 is_verified() {
   local h="${1:-}" v
