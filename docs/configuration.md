@@ -108,11 +108,13 @@ Test cleanup must use the guarded path in [`docs/cmux-backend.md`](cmux-backend.
   "model": "minimax/MiniMax-M3.1-Flash",
   "effort": "",
   "secondmate": { "harness": "minimax-code", "model": "minimax/MiniMax-M3.1-Flash", "effort": "" },
-  "max_lanes": 12,
-  "max_provider_lanes": 6,
+  "max_lanes": 8,
+  "max_provider_lanes": 4,
   "route": { "_mode": {}, "rules": [], "default": [] }
 }
 ```
+
+The two ceiling values above are ILLUSTRATIVE and are not the numbers any home currently runs: the numbers are a measured decision that changes, and they live in the home's own `config/dispatch.json` with their reason and their expiry beside them, never in this document.
 
 Every key is optional. A file with only `harness` is valid, and a file with no `route` key is valid and means "this file configures no routing rules".
 A `config/dispatch.json` that exists but does not parse is a BROKEN configuration, not an absent one: it is reported (`DISPATCH_CONFIG: invalid config/dispatch.json - malformed JSON`) and never silently replaced by the legacy routing file, because quietly routing on a different ruleset is the failure mode this file exists to prevent.
@@ -159,16 +161,20 @@ To route the whole fleet to MCode, the whole edit is:
   "harness": "minimax-code",
   "model": "minimax/MiniMax-M3.1-Flash",
   "secondmate": { "harness": "minimax-code", "model": "minimax/MiniMax-M3.1-Flash" },
-  "max_lanes": 12,
-  "max_provider_lanes": 6
+  "max_lanes": 8,
+  "max_provider_lanes": 4
 }
 ```
 
+The two ceiling values in that example are illustrative placeholders. A home's real ceilings are a measured decision that lives in that home's own `config/dispatch.json` with its reason and its expiry beside it, and a home that changes them changes them THERE, not here.
+
 ### The configured-route gate (bin/fm-dispatch-guard.sh)
 
-While a home's CONFIGURED route harness is `minimax-code`, the dispatch guard refuses a spawn on the Pi family (`pi` and `pi-signed`), because the standing directive is that the free MCode route is the route. The rule is conditional on the CONFIGURED route, never on the ambient detected harness: a home that configures nothing keeps whatever it had, and a home that configures `pi` keeps its Pi lanes. The refusal names the configured route and the escape hatch. `FM_DISPATCH_GUARD_ROUTE_BYPASS=1` skips this one check and is logged as `BYPASS_ROUTE`; the global `FM_DISPATCH_GUARD_BYPASS=1` does not rescue it.
+While a home's CONFIGURED route harness is `minimax-code`, the dispatch guard refuses a spawn on EVERY API-drawn adapter, because the standing directive is that the free MCode route is the route and every other route draws a provider account's quota through an API call. The gate names the class, not one adapter: an adapter that draws an account is refused, and the configured route itself is not an API-drawn route, so it is never refused. The rule is conditional on the CONFIGURED route, never on the ambient detected harness: a home that configures nothing keeps whatever it had, and a home that configures `pi` keeps its Pi lanes. An adapter the guard holds no evidence about is not refused by this gate, because refusing on a guess would wedge a legal spawn.
 
-The retired slug `minimax/MiniMax-M3.1-Flash-Preview` is refused outright with no bypass, like the `gpt-6.1-sol` ban, because the catalog no longer serves it. The live id is `minimax/MiniMax-M3.1-Flash`.
+The refusal names the configured route and the escape hatch. `FM_DISPATCH_GUARD_ROUTE_BYPASS=1` skips this one check and is logged as `BYPASS_ROUTE`; the global `FM_DISPATCH_GUARD_BYPASS=1` does not rescue it, and it is the ONLY escape from this gate.
+
+The retired slug `minimax/MiniMax-M3.1-Flash-Preview` is refused outright with no bypass, like the `gpt-6.1-sol` ban, because the catalog no longer serves it. The live id is `minimax/MiniMax-M3.1-Flash`. Both bans are matched as ID STRINGS and never by asking a CLI whether the model resolves, because the MCode CLI accepts the retired slug and exits 0: a CLI-shaped check reports a model the provider no longer serves as a healthy one.
 
 ### Inheritance
 
@@ -176,7 +182,16 @@ The retired slug `minimax/MiniMax-M3.1-Flash-Preview` is refused outright with n
 
 ## Dispatch lane ceilings (config/dispatch.json / config/dispatch-max-lanes / config/dispatch-max-provider-lanes)
 
-`config/dispatch.json` is the ONE dispatch file and is the primary source for the lane ceilings: `.max_lanes` sets the home-local maximum for all working or unknown worker lanes, and `.max_provider_lanes` sets the corresponding per-provider maximum. The legacy `config/dispatch-max-lanes` and `config/dispatch-max-provider-lanes` files remain supported as compatibility fallbacks and are consulted only when the one file does not set the value. Both shapes hold a positive decimal integer, and the per-provider ceiling defaults to the global ceiling when absent or invalid. `FM_DISPATCH_GUARD_MAX_LANES` and `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` override their respective config values. Provider identity is read from the provider prefix in each task's recorded `model=` when present, otherwise from its recorded `harness=`; unknown or unreadable lane state occupies both applicable ceilings.
+`config/dispatch.json` is the ONE dispatch file and is the primary source for the lane ceilings: `.max_lanes` sets the home-local maximum for all working or unknown worker lanes, and `.max_provider_lanes` sets the corresponding per-provider maximum. The legacy `config/dispatch-max-lanes` and `config/dispatch-max-provider-lanes` files remain supported as compatibility fallbacks and are consulted only when the one file does not set the value. Both shapes hold a positive decimal integer, and the per-provider ceiling defaults to the global ceiling when absent or invalid. `FM_DISPATCH_GUARD_MAX_LANES` and `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` override their respective config values.
+
+The two ceilings have deliberately different SCOPES, and the difference is the point:
+
+- The live-lane ceiling is HOME-LOCAL. It counts this home's own lanes, because another home's lanes are another home's work and this home's lane budget is its own.
+- The per-provider ceiling binds a CREDENTIAL ACCOUNT and is therefore counted across THIS firstmate's registered second-mate homes as well. One firstmate's homes on one host hold ONE copy of each credential, so a lane running in a registered second-mate home spends from our account and occupies our account's slot even though the lane itself is not ours.
+
+The registered homes are read from this home's own `data/secondmates.md`, through the `home:` entry of each registered second mate. That registry is the only source: another firstmate's fleet is never counted and never claimed, and no foreign endpoint namespace is swept for matching names.
+
+A lane is attributed to an ACCOUNT and not to a provider name. `fm_dispatch_guard_provider_of_meta` at line 378 reads the provider prefix of a meta's recorded `model=` and falls back to its recorded `harness=`; `fm_dispatch_guard_account_of_meta` at line 462 then folds the spellings of one account onto one key, so a prefixed model, an unprefixed model on the MCode adapter and an unprefixed model on another adapter that serves the same vendor are counted as ONE account's lanes instead of three buckets. Unknown or unreadable lane state occupies both applicable ceilings.
 
 The ceiling is enforced by `bin/fm-dispatch-guard.sh` (`fm_dispatch_guard_lane_cap`), which `bin/fm-spawn.sh` calls before it spawns. The Herdr subagent cap (`MAX_SUBAGENT_PANES` / `MAX_TOTAL_PANES`, `cap.sh`) is a separate, pane-level ceiling on top of it.
 
@@ -200,9 +215,9 @@ This section owns the RULE for choosing a capacity, and it does not repeat the s
 ### An exported environment variable beats the configured value
 
 The guard reads the environment before it reads the file.
-In [`bin/fm-dispatch-guard.sh`](bin/fm-dispatch-guard.sh), the live-lane cap resolution seeds itself from `FM_DISPATCH_GUARD_MAX_LANES` at line 310 and reads `.max_lanes` from `config/dispatch.json` only when that environment value is empty, at line 311.
-The per-provider cap resolution seeds itself from `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` at line 337 and reads `.max_provider_lanes` only when that environment value is empty, at line 338.
-The guard's own header records the same precedence: line 28 documents `FM_DISPATCH_GUARD_MAX_LANES=<n>` as an override of `config/dispatch.json` `.max_lanes`, and line 30 documents `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES=<n>` as an override of `.max_provider_lanes`.
+In [`bin/fm-dispatch-guard.sh`](bin/fm-dispatch-guard.sh), the live-lane cap resolution seeds itself from `FM_DISPATCH_GUARD_MAX_LANES` at line 358 and reads `.max_lanes` from `config/dispatch.json` only when that environment value is empty, at line 359.
+The per-provider cap resolution seeds itself from `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` at line 522 and reads `.max_provider_lanes` only when that environment value is empty, at line 523.
+The guard's own header records the same precedence: line 36 documents `FM_DISPATCH_GUARD_MAX_LANES=<n>` as an override of `config/dispatch.json` `.max_lanes`, and line 38 documents `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES=<n>` as an override of `.max_provider_lanes`.
 So an exported environment variable wins over the configured value, and an operator who wants the configured value to be the truth must make sure that no such variable is exported in the shell that dispatches.
 An ambient override that is read ahead of the durable config makes the durable config a lie: the file says one number and the environment silently decides another.
 That is why a capacity belongs in `config/dispatch.json` and not in a shell profile.
@@ -214,10 +229,11 @@ Then run `bin/fm-config-push.sh` to propagate the new ceilings to the second mat
 
 ### What each ceiling counts
 
-The two ceilings count different things.
-The live-lane ceiling counts live crewmate lanes, counted per window or pane rather than per session: the guard's own refusal says so at line 397 of [`bin/fm-dispatch-guard.sh`](bin/fm-dispatch-guard.sh), and the inventory it counts walks the recorded lane metas from line 360.
-The per-provider ceiling counts the lanes attributed to a provider, and that attribution is read out of the recorded lane metadata: `fm_dispatch_guard_provider_of_meta` at line 326 reads the provider prefix of a meta's recorded `model=` and falls back to its recorded `harness=`, and the guard attributes each lane to that provider at line 365.
-The per-provider ceiling is then applied to each provider separately at line 401.
+The two ceilings count different things, and they have deliberately different scopes.
+The live-lane ceiling counts live crewmate lanes of THIS home, counted per window or pane rather than per session: the guard's own refusal says so at line 598 of [`bin/fm-dispatch-guard.sh`](bin/fm-dispatch-guard.sh), and the inventory it counts walks the recorded lane metas from line 536.
+The per-provider ceiling counts the lanes attributed to a CREDENTIAL ACCOUNT, and that attribution is read out of the recorded lane metadata: `fm_dispatch_guard_provider_of_meta` at line 378 reads the provider prefix of a meta's recorded `model=` and falls back to its recorded `harness=`, `fm_dispatch_guard_account_of_meta` at line 462 folds the spellings of one account onto one key, and the guard attributes each lane to that account at line 563.
+That count is FLEET-WIDE over this firstmate's own registered homes: `fm_dispatch_guard_fleet_homes` at line 496 reads the `home:` entry of every registered second mate out of `data/secondmates.md`, so a lane in a registered second-mate home occupies our account's slot, and a home this firstmate never registered is never counted.
+The per-provider ceiling is then applied to each account separately at line 605.
 
 ### The per-provider ceiling binds a credential account
 
@@ -226,16 +242,16 @@ Two surfaces that hold the same credential for a provider draw the same pool, so
 A pool that is genuinely one account across every surface is the fleet-wide limit, and the pool whose number binds everybody is the one that matters.
 The account map that says which pools are shared and which are not is measured configuration, so it lives in `route._mode.account_map` in each surface's own `config/dispatch.json`, and a reader never has to re-derive it from a reading.
 A provider name alone is not evidence of a shared pool: the same provider can be one account on one surface and a different account on another, and the proof is the credential-store digest and the reset instants read on each surface, not the name.
-As of 2026-10-21 the MiniMax credential on the Hetz host is held by that host alone, and the Codex credential on it is `codex-home` plus `openai-codex`, while zai/GLM is a single account across every credentialed surface, so zai is the pool whose number binds the whole fleet.
+The same rule holds across the homes of one firstmate: one firstmate's homes on one host hold one copy of each credential, so the ceiling counts that account's lanes in every one of its registered homes, and the lanes of another firstmate are never counted as ours.
 
 ### A capacity expires like a route does
 
 A capacity number whose reason expires is operational configuration and not documentation, so it lives in `config/dispatch.json` with its expiry beside it.
 That is the shape the route already uses: the `route._mode` object carries the reason, the date it expires, and the action that retires it, and this file owns the rule for choosing a route and never the route that is chosen right now.
 A capacity decision follows the same rule, so `route._mode` carries `capacity_reason`, `capacity_expires` and `capacity_expires_action` beside the route's own fields, and this file owns the rule for choosing a capacity and never the number that is chosen right now.
-As of 2026-10-21 the Hetz home runs a live-lane ceiling of 12 and a per-provider ceiling of 6, and that is a dated record of a measured decision whose reason expires on 2026-10-25, not a permanent value, so a later reader can tell a measured window from a policy.
-The 12 is this host's own allocation and the 6 is the ceiling on one credential account, for the reason the section above gives: the per-provider ceiling binds an account rather than a provider name, and one surface's MiniMax lane is not another surface's MiniMax lane unless they hold the same credential, so the two ceilings are deliberately different numbers and this host may not raise its per-provider ceiling to match its own live-lane ceiling.
-The authoritative number lives in that home's own `config/dispatch.json`, never in this document.
+A measured capacity decision is a dated record in that home's own `config/dispatch.json`, with its expiry and its reason beside it, so a later reader can tell a measured window from a policy.
+The live-lane ceiling is a host's own allocation and the per-provider ceiling is a ceiling on one credential account, for the reason the section above gives: the two ceilings are deliberately different numbers and a host may not raise its per-provider ceiling to match its own live-lane ceiling.
+The authoritative numbers live in that home's own `config/dispatch.json`, never in this document.
 
 ### The second ceiling: the treehouse worktree pool
 

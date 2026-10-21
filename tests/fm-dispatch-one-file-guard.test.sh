@@ -95,6 +95,84 @@ JSON
     "$mcode_home" minimax-code minimax/MiniMax-M3.1-Flash
 }
 
+# --- A2: the route gate covers the CLASS of API-drawn adapters ---------------
+#
+# The rule used to name the Pi family only, so a codex spawn on the free MCode
+# route drew the Codex account's quota while the guard reported the dispatch
+# as allowed. Measured on 2026-10-21: codex with openai-codex/gpt-6-luna
+# exited 0 while the configured route was minimax-code. The gate is now
+# expressed as the class the directive names - every API-drawn adapter - and
+# the configured route itself is never in that class.
+
+API_DRAWN_ADAPTERS="claude codex opencode pi pi-signed grok kimi agy"
+
+test_route_gate_covers_every_api_drawn_adapter() {
+  local mcode_home adapter
+  mcode_home=$(new_home route-api-drawn)
+  cat > "$mcode_home/config/dispatch.json" <<'JSON'
+{ "harness": "minimax-code", "model": "minimax/MiniMax-M3.1-Flash" }
+JSON
+
+  for adapter in $API_DRAWN_ADAPTERS; do
+    run_guard 64 "A2 an API-drawn adapter is refused on the free route: $adapter" \
+      "$mcode_home" "$adapter" some-legal-model
+  done
+
+  # The configured route itself is not API-drawn, so it is not refused.
+  run_guard 0 "A2 the configured route itself is allowed on the free route" \
+    "$mcode_home" minimax-code minimax/MiniMax-M3.1-Flash
+
+  # An adapter the guard holds no evidence about is not refused by this gate:
+  # refusing on a guess would wedge a legal spawn.
+  run_guard 0 "A2 an adapter with no evidence of drawing an account is not refused" \
+    "$mcode_home" some-future-adapter some-legal-model
+}
+
+test_route_gate_refusal_names_the_route_and_the_bypass() {
+  local mcode_home out
+  mcode_home=$(new_home route-reason)
+  cat > "$mcode_home/config/dispatch.json" <<'JSON'
+{ "harness": "minimax-code" }
+JSON
+  out=$(env FM_HOME="$mcode_home" FM_DISPATCH_GUARD_LOG="$LOG" "$GUARD" codex some-legal-model 2>&1)
+  case "$out" in
+    *minimax-code*) : ;;
+    *) fail "the route-gate refusal does not name the configured route: $out" ;;
+  esac
+  case "$out" in
+    *FM_DISPATCH_GUARD_ROUTE_BYPASS*) : ;;
+    *) fail "the route-gate refusal does not name the bypass: $out" ;;
+  esac
+  pass "the route-gate refusal names the configured route and the bypass"
+}
+
+test_route_gate_escape_hatch_applies_to_the_whole_class() {
+  local mcode_home adapter
+  mcode_home=$(new_home route-api-bypass)
+  cat > "$mcode_home/config/dispatch.json" <<'JSON'
+{ "harness": "minimax-code" }
+JSON
+
+  # The narrow bypass is the only way past the gate, and it covers the class.
+  for adapter in $API_DRAWN_ADAPTERS; do
+    run_guard 0 "A3 the documented route bypass admits an API-drawn adapter: $adapter" \
+      "$mcode_home" "$adapter" some-legal-model FM_DISPATCH_GUARD_ROUTE_BYPASS=1
+  done
+
+  # The global bypass must not rescue ANY of them.
+  for adapter in $API_DRAWN_ADAPTERS; do
+    run_guard 64 "A4 the global bypass does not rescue the route gate: $adapter" \
+      "$mcode_home" "$adapter" some-legal-model FM_DISPATCH_GUARD_BYPASS=1
+  done
+
+  # ...and it does not rescue the retired slug or the Sol ban either, with
+  # the narrow bypass set as well.
+  run_guard 64 "A5 the route bypass does not rescue the retired slug" \
+    "$mcode_home" minimax-code minimax/MiniMax-M3.1-Flash-Preview FM_DISPATCH_GUARD_ROUTE_BYPASS=1
+  run_guard 64 "A6 the route bypass does not rescue the Sol ban" \
+    "$mcode_home" codex gpt-6.1-sol FM_DISPATCH_GUARD_ROUTE_BYPASS=1
+}
+
 # --- D: the retired slug ----------------------------------------------------
 test_retired_slug_is_refused() {
   local home
@@ -182,6 +260,9 @@ test_legacy_files_still_configure() {
 }
 
 test_route_gate_bites_and_is_conditional
+test_route_gate_covers_every_api_drawn_adapter
+test_route_gate_refusal_names_the_route_and_the_bypass
+test_route_gate_escape_hatch_applies_to_the_whole_class
 test_retired_slug_is_refused
 test_escape_hatches
 test_legacy_files_still_configure

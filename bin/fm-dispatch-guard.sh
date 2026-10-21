@@ -18,6 +18,14 @@
 #
 # Exit: 0 allow, 64 refuse (with a specific, actionable reason on stderr).
 #
+# Scope of the two lane ceilings, which are deliberately different:
+#   - the live-lane ceiling is HOME-LOCAL and counts this home's own lanes.
+#   - the per-provider ceiling binds a CREDENTIAL ACCOUNT and counts that
+#     account's lanes across THIS firstmate's registered second-mate homes as
+#     well, because one firstmate's homes on one host hold one copy of each
+#     credential. Another firstmate's fleet is never counted and never
+#     claimed; the registry of our own homes is the only source.
+#
 # Overrides are deliberately narrow, documented, and logged - never silent:
 #   FM_DISPATCH_GUARD_BYPASS=1        skip every bypassable check (logged)
 #   FM_DISPATCH_GUARD_LOAD_BYPASS=1   skip only the load ceiling (logged)
@@ -122,6 +130,12 @@ fi
 # This ban has NO bypass, for the same reason the Sol ban has none: the
 # retired slug sits in config files and old briefs, and a bypass would turn
 # the rule into a suggestion exactly where it has to be absolute.
+#
+# The retired slug is matched as an ID STRING and never by asking a CLI
+# whether it resolves, because the MCode CLI ACCEPTS the retired slug and
+# exits 0: a probe against the CLI returns success for a model the provider
+# no longer serves, so a CLI-shaped check would report the banned slug as
+# healthy and let it through. The string comparison is the check.
 # ---------------------------------------------------------------------------
 case "$MODEL" in
   *MiniMax-M3.1-Flash-Preview*)
@@ -134,19 +148,55 @@ esac
 #
 # The Captain's standing directive (2026-10-21, stated four times) is that
 # the MCode route IS the route. While the home's CONFIGURED route harness is
-# minimax-code, a spawn on the Pi family is refused, because the whole point
-# of the directive is that the free MCode route is used instead of a Pi lane.
+# minimax-code, a spawn that draws a provider account's quota through an API
+# call is refused, because the whole point of the directive is that the free
+# MCode route is used instead of an API-drawn lane.
+#
+# The Pi family was the first instance of that rule and stayed in it. codex
+# was NOT, and that gap was live: measured on 2026-10-21, codex with
+# openai-codex/gpt-6-luna exited 0 while the configured route was
+# minimax-code, so an API-drawn lane could be dispatched onto the free route
+# without the guard ever objecting. A rule that names one adapter when the
+# directive names a class of routes is a rule that leaks, so the gate is now
+# expressed as the class: EVERY API-drawn adapter is refused on the free
+# route, and the configured route itself is not.
 #
 # The rule is conditional on the CONFIGURED route, never on the ambient
 # detected harness: a home that configures nothing keeps whatever it had, and
-# a home that configures pi keeps its Pi lanes. A blanket ban on pi would be a
-# different rule and would wedge homes that deliberately route on pi.
+# a home that configures pi keeps its Pi lanes. A blanket ban on every adapter
+# would be a different rule and would wedge homes that deliberately route on
+# one of them.
 #
 # The escape hatch is narrow, explicit, and logged: FM_DISPATCH_GUARD_ROUTE_BYPASS=1
 # skips THIS check only. It is evaluated before the global bypass block, so
-# FM_DISPATCH_GUARD_BYPASS=1 can never rescue a refused Pi spawn, exactly as
-# it can never rescue the Sol ban.
+# FM_DISPATCH_GUARD_BYPASS=1 can never rescue a refused spawn, exactly as
+# it can never rescue the Sol ban or the retired-slug ban.
 # ---------------------------------------------------------------------------
+
+# fm_dispatch_guard_api_drawn_adapters: the verified adapters whose spawns
+# draw a provider credential's quota through an API call. The free MCode route
+# is deliberately not among them: its traffic is covered by the route's own
+# allowance, so a lane on it is not a lane on an account's quota.
+#
+# This list is the RULE and not a measurement. An adapter earns a place here
+# by being API-drawn and leaves the list by becoming a free route. An adapter
+# that is absent from the list is not refused by this gate, because the guard
+# holds no evidence that it draws an account; refusing on a guess would wedge
+# a legal spawn.
+fm_dispatch_guard_api_drawn_adapters() {
+  printf '%s\n' claude codex opencode pi pi-signed grok kimi agy
+}
+
+# fm_dispatch_guard_is_api_drawn: does this spawn draw a provider account?
+fm_dispatch_guard_is_api_drawn() {  # <harness>
+  local candidate
+  while IFS= read -r candidate; do
+    if [ "$candidate" = "$1" ]; then
+      return 0
+    fi
+  done < <(fm_dispatch_guard_api_drawn_adapters)
+  return 1
+}
 
 # fm_dispatch_guard_route_harness: the CONFIGURED route harness for this home
 # (config/dispatch.json .harness, then config/crew-harness, then the
@@ -160,15 +210,13 @@ fm_dispatch_guard_route_harness() {
 route_harness=$(fm_dispatch_guard_route_harness)
 case "$route_harness" in
   minimax-code)
-    case "$HARNESS" in
-      pi|pi-signed)
-        if [ "${FM_DISPATCH_GUARD_ROUTE_BYPASS:-0}" = "1" ]; then
-          log_event "BYPASS_ROUTE route=${route_harness} harness=${HARNESS}"
-        else
-          refuse "the configured route for this home is '${route_harness}', the free MCode route (captain directive 2026-10-21), so a spawn on '$HARNESS' is refused. Spawn on the configured route, or set FM_DISPATCH_GUARD_ROUTE_BYPASS=1 to override this one check (logged)."
-        fi
-        ;;
-    esac
+    if fm_dispatch_guard_is_api_drawn "$HARNESS"; then
+      if [ "${FM_DISPATCH_GUARD_ROUTE_BYPASS:-0}" = "1" ]; then
+        log_event "BYPASS_ROUTE route=${route_harness} harness=${HARNESS}"
+      else
+        refuse "the configured route for this home is '${route_harness}', the free MCode route (captain directive 2026-10-21), so a spawn on '$HARNESS' is refused: '$HARNESS' draws a provider account's quota through an API call, and the configured route is the one that does not. Spawn on the configured route, or set FM_DISPATCH_GUARD_ROUTE_BYPASS=1 to override this one check (logged)."
+      fi
+    fi
     ;;
 esac
 
@@ -323,6 +371,10 @@ fm_dispatch_guard_lane_cap() {
 
 # Resolve the provider from the recorded model's provider prefix where present,
 # otherwise use the recorded harness as the provider identity.
+#
+# This is the PROVIDER ATTRIBUTION: it answers "which provider is this lane
+# on?". The ceiling binds a CREDENTIAL ACCOUNT, which is a different question,
+# and the answer is fm_dispatch_guard_account_of_meta below.
 fm_dispatch_guard_provider_of_meta() {  # <meta-file>
   local harness model
   harness="$(sed -n 's/^harness=//p' "$1" | head -n 1)"
@@ -331,6 +383,139 @@ fm_dispatch_guard_provider_of_meta() {  # <meta-file>
     */*) printf '%s' "${model%%/*}" ;;
     *) printf '%s' "${harness:-unknown}" ;;
   esac
+}
+
+# ---------------------------------------------------------------------------
+# The CREDENTIAL ACCOUNT a lane spends from.
+#
+# The per-provider ceiling binds one credential account and not a provider name
+# (docs/configuration.md, "The per-provider ceiling binds a credential
+# account"), and the provider attribution above answers a different question:
+# "which provider is this lane on?". The two answers are not the same string
+# for one account, so the fleet's lanes on the MiniMax credential were counted
+# in three buckets:
+#
+#   model=minimax/MiniMax-M3.1-Flash   -> provider "minimax"
+#   model=MiniMax-M3.1-Flash          -> provider "minimax-code" (harness)
+#   harness=pi, model=MiniMax-M2.7    -> provider "pi"          (harness)
+#
+# Every one of those draws the same MiniMax credential, so a ceiling on that
+# credential was enforced against one bucket and ignored in the other two, and
+# the account's real occupancy was never the number the ceiling saw. The
+# account identity below folds the spellings of one account onto one key, so
+# the ceiling counts the account's lanes once, wherever they are recorded.
+#
+# The account is resolved from the lane's MODEL first, because the model names
+# the pool it draws from, and from the recorded adapter only when the model
+# names no pool of its own. It never asks a CLI whether a model resolves: the
+# MCode CLI accepts the retired slug and exits 0, so a CLI-shaped probe
+# reports a dead model as a live one.
+# ---------------------------------------------------------------------------
+
+# fm_dispatch_guard_account_of_prefix: the credential account a provider
+# PREFIX names. Some prefixes are credential-store aliases of one account.
+fm_dispatch_guard_account_of_prefix() {  # <provider-prefix>
+  case "${1:-}" in
+    openai-codex|codex-home) printf 'codex' ;;
+    *) printf '%s' "${1:-}" ;;
+  esac
+}
+
+# fm_dispatch_guard_account_of_model: the credential account a model NAME
+# belongs to, for models recorded without a provider prefix. Prints nothing
+# and fails when the name belongs to no known account.
+fm_dispatch_guard_account_of_model() {  # <model>
+  local m
+  m="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  case "$m" in
+    minimax*)                printf 'minimax' ;;
+    gpt-*|o1-*|o3-*|codex-*) printf 'codex' ;;
+    claude-*|anthropic-*)    printf 'claude' ;;
+    gemini-*)                printf 'agy' ;;
+    glm-*|zai-*)             printf 'zai' ;;
+    kimi-*|moonshot*)        printf 'kimi' ;;
+    grok-*)                  printf 'grok' ;;
+    *) return 1 ;;
+  esac
+}
+
+# fm_dispatch_guard_account_of_harness: the credential account an ADAPTER
+# spends from when the model names no account of its own.
+fm_dispatch_guard_account_of_harness() {  # <harness>
+  case "${1:-}" in
+    minimax-code)   printf 'minimax' ;;
+    codex|opencode) printf 'codex' ;;
+    claude)         printf 'claude' ;;
+    pi|pi-signed)   printf 'pi' ;;
+    grok)           printf 'grok' ;;
+    kimi)           printf 'kimi' ;;
+    agy)            printf 'agy' ;;
+    *) return 1 ;;
+  esac
+}
+
+# fm_dispatch_guard_account_of_meta: the credential account a recorded lane
+# draws from. The provider attribution stays the provider attribution and the
+# account stays the account: this function only falls back on it, for a lane
+# whose model and adapter name no account at all, so that an unknown lane
+# occupies a slot instead of slipping past the ceiling.
+fm_dispatch_guard_account_of_meta() {  # <meta-file>
+  local harness model account
+  harness="$(sed -n 's/^harness=//p' "$1" | head -n 1)"
+  model="$(sed -n 's/^model=//p' "$1" | head -n 1)"
+  case "$model" in
+    */*)
+      account="$(fm_dispatch_guard_account_of_prefix "${model%%/*}")"
+      ;;
+    *)
+      account="$(fm_dispatch_guard_account_of_model "$model" 2>/dev/null || true)"
+      [ -n "$account" ] || account="$(fm_dispatch_guard_account_of_harness "$harness" 2>/dev/null || true)"
+      ;;
+  esac
+  [ -n "$account" ] || account="$(fm_dispatch_guard_provider_of_meta "$1")"
+  [ -n "$account" ] || account="unknown"
+  printf '%s' "$account"
+}
+
+# fm_dispatch_guard_fleet_homes: the homes whose lanes spend from THIS
+# firstmate's credential accounts.
+#
+# One firstmate's homes on one host hold ONE copy of each credential, so a
+# lane running in a registered second-mate home is a lane on our account and
+# the per-account ceiling has to count it. Counting only this home's own
+# state/*.meta left the ceiling binding one bucket of an account that the
+# fleet was spending across several of its homes.
+#
+# The registry is this home's own data/secondmates.md, whose entries carry
+# their home path in a trailer of the form
+#   (home: <path>; scope: ...; projects: ...; added <date>)
+#
+# Only the homes THIS firstmate registered are counted. Another firstmate's
+# fleet is not ours to count and its lanes are not ours to claim, so this
+# registry is the only source and no foreign endpoint namespace is swept.
+fm_dispatch_guard_fleet_homes() {
+  local registry entry
+  [ -n "${FM_HOME:-}" ] || return 0
+  printf '%s\n' "$FM_HOME"
+  registry="${FM_HOME}/data/secondmates.md"
+  [ -r "$registry" ] || return 0
+  local -A seen=()
+  seen["$FM_HOME"]=1
+  while IFS= read -r entry || [ -n "$entry" ]; do
+    case "$entry" in
+      *"(home: "*) : ;;
+      *) continue ;;
+    esac
+    entry="${entry#*\(home: }"
+    entry="${entry%%;*}"
+    entry="${entry#"${entry%%[![:space:]]*}"}"
+    entry="${entry%"${entry##*[![:space:]]}"}"
+    [ -n "$entry" ] || continue
+    [ -n "${seen[$entry]:-}" ] && continue
+    seen["$entry"]=1
+    [ -d "$entry/state" ] || continue
+    printf '%s\n' "$entry"
+  done < "$registry"
 }
 
 fm_dispatch_guard_provider_cap() {
@@ -357,49 +542,69 @@ if [ -n "${FM_HOME:-}" ] && [ -d "${FM_HOME}/state" ]; then
   incomplete=0
   declare -A provider_live=()
   declare -A provider_idle=()
-  for meta in "${FM_HOME}"/state/*.meta; do
-    [ -e "$meta" ] || continue
-    backend="$(fm_backend_of_meta "$meta")"
-    raw_target="$(fm_backend_target_of_meta "$meta")"
-    target="$(lane_target "$backend" "$raw_target")"
-    provider="$(fm_dispatch_guard_provider_of_meta "$meta")"
-    if [ -z "$target" ]; then
-      # A meta with no resolvable endpoint is unknown and must not free a slot.
-      log_event "LANE_UNRESOLVED meta=$(basename "$meta")"
-      live=$((live + 1))
-      provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 ))
-      continue
-    fi
-    if [ $((SECONDS - started)) -ge "$budget" ]; then
-      incomplete=1
-      break
-    fi
-    case "$(fm_dispatch_guard_lane_classify "$backend" "$target")" in
-      absent) : ;;                             # proven gone
-      idle)
-        idle=$((idle + 1))
-        provider_idle["$provider"]=$(( ${provider_idle["$provider"]:-0} + 1 )) ;;
-      unverified)
-        log_event "LANE_UNVERIFIED meta=$(basename "$meta") backend=${backend}"
-        live=$((live + 1))
-        provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 )) ;;
-      *)
-        live=$((live + 1))
-        provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 )) ;; # working, ambiguous, or unknown
-    esac
-  done
+  # The KEY of these arrays is the CREDENTIAL ACCOUNT the lane spends from,
+  # not a provider name: the ceiling binds an account, and one account is
+  # recorded under several provider spellings. See
+  # fm_dispatch_guard_account_of_meta.
+  #
+  # The live-lane ceiling is HOME-LOCAL: it counts this home's own lanes. The
+  # per-account ceiling counts the account's lanes across this firstmate's
+  # registered homes, because one firstmate's homes hold one copy of each
+  # credential. So the walk covers every registered home, and only this
+  # home's own lanes feed the home-local live-lane ceiling.
+  while IFS= read -r home; do
+    [ -n "$home" ] || continue
+    [ -d "$home/state" ] || continue
+    for meta in "$home"/state/*.meta; do
+      [ -e "$meta" ] || continue
+      backend="$(fm_backend_of_meta "$meta")"
+      raw_target="$(fm_backend_target_of_meta "$meta")"
+      target="$(lane_target "$backend" "$raw_target")"
+      provider="$(fm_dispatch_guard_account_of_meta "$meta")"
+      if [ -z "$target" ]; then
+        # A meta with no resolvable endpoint is unknown and must not free a slot.
+        log_event "LANE_UNRESOLVED meta=$(basename "$meta") home=$(basename "$home")"
+        provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 ))
+        if [ "$home" = "$FM_HOME" ]; then
+          live=$((live + 1))
+        fi
+        continue
+      fi
+      if [ $((SECONDS - started)) -ge "$budget" ]; then
+        incomplete=1
+        break 2
+      fi
+      case "$(fm_dispatch_guard_lane_classify "$backend" "$target")" in
+        absent) : ;;                             # proven gone
+        idle)
+          provider_idle["$provider"]=$(( ${provider_idle["$provider"]:-0} + 1 ))
+          if [ "$home" = "$FM_HOME" ]; then idle=$((idle + 1)); fi ;;
+        unverified)
+          log_event "LANE_UNVERIFIED meta=$(basename "$meta") backend=${backend}"
+          provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 ))
+          if [ "$home" = "$FM_HOME" ]; then live=$((live + 1)); fi ;;
+        *)
+          provider_live["$provider"]=$(( ${provider_live["$provider"]:-0} + 1 ))
+          if [ "$home" = "$FM_HOME" ]; then live=$((live + 1)); fi ;; # working, ambiguous, or unknown
+      esac
+    done
+  done < <(fm_dispatch_guard_fleet_homes)
   if [ "$incomplete" = 1 ]; then
     refuse "the live-lane inventory did not finish within ${budget}s (${live} lanes probed so far), so the ceiling cannot be proven clear. Free a lane, raise FM_DISPATCH_GUARD_LANE_BUDGET_S deliberately, or set FM_DISPATCH_GUARD_BYPASS=1 (logged)."
   fi
-  # Live-lane ceiling.
+  # Live-lane ceiling (home-local).
   cap=$(fm_dispatch_guard_lane_cap)
   if [ "$live" -ge "$cap" ]; then
     refuse "${live} working or unknown crewmate lanes and ${idle} idle lanes exist, counted per window/pane rather than per session (cap ${cap}). Stop one, or raise FM_DISPATCH_GUARD_MAX_LANES deliberately. Do not fan out on one host."
   fi
+  # Per-account ceiling. The count is FLEET-WIDE over this firstmate's
+  # registered homes, because the account is shared by every one of them: a
+  # lane in a registered second-mate home is a lane on our account, so it
+  # occupies our account's slot even though the lane itself is not ours.
   provider_cap="$(fm_dispatch_guard_provider_cap)"
   for provider in "${!provider_live[@]}"; do
     if [ "${provider_live[$provider]}" -ge "$provider_cap" ]; then
-      refuse "${provider_live[$provider]} working or unknown lanes occupy provider '${provider}' (cap ${provider_cap}); stop one or raise FM_DISPATCH_GUARD_MAX_PROVIDER_LANES deliberately."
+      refuse "${provider_live[$provider]} working or unknown lanes occupy credential account '${provider}' across this home and the registered second-mate homes of this firstmate (cap ${provider_cap}); stop one or raise FM_DISPATCH_GUARD_MAX_PROVIDER_LANES deliberately."
     fi
   done
 fi
