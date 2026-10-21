@@ -77,8 +77,8 @@ Do not merge these tiers or invent new ones:
 
 - `HD2_IN_HOUSE` — HD2/Contabo infrastructure (`vmi3196300`,
   `vmi3238503`, `srv797124`).
-- `BRANDON_LEGACY_VPS` — Brandon legacy AminoVPS / Elevate legacy VPS
-  (`srv1137994-aminolifesciences`).
+- `BRANDON_LEGACY_VPS` — Brandon legacy Elevatesci VPS / Elevate legacy VPS
+  (`srv1137994-elevatesci`).
 - `BRANDON_HUB` — Brandon's Hostinger KVM8 hub host (`srv1856614`); distinct from HD2Stack.
 - `KVM1_HOSTINGER` — KVM1 Hostinger node (`srv797124`).
 - `HETZNER_COMPUTE` — Hetzner compute plane.

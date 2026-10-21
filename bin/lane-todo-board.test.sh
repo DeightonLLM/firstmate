@@ -14,6 +14,7 @@ set -u
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOARD="$SELF_DIR/lane-todo-board.sh"
+DASH="$SELF_DIR/lane-todo-dash.sh"
 
 TMP_ROOT=""
 CASES_RUN=0
@@ -24,9 +25,14 @@ CASE_ASSERTIONS=0
 FAILED=0
 OUT=""
 RC=0
+SERVER_PID=""
 
 # shellcheck disable=SC2329 # Invoked by the EXIT trap below, not by name.
 cleanup() {
+  if [ -n "$SERVER_PID" ]; then
+    kill "$SERVER_PID" 2>/dev/null || true
+    wait "$SERVER_PID" 2>/dev/null || true
+  fi
   if [ -n "$TMP_ROOT" ] && [ -d "$TMP_ROOT" ]; then
     rm -rf -- "$TMP_ROOT"
   fi
@@ -118,6 +124,47 @@ assert_no_file() {  # <path> <why>
   fi
 }
 
+assert_grep_file() {  # <path> <regex> <why>
+  if [ -f "$1" ] && grep -Eq -- "$2" "$1"; then
+    pass
+  else
+    fail "${3:-expected pattern missing from $1: $2}"
+  fi
+}
+
+assert_file_has() {  # <path> <literal> <why>
+  if [ -f "$1" ] && grep -qF -- "$2" "$1"; then
+    pass
+  else
+    fail "${3:-expected literal missing from $1: $2}"
+  fi
+}
+
+# A stub lavish-axi records every invocation as one tab-separated CALL line, so a
+# test can assert on the exact argv the dashboard hands to Lavish. The real
+# adapter and the real runner still execute, so the registration under test is
+# the genuine one the sanctioned owner writes.
+write_lavish_stub() {  # <home>
+  local home="$1"
+  mkdir -p "$home/fakebin"
+  cat > "$home/fakebin/lavish-axi" <<'STUB'
+#!/usr/bin/env bash
+{ printf 'CALL'; printf '\t%s' "$@"; printf '\n'; } >> "${LAVISH_STUB_LOG:?}"
+exit 0
+STUB
+  chmod +x "$home/fakebin/lavish-axi"
+}
+
+run_dash_cmd() {  # <home> [args...] -> sets OUT and RC
+  local home="$1"
+  shift
+  OUT=$(cd "$home" && FM_HOME="$home" HERDR_PANE_LIST_FILE="$home/herdr-panes.txt" \
+        LAVISH_STUB_LOG="$home/lavish-calls.log" PATH="$home/fakebin:$PATH" \
+        bash "$DASH" "$@" 2>&1)
+  RC=$?
+}
+
+
 # Extract the board region between two sentinel todo lines and require it to be
 # byte-identical to the todo file: that is what "rendered verbatim" means.
 assert_verbatim() {  # <todo file> <first sentinel> <last sentinel> <why>
@@ -146,6 +193,16 @@ run_board() {  # <home> [args...] -> sets OUT and RC
   shift
   OUT=$(FM_HOME="$home" bash "$BOARD" "$@" 2>&1)
   RC=$?
+}
+
+run_dash() {  # <home> <output> -> sets OUT and RC
+  local home="$1" output="$2"
+  OUT=$(FM_HOME="$home" HERDR_PANE_LIST_FILE="$home/herdr-panes.txt" bash "$DASH" "$output" 2>&1)
+  RC=$?
+}
+
+free_port() {
+  python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
 }
 
 write_lane() {  # <home> <lane> <key=value>...
@@ -528,6 +585,198 @@ assert_has "combo-lane" "--init-lane should report the lane it scaffolded"
 end_case
 
 # --- summary ---------------------------------------------------------------
+
+start_case "the offline HTML dashboard renders lanes, tickets, comms, capacity, and gates"
+home=$(new_home dash)
+mkdir -p "$home/state/lanes" "$home/data" "$home/config" "$home/BRANDON-COMPUTE-COMMS/Hetz/inbound" "$home/BRANDON-COMPUTE-COMMS/Hetz/outbound"
+cat > "$home/state/lanes/lane-alpha.lane" <<'LANE'
+task=task-alpha
+model=glm-5.3-flash
+surface=controller
+compaction_headroom_pct=35
+LANE
+printf 'working: compiling\n' > "$home/state/task-alpha.status"
+cat > "$home/data/backlog.md" <<'BACKLOG'
+## P1
+- [ ] T-100 Offline dashboard
+  claim: lane-alpha
+  blocker: waiting for fixture review
+- [x] T-099 Completed ticket
+BACKLOG
+printf 'controller=4\n' > "$home/config/project-capacity"
+printf 'w1:p9 working pane alpha\n' > "$home/herdr-panes.txt"
+printf 'inbound receipt\n' > "$home/BRANDON-COMPUTE-COMMS/Hetz/inbound/20261013-hello.receipt"
+printf 'outbound receipt\n' > "$home/BRANDON-COMPUTE-COMMS/Hetz/outbound/20261013-ack.receipt"
+touch -d '2 minutes ago' "$home/BRANDON-COMPUTE-COMMS/Hetz/inbound/20261013-hello.receipt" "$home/BRANDON-COMPUTE-COMMS/Hetz/outbound/20261013-ack.receipt"
+printf 'GATE G-7 PASS: local fixture\n' > "$home/state/task-gate.status"
+run_dash "$home" "$home/index.html"
+assert_status 0 "dashboard generation must succeed"
+assert_file "$home/index.html" "dashboard output must exist"
+OUT=$(cat "$home/index.html")
+assert_has "glm-5.3-flash" "lane model row missing"
+assert_has "lane-alpha" "lane row missing"
+assert_has "task-alpha" "lane task field missing"
+assert_has "working" "lane state missing"
+assert_has "T-100 Offline dashboard" "ticket row missing"
+assert_has "waiting for fixture review" "ticket blocker missing"
+assert_has "2m ago" "comms age line missing"
+assert_has "Declared 4" "capacity line missing"
+assert_has "Running 1" "running pane count missing"
+assert_has "G-7" "gate line missing"
+assert_has "Generated <time datetime=" "generated-at timestamp missing"
+assert_has "id=\"pill\"" "right-edge metric pill missing"
+assert_has "#pill:hover{width:252px;padding:12px 14px}" "pill hover width should match the design spec"
+assert_has "Tickets done</span><span class=\"dv\">1 / 2 · 50%" "ticket completion percentage missing"
+assert_has "Capacity used</span><span class=\"dv ok\">25%" "capacity used percentage missing"
+assert_has "Compaction headroom</span><span class=\"dv ok\">35%" "reported compaction headroom missing"
+assert_has "Refresh snapshot" "dashboard refresh control missing"
+assert_has "id=\"state-filter\"" "state filter missing"
+assert_has "id=\"priority-filter\"" "priority filter missing"
+assert_has "id=\"host-filter\"" "host filter missing"
+assert_has "<details>" "lane and ticket details should expand without JavaScript"
+assert_lacks "https://" "offline dashboard must contain no external URLs"
+run_dash "$home" "$home/index.html"
+OUT=$(cat "$home/index.html")
+count=$(printf '%s\n' "$OUT" | grep -o '<main>' | wc -l | tr -d '[:space:]')
+assert_eq "$count" "1" "regeneration must replace the snapshot without duplicating markup"
+assert_lacks "http://" "offline dashboard must contain no external URLs"
+end_case
+
+start_case "serve returns the generated dashboard and accepts Markdown feedback"
+home=$(new_home serve)
+mkdir -p "$home/data" "$home/state" "$home/fakebin"
+cat > "$home/data/backlog.md" <<'BACKLOG'
+## P1
+- [ ] T-100 Offline dashboard
+  claim: lane-alpha
+  blocker: waiting for review
+BACKLOG
+cat > "$home/fakebin/tailscale" <<'TAILSCALE'
+#!/usr/bin/env bash
+printf '127.0.0.1\n'
+TAILSCALE
+chmod +x "$home/fakebin/tailscale"
+port=$(free_port)
+FM_HOME="$home" LANE_TODO_DASH_PORT="$port" PATH="$home/fakebin:$PATH" \
+  bash "$DASH" serve >"$home/server.log" 2>&1 &
+SERVER_PID=$!
+for _ in $(seq 1 40); do
+  if python3 - "$port" <<'PY' >/dev/null 2>&1
+import sys, urllib.request
+try:
+    urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/", timeout=0.2).close()
+except Exception:
+    raise SystemExit(1)
+PY
+  then break; fi
+  sleep 0.1
+done
+OUT=$(python3 - "$port" <<'PY'
+import sys, urllib.request
+with urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/", timeout=2) as response:
+    print(response.status)
+    print(response.read().decode())
+PY
+)
+assert_has "200" "serve should return HTTP 200"
+assert_has "T-100 Offline dashboard" "served page should contain a ticket row"
+feedback_status=$(python3 - "$port" <<'PY'
+import sys, urllib.parse, urllib.request
+data = urllib.parse.urlencode({"ticket": "T-100 Offline dashboard", "comment": "Please keep the blocker visible."}).encode()
+request = urllib.request.Request(f"http://127.0.0.1:{sys.argv[1]}/feedback", data=data, method="POST")
+request.add_header("Origin", f"http://127.0.0.1:{sys.argv[1]}")
+with urllib.request.urlopen(request, timeout=2) as response:
+    print(response.status)
+PY
+)
+assert_eq "$feedback_status" "201" "POST should create one feedback file"
+feedback_files=("$home/state/dash-feedback/"*.md)
+assert_file "${feedback_files[0]}" "POST should write into the feedback inbox"
+assert_grep_file "${feedback_files[0]}" '^# Dashboard feedback$' "feedback should be a Markdown document"
+assert_grep_file "${feedback_files[0]}" '^- Timestamp: [0-9]{4}-[0-9]{2}-[0-9]{2}T.*Z$' "feedback should contain a UTC timestamp"
+assert_grep_file "${feedback_files[0]}" '^- Ticket: T-100 Offline dashboard$' "feedback should retain the ticket reference"
+assert_grep_file "$home/server.log" "^Serving dashboard at http://127.0.0.1:$port/$" "serve should print its bound URL"
+printf '%s\n' '- [ ] T-101 Added after first request' >> "$home/data/backlog.md"
+OUT=$(python3 - "$port" <<'PY'
+import sys, urllib.request
+with urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/", timeout=2) as response:
+    print(response.read().decode())
+PY
+)
+assert_has "T-101 Added after first request" "a fresh GET should rerun the generator"
+kill "$SERVER_PID" 2>/dev/null || true
+wait "$SERVER_PID" 2>/dev/null || true
+SERVER_PID=""
+end_case
+
+start_case "review opens the artifact as a Lavish session and arms the registered chat-back source"
+home=$(new_home review)
+write_lavish_stub "$home"
+mkdir -p "$home/data"
+cat > "$home/data/backlog.md" <<'BACKLOG'
+## P1
+- [ ] T-100 Offline dashboard
+BACKLOG
+run_dash_cmd "$home" review
+assert_status 0 "review must succeed"
+review_out="$OUT"
+artifact="$home/.lavish/LANE-TODO-DASH.html"
+artifact_real="$(cd "$(dirname "$artifact")" && pwd)/$(basename "$artifact")"
+assert_file "$artifact" "review must regenerate the artifact at its stable path"
+assert_no_file "$home/index.html" "review must not fall through and regenerate the default artifact"
+OUT=$(cat "$artifact")
+assert_has "T-100 Offline dashboard" "the artifact must still carry this script's own ticket data"
+OUT="$review_out"
+source_id=$(bash "$SELF_DIR/fm-procevent-lavish.sh" source-id "$artifact" 2>&1)
+assert_has "lavish-" "source identity must come from the sanctioned adapter"
+assert_file "$home/state/procevent/$source_id.source" "review must register the source with the runner"
+assert_grep_file "$home/state/procevent/$source_id.source" '^adapter=lavish$' "the registered adapter must be lavish"
+assert_grep_file "$home/state/procevent/$source_id.source" '^argv:$' "the registration must store a poll argv"
+assert_file_has "$home/state/procevent/$source_id.source" "poll" "the registered argv must poll"
+assert_file_has "$home/state/procevent/$source_id.source" "$artifact_real" "the poll argv must name the artifact realpath"
+assert_has "armed: $source_id" "review must report the armed source id"
+OUT=$(cat "$home/lavish-calls.log")
+assert_has "CALL"$'\t'"$artifact" "review must open the artifact as a Lavish session"
+assert_lacks $'\t'"share" "review must never publish to a third-party host"
+end_case
+
+start_case "reply and end drive the agent-to-human half and retire the source"
+home=$(new_home reply)
+write_lavish_stub "$home"
+mkdir -p "$home/data"
+cat > "$home/data/backlog.md" <<'BACKLOG'
+## P1
+- [ ] T-100 Offline dashboard
+BACKLOG
+run_dash_cmd "$home" review
+assert_status 0 "review must succeed"
+artifact="$home/.lavish/LANE-TODO-DASH.html"
+source_id=$(bash "$SELF_DIR/fm-procevent-lavish.sh" source-id "$artifact" 2>&1)
+assert_file "$home/state/procevent/$source_id.source" "review must register the source before it can be retired"
+: > "$home/lavish-calls.log"
+run_dash_cmd "$home" reply "Applied: the blocker stays visible"
+assert_status 0 "reply must succeed"
+OUT=$(cat "$home/lavish-calls.log")
+assert_has "CALL"$'\t'"reply"$'\t'"$artifact"$'\t'"--agent-reply"$'\t'"Applied: the blocker stays visible" "reply must send the agent message into the board"
+run_dash_cmd "$home" end
+assert_status 0 "end must succeed"
+OUT=$(cat "$home/lavish-calls.log")
+assert_has "CALL"$'\t'"end"$'\t'"$artifact" "end must end the Lavish session"
+assert_no_file "$home/state/procevent/$source_id.source" "end must retire the registered source"
+end_case
+
+start_case "reply and end refuse before a dashboard artifact exists"
+home=$(new_home bare)
+write_lavish_stub "$home"
+run_dash_cmd "$home" reply "too early"
+assert_status 1 "reply must refuse without an artifact"
+assert_has "run review first" "reply must say which command to run"
+run_dash_cmd "$home" end
+assert_status 1 "end must refuse without an artifact"
+assert_has "run review first" "end must say which command to run"
+run_dash_cmd "$home" reply
+assert_status 1 "reply must refuse an empty message"
+end_case
 
 printf '1..%d\n' "$CASES_RUN"
 printf '# lane-todo-board: %d cases, %d assertions, %d failed\n' \

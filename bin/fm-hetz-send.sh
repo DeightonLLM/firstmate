@@ -42,6 +42,19 @@
 # named as missing and refused (exit 4) instead of collapsing into an opaque
 # transport return code that an operator cannot tell apart from a refused key.
 #
+# The default inbox is the folder the Hetz lane actually reads:
+# /home/hd2admin/controller-replies/. The old default, /tmp/hetzner-inbound, is
+# not present on Hetz, so every send to it failed with "No such file or
+# directory" (ssh rc=1) and was indistinguishable from a refused key.
+#
+# The inbox is probed BEFORE the message is written, and the probe reports an
+# absent inbox through its own exit code (3) rather than through its output.
+# That sentinel is this helper's contract with itself: the far side runs
+# "test -d <inbox> || exit 3", so exit 3 means "the directory is not there"
+# and every other non-zero code is a genuine transport failure, reported
+# verbatim with its real ssh return code. An absent inbox is therefore named
+# as absent, with the exact remediation, and never reported as a delivery.
+#
 # MESSAGE IDENTITY. The remote file name is unique per invocation, and the
 # remote write refuses to overwrite an existing file. Two sends inside the same
 # second used to collide on one name: both printed "sent" and exited 0 while the
@@ -61,7 +74,7 @@
 #   FM_HETZ_LOG   outbound log path (default: this home's
 #                 state/outbound-to-hetz.log)
 #   FM_HETZ_HOST  remote ssh target (default: hd2admin@brandon-compute)
-#   FM_HETZ_INBOUND  remote inbound directory (default: /tmp/hetzner-inbound)
+#   FM_HETZ_INBOUND  remote inbound directory (default: /home/hd2admin/controller-replies)
 #   FM_HETZ_ROUTE_REGISTRY  route registry path
 #   FM_HETZ_ROUTE_ID  route id used when --route is not given
 #   FM_HETZ_MSG_NAME  pin the remote file name (testing seam; the default is a
@@ -79,14 +92,17 @@ STATE="${FM_STATE_OVERRIDE:-${STATE:-$FM_HOME/state}}"
 
 LOG="${FM_HETZ_LOG:-$STATE/outbound-to-hetz.log}"
 HOST="${FM_HETZ_HOST:-hd2admin@brandon-compute}"
-INBOUND="${FM_HETZ_INBOUND:-/tmp/hetzner-inbound}"
+INBOUND="${FM_HETZ_INBOUND:-/home/hd2admin/controller-replies}"
 REGISTRY="${FM_HETZ_ROUTE_REGISTRY:-$FM_HOME/data/hetz-routes.tsv}"
 ROUTE_ID="${FM_HETZ_ROUTE_ID:-hetz-inbound}"
 ROUTE=""
 
 EXIT_ROUTE=3
 EXIT_INBOX=4
-INBOX_PRESENT_SENTINEL=FM_INBOX_PRESENT
+# The exit code the far-side probe uses to say "that directory is not there".
+# It is the probe's own contract, not a transport code: ssh returns the remote
+# command's status, and the probe only ever exits 0 or this value.
+EXIT_INBOX_ABSENT=3
 
 usage() {
   awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
@@ -173,27 +189,35 @@ MSG_NAME="${FM_HETZ_MSG_NAME:-msg-${TS2}-$$.msg}"
 
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 
-# Pre-flight the destination. The probe prints a sentinel on stdout and exits 0
-# whether or not the inbox exists, so a reachable route with no inbox can never
-# be confused with a broken transport.
-# shellcheck disable=SC2029 # Client-side expansion is intended: $INBOUND and
-# the sentinel are substituted here and quoted into the remote command string.
-inbox_state=$(ssh "${SSH_OPTS[@]}" "$HOST" \
-  "if [ -d '$INBOUND' ]; then printf '%s\\n' '$INBOX_PRESENT_SENTINEL'; fi" 2>/dev/null)
+# Pre-flight the destination. The probe reports an absent inbox through its own
+# exit code (3), never through its output and never through an opaque transport
+# code: the far side runs "test -d <inbox> || exit 3", so exit 3 means "that
+# directory is not there" and every other non-zero code is a real transport
+# failure, reported verbatim with its real ssh return code. The probe reads
+# nothing from stdin, so it can never swallow the message body.
+# shellcheck disable=SC2029 # Client-side expansion is intended: $INBOUND is
+# substituted here and quoted into the remote command string.
+ssh "${SSH_OPTS[@]}" "$HOST" \
+  "test -d '$INBOUND' || exit $EXIT_INBOX_ABSENT" </dev/null >/dev/null 2>&1
 inbox_rc=$?
 
-if [ "$inbox_rc" -ne 0 ]; then
-  # The route itself is unreachable. Report the real transport failure.
-  printf 'not sent: ssh rc=%s to %s (inbound %s)\n' "$inbox_rc" "$HOST" "$INBOUND" >&2
-  exit "$inbox_rc"
-fi
-
-case "$inbox_state" in
-  *"$INBOX_PRESENT_SENTINEL"*) : ;;
-  *)
-    printf 'error: remote inbox is missing or not a directory: %s on %s (no message written)\n' \
+case "$inbox_rc" in
+  0)
+    # The inbox exists. Carry on and write the message.
+    ;;
+  "$EXIT_INBOX_ABSENT")
+    # The far side answered, and the answer is "that directory is not there".
+    # Name it, give the exact remediation, and refuse: a destination this
+    # helper invents is not a destination any consumer watches.
+    printf 'error: remote inbox is missing or absent: %s on %s (no message written)\n' \
       "$INBOUND" "$HOST" >&2
+    printf 'remediation: the remote inbox must already exist. Create it on the far side, or set FM_HETZ_INBOUND to a directory the peer actually reads (the Hetz lane reads /home/hd2admin/controller-replies). This helper never creates the destination it writes to.\n' >&2
     exit "$EXIT_INBOX"
+    ;;
+  *)
+    # A genuine transport failure. The real ssh return code is the message.
+    printf 'not sent: ssh rc=%s to %s (inbound %s)\n' "$inbox_rc" "$HOST" "$INBOUND" >&2
+    exit "$inbox_rc"
     ;;
 esac
 

@@ -44,7 +44,13 @@ hosts:
     canonical_hostname: vmi3238503
     tailscale_ip: 100.71.95.76
     public_ip: UNKNOWN
-    role: HD2stack 1Panel entrypoint and HD2 in-house host; historical inventory also places an HD2 AnythingLLM instance here, but current service/DNS origin is not verified
+    role: >-
+      HD2stack 1Panel entrypoint and HD2 in-house host. HD2 DOES run an AnythingLLM instance
+      (llm.hd2.ai, container "anythingllm", loopback 127.0.0.1:3001, with local Ollama on
+      127.0.0.1:21434). That instance serves OUR OWN internal properties, including hd2.ai. It is
+      the required internal instance and it is healthy. SCOPE RULE: internal/property sites may use
+      it; CLIENT sites (Core Distro, CBD and any other customer's site) must NEVER point at it —
+      they use their own client-facing instance. Do not "fix" a client site by pointing it at HD2.
     tier: HD2_IN_HOUSE
     tenants:
       - hd2
@@ -78,27 +84,51 @@ hosts:
     freshness_days: 30
     status: KNOWN
     notes: Distinct from HD2Stack vmi3238503; the operator alias and canonical hostname both refer to this node only.
-  - id: srv1137994-aminolifesciences
+  - id: srv1137994-elevatesci
     provider: hostinger
-    alias: animovps
-    canonical_hostname: srv1137994-aminolifesciences
+    alias: elevatesci-vps
+    legacy_aliases: animovps, elevatesVPS
+    canonical_hostname: srv1137994
     tailscale_ip: 100.69.211.43
     public_ip: UNKNOWN
-    role: Brandon edge/control plane per PRD v3 section 7.1; staging and worker tenants
+    role: elevatesci VPS - live origin for elevatesci.com and agents.elevatesci.com, and target host for the staged Core-Distro WordPress port; staging and worker tenants
     tier: BRANDON_LEGACY_VPS
+    identity_note: >
+      ONE machine, FOUR names. Operator ruling 2026-10-16 settled that the live
+      elevatesci.com origin IS srv1137994 / elevatesVPS / elevatesci-vps / animovps
+      (Aminolifesciences). Tailscale 100.69.211.43 matches across every alias, so
+      these are one host and not two candidates. This is NOT the HD2Stack KVM1 node;
+      KVM1 is the HD2 main WordPress site. Both elevatesci.com hostnames sit behind
+      Cloudflare, which is why the origin was never visible from DNS.
+    access_status: AUTHORIZED
+    access_scope: >
+      Operator ruling 2026-10-16 lifted the standing prohibition for Elevate/Core
+      staging and WordPress port work on this host. It is NOT a blanket release of
+      unrelated Aminolifesciences client or archive data on the same machine; ask
+      before using that. Promoting staging to live client production remains a
+      separately gated step and this ruling is not that approval.
     tenants:
       - core-distro
       - cbd-data
     evidence_paths:
       - docs/system-context/evidence/BR-INV-001/report.md
+      - BRANDON-COMPUTE-COMMS/to-brandon-compute/2026-10-16-controller-answers-elevate-origin-staging-and-gate-lifted.md
     sources:
       - BR-INV-001/report.md Host 1
       - AMINOVPS_COORDINATE_MAP_20260711.md
       - L1_AMINOVPS_V2_REMOTE_INVENTORY_20260714.md
-    last_verified: 2026-09-15
+      - Operator ruling 2026-10-16
+    last_verified: 2026-10-16
     freshness_days: 30
     status: PARTIAL
-    notes: Documented runtime versions exist; OS, CPU, RAM, disk, firewall, and backup posture are not documented.
+    notes: >-
+      Documented runtime versions exist; OS, CPU, RAM, disk, firewall, and backup posture are not documented.
+      The staging.core-distro.com A record was observed as 45.90.220.156 on 2026-09-23; it is not a current
+      host-interface check. Operator reports the staging name, PTR srv1137994.hstgr.cloud, SSH alias elevatesVPS,
+      and Tailscale address 100.69.211.43 identify this same host, but the mapping/PTR were not independently
+      verified for this update. Operator-reported CloudPanel clp-php-fpm.service, PHP 8.1 and
+      /run/clp-php-fpm.sock are likewise unverified and distinct from documented PHP CLI 8.4.22. Do not route
+      based on the historical DNS record alone.
   - id: srv1856614
     provider: hostinger
     alias: brandon-hub

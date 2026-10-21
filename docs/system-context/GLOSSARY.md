@@ -9,7 +9,7 @@ and must not be used in a `KNOWN` record.
 | Term | Definition | Source |
 |---|---|---|
 | **HD2 in-house** | The HD2/Contabo infrastructure stack: the controller 1Panel host, the HD2stack 1Panel host, and the HD2.ai edge host. Operated under `panel.dubzai.com`, `dash.hd2.ai/hd2secure`, and `hd2.ai`. | `AGENTS.md` Management URL map |
-| **Brandon legacy VPS** | The AminoVPS host `srv1137994-aminolifesciences` (alias `animovps`), originally used as Elevate / Brandon edge. Predates the PRD-v3 tier model. | `BR-INV-001/report.md` §Host 1 |
+| **Brandon legacy VPS** | The Elevatesci VPS host `srv1137994-elevatesci` (alias `animovps`), originally used as Elevate / Brandon edge. Predates the PRD-v3 tier model. | `BR-INV-001/report.md` §Host 1 |
 | **Brandon hub** | The provisioned Hostinger hub `srv1856614` (alias `brandon-hub`, public `2.25.197.26`) for Brandon's staged OnePanel/OpenResty and private platform services. Contabo HD2Stack `vmi3238503` is HD2 in-house and is not a Brandon service target. | `BRANDON_CAMPAIGN_CONTROL.md` §§2, 4; `BRANDON_HUB_SERVICE_MATRIX.md` §1 |
 | **KVM1 Hostinger** | The Hostinger node hosting `hd2.ai` (canonical Hostinger hostname `srv797124`, alias `srv797124-hd2`). Used as HD2.ai edge/review host. | `AGENTS.md` Hostinger note |
 | **Hetzner compute** | The provisioned Hetzner AX42-2 dedicated server `#3027423` / `HEL1-DC9`, canonical hostname and SSH alias `brandon-compute`, Tailscale `100.106.6.22`, public `157.180.99.39`. Current re-verification is temporarily blocked by the Tailscale interactive re-auth gate. | `BR-HERDR-HETZNER-ROUTE-001/agy-route-repair.md` §§1–7; `BR-COMPUTE-LLM-001/m3-runtime-preparation.md` §§1–2 |
@@ -24,10 +24,10 @@ and must not be used in a `KNOWN` record.
 | **LiteLLM** | Brandon Hub staging gateway installed on Hostinger `srv1856614` under BR-HUB-006 with placeholder keys; an older controller-host instance is separately recorded and not reconciled as a client service. | `BR-HUB-006` stage 2–4 evidence; `BRANDON_HUB_SERVICE_MATRIX.md` §3.4 |
 | **Mattermost** | Service referenced by audit work; instance ownership and brand/domain relationship are **explicitly unresolved** in current evidence. | `PRD_DELIVERY_MAP.md` unresolved area 4 (cross-reference) |
 | **Jitsi** | Service referenced by audit work; instance ownership and brand/domain relationship are **explicitly unresolved** in current evidence. | `PRD_DELIVERY_MAP.md` unresolved area 4 (cross-reference) |
-| **Percona MySQL** | MySQL variant deployed on AminoVPS (Core-Distro production database). Version `8.4.10-10`. | `BR-INV-001/report.md` §Host 1 |
+| **Percona MySQL** | MySQL variant deployed on Elevatesci VPS (Core-Distro production database). Version `8.4.10-10`. | `BR-INV-001/report.md` §Host 1 |
 | **Qdrant** | A staged Qdrant instance was installed on Hostinger `srv1856614`; PRD v3 §§6.1 and 7.2 place Qdrant and temporary work data on Hetzner `brandon-compute`. Project collection isolation and AnythingLLM's backend remain unresolved. | `BR-HUB-006` stage 2–4 evidence; canonical PRD v3 §§6.1, 7.2; `BRANDON_HUB_SERVICE_MATRIX.md` §3.6 |
 | **OpenResty/OnePanel** | Brandon Hub reverse proxy and panel on Hostinger `srv1856614`; not the HD2Stack `vmi3238503` proxy. DNS/TLS and public app cutover remain gated. | `BR-HUB-006` stage 2–4 evidence; `BRANDON_CAMPAIGN_CONTROL.md` |
-| **cbd-worker.service** | CBD-Data worker systemd service running on AminoVPS. | `BR-INV-001/report.md` §Host 1 |
+| **cbd-worker.service** | CBD-Data worker systemd service running on Elevatesci VPS. | `BR-INV-001/report.md` §Host 1 |
 
 ## Projects
 

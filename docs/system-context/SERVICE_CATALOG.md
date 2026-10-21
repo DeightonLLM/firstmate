@@ -5,10 +5,11 @@ Each record separates platform ownership from tenant/client and from brand or
 domain. Where current evidence does not identify ownership, the field is
 `UNKNOWN` and the record status reflects that.
 
-> **AnythingLLM instances are separate services.** The existing HD2 instance
-> is not Brandon's application deployment. Brandon's hub task queue names a
-> separate instance targeted to `srv1856614`; deployment and its backup,
-> secret-store, vector-backend, and project-isolation gates remain open.
+> **AnythingLLM instances are separate services.**
+> 1. **Internal properties** (`hd2.ai`, internal sites) run on **HD2Stack (`vmi3238503`)** via endpoint `llm.hd2.ai` (container `anythingllm` on port 3010, companion `ollama-hd2-1panel` on port 21434 with Gemini provider and no Ollama models pulled).
+> 2. **Client sites** (Core-Distro, CBD, customer sites) run on **Hetzner host (`100.106.6.22:3001`)** (`elevate-anythingllm`), reached strictly through each client site's own hostname proxy, NEVER through `llm.hd2.ai`.
+> 3. **The rule that was broken:** Core-Distro staging pointed its widget at `llm.hd2.ai/api/embed` (which returns 404), causing client chat outage. A client site must never depend on the internal HD2 instance.
+> 4. **Brandon hub** task queue names a separate instance targeted to `srv1856614`; deployment and its backup, secret-store, vector-backend, and project-isolation gates remain open (`BLOCKED`).
 > **Mattermost and Jitsi instance ownership is also unresolved** in current
 > evidence; do not assign them to a brand or domain until an accepted source
 > proves the assignment.
@@ -31,21 +32,35 @@ domain. Where current evidence does not identify ownership, the field is
 
 ---
 
-## `hd2-anythingllm` — Existing HD2 AnythingLLM
+## `hd2-anythingllm` — Existing HD2 AnythingLLM (Internal Only)
 
 | Field | Value | Source |
 |---|---|---|
 | Platform owner | `deightonllm` | `BRANDON_HUB_COMPONENT_INVENTORY.md` |
-| Tenant or client | `hd2` — existing HD2 instance only | `BRANDON_HUB_COMPONENT_INVENTORY.md` |
+| Tenant or client | `hd2` — internal HD2 properties only (`hd2.ai`, internal sites) | `BRANDON_HUB_COMPONENT_INVENTORY.md` |
 | Brand or domain | `llm.hd2.ai` | `BRANDON_HUB_COMPONENT_INVENTORY.md` |
-| Current host | `hd2stack` (`vmi3238503`) — documented historical placement; not live-checked this session | `BRANDON_HUB_COMPONENT_INVENTORY.md` |
-| Intended host | UNKNOWN — no current approved route target is recorded; operator direction is that apps must not resolve to HD2Stack | `WAREHOUSE_BOUNDARIES.md`; `ELEVATE_NGINX_ROUTE_20260919.md` |
-| Runtime | `container` (Docker Compose, named volumes) | `BRANDON_HUB_COMPONENT_INVENTORY.md` |
+| Current host | `hd2stack` (`vmi3238503`) — measured live 2026-10-17: container `anythingllm` (`1.12.1`) published `127.0.0.1:3010 -> 3001` (healthy); companion `ollama-hd2-1panel` (`0.33.2`) published `127.0.0.1:21434 -> 11434` | Measured live 2026-10-17 |
+| Intended host | `hd2stack` (`vmi3238503`) — internal properties only | `lane-docs-topology.md` |
+| Runtime | `container` (Docker Compose, named volumes) | Measured live 2026-10-17 |
 | Allowed actions | `read` | n/a |
-| Status | `PARTIAL` — prior inventory says working/running; current live state and client/workspace isolation are not verified | `BRANDON_HUB_COMPONENT_INVENTORY.md` |
-| Last verified | 2026-09-15 | n/a |
-| Freshness days | 30 | n/a |
-| Notes | Historical inventory associates `llm.hd2.ai` with this host, but current DNS/origin was not checked. Do not infer that this instance serves Brandon or any Brandon project; no app route should resolve to HD2Stack per operator direction. Vector backend is unknown. | `BRANDON_HUB_COMPONENT_INVENTORY.md`; `WAREHOUSE_BOUNDARIES.md` |
+| Status | `VERIFIED` — measured live 2026-10-17: endpoint `llm.hd2.ai` returns HTTP 200 via Cloudflare. Config: `LLM_PROVIDER=gemini`, `GEMINI_LLM_MODEL_PREF=gemini-3.1-flash-lite-preview`, `VECTOR_DB=lancedb`, `OLLAMA_MODEL_PREF=qwen2.5:0.5b` with no model actually pulled (empty `[]`). | Measured live 2026-10-17 |
+| Last verified | 2026-10-17 | n/a |
+| Notes | Dedicated strictly to internal HD2 properties (`hd2.ai`). Architecture rule: Client sites (Core-Distro, CBD, customer sites) must NEVER query or depend on `llm.hd2.ai`. Client sites are served by AnythingLLM on Hetzner host (`100.106.6.22:3001`) via each client site's own domain proxy. | `lane-docs-topology.md`; `WAREHOUSE_BOUNDARIES.md` |
+
+## `hetz-anythingllm` — Client-facing AnythingLLM on Hetzner
+
+| Field | Value | Source |
+|---|---|---|
+| Platform owner | `brandon` / `elevate` | `BRANDON_HUB_SERVICE_MATRIX.md` |
+| Tenant or client | `core-distro`, `cbd-data`, `elevate` — client sites | `2026-10-17-STOP-8081-is-client-dependency.md` |
+| Brand or domain | Client site hostnames (e.g., `staging.core-distro.com`, `elevatesci.com`) — never `llm.hd2.ai` | `lane-docs-topology.md` |
+| Current host | `brandon-compute` (`100.106.6.22`) | Measured live 2026-10-17: container `elevate-anythingllm` (`mintplexlabs/anythingllm:1.16.2`) bound to `127.0.0.1:3001` and `100.106.6.22:3001` (healthy) |
+| Intended host | `brandon-compute` (`100.106.6.22`) | `HOSTS.md` |
+| Runtime | `container` (Docker) | Measured live 2026-10-17 |
+| Allowed actions | `read`, `mock-test` | n/a |
+| Status | `VERIFIED` — measured live 2026-10-17. Healthy container serving client sites. Backed by llama-server on `http://host.docker.internal:8081/v1` (`generic-openai`, `lfm2.5`). | Measured live 2026-10-17 |
+| Last verified | 2026-10-17 | n/a |
+| Notes | Client sites reach this instance strictly through each site's own hostname proxy (e.g. `staging.core-distro.com/api/embed`), NEVER through `llm.hd2.ai`. Port 8081 on Hetz is a required client dependency and must not be stopped or rebound. | `2026-10-17-STOP-8081-is-client-dependency.md`; `lane-docs-topology.md` |
 
 ## `brandon-anythingllm` — Brandon Hub AnythingLLM (not deployed)
 
@@ -175,21 +190,21 @@ domain. Where current evidence does not identify ownership, the field is
 | Freshness days | 30 | n/a |
 | Notes | **Do not claim Jitsi rebranding is complete**; no accepted artifact proves current instance ownership | `PRD_DELIVERY_MAP.md` unresolved area 4 |
 
-## `coredistro-staging` — Core-Distro Next.js staging
+## `coredistro-staging` — Core-Distro WordPress Staging (Next.js Decommissioned)
 
 | Field | Value | Source |
 |---|---|---|
 | Platform owner | `brandon` | `PRD_DELIVERY_MAP.md` |
 | Tenant or client | `core-distro` | `PRD_DELIVERY_MAP.md` |
-| Brand or domain | `core-distro.com` | `BR-INV-001/report.md` §Host 1 |
-| Current host | `srv1137994-aminolifesciences` | `BR-INV-001/report.md` §Host 1 |
-| Intended host | `srv1137994-aminolifesciences` (or KVM1 Hostinger per PRD-v3 edge direction) | `BR-INV-001/report.md` §Host 1 |
-| Runtime | `node` (Next.js) | `BR-INV-001/report.md` §Host 1 |
-| Allowed actions | `read`, `local-build`, `mock-test`, `staging-deploy` | n/a |
-| Status | `KNOWN` (staging at `127.0.0.1:3113`, active) | `BR-INV-001/report.md` §Host 1 |
-| Last verified | 2026-09-15 | n/a |
+| Brand or domain | `staging.core-distro.com` | `report-staging-retirement-option-a.md` |
+| Current host | `brandon-compute` (`100.106.6.22:8087` via `srv1137994-elevatesci` Nginx reverse proxy) | `report-staging-retirement-option-a.md` |
+| Intended host | `brandon-compute` (`100.106.6.22`) | `HOSTS.md` |
+| Runtime | `container` (Docker `core-distro-stage-wordpress-1`, WordPress 7.1.3 / PHP 8.3.35) | Measured live 2026-10-18 |
+| Allowed actions | `read`, `mock-test`, `staging-deploy` | n/a |
+| Status | `VERIFIED` — live WordPress staging container on Hetzner compute `100.106.6.22:8087` proxied via ElevateSci Nginx at `https://staging.core-distro.com`. Next.js staging systemd service `core-distro-staging.service` stopped, disabled, and archived at `/opt/core-distro-staging-pre-retire-20261018.tar.gz`. | `report-staging-retirement-option-a.md` |
+| Last verified | 2026-10-18 | n/a |
 | Freshness days | 30 | n/a |
-| Notes | Production port `127.0.0.1:3117` is registered but not started | `BR-INV-001/report.md` §Host 1 |
+| Notes | Legacy Next.js staging retired per Captain Option A mandate 2026-10-18. Reverse proxy points `location /` to Hetzner Docker origin `http://100.106.6.22:8087`. AnythingLLM `/llm/chat/` and `/api/embed/` routes preserved. | `report-staging-retirement-option-a.md` |
 
 ## `coredistro-production` — Core-Distro PHP production
 
@@ -198,7 +213,7 @@ domain. Where current evidence does not identify ownership, the field is
 | Platform owner | `brandon` | `PRD_DELIVERY_MAP.md` |
 | Tenant or client | `core-distro` | `PRD_DELIVERY_MAP.md` |
 | Brand or domain | `core-distro.com` | `BR-AUD-002/report.md` |
-| Current host | `srv1137994-aminolifesciences` | `BR-AUD-002/report.md` |
+| Current host | `srv1137994-elevatesci` | `BR-AUD-002/report.md` |
 | Intended host | UNKNOWN — PRD-v3 application architecture decision pending | `PRD_DELIVERY_MAP.md` unresolved area 2 |
 | Runtime | `php-fpm` | `BR-AUD-002/report.md` |
 | Allowed actions | `read`, `mock-test` | n/a |
@@ -214,14 +229,14 @@ domain. Where current evidence does not identify ownership, the field is
 | Platform owner | `brandon` | `BR-INV-001/report.md` §Host 1 |
 | Tenant or client | `cbd-data` | `BR-INV-001/report.md` §Host 1 |
 | Brand or domain | `cbd-data.com` | `BR-AUD-005/report.md` |
-| Current host | `srv1137994-aminolifesciences` | `BR-INV-001/report.md` §Host 1 |
+| Current host | `srv1137994-elevatesci` | `BR-INV-001/report.md` §Host 1 |
 | Intended host | `hetzner-compute` (per PRD-v3 compute plane) | `PRD_DELIVERY_MAP.md` |
 | Runtime | `systemd` (`cbd-worker.service`) | `BR-INV-001/report.md` §Host 1 |
 | Allowed actions | `read`, `local-build`, `mock-test` | n/a |
-| Status | `KNOWN` (active on AminoVPS) | `BR-INV-001/report.md` §Host 1 |
+| Status | `KNOWN` (active on Elevatesci VPS) | `BR-INV-001/report.md` §Host 1 |
 | Last verified | 2026-09-15 | n/a |
 | Freshness days | 30 | n/a |
-| Notes | Live placement on AminoVPS is not the PRD-v3 target; migration requires separate authority | `PRD_DELIVERY_MAP.md` unresolved area 2 |
+| Notes | Live placement on Elevatesci VPS is not the PRD-v3 target; migration requires separate authority | `PRD_DELIVERY_MAP.md` unresolved area 2 |
 
 ## `elevate-site` — Elevate Life Sci customer-facing site
 
@@ -245,7 +260,7 @@ domain. Where current evidence does not identify ownership, the field is
 | Platform owner | `elevate` | `PRD_DELIVERY_MAP.md` |
 | Tenant or client | `elevate` | `PRD_DELIVERY_MAP.md` |
 | Brand or domain | `agents.elevatesci.com` | `PRD_DELIVERY_MAP.md` |
-| Current host | `srv1137994-aminolifesciences` (Hostinger KVM8; direct host verified 2026-09-19) | `hosts.yaml`; `ELEVATE_NGINX_ROUTE_20260919.md` |
+| Current host | `srv1137994-elevatesci` (Hostinger KVM8; direct host verified 2026-09-19) | `hosts.yaml`; `ELEVATE_NGINX_ROUTE_20260919.md` |
 | Intended host | UNKNOWN — an Elevate-owned API backend target is not approved | `ELEVATE_NGINX_ROUTE_20260919.md` |
 | Runtime | `static` dashboard via Nginx; `/api/*` fails closed locally | `ELEVATE_NGINX_ROUTE_20260919.md` |
 | Allowed actions | `read` | n/a |
