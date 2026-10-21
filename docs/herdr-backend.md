@@ -409,19 +409,24 @@ Every failure path exits 0, because a slow or broken Herdr must never delay or b
 
 `extensions/mcode-herdr-agent/` is the MCode plugin package that drives those calls through MCode's
 lifecycle hooks.
-Its root `plugin.json` is the portable Agent Plugins manifest, and `.minimax-plugin/plugin.json`
-carries the MCode-native manifest and the hook declaration.
-`bin/fm-install-mcode-herdr-agent.sh` publishes the package into the MCode local marketplace and puts
-the reporter on `PATH` so the hook can call it by name.
+Its `.minimax-plugin/plugin.json` carries the MCode-native manifest and the hook declaration, and it
+names an `icon` that ships in the package.
+The package carries no root `plugin.json`, because MCode's native loader gives a root manifest
+priority over the native one and its loader returns an empty hook list, so the hook would never fire.
+`bin/fm-install-mcode-herdr-agent.sh` publishes the package into the MCode local marketplace, puts
+the reporter on `PATH` so the hook can call it by name, refreshes the marketplace snapshot, and
+enables the plugin.
+A local package needs no install step: `mcode plugin add mcode-herdr-agent@local` is refused with
+`LOCAL_PLUGIN_INSTALL_UNSUPPORTED`, so the installer enables the discovered package instead.
 
 **Verified on 2026-10-20:** reporting the live MCode pane `w64:p1C` made it appear in
 `herdr agent list` as `agent: mcode` and `agent_status: working`, the same shape as the Pi panes,
 and `herdr pane list` reported the same pane with `agent_status: working`.
 
-**Open:** MCode's local marketplace does not enumerate a bare package directory, so
-`mcode plugin add mcode-herdr-agent@local` does not resolve the package and the hook does not fire
-on its own yet.
-Until that is closed, an MCode pane's state is reported by calling the reporter directly.
+**Verified on 2026-10-21:** the local marketplace enumerates the published package, `mcode plugin
+list -m local` reports `mcode-herdr-agent@local` as enabled, and the runtime plugin snapshot carries
+all five hook handlers (SessionStart, UserPromptSubmit, PermissionRequest, Stop, SessionEnd), each
+pointing at `fm-herdr-agent-report.sh`.
 
 ## Long instructions belong in a file, not in a send
 

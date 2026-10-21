@@ -6,7 +6,10 @@
 # stopped light dark.
 # This installer publishes the tracked plugin package into the MCode local
 # marketplace, puts the reporter on PATH so the plugin can call it by name,
-# and enables the plugin for the local marketplace.
+# refreshes the marketplace snapshot, and enables the plugin for the local
+# marketplace.
+# A local package needs no install step: mcode plugin add refuses a local
+# plugin with LOCAL_PLUGIN_INSTALL_UNSUPPORTED.
 #
 # Usage: fm-install-mcode-herdr-agent.sh [--uninstall]
 set -uo pipefail
@@ -69,8 +72,17 @@ exec "$REPO_ROOT/bin/fm-herdr-agent-report.sh" "\$@"
 SHIM_EOF
 chmod 0755 "$SHIM"
 
-if ! mcode plugin add "$PLUGIN_NAME@local" >/dev/null 2>&1; then
-  printf 'Plugin package published to %s, but mcode plugin add failed.\n' "$MARKETPLACE_DIR" >&2
+# A local package is discovered by the directory itself, so there is nothing to
+# install: mcode plugin add refuses a local plugin with LOCAL_PLUGIN_INSTALL_UNSUPPORTED.
+# Refreshing the marketplace snapshot and enabling the discovered package is the
+# supported path, and it leaves the plugin enabled for every later session.
+if ! mcode plugin marketplace upgrade >/dev/null 2>&1; then
+  printf 'Plugin package published to %s, but mcode plugin marketplace upgrade failed.\n' "$MARKETPLACE_DIR" >&2
+  exit 1
+fi
+
+if ! mcode plugin enable "$PLUGIN_NAME@local" >/dev/null 2>&1; then
+  printf 'Plugin package published to %s, but mcode plugin enable failed.\n' "$MARKETPLACE_DIR" >&2
   printf 'Enable it with: mcode plugin enable %s@local\n' "$PLUGIN_NAME" >&2
   exit 1
 fi
