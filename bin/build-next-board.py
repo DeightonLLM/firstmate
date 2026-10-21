@@ -207,6 +207,32 @@ def collect(repo, stale_days, now):
                 "evidence": [],
             })
 
+    # A tracker row that carries a lane's own annotation is newer, more specific
+    # evidence than the live-state snapshot, so it wins for that slug. A tracker
+    # row that is still the intake scaffolding has nothing to say and must NOT
+    # override the live-state - that is how a ticket ends up reported as
+    # "await lane dispatch" when the fleet has already proved it done.
+    if isinstance(live, list):
+        annotated = {}
+        for row in raw:
+            slug = row.get("slug")
+            if not slug:
+                continue
+            if all(not row.get(f) or row.get(f) in ("-", "None", "")
+                   for f in ("lane_state", "artifact", "verdict", "evidence")):
+                continue
+            annotated[slug] = row
+        if annotated:
+            for item in items:
+                row = annotated.get(item["slug"])
+                if not row:
+                    continue
+                item["state"] = str(row.get("lane_state") or item["state"])
+                item["next_action"] = (row.get("next_action") or item["next_action"]).strip()
+                item["owner"] = (row.get("lane") or item["owner"]).strip() or item["owner"]
+                item["evidence"] = [row.get("evidence")] if row.get("evidence") else item["evidence"]
+                item["source"] = "tracker-annotation"
+
     # the live backlog is the real queue - merge it in, keeping tracker rows first
     backlog = parse_backlog(repo)
     seen = {i["slug"] for i in items}

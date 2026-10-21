@@ -540,6 +540,50 @@ def run_live_checks(args):
     check("a residual's verdict is read from its own verdict line", not bad_verdicts,
           "; ".join(bad_verdicts[:3]) if bad_verdicts else "%d residual(s)" % len(residuals))
 
+    # 5c. the two views of the same ticket must agree
+    #
+    # The ticket queue and the NEXT card both talk about the Captain's tickets. A
+    # ticket can be in the queue with the "Await lane dispatch" placeholder in its
+    # tracker row while the NEXT card has a verified state for the same slug from
+    # the live-state file. When that happened the queue said CONTRACT-GAP about
+    # work the board had already proved done - the board disagreeing with itself.
+    items_by_slug = {i.get("slug"): i for i in items if i.get("slug")}
+    queue_states = {}
+    for match in re.finditer(r'<td class="state">([^<]+)</td>', html):
+        queue_states.setdefault(match.group(1), 0)
+        queue_states[match.group(1)] += 1
+    queue_section = re.search(r'<section[^>]*id="tickets"[^>]*>(.*?)</section>', html, re.S)
+    queue_html = queue_section.group(1) if queue_section else ""
+    placeholder_rows = 0
+    for row in re.finditer(r"<tr>(.*?)</tr>", queue_html, re.S):
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", row.group(1), re.S)
+        if len(cells) >= 5:
+            action = re.sub(r"<[^>]+>", " ", cells[4]).strip().lower()
+            if action.startswith("await lane dispatch"):
+                placeholder_rows += 1
+    check("the ticket queue does not show the 'Await lane dispatch' placeholder",
+          placeholder_rows == 0,
+          "%d placeholder row(s) left" % placeholder_rows)
+
+    # Every ticket the queue shows must appear in the NEXT card with the same state.
+    disagreements = []
+    if queue_section:
+        for row in re.finditer(r'<tr>(.*?)</tr>', queue_section.group(1), re.S):
+            cells = re.findall(r'<td[^>]*>(.*?)</td>', row.group(1), re.S)
+            if len(cells) < 4:
+                continue
+            code = re.search(r"<code>([^<]+)</code>", cells[1])
+            if not code:
+                continue
+            slug = code.group(1).split("-", 1)[1] if "-" in code.group(1) else code.group(1)
+            shown = re.sub(r"<[^>]+>", "", cells[3]).strip()
+            item = items_by_slug.get(slug)
+            if item and item.get("state") and shown and shown != item.get("state"):
+                disagreements.append("%s: queue=%s next=%s" % (slug, shown, item.get("state")))
+    check("the ticket queue and the NEXT card agree about every shared ticket",
+          not disagreements,
+          "; ".join(disagreements[:4]) if disagreements else "%d ticket row(s)" % len(queue_states))
+
     # 6. the tracker page reaches the board, and the board is served over HTTP
     if not args.skip_http:
         base = "http://%s:%d" % (args.bind, args.port)

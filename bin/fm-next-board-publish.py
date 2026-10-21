@@ -603,13 +603,25 @@ def ticket_state(row):
             str(row.get("lane") or "-"), "")
 
 
-def render_queue(queue, tracker_rows):
+def render_queue(queue, tracker_rows, known_items=None):
     """The Captain's own ticket set: every ticket the queue holds, P0 first.
 
     Every ticket is still rendered - the queue is never truncated - but only P0 is
     expanded. P1 and P2 fold away behind a count, so the page opens on what is on
     fire rather than on forty rows of context.
+
+    The queue and the NEXT card must agree about the same ticket. A ticket's own
+    tracker row wins whenever it carries a real annotation. When that row is still
+    the "Await lane dispatch" placeholder, the board's own verified state for the
+    same slug is used instead - otherwise the queue reports CONTRACT-GAP about work
+    the NEXT card has already proved done, which is the board disagreeing with
+    itself.
     """
+    known = {}
+    for item in (known_items or []):
+        slug = item.get("slug")
+        if slug:
+            known[slug] = item
     by_seq = {str(r.get("sequence")): r for r in tracker_rows}
     by_priority = {}
     for ticket in queue:
@@ -632,6 +644,39 @@ def render_queue(queue, tracker_rows):
             row = by_seq.get(ticket["sequence"], {})
             state, next_action, owner, question = ticket_state(row)
             slug = "%s-%s" % (ticket["sequence"], ticket["slug"])
+            # The board's own verified state for this ticket, when the ticket's own
+            # tracker row has not caught up.
+            #
+            # A tracker row that carries a lane's own annotation - a lane_state, an
+            # artifact, a verdict or evidence - is the ticket's authoritative record
+            # and wins. A row that is still the intake scaffolding has nothing to
+            # say: its next_action is the literal "Await lane dispatch" placeholder,
+            # its blocked_by may name a blocker that was resolved weeks ago, and its
+            # decision may predate the work. The board's evidence-backed state for
+            # that slug is used instead - that state carries a command and its
+            # result, which is what the protocol requires before an item moves.
+            item = known.get(row.get("slug") or ticket["slug"])
+            row_is_scaffolding = all(
+                not row.get(field) or row.get(field) in ("-", "None", "")
+                for field in ("lane_state", "artifact", "verdict", "evidence"))
+            placeholder_next = (not next_action) \
+                or next_action.lower().startswith("await lane dispatch")
+            if item and (row_is_scaffolding or state == "CONTRACT-GAP" or placeholder_next):
+                if row_is_scaffolding:
+                    # The row has nothing to say at all, so the evidence-backed state
+                    # replaces it outright - including a BLOCKED-by-a-stale-dependency
+                    # or a NEEDS-CAPTAIN-DECISION recorded before the work happened.
+                    if item.get("state"):
+                        state = item["state"]
+                elif state == "CONTRACT-GAP" and item.get("state") \
+                        and item.get("state") != "CONTRACT-GAP":
+                    state = item["state"]
+                if item.get("next_action"):
+                    next_action = item["next_action"]
+                if item.get("owner") and item.get("owner") not in ("-", "None", ""):
+                    owner = item["owner"]
+                if item.get("captain_question"):
+                    question = item["captain_question"]
             pill = (ticket.get("priority") or "P2").lower()
             cell = ('<code>%s</code>' % esc(slug))
             if question:
@@ -1618,7 +1663,8 @@ def render_page(now, delivery, queue, tracker_rows, board_json, board_age,
        safe_render(render_next_work, (selection, counts or {}), "next-work"),
        safe_render(render_token_band, (band_state or {},), "tokens"),
        safe_render(render_talk, (chat_state or {},), "talk"),
-       render_delivery(delivery), render_queue(queue, tracker_rows), render_next(board_json))
+       render_delivery(delivery), render_queue(queue, tracker_rows, board_json.get("items")),
+       render_next(board_json))
 
 
 # ------------------------------------------------------------------------ 5. publish
