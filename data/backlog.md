@@ -1,6 +1,14 @@
 # Backlog
 
 ## In flight
+- [ ] m3.1f-firstmate-herdrbusyblind - On the herdr backend the watcher can never prove a crew is working, so every live lane is surfaced as stale (repo: firstmate) (kind: ship) (since 2026-10-21)
+  MEASURED 2026-10-21 by the firstmate while supervising a live lane.
+  `fm_backend_busy_state herdr <pane>` returns **unknown for every pane on this host**: `default:wE1:p2` (a lane demonstrably running, with active tool calls in its pane), `default:wDB:p2` (the primary) and `default:wDS:p3` (the secondmate) all read `unknown`.
+  MECHANISM: `fm_backend_herdr_busy_state` calls `fm_backend_herdr_agent_status_raw`, which runs `herdr agent get <pane_id>` and reads `.result.agent.agent_status`. Herdr's agent registry does not track these panes: `herdr agent list` returns `{"agents":[]}` and `herdr pane list` reports `agent_status: unknown` for every pane. The classifier is CORRECT - `fm_backend_herdr_classify_agent_status` maps working to busy, idle/done/blocked to idle, everything else to unknown, and unknown must never be promoted to busy. The INPUT is missing.
+  CONSEQUENCE: `window_is_busy` in `bin/fm-watch.sh` can never prove a crew is working on the herdr backend, so a live lane is surfaced as `stale: ... (crew-silent ... never reported)` unless it happens to write a status line inside the grace window. The watcher cannot distinguish **working** from **hung** on herdr. Measured this session: the token lane was surfaced as stale at 900s, 1528s and 2446s of silence while it was demonstrably working.
+  FIX DIRECTION: a busy signal that does not depend on herdr's agent registry - the pane's own agent process state, or evidence of an in-flight tool call - under the same fail-closed contract: unknown must never be promoted to busy, and a live holder must never be mistaken for an idle one. The fix belongs in `bin/backends/herdr.sh` (shared by every lane on this surface), so it wants its own lane and its own tests rather than an inline change.
+  NOT TO CHANGE: the classifier's semantics, and the watcher's absorb-only-when-provably-working rule. Both are right; they are starved of evidence.
+
 - [ ] m3.1f-firstmate-teardownsuitenotblind - The teardown safety suite dies at its first failure, so 37 of its assertions never run; one of them asserts a string no code path emits (repo: firstmate) (kind: ship) (since 2026-10-21)
   MEASURED 2026-10-21 by the firstmate, while landing the teardown row-closing fix (`3ad3c4b`).
   `tests/lib.sh`'s `fail()` prints `not ok` and then `exit 1`, so the FIRST failing assertion ends the whole suite. `tests/fm-teardown.test.sh` invokes 39 test functions (46 assertions). Running it with the abort relaxed so every assertion executes gives: **pristine main = 39 passing, 7 failing**; **with the teardown fix = 40 passing, 2 failing** - the fix resolves five of the seven and adds its own isolation test.
