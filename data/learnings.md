@@ -154,3 +154,35 @@ and renewing the certificate will not fix the 500.
   a workflow whose child `key` IS the convention lane key and whose `label` is human-readable (`runs.all([{ key, label, agent, task }])`), via
   `subagent({ workflow: "<script path>" })`. A workflow string that is a script PATH works; pasting the fenced ```js block into the workflow
   argument does not and fails with ENOENT. <!--a:2026-10-19-->
+
+## 2026-10-21 — verifying a lane's own claim, and three classes of false signal
+
+These four cost real time this session. Each is general to any firstmate operator.
+
+- **A suite that asserts the ABSENCE of a production artefact measures the environment, not the code.**
+  A check of the form "no artefact X exists in the live directory" is only meaningful when the directory
+  is one the test owns. Run against a live home, it asserts that production is idle — so it passes when
+  nothing is happening and fails exactly when the system is working. The fix that preserves intent is to
+  snapshot the artefact NAME set before the run and assert the set did not GROW. Compare names, not
+  contents: a live daemon appends to its own log, so a content comparison trades one flaky failure for
+  another. Take the "before" snapshot before the work starts, or the check is vacuous. A lane reporting
+  "N/N checks green" is not evidence the suite is isolated — reproduce it in the environment it will meet.
+
+- **A verdict that reports failure for a delivery that succeeded is the same class of harm as the
+  opposite.** `fm-send.sh` printed "delivery unconfirmed" for a message the pane received, read and acted
+  on within seconds. The safe default (fail closed) is right for a genuinely ambiguous send, but a false
+  negative teaches the operator that a working lane is unreachable, and re-sends a message that already
+  landed. When a send tool reports a verdict, CONFIRM IT AGAINST THE RECEIVER before acting on it. The
+  same blind spot appeared twice in one session: a send that could not confirm, and a busy-detection that
+  could not confirm. Both were missing evidence, not wrong logic.
+
+- **A liveness detector that reads a registry nobody writes will always report an empty fleet.** The
+  safety net counted live lanes from `state/lanes/*.lane`; the last file in that registry is dated
+  2026-10-05, because the fleet moved to `state/<id>.meta` and nothing maintained the old format. It
+  reported "no-live-lanes" every 30 minutes while two lanes ran. Before trusting a detector, check that
+  its INPUT is still written by something — `grep` for the writer, not just the reader.
+
+- **A long primary turn looks like a dead primary.** The heartbeat bound is 1800s, and a status line
+  "buys 30 minutes". A primary that did not write one for 16 hours was escalated three times inside a
+  77-minute window — each escalation a model turn whose content was "you have been quiet". Write the
+  heartbeat line during long turns; it costs no model turn and it removes a self-inflicted escalation.
