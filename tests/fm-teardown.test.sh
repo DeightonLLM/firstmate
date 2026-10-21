@@ -72,7 +72,7 @@ make_case() {
   local name=$1 case_dir fakebin
   case_dir="$TMP_ROOT/$name"
   fakebin="$case_dir/fakebin"
-  mkdir -p "$case_dir/state" "$case_dir/config" "$fakebin"
+  mkdir -p "$case_dir/state" "$case_dir/data" "$case_dir/config" "$fakebin"
 
   # Mocks for the post-check teardown steps. Refuse logic exits before these
   # run; the ALLOW cases need them so the script can complete cleanly.
@@ -491,8 +491,15 @@ SH
 # Run teardown with PATH mocking. Args: case_dir [extra args...]
 run_teardown() {
   local case_dir=$1; shift
+  # FM_DATA_OVERRIDE points at the case directory on purpose. The teardown
+  # addresses the home it is told to tear down, and without it the data
+  # directory resolved to the REPOSITORY ROOT's data/ - which, in a home whose
+  # repository root is the home, is that home's live backlog. The suite then
+  # rewrote it: rows moved to Done, bodies orphaned, the queue pruned. A test
+  # must never mutate the checkout it runs from.
   FM_ROOT_OVERRIDE="$ROOT" \
   FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_DATA_OVERRIDE="$case_dir/data" \
   FM_CONFIG_OVERRIDE="$case_dir/config" \
   PATH="$case_dir/fakebin:$PATH" \
     "$TEARDOWN" task-x1 "$@"
@@ -548,6 +555,29 @@ test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present() {
   printf '%s\n' "$out" | grep -F 'tasks-axi done' >/dev/null \
     && fail "teardown prompted tasks-axi despite manual backend opt-out: $out"
   pass "teardown honors config/backlog-backend=manual even when tasks-axi is compatible"
+}
+
+test_teardown_never_writes_the_checkouts_own_backlog() {
+  local case_dir repo_backlog before after
+  case_dir=$(make_case repo-backlog-isolation)
+  write_meta "$case_dir" no-mistakes ship
+  printf '%s\n' 'pr=https://github.com/example/repo/pull/7' >> "$case_dir/state/task-x1.meta"
+  add_compatible_tasks_axi "$case_dir"
+
+  # The checkout this suite runs from may itself BE a firstmate home, and then
+  # its data/backlog.md is that home's live queue. A teardown that resolves
+  # the backlog by working directory instead of by the home it was given
+  # rewrites it: rows move to Done, bodies are orphaned and the queue is
+  # pruned. The suite must never touch it.
+  repo_backlog="$ROOT/data/backlog.md"
+  before=""
+  [ -f "$repo_backlog" ] && before=$(cat "$repo_backlog")
+  run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr" || true
+  after=""
+  [ -f "$repo_backlog" ] && after=$(cat "$repo_backlog")
+  [ "$before" = "$after" ] \
+    || fail "teardown rewrote the checkout's own data/backlog.md"
+  pass "teardown leaves the checkout's own data/backlog.md untouched"
 }
 
 test_local_only_truly_unpushed_refuses() {
@@ -1827,6 +1857,7 @@ test_herdr_projection_teardown_retains_journal_when_close_unconfirmed() {
 test_local_only_fork_remote_allows
 test_teardown_prompts_tasks_axi_done_when_compatible
 test_teardown_manual_backend_prompts_hand_edit_even_when_tasks_axi_present
+test_teardown_never_writes_the_checkouts_own_backlog
 test_local_only_truly_unpushed_refuses
 test_local_only_merged_to_local_main_allows
 test_no_mistakes_origin_remote_allows
