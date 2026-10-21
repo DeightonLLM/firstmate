@@ -219,10 +219,14 @@ The live-lane ceiling counts live crewmate lanes, counted per window or pane rat
 The per-provider ceiling counts the lanes attributed to a provider, and that attribution is read out of the recorded lane metadata: `fm_dispatch_guard_provider_of_meta` at line 326 reads the provider prefix of a meta's recorded `model=` and falls back to its recorded `harness=`, and the guard attributes each lane to that provider at line 365.
 The per-provider ceiling is then applied to each provider separately at line 401.
 
-### The per-provider ceiling is a fleet number
+### The per-provider ceiling binds a credential account
 
-The per-provider ceiling is a FLEET number and not a per-host number, because the MiniMax and Codex accounts are shared between the Hetz and HD2Stack hosts, so a host that raises its own ceiling does not entitle it to run lanes that the other host is already running.
-The fleet total for a shared account is reconciled across the hosts that share it before the configured number is treated as final.
+The per-provider ceiling binds a CREDENTIAL ACCOUNT, and not a provider name and not a host.
+Two surfaces that hold the same credential for a provider draw the same pool, so the fleet total for that pool is reconciled across the surfaces that share it before the configured number is treated as final, and a surface that raises its own ceiling does not entitle it to lanes on an account it does not hold.
+A pool that is genuinely one account across every surface is the fleet-wide limit, and the pool whose number binds everybody is the one that matters.
+The account map that says which pools are shared and which are not is measured configuration, so it lives in `route._mode.account_map` in each surface's own `config/dispatch.json`, and a reader never has to re-derive it from a reading.
+A provider name alone is not evidence of a shared pool: the same provider can be one account on one surface and a different account on another, and the proof is the credential-store digest and the reset instants read on each surface, not the name.
+As of 2026-10-21 the MiniMax credential on the Hetz host is held by that host alone, and the Codex credential on it is `codex-home` plus `openai-codex`, while zai/GLM is a single account across every credentialed surface, so zai is the pool whose number binds the whole fleet.
 
 ### A capacity expires like a route does
 
@@ -230,7 +234,7 @@ A capacity number whose reason expires is operational configuration and not docu
 That is the shape the route already uses: the `route._mode` object carries the reason, the date it expires, and the action that retires it, and this file owns the rule for choosing a route and never the route that is chosen right now.
 A capacity decision follows the same rule, so `route._mode` carries `capacity_reason`, `capacity_expires` and `capacity_expires_action` beside the route's own fields, and this file owns the rule for choosing a capacity and never the number that is chosen right now.
 As of 2026-10-21 the Hetz home runs a live-lane ceiling of 12 and a per-provider ceiling of 6, and that is a dated record of a measured decision whose reason expires on 2026-10-25, not a permanent value, so a later reader can tell a measured window from a policy.
-The 12 is this host's allocation and the 6 is the fleet's, for the reason the section above gives: the per-provider ceiling is a FLEET number because the MiniMax and Codex accounts are shared between the Hetz and HD2Stack hosts, so the two ceilings are deliberately different numbers and this host may not raise its per-provider ceiling to match its own live-lane ceiling.
+The 12 is this host's own allocation and the 6 is the ceiling on one credential account, for the reason the section above gives: the per-provider ceiling binds an account rather than a provider name, and one surface's MiniMax lane is not another surface's MiniMax lane unless they hold the same credential, so the two ceilings are deliberately different numbers and this host may not raise its per-provider ceiling to match its own live-lane ceiling.
 The authoritative number lives in that home's own `config/dispatch.json`, never in this document.
 
 ### The second ceiling: the treehouse worktree pool
