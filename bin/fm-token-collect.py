@@ -31,6 +31,10 @@ THE RULES THAT BIND (contract section 1):
     document: that source's block carries `ok: false` plus an `error` string, and the
     OTHER source's data is still emitted. A surface that reported nothing is emitted
     as unknown coverage with a reason — never as a zero, and never dropped.
+  * Age is not identity. The band's own `schema` says which collector wrote it, so a
+    band that carries another collector's schema is recollected even when its mtime is
+    fresh. Without that rule a superseded collector's band survives an install and
+    keeps being published as if it were current.
   * Deterministic output. Sorted keys, sorted rows, no invented timestamps inside the
     data (only `generated_at`). With a fixed `--now` the output is byte-identical.
 
@@ -41,6 +45,7 @@ into the live runtime directory. A lane must never publish into the live home.
 usage: fm-token-collect.py [--out PATH] [--ledger PATH] [--max-age SECONDS] [--force]
                            [--quota-json PATH] [--now ISO]
                            [--roster PATH] [--surface-dir PATH] [--surface-usage PATH]
+                           [--print-schema]
 """
 import argparse
 import datetime as dt
@@ -1334,16 +1339,45 @@ def render_document(document):
 
 # ------------------------------------------------------------------------- the CLI
 
-def output_is_fresh(path, max_age_seconds, now):
-    """True when the existing output is younger than the bound."""
-    if max_age_seconds is None:
-        return False
+def output_age_seconds(path, now):
+    """How old the output file is in seconds, or None when it cannot be read."""
     try:
         stat = os.stat(path)
     except OSError:
+        return None
+    return now.timestamp() - stat.st_mtime
+
+
+def band_schema(path):
+    """The schema the band document on disk carries, or None when it cannot be read.
+
+    The schema IS the producer's identity: a band written by a superseded
+    collector carries that collector's schema, whatever its mtime says.
+    """
+    payload, error = read_json_file(path)
+    if error or not isinstance(payload, dict):
+        return None
+    schema = payload.get("schema")
+    return schema if isinstance(schema, str) else None
+
+
+def output_is_fresh(path, max_age_seconds, now, expected_schema=None):
+    """True only when the existing output is young enough AND this collector wrote it.
+
+    Age alone is not identity. A band produced by a superseded collector can carry a
+    fresh mtime while its content belongs to the old collector — that is exactly how
+    the live board kept serving a v1 band after the v2 collector had been installed.
+    The band's own `schema` is the producer's identity, so a band that does not carry
+    this collector's schema is never skipped: it is recollected.
+    """
+    if max_age_seconds is None:
         return False
-    age = (now.timestamp() - stat.st_mtime)
-    return age < max_age_seconds
+    age = output_age_seconds(path, now)
+    if age is None or age >= max_age_seconds:
+        return False
+    if expected_schema is None:
+        expected_schema = SCHEMA
+    return band_schema(path) == expected_schema
 
 
 def load_surface_documents(surface_dir, explicit_paths, errors):
@@ -1439,7 +1473,16 @@ def main(argv=None):
                              % DEFAULT_SURFACE_DIR_REL)
     parser.add_argument("--surface-usage", action="append", default=None,
                         help="one published surface usage document to collect (repeatable)")
+    parser.add_argument("--print-schema", action="store_true",
+                        help="print the schema this collector writes and exit")
     args = parser.parse_args(argv)
+
+    if args.print_schema:
+        # The one place the schema is spelled out. Everything that needs to know
+        # what this collector writes - the install script, the publisher - asks
+        # here instead of keeping a second copy of the string.
+        print(SCHEMA)
+        return 0
 
     if args.now:
         now = parse_instant(args.now)
@@ -1455,15 +1498,20 @@ def main(argv=None):
     roster_path = pathlib.Path(args.roster).resolve() if args.roster else (REPO_ROOT / DEFAULT_ROSTER_REL)
     surface_dir = pathlib.Path(args.surface_dir).resolve() if args.surface_dir else (REPO_ROOT / DEFAULT_SURFACE_DIR_REL)
 
-    if not args.force and output_is_fresh(out_path, args.max_age, now):
-        try:
-            stat = os.stat(out_path)
-            age = int(now.timestamp() - stat.st_mtime)
-        except OSError:
-            age = 0
-        print("fm-token-collect: skipped refresh, %s is %ds old (max-age %ds)" % (
-            out_path, age, int(args.max_age)))
-        return 0
+    if not args.force and args.max_age is not None:
+        age = output_age_seconds(out_path, now)
+        if output_is_fresh(out_path, args.max_age, now):
+            print("fm-token-collect: skipped refresh, %s is %ds old (max-age %ds) schema=%s" % (
+                out_path, int(age or 0), int(args.max_age), SCHEMA))
+            return 0
+        if age is not None and age < args.max_age:
+            # Young enough to skip, but not written by this collector. The band is
+            # recollected: a document from a superseded collector is never served
+            # just because it happens to be new enough.
+            sys.stderr.write(
+                "fm-token-collect: refreshing, %s carries schema %s and this collector writes %s - "
+                "a band from a superseded collector is never served\n" % (
+                    out_path, band_schema(out_path) or "none", SCHEMA))
 
     errors = []
     quota_payload, quota_error = read_quota_payload(args.quota_json)
@@ -1508,9 +1556,10 @@ def main(argv=None):
         weekly_text = "%d" % total
     surfaces = document["ledger"]["surfaces"]
     reported = sum(1 for surface in surfaces if surface["status"] == "reported")
-    print("fm-token-collect: wrote %s quota=%s windows=%d providers_without_windows=%d "
+    print("fm-token-collect: wrote %s schema=%s quota=%s windows=%d providers_without_windows=%d "
           "ledger=%s days=%d surfaces=%d/%d weekly=%s days_known=%d/%d errors=%d" % (
               out_path,
+              SCHEMA,
               "ok" if document["quota"]["ok"] else "failed",
               len(document["quota"]["windows"]),
               len(document["quota"]["providers_without_windows"]),
