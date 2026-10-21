@@ -114,6 +114,8 @@
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
 #     __MCODEDIR__  absolute path to /tmp/fm-<task-id>/mcode (isolated runtime config
 #                   dir with permissionMode: bypassPermissions so mcode never parks on gates)
+#     __MCODEDATADIR__  absolute path to the mcode data dir, which stays the real one
+#                   because mcode keys its OAuth credential on the literal auth-home path
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
 # Kimi uses one surgically installed Firstmate region in $HOME/.kimi-code/config.toml,
@@ -526,7 +528,7 @@ launch_template() {
     # so permissions are structurally disabled by launching with a per-task config
     # directory (__MCODEDIR__) where permissionMode is set to bypassPermissions.
     # It exposes no effort axis, so __EFFORTFLAG__ is omitted.
-    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MCODEDIR__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MCODEDATADIR__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -1595,6 +1597,18 @@ mkdir -p "$TASK_TMP/gotmp"
 
 # Per-task minimax-code runtime config dir with permissionMode=bypassPermissions
 # so unattended dispatched mcode lanes structurally cannot park on an interactive gate.
+#
+# The data dir and the config dir are deliberately DIFFERENT paths. mcode binds
+# its OAuth credential to the literal string of the auth home, which is
+# "<data dir>/auth", and it keys the stored record on
+# sha256(authHome + "\0" + clientId). A per-task auth directory therefore
+# computes a DIFFERENT key, the stored token is never found, and every spawned
+# mcode agent comes up asking for a login. So the data dir stays the real one
+# and only the config dir is per-task, which is where the permission mode
+# actually needs to differ.
+#
+# mcode also refuses to start when its v2 state directory is a symlink
+# ("Unsafe migration lock symlink path: <dir>/v2"), so v2 is a real directory.
 if [ "$HARNESS" = minimax-code ]; then
   MCODE_TASK_DIR="$TASK_TMP/mcode"
   mkdir -p "$MCODE_TASK_DIR"
@@ -1615,6 +1629,12 @@ if [ "$HARNESS" = minimax-code ]; then
       [ -e "$item" ] || continue
       b=$(basename "$item")
       [ "$b" = "config.yaml" ] && continue
+      # The v2 state directory must be a real directory, not a symlink, or
+      # mcode refuses to start with "Unsafe migration lock symlink path".
+      if [ "$b" = "v2" ]; then
+        mkdir -p "$MCODE_TASK_DIR/v2" 2>/dev/null || true
+        continue
+      fi
       ln -s "$item" "$MCODE_TASK_DIR/$b" 2>/dev/null || true
     done
   fi
@@ -2087,6 +2107,11 @@ LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 sq_mcodedir=$(shell_quote "$TASK_TMP/mcode")
 LAUNCH=${LAUNCH//__MCODEDIR__/$sq_mcodedir}
+# The mcode data dir stays the real one: mcode keys its OAuth credential on the
+# literal auth-home path, so a per-task data dir makes every spawned agent ask
+# for a login. Only the config dir is per-task.
+sq_mcodedatadir=$(shell_quote "${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}")
+LAUNCH=${LAUNCH//__MCODEDATADIR__/$sq_mcodedatadir}
 # Crewmate panes are created by a long-lived tmux/herdr daemon that does not
 # inherit firstmate's current environment, so a bare `claude` in the pane falls
 # back to the default ~/.claude store even when firstmate itself runs under a
@@ -2107,7 +2132,9 @@ fi
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 if [ "$HARNESS" = minimax-code ]; then
-  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_mcodedir MCODE_CONFIG_DIR=$sq_mcodedir"
+  # The data dir is the real one so mcode finds its OAuth credential, and the
+  # config dir is the per-task one so permissionMode is bypassPermissions.
+  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_mcodedatadir MCODE_CONFIG_DIR=$sq_mcodedir"
 fi
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
