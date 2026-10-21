@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Render the primary-harness supervision operating block for session start and
 # the short repair line used by guards and turn-end hooks.
+#
+# The block's current-state stanzas, the ordinary-wake line, and the
+# docs-before-captain-question rule are harness-independent and printed here,
+# so every primary receives them from this one owner. Only the wait-shape
+# protocol comes from docs/supervision-protocols/<harness>.md.
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -184,6 +189,14 @@ ordinary_wake_line() {
   esac
 }
 
+captain_question_stanza() {
+  printf '%s\n' 'Before asking the Captain a design, architecture, or ownership question:'
+  printf '%s\n' '- Read the canonical docs first: AGENTS.md, the owning docs/ page, the bin/ script header or skill that owns the mechanism, and this home'"'"'s living fleet docs under data/.'
+  printf '%s\n' '- If a doc already answers it, do not ask. State the answer and name the doc that decided it.'
+  printf '%s\n' '- Ask only when the docs are genuinely silent. A fleet doc such as data/end-to-end-*/SURFACE-MAP.md that already assigned an owner settles ownership; a review surface is never a system of record.'
+  printf '%s\n' '- Check for yourself: every captain question in this session names the docs consulted and why they were silent. A question with no named doc means this step was skipped.'
+}
+
 if [ "$REPAIR_LINE" -eq 1 ]; then
   repair_line
   exit 0
@@ -211,5 +224,6 @@ else
 fi
 ordinary_wake_line
 printf '\n'
+captain_question_stanza
 render_snippet
 printf '\n'

@@ -33,6 +33,15 @@ end-to-end by `tests/fm-provider-route.test.sh`. Adding a new provider or
 changing a scope requires updating that helper and its fixtures in the same
 patch.
 
+## Prohibited Providers and Endpoints
+
+### OpenRouter Endpoints (Operator Policy 2026-10-17)
+
+OpenRouter (`openrouter.ai`, `openrouter/*`, or any models proxied through OpenRouter) is **strictly prohibited across all internal and client infrastructure**. 
+- Never configure, route, or execute tasks via OpenRouter endpoints.
+- All requests must use direct first-party vendor credentials (`zai` direct, `minimax` direct, Google Gemini via AGY, OpenAI direct).
+- OpenRouter API keys, model aliases (`openai/*` through OpenRouter), and proxy routes are banned in all environments, scripts, and agent settings.
+
 ## Published vendor facts
 
 Z.AI currently lists GLM-5.3 and GLM-5.3-Flash in the Coding Plan. Its
@@ -310,3 +319,17 @@ cannot reach the production host without an explicit, separately authorized
 cable that does not exist in this controller charter. A future lane that
 needs active failover must be a separate, operator-authorized campaign with
 its own host, credential, and write boundary.
+
+---
+
+## Model Ladder & Section Review Gates (Operator Invariant 2026-10-17)
+
+### Model Ladder
+- **Retired**: `gpt-5.6-luna`.
+- **Active Triage / Coordination Tier**: **Luna 6 latest** (`gpt-6-luna` / `gpt-luna-latest`).
+- **Super High-Level Escalation**: **Sol (medium reasoning)** (`gpt-5.6-sol` / `gpt-sol-latest`) for cross-system architecture, deep debugging, and security refactors.
+
+### Solid Review & Test Gate
+- All worker deliverables must ultimately be reviewed before final acceptance (`CHECK_PASS`).
+- Enforcement applies at **solid section-level milestones** (e.g. deliverable completion, test suite green, artifact creation) rather than micro-interrupting every intermediate command.
+- Measurement gates believing: every review claim must cite real test commands and stdout.

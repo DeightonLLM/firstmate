@@ -179,6 +179,8 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 # (fm_busy_classify).
 # shellcheck source=bin/fm-busy-lib.sh
 . "$FM_DAEMON_DIR/fm-busy-lib.sh"
+# shellcheck source=bin/fm-gate-lib.sh
+. "$FM_DAEMON_DIR/fm-gate-lib.sh"
 
 # --- tunables ---------------------------------------------------------------
 # Supervisor backends this daemon knows how to inject into today. zellij, orca,
@@ -1133,6 +1135,14 @@ inject_msg() {  # <message> [state]
   # discovery), matching this function's pre-existing default assumption.
   backend="${FM_SUPERVISOR_BACKEND:-tmux}"
   fm_backend_target_exists "$backend" "$target" || return 1
+  # (2b) STALL POLICY: never type into a pane that is parked on an interactive
+  # approval gate. Injection types text and presses Enter; on a gate that could
+  # answer the dialog, which is exactly the unattended accept the captain
+  # forbids. A gate is escalated to him, never injected into.
+  if fm_gate_pane_awaiting_human "$(fm_backend_capture "$backend" "$target" 40 2>/dev/null)"; then
+    log "inject deferred: supervisor pane parked on an approval gate (captain decision required)"
+    return 1
+  fi
   # (3) Busy-guard: never inject into an in-use supervisor pane.
   if pane_is_busy "$target" "$backend"; then
     log "inject deferred: supervisor pane busy (agent mid-turn)"
@@ -1192,7 +1202,7 @@ should_force_self() {  # <reason>
 is_wake_reason() {  # <reason>
   local reason=$1
   case "$reason" in
-    signal:*|stale:*|check:*|heartbeat|heartbeat:*) return 0 ;;
+    signal:*|stale:*|gate:*|check:*|heartbeat|heartbeat:*) return 0 ;;
   esac
   return 1
 }
@@ -1224,6 +1234,11 @@ handle_wake() {  # <reason> <state>
                 idle\ *s,\ possible\ wedge,\ escalation\ *)
                   decision="escalate|${reason#stale: }" ;;
               esac ;;
+    gate:*)   # A crew parked on an approval gate is a captain decision, always.
+              # Never self-handled and never answered here: a self-handle would
+              # be the daemon silently waving a dangerous command through, which
+              # the captain's stall policy forbids outright.
+              decision="escalate|${reason}" ;;
     check:*)  decision=$(classify_check "$reason") ;;
     heartbeat|heartbeat:*) decision=$(classify_heartbeat) ;;
     *)        decision=$(classify_unknown "$reason") ;;

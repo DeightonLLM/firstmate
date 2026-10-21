@@ -106,7 +106,83 @@ test_empty_message_is_a_usage_error() {
   pass "an empty message is refused as a usage error"
 }
 
+# ---------------------------------------------------------------------------
+# Ticket 0029 defect 2: the default remote inbox does not exist on Hetz.
+#
+# RED note: before the fix the default was /tmp/hetzner-inbound and an absent
+# inbox surfaced only as a bare ssh error, so neither assertion below held - the
+# default pointed at the wrong directory and no remediation was ever printed.
+# ---------------------------------------------------------------------------
+
+# The default must be the folder Hetz actually reads, not the stale tmp path.
+test_default_inbox_is_the_folder_hetz_reads() {
+  local fakebin out
+  fakebin=$(make_ssh_stub 3)
+  # Stub ssh to 3 = the helper's "remote inbox absent" sentinel, so the message
+  # echoes the inbound path the script actually chose.
+  out=$(PATH="$fakebin:$PATH" FM_HETZ_LOG="$TMP_ROOT/outbound.log" \
+    "$SEND" "hello" 2>&1)
+  assert_contains "$out" "/home/hd2admin/controller-replies" \
+    "the default inbound is not the directory Hetz reads"
+  assert_not_contains "$out" "/tmp/hetzner-inbound" \
+    "the default inbound is still the absent /tmp/hetzner-inbound"
+  pass "the default inbound is the folder Hetz reads"
+}
+
+# An absent inbox must fail closed loudly, with the exact remediation.
+test_absent_inbox_fails_closed_with_remediation() {
+  local fakebin out code
+  fakebin=$(make_ssh_stub 3)
+  out=$(PATH="$fakebin:$PATH" FM_HETZ_LOG="$TMP_ROOT/outbound.log" \
+    "$SEND" "hello from the controller" 2>&1)
+  code=$?
+  if [ "$code" -eq 0 ]; then
+    fail "an absent remote inbox exited 0, so the caller reads it as delivered"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
+    return
+  fi
+  assert_not_contains "$out" "sent at" \
+    "an absent remote inbox is still reported as sent"
+  assert_contains "$out" "absent" \
+    "an absent remote inbox is not named as absent"
+  assert_contains "$out" "remediation" \
+    "an absent remote inbox does not print the exact remediation"
+  assert_contains "$out" "FM_HETZ_INBOUND" \
+    "the remediation does not name the override that fixes it"
+  pass "an absent remote inbox fails closed with the exact remediation"
+}
+
+# The guard must not swallow a genuine transport failure: a non-sentinel rc is
+# still reported verbatim, so this hardening cannot mask the original defect.
+test_transport_failure_still_reports_real_rc() {
+  local fakebin out
+  fakebin=$(make_ssh_stub 1)
+  # run_send takes the stub's exit code as its second argument, so the stub and
+  # the sender agree on which failure they are exercising.
+  out=$(run_send "$fakebin" 1 "hello from the controller")
+  assert_contains "$out" "ssh rc=1" \
+    "a transport failure no longer reports its real ssh return code"
+  assert_not_contains "$out" "absent" \
+    "a transport failure is misreported as an absent inbox"
+  pass "a transport failure is not misreported as an absent inbox"
+}
+
+# A configured override must still win over the corrected default.
+test_explicit_override_is_honoured() {
+  local fakebin out
+  fakebin=$(make_ssh_stub 3)
+  out=$(PATH="$fakebin:$PATH" FM_HETZ_LOG="$TMP_ROOT/outbound.log" \
+    FM_HETZ_INBOUND=/home/hd2admin/somewhere-else "$SEND" "hello" 2>&1)
+  assert_contains "$out" "/home/hd2admin/somewhere-else" \
+    "an explicit FM_HETZ_INBOUND override is ignored"
+  pass "an explicit FM_HETZ_INBOUND override is honoured"
+}
+
 test_success_reports_sent
 test_failure_must_not_report_sent
 test_failure_names_the_real_rc
 test_empty_message_is_a_usage_error
+test_default_inbox_is_the_folder_hetz_reads
+test_absent_inbox_fails_closed_with_remediation
+test_transport_failure_still_reports_real_rc
+test_explicit_override_is_honoured

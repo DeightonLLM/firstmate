@@ -19,6 +19,10 @@
 #   (h) dead pane: no run -> unknown/none; with a run -> run-step (not the shell)
 #   (i) kind=scout skips the run lookup                           -> pane/status-log
 #   (j) torn-down worktree / missing meta                         -> unknown/none
+#   (l) no run + a pane parked on an interactive approval gate     -> blocked/pane,
+#       even when the status log's stale last line says done: (the 2026-10-13
+#       silent-stall incident: the backend reports a gated pane and a finished
+#       pane identically as idle), and WITHOUT ever sending a key to the pane.
 #   (k) crew_is_provably_working end-to-end over the REAL helper (not a canned
 #       fake fm-crew-state.sh verdict): cross-branch attribution via the runs
 #       list -> absorbed; genuinely no run anywhere + idle pane -> surfaced.
@@ -88,8 +92,14 @@ case "${1:-}" in
     printf '%%1\n' ;;
   capture-pane)
     [ "${FM_FAKE_TMUX_MISSING:-0}" = 1 ] && exit 1
-    if [ "${FM_FAKE_BUSY:-0}" = 1 ]; then printf 'work in progress\n%s\n' "${FM_FAKE_BUSY_TEXT:-esc to interrupt}"
+    if [ -n "${FM_FAKE_PANE_TEXT:-}" ]; then printf '%s\n' "$FM_FAKE_PANE_TEXT"
+    elif [ "${FM_FAKE_BUSY:-0}" = 1 ]; then printf 'work in progress\n%s\n' "${FM_FAKE_BUSY_TEXT:-esc to interrupt}"
     else printf 'all quiet\n> \n'; fi ;;
+  send-keys)
+    # STALL POLICY recorder: any key the helper might try to send at a pane is
+    # written here. The gate cases below assert this file never appears.
+    [ -n "${FM_FAKE_KEYLOG:-}" ] && printf '%s\n' "$*" >> "$FM_FAKE_KEYLOG"
+    exit 1 ;;
 esac
 exit 0
 SH
@@ -170,8 +180,11 @@ reset_fakes() {
   FM_FAKE_HERDR_MISSING=0
   FM_FAKE_HERDR_AGENT_STATUS=""
   FM_FAKE_CI_LOGS=""
+  FM_FAKE_PANE_TEXT=""
+  FM_FAKE_KEYLOG=""
   export FM_FAKE_AXI_STATUS FM_FAKE_AXI_STATUS_RUN FM_FAKE_RUNS_LIST FM_FAKE_BUSY FM_FAKE_BUSY_TEXT FM_FAKE_TMUX_MISSING
   export FM_FAKE_HERDR_BUSY FM_FAKE_HERDR_MISSING FM_FAKE_HERDR_AGENT_STATUS FM_FAKE_CI_LOGS
+  export FM_FAKE_PANE_TEXT FM_FAKE_KEYLOG
 }
 
 # --- run-object fixtures (TOON, as `no-mistakes axi status` emits) -----------
@@ -923,6 +936,87 @@ test_no_run_herdr_idle_agent_status_and_idle_record_stays_idle() {
   pass "an idle record with idle agent_status stays not-busy (no regression for a human-blocked agent)"
 }
 
+# (l) The 2026-10-13 silent stall: an unattended crewmate parked on an approval
+# gate. The backend renders that pane exactly like a finished one (herdr
+# `agent_status: idle`, an idle busy record), so the status log's stale `done:`
+# line would otherwise report the lane as complete and nobody would ever look.
+# The gate is DETECTED and reported as blocked - never answered, never dismissed.
+gate_pane_text='⚠️ DANGEROUS COMMAND
+
+ cd /root/agent-work/deightonllm-firstmate && unset BASH_ENV
+ rm -rf /tmp/c1check
+
+ Allow?
+ Yes,No
+ → Yes
+   No
+ ↑↓ navigate  enter sele'
+
+test_no_run_gate_pane_reports_blocked_not_done() {
+  reset_fakes
+  local d; d=$(new_case gate-blocked)
+  make_repo_on_branch "$d/wt" fm/feat-gated
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-gated.meta" "window=fm:fm-feat-gated" "worktree=$d/wt" \
+    "kind=ship" "harness=claude"
+  # The dangerous shape: a stale terminal log line from earlier in the lane.
+  printf 'done: pushed branch\n' > "$d/state/feat-gated.status"
+  FM_FAKE_AXI_STATUS=""
+  FM_FAKE_RUNS_LIST=""
+  FM_FAKE_BUSY=0
+  FM_FAKE_PANE_TEXT="$gate_pane_text"
+  FM_FAKE_KEYLOG="$d/keys-sent.log"
+  arm_idle_record "$d/state" feat-gated
+  FM_FAKE_KEYLOG="$d/keys-sent.log"
+  local out; out=$(run_crew_state "$d" feat-gated)
+  assert_contains "$out" "state: blocked" "a pane parked on an approval gate is blocked, not finished"
+  assert_contains "$out" "source: pane" "the gate verdict comes from the pane capture"
+  assert_contains "$out" "harness=claude" "the blocked detail names the harness"
+  assert_contains "$out" "never auto-answered" "the detail states the stall policy"
+  assert_not_contains "$out" "state: done" "a stale done: log line must not mask a live gate"
+  pass "no run + approval gate -> blocked (pane), beating a stale done: log line"
+}
+
+test_no_run_gate_pane_never_sends_keys() {
+  reset_fakes
+  local d; d=$(new_case gate-nokeys)
+  make_repo_on_branch "$d/wt" fm/feat-nokeys
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-nokeys.meta" "window=fm:fm-feat-nokeys" "worktree=$d/wt" \
+    "kind=ship" "harness=claude"
+  printf 'done: pushed branch\n' > "$d/state/feat-nokeys.status"
+  FM_FAKE_AXI_STATUS=""
+  FM_FAKE_RUNS_LIST=""
+  FM_FAKE_BUSY=0
+  FM_FAKE_PANE_TEXT="$gate_pane_text"
+  FM_FAKE_KEYLOG="$d/keys-sent.log"
+  arm_idle_record "$d/state" feat-nokeys
+  FM_FAKE_KEYLOG="$d/keys-sent.log"
+  run_crew_state "$d" feat-nokeys >/dev/null
+  assert_absent "$d/keys-sent.log" "the current-state reader must never send a key to a gated pane"
+  pass "detecting a gate never sends keys, accepts, or dismisses it (captain stall policy)"
+}
+
+test_no_run_idle_finished_pane_still_uses_log() {
+  reset_fakes
+  local d; d=$(new_case not-gated)
+  make_repo_on_branch "$d/wt" fm/feat-notgated
+  make_fakebin "$d" >/dev/null
+  fm_write_meta "$d/state/feat-notgated.meta" "window=fm:fm-feat-notgated" "worktree=$d/wt" \
+    "kind=ship" "harness=claude"
+  printf 'done: pushed branch\n' > "$d/state/feat-notgated.status"
+  FM_FAKE_AXI_STATUS=""
+  FM_FAKE_RUNS_LIST=""
+  FM_FAKE_BUSY=0
+  FM_FAKE_PANE_TEXT='all quiet
+> '
+  arm_idle_record "$d/state" feat-notgated
+  local out; out=$(run_crew_state "$d" feat-notgated)
+  assert_contains "$out" "state: done" "a genuinely finished idle pane still reads done"
+  assert_not_contains "$out" "awaiting interactive approval" "an ordinary idle pane is not a gate"
+  pass "no run + ordinary idle pane is unchanged (idle keeps meaning finished)"
+}
+
 # (g) no run + idle pane -> the status-log verb, as-is
 test_no_run_idle_pane_uses_log() {
   reset_fakes
@@ -1358,5 +1452,8 @@ test_historical_same_branch_rewritten_head_not_current
 test_active_run_descendant_fix_head_remains_current
 test_local_advanced_past_run_head_invalidates
 test_missing_run_head_falls_back_to_current_state
+test_no_run_gate_pane_reports_blocked_not_done
+test_no_run_gate_pane_never_sends_keys
+test_no_run_idle_finished_pane_still_uses_log
 
 echo "all fm-crew-state tests passed"

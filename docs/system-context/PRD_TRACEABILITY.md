@@ -53,6 +53,19 @@ evidenced use `BLOCKED` or `UNKNOWN` instead of guessing.
 | Freshness days | 30 | n/a |
 | Notes | Local mock-test implementation only; live/provider authority remains separate | `SOFTWARE_LANES.md` |
 
+### `elevate-ops-console-security` — ElevateSci Ops console security hardening
+
+| Field | Value | Source |
+|---|---|---|
+| PRD section | Elevate operations console security | `INBOX/0039-elevate-ops-console-security-hardening.md` |
+| Scope | `elevate` | Ticket 0039 |
+| Status | `DELIVERED` | Live probe verification |
+| Blocker | NONE | n/a |
+| Evidence | Port 8000 bound to `127.0.0.1:8000`, external Tailscale connection refused | Live probe |
+| Last verified | 2026-10-18 | n/a |
+| Freshness days | 30 | n/a |
+| Notes | Rebound docker-jitsi-meet web container from 0.0.0.0 to 127.0.0.1, eliminating unauthenticated Tailscale port 8000 exposure | Live verification |
+
 ## Project: Core Distro
 
 ### `coredistro-source-runtime` — Core Distro PHP source and runtime
@@ -67,6 +80,19 @@ evidenced use `BLOCKED` or `UNKNOWN` instead of guessing.
 | Last verified | 2026-10-12 | `bin/fm-coord-drift-check.sh` |
 | Freshness days | 30 | n/a |
 | Notes | Coordinates verified 2026-10-12: Namecheap `66.29.153.174` (PHP 8.2) and Contabo `161.97.120.4` (agents 401 Basic Auth); Controller `/etc/hosts` localhost trap noted; deployment/hydration/auth gates still open; PRD-v3 architecture conflict pending Captain-ordered ADR | `PRD_DELIVERY_MAP.md`, `bin/fm-coord-drift-check.sh` |
+
+### `coredistro-staging-runtime` — Core Distro WordPress Staging (Next.js Decommissioned)
+
+| Field | Value | Source |
+|---|---|---|
+| PRD section | Core Distro staging source and runtime | `report-staging-retirement-option-a.md` |
+| Scope | `core-distro` | `report-staging-retirement-option-a.md` |
+| Status | `EVIDENCED` | `report-staging-retirement-option-a.md` |
+| Blocker | NONE | n/a |
+| Evidence | Captain Option A mandate executed 2026-10-18. Next.js staging systemd service `core-distro-staging.service` stopped/disabled on `srv1137994-elevatesci`, backup archived at `/opt/core-distro-staging-pre-retire-20261018.tar.gz` (SHA-256 `0391c93f5b443ddc01222d62a791444c53c90326403c0264b7f62b09a3b43a6c`). ElevateSci Nginx reverse proxy repointed to WordPress staging origin `http://100.106.6.22:8087` on Hetzner compute (`core-distro-stage-wordpress-1`). Live probe `https://staging.core-distro.com` verified HTTP 200 with WordPress 7.1.3 / PHP 8.3.35 headers. | `report-staging-retirement-option-a.md` |
+| Last verified | 2026-10-18 | `report-staging-retirement-option-a.md` |
+| Freshness days | 30 | n/a |
+| Notes | Replaces legacy Next.js staging with WordPress container stack matching production theme and architecture. AnythingLLM chat proxy routes preserved. | `report-staging-retirement-option-a.md` |
 
 ### `coredistro-route-qa` — Core Distro route QA
 
@@ -120,7 +146,7 @@ evidenced use `BLOCKED` or `UNKNOWN` instead of guessing.
 | Evidence | `data/cbd-worker-canary/report.md` | n/a |
 | Last verified | 2026-09-15 | n/a |
 | Freshness days | 30 | n/a |
-| Notes | Live placement on AminoVPS is not the PRD-v3 target | `PRD_DELIVERY_MAP.md` |
+| Notes | Live placement on Elevatesci VPS is not the PRD-v3 target | `PRD_DELIVERY_MAP.md` |
 
 ### `cbd-data-enrichment-gap` — CBD-Data enrichment gap
 
@@ -189,7 +215,7 @@ evidenced use `BLOCKED` or `UNKNOWN` instead of guessing.
 | Evidence | `PRD_DELIVERY_MAP.md` unresolved area 4; canonical PRD v3 §§6.1, 7.1–7.2, 11.5 | n/a |
 | Last verified | 2026-09-19 | n/a |
 | Freshness days | 30 | n/a |
-| Notes | AnythingLLM is named by the Brandon Hub task queue, not the canonical PRD by product name; the app target is Hostinger `srv1856614`, while compute/Qdrant work belongs on Hetzner `brandon-compute`. Existing HD2 `llm.hd2.ai` does not satisfy Brandon delivery. Resolve approved secret store, backup/restore, embedding/vector backend, per-project isolation, and DNS/TLS gate before customer documents. | `BRANDON_HUB_TASKS.md` task 9; `WAREHOUSE_BOUNDARIES.md` |
+| Notes | AnythingLLM is named by the Brandon Hub task queue, not the canonical PRD by product name; the app target is Hostinger `srv1856614`, while compute/Qdrant work belongs on Hetzner `brandon-compute`. Existing HD2 `llm.hd2.ai` on HD2Stack `vmi3238503` is internal-only for our own properties (`hd2.ai`) and does not satisfy Brandon delivery. Architecture rule: Client sites (Core-Distro, CBD, customer sites) are served by AnythingLLM on Hetzner host (`100.106.6.22:3001`) via each client site's own hostname proxy, NEVER via `llm.hd2.ai`. Core-Distro staging previously broke this rule by pointing its widget at `llm.hd2.ai/api/embed` (yielding 404). | `BRANDON_HUB_TASKS.md` task 9; `WAREHOUSE_BOUNDARIES.md`; `lane-docs-topology.md` |
 
 ## Project: Brandon compute
 
@@ -199,12 +225,12 @@ evidenced use `BLOCKED` or `UNKNOWN` instead of guessing.
 |---|---|---|
 | PRD section | Brandon compute runtime | `PRD_DELIVERY_MAP.md` BR-COMPUTE-LLM-001 row |
 | Scope | `compute` | `PRD_DELIVERY_MAP.md` |
-| Status | `UNKNOWN` — controller records identify a target runtime, but accepted live execution evidence is absent | `brandon-compute-runtime-registration-20260922.md` |
-| Blocker | `EVIDENCE_MISSING` — source/build identity, exact runtime state, backup, and isolated restore test are not established | same as source |
-| Evidence | Registration and handoff only; the prior `BR-COMPUTE-LLM-001` files are task prompts, not an accepted runtime result | `brandon-compute-runtime-registration-20260922.md` |
-| Last verified | 2026-09-22 (operator-supplied host key verified; bounded read-only SSH probe confirmed `brandon-compute`/`hd2admin`/`100.106.6.22`; source/build and backup/restore evidence remain missing) | same as source |
+| Status | `VERIFIED` — live execution evidence measured 2026-10-17: `elevate-anythingllm` container healthy on `100.106.6.22:3001` backed by llama-server on `http://host.docker.internal:8081/v1` | Measured live 2026-10-17 |
+| Blocker | NONE — client AnythingLLM runtime active on Hetzner | Measured live 2026-10-17 |
+| Evidence | Live container inspection and SSH probe: `elevate-anythingllm` (`1.16.2`), provider `generic-openai` (`lfm2.5`) on port 8081 | Measured live 2026-10-17 |
+| Last verified | 2026-10-17 | same as source |
 | Freshness days | 30 | n/a |
-| Notes | Treat `/opt/brandon` as a runtime copy/target and keep Ollama contained without install/removal until the Brandon evidence packet is accepted; no staging, cutover, public exposure, or client-data work is cleared | same as source |
+| Notes | Client sites (Core-Distro, CBD, customer sites) use AnythingLLM on Hetzner `brandon-compute` (`100.106.6.22:3001`) via client site hostname proxy. Port 8081 is an active client dependency and must not be stopped or rebound. Client sites must never query `llm.hd2.ai`. | `2026-10-17-STOP-8081-is-client-dependency.md`; `lane-docs-topology.md` |
 
 ### `brandon-compute-pi-1panel` — Brandon compute Pi/1Panel setup
 

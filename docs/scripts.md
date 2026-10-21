@@ -58,6 +58,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-secondmate-report.sh` | Optional helper to append a correlated parent status or document-pointer report       |
 | `fm-comms-ingest.sh`     | Receive, receipt, and acknowledge remote file-drop replies from one or more source folders |
 | `fm-hetz-send.sh`        | Send one outbound Hetz message and report the real `ssh` return code                   |
+| `fm-comms-notify.sh`     | Send immediate guarded notification for delivered inter-home communication via Herdr   |
 | `fm-gate-refuse-lib.sh`  | Shared no-mistakes gate-context refusal for fleet lifecycle entrypoints               |
 | `fm-watch-arm.sh`        | Verified home-scoped watcher arm wrapper with loud cycle endings and bounded lifecycle ledger |
 | `fm-watch-checkpoint.sh` | Run one bounded foreground watcher checkpoint for Codex-style supervision            |

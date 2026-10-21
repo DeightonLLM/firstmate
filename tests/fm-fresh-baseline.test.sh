@@ -68,16 +68,40 @@ verify_resolved_pointer() {
   pass "$label: $role resolves to a readable existing file with a matching digest"
 }
 
-# A cross-home path is allowed, but it must never be presented as this home's own.
-# The accepted contract is an explicit scope label, not absence: the policy family
-# genuinely lives in a root-owned scope that is readable from this host, and
-# reporting a readable file as missing discards a real contract. So the rule is
-# that every /root pointer must be labelled cross-home:root.
+# A pointer into a scope this home does not own must carry an explicit
+# cross-home label. The accepted contract is an explicit scope label, not
+# absence: the policy family genuinely lives in a root-owned scope that is
+# readable from this host, and reporting a readable file as missing discards a
+# real contract. So the rule is that a pointer outside this home and outside
+# the account scope is labelled cross-home:NAME. The warehouse, goal-queue and
+# state pointers are firstmate-owned and carry no scope label, so the rule
+# covers the policy family only.
 assert_no_manifest_pointer_to_other_home() {
-  local manifest=$1 label=$2 unlabelled
-  unlabelled=$(printf '%s\n' "$manifest" | grep -E '=/(root|home)/[^ ]*sha256:' || true)
-  if [ -n "$unlabelled" ]; then
-    fail "$label: manifest has a cross-home pointer with no scope label: $unlabelled"
+  local manifest=$1 label=$2 home=$3 account=${4:-$3} line role path scope offender=''
+  while IFS= read -r line; do
+    case "$line" in
+      policy=*|project-policy=*|routing=*|bounded=*|'lean-ctx='*) : ;;
+      *) continue ;;
+    esac
+    role=${line%%=*}
+    path=${line#*=}
+    path=${path%% *}
+    case "$path" in
+      unavailable*) continue ;;
+    esac
+    scope=$(printf '%s\n' "$line" | sed -n 's/.* scope=\([^ ]*\) .*/\1/p')
+    case "$path" in
+      "$home"/*|"$account"/*) continue ;;
+    esac
+    case "$scope" in
+      cross-home:*) : ;;
+      *) offender="$offender $role=$path(scope=${scope:-none})" ;;
+    esac
+  done <<EOF
+$manifest
+EOF
+  if [ -n "$offender" ]; then
+    fail "$label: manifest has a cross-home pointer with no scope label: $offender"
     return
   fi
   pass "$label: every cross-home pointer carries a scope label"
@@ -145,7 +169,7 @@ for i in 0 1 2; do
   assert_contains "$manifest" 'Read pointers and hashes above; do not paste or inherit prior conversation history.' "$label brief missing no-history rule"
   assert_absent "$manifest" '## Selection invariant' "$label brief pasted routing-policy body instead of pointer"
   assert_absent "$manifest" '-----BEGIN PRIVATE KEY-----' "$label brief contains secret-like material"
-  assert_no_manifest_pointer_to_other_home "$manifest" "$label brief"
+  assert_no_manifest_pointer_to_other_home "$manifest" "$label brief" "$POPULATED"
   verify_resolved_pointer "$manifest" policy "$label brief"
   verify_resolved_pointer "$manifest" project-policy "$label brief"
   verify_resolved_pointer "$manifest" routing "$label brief"
@@ -163,7 +187,40 @@ assert_contains "$populated_session" "routing=$POPULATED/docs/agent-policy/HERDR
 assert_contains "$populated_session" "lean-ctx=$POPULATED/.codex/LEAN-CTX.md scope=home sha256:" 'session-start lean-ctx not resolved from the home'
 assert_contains "$populated_session" "warehouse=$ROOT/docs/system-context/INDEX.md sha256:" 'session-start missing warehouse hash pointer'
 assert_contains "$populated_session" "warehouse-preflight=$ROOT/bin/fm-context-preflight.sh sha256:" 'session-start dropped the warehouse preflight digest'
-assert_no_manifest_pointer_to_other_home "$populated_session" 'populated session-start manifest'
+assert_no_manifest_pointer_to_other_home "$populated_session" 'populated session-start manifest' "$POPULATED"
+
+# ------------------------------------------------------------- account-scope case
+# A firstmate home that is not a checkout of this repo owns no policy document
+# of its own. The canonical policy then belongs to the ACCOUNT scope, which is
+# where the Hetz lane keeps it, at <account>/agent-work/AGENT-POLICY.md. This
+# case proves the account scope is consulted before any cross-home scope: the
+# cross-home scope is pointed at an empty directory, so only the account
+# candidate can answer.
+ACCOUNT="$TMP_ROOT/account-home"
+LANE="$TMP_ROOT/lane-home"
+ACCOUNT_SCOPE="$TMP_ROOT/empty-cross-home-scope"
+mkdir -p "$ACCOUNT/agent-work" "$LANE/data" "$LANE/state" "$ACCOUNT_SCOPE"
+touch "$LANE/data/backlog.md"
+printf '# account-scoped canonical agent policy\n' > "$ACCOUNT/agent-work/AGENT-POLICY.md"
+
+env HOME="$ACCOUNT" FM_HOME="$LANE" FM_ROOT_OVERRIDE="$ROOT" FM_BASELINE_ROOT="$ROOT" \
+  FM_BASELINE_ROOT_SCOPE="$ACCOUNT_SCOPE" FM_BASELINE_TODAY=2026-09-15 \
+  "$BRIEF" account-worker firstmate >/dev/null 2>&1 || {
+  printf 'not ok - brief generation failed with the policy owned by the account scope\n' >&2
+  exit 1
+}
+
+account_brief=$(sed -n '1,$p' "$LANE/data/account-worker/brief.md")
+account_session=$(env HOME="$ACCOUNT" FM_HOME="$LANE" FM_ROOT_OVERRIDE="$ROOT" \
+  FM_BASELINE_ROOT_SCOPE="$ACCOUNT_SCOPE" \
+  "$SESSION_START" --baseline-manifest 2>&1)
+assert_contains "$account_brief" "policy=$ACCOUNT/agent-work/AGENT-POLICY.md scope=account sha256:" \
+  'brief policy did not resolve from the account scope'
+assert_contains "$account_session" "policy=$ACCOUNT/agent-work/AGENT-POLICY.md scope=account sha256:" \
+  'session-start policy did not resolve from the account scope'
+verify_resolved_pointer "$account_brief" policy 'account-scoped brief'
+verify_resolved_pointer "$account_session" policy 'account-scoped session-start manifest'
+assert_no_manifest_pointer_to_other_home "$account_brief" 'account-scoped brief' "$LANE" "$ACCOUNT"
 
 # The unavailable marker must carry the role name, must state the gap, and must
 # never carry a path or a digest that would read as a content-pinned pointer.
@@ -216,8 +273,8 @@ bare_session=$(env HOME="$BARE" FM_HOME="$BARE" FM_ROOT_OVERRIDE="$ROOT" \
   "$SESSION_START" --baseline-manifest 2>&1)
 
 assert_contains "$bare_brief" 'Baseline manifest: fresh-agent-baseline/v1' 'bare brief missing manifest version'
-assert_no_manifest_pointer_to_other_home "$bare_brief" 'bare brief'
-assert_no_manifest_pointer_to_other_home "$bare_session" 'bare session-start manifest'
+assert_no_manifest_pointer_to_other_home "$bare_brief" 'bare brief' "$BARE"
+assert_no_manifest_pointer_to_other_home "$bare_session" 'bare session-start manifest' "$BARE"
 for role in policy project-policy routing bounded lean-ctx; do
   assert_unavailable_line "$bare_brief" "$role" 'bare brief'
   assert_unavailable_line "$bare_session" "$role" 'bare session-start manifest'
