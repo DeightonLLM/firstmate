@@ -505,33 +505,43 @@ work_is_landed() {
 }
 
 backlog_refresh_reminder() {
-  local pr done_cmd report_path backlog_path note_content done_keep
+  local pr done_cmd report_path backlog_path note_content done_keep backlog_dir
   [ "$KIND" = secondmate ] && return 0
   backlog_path="$DATA/backlog.md"
+  # The backlog this home owns is addressed by path, never by the caller's
+  # working directory. tasks-axi resolves a markdown backlog relative to the
+  # directory it runs in, so without the explicit --file a teardown run from
+  # a checkout rewrote THAT checkout's data/backlog.md - which, in a home
+  # whose repository root IS the home, is the home's own live queue. The
+  # command also runs from the data directory's parent, so the home's
+  # .tasks.toml supplies the adapter selection.
+  backlog_dir=$(dirname "$backlog_path")
   if fm_tasks_axi_backend_available "$CONFIG"; then
     case "$KIND" in
       scout)
         report_path="data/$ID/report.md"
-        done_cmd="tasks-axi done $ID --report $report_path"
+        done_cmd="tasks-axi done $ID --report $report_path --file '$backlog_path'"
         ;;
       *)
         if [ "$MODE" = local-only ]; then
-          done_cmd="tasks-axi done $ID --note \"local main\""
+          done_cmd="tasks-axi done $ID --note \"local main\" --file '$backlog_path'"
         else
           pr=$PR_URL
           if [ -n "$pr" ]; then
-            done_cmd="tasks-axi done $ID --pr $pr"
+            done_cmd="tasks-axi done $ID --pr $pr --file '$backlog_path'"
           else
-            done_cmd="tasks-axi done $ID --pr PR_URL"
+            done_cmd="tasks-axi done $ID --pr PR_URL --file '$backlog_path'"
           fi
         fi
         ;;
     esac
     # Execute the done command and queue-ready command to advance the queue
     printf '%s\n' "Backlog: $ID just finished. Executing: $done_cmd"
-    eval "$done_cmd" || printf '%s\n' "warning: tasks-axi done command failed for $ID" >&2
-    printf '%s\n' "Backlog: $ID just finished. Executing: tasks-axi ready"
-    tasks-axi ready || printf '%s\n' "warning: tasks-axi ready command failed" >&2
+    ( cd "$backlog_dir" && eval "$done_cmd" ) \
+      || printf '%s\n' "warning: tasks-axi done command failed for $ID" >&2
+    printf '%s\n' "Backlog: $ID just finished. Executing: tasks-axi ready --file $backlog_path"
+    ( cd "$backlog_dir" && tasks-axi ready --file "$backlog_path" ) \
+      || printf '%s\n' "warning: tasks-axi ready command failed" >&2
   elif fm_backlog_backend_manual "$CONFIG" && [ -f "$backlog_path" ]; then
     # Markdown backend: close the task's OWN row, prune Done to done_keep, then
     # append a done-wake record so the watcher triggers the next dispatch cycle.
