@@ -466,13 +466,18 @@ are the authoritative source for the detection facts.
 
 | Fact | Value |
 |---|---|
-| Busy state | UNKNOWN, by design. `fm_busy_sources_for_harness minimax-code` credits no semantic adapter source, so a minimax-code task classifies `unknown`, never idle. Only the firstmate-owned `fm-spawn`, `fm-interrupt`, and `fm-recovery` sources are trusted. Do not add a trust-table entry without a live-verified lifecycle source. |
+| Busy state | PARTIAL, and the honest reading is narrower than "credits a real semantic source". The mcode self-report path works where the session's mcode data dir can load the local `mcode-herdr-agent` package; that package then reports `idle` / `working` / `blocked` to herdr, and `herdr pane list` shows the pane's agent state. A lane whose per-task data dir carries a SYMLINKED `plugins` root cannot load that package, because the mcode CLI refuses a symlinked plugin root with `PLUGIN_ROOT_SYMLINK`; such a pane reports `agent_status: unknown` even while it is working. `unknown` therefore means the self-report path is unavailable for that pane, NEVER that the lane is idle, and the authoritative liveness read for a spawned lane is the pane's own process state. |
+| Status transport | Native append: `echo "<state>: <one short line>" >> state/<id>.status`. mcode is NOT in the lean-ctx replace-mode set - `bin/fm-brief.sh` carries `FM_HARNESS_LEAN_CTX_REPLACE="codex"`, and that set deliberately excludes every other verified harness. Never tell an mcode lane to use `ctx_shell`. |
 | Exit command | Not verified. No live minimax-code session has been exercised for its exit form, so treat it as unknown rather than guessing one. |
 | Interrupt | `ctrl+c`, by the binary's ordinary terminal convention. A live interrupt was NOT exercised, so treat it as unverified. |
 | Skill invocation | Not verified. Use natural language until a `/<skill>` form is live-confirmed. |
 | Autonomy | No autonomy flag. The binary exposes no permission-bypass option, so `fm-spawn.sh` launches it with a per-task isolated config dir (`MINIMAX_DATA_DIR` and `MCODE_CONFIG_DIR` set to `/tmp/fm-<task-id>/mcode`) whose `permissionMode` is `bypassPermissions`. |
-| Launch | `mcode [options] [command] [prompt]`. The brief is the POSITIONAL prompt argument, not a flag value, and `-m, --model <provider/model>` selects the model for that Session only. |
+| Headless | The binary DOES have a headless path: `mcode exec` runs a prompt non-interactively, and the harness caps it at one hour (3600000 ms), so a run that reaches the cap is killed mid-flight and any long task must preserve its raw data as it is produced. A crewmate lane is still spawned visibly through `bin/fm-spawn.sh`; the headless path is for a bounded measurement run, not for a supervised lane. |
+| Launch | `mcode [options] [command] [prompt]`. The brief is the POSITIONAL prompt argument, not a flag value, and `-m, --model <provider/model>` selects the model for that Session only. `bin/fm-spawn.sh <lane-key> <project-dir> --harness minimax-code --model minimax/MiniMax-M3.1-Flash --backend herdr [--scout]` spawns it. |
 | Env marker | None found. Detection is by process ancestry on the `minimax-code` process name, exercised by `tests/fm-mcode-harness.test.sh`. |
+| Model | `minimax/MiniMax-M3.1-Flash` is the routed M3.1 Flash model. Lane-key alias `m3.1f`. Never route GLM, and never route M3.1 through Pi. |
+| Label formats | THREE different ones: preflight label `<domain>-<surface>-<model>-<taskslug>`, spawn task id (lane key) `<harness>-<model>-<host>-<task>`, To-Do row prefix `[<harness>·<ModelAbbrev> <effort> @<Host>]`. Mixing them is the common dispatch failure. The lane key's host segment is the host where the owner runs - `controller` for the main firstmate home, `brandon` for this host - and `docs/todo-prefix-canonical-format.md` owns the contract and the alias table. |
+| Supervision | `bash bin/fm-watch-arm.sh` as a tracked background task, re-armed every turn. |
 
 **Turn-end signal: none is installed.** `fm-spawn.sh` installs no turn-end hook for
 minimax-code, so no firstmate-owned `state/<id>.turn-ended` marker is produced for its
