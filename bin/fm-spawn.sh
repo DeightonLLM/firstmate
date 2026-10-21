@@ -1618,6 +1618,33 @@ mkdir -p "$TASK_TMP/gotmp"
 #
 # mcode also refuses to start when its v2 state directory is a symlink
 # ("Unsafe migration lock symlink path: <dir>/v2"), so v2 is a real directory.
+#
+# The plugin root is a real directory for the same class of reason. The MCode
+# CLI refuses a symlinked plugin root ("PLUGIN_ROOT_SYMLINK: Plugin root must
+# be a physical directory"), so a lane whose per-task plugin root is a symlink
+# cannot load the local package at all and its lifecycle hooks never fire.
+# The package directories are therefore copied in instead of symlinked, and
+# every other base entry stays a symlink.
+#
+# RULE: a spawned lane's plugin root is physical so the local package can
+# load, and every other runtime entry stays a symlink into the base runtime.
+copy_mcode_plugin_root() {  # <base plugins dir> <task plugins dir>
+  local src=$1 dst=$2 entry name
+  mkdir -p "$dst" || return 1
+  [ -d "$src" ] || return 0
+  for entry in "$src"/*; do
+    [ -e "$entry" ] || continue
+    [ -d "$entry" ] || continue
+    # A symlinked package directory is not a loadable plugin either, so it is
+    # skipped rather than copied as a link.
+    [ ! -L "$entry" ] || continue
+    name=$(basename "$entry")
+    rm -rf "${dst:?}/$name" 2>/dev/null || true
+    cp -R "$entry" "${dst:?}/$name" 2>/dev/null || rm -rf "${dst:?}/$name"
+  done
+  return 0
+}
+
 if [ "$HARNESS" = minimax-code ]; then
   MCODE_TASK_DIR="$TASK_TMP/mcode"
   mkdir -p "$MCODE_TASK_DIR"
@@ -1644,8 +1671,36 @@ if [ "$HARNESS" = minimax-code ]; then
         mkdir -p "$MCODE_TASK_DIR/v2" 2>/dev/null || true
         continue
       fi
+      # The plugin root must be a physical directory, never a symlink: mcode
+      # refuses a symlinked plugin root with PLUGIN_ROOT_SYMLINK, so the local
+      # package could not load and the lane would never self-report.
+      if [ "$b" = "plugins" ]; then
+        if ! copy_mcode_plugin_root "$item" "$MCODE_TASK_DIR/plugins"; then
+          printf 'warn: could not build the per-task mcode plugin root at %s; the local package will not load for this lane\n' "$MCODE_TASK_DIR/plugins" >&2
+          mkdir -p "$MCODE_TASK_DIR/plugins" 2>/dev/null || true
+        fi
+        continue
+      fi
       ln -s "$item" "$MCODE_TASK_DIR/$b" 2>/dev/null || true
     done
+  fi
+
+  # The local package must be ENABLED in the per-task runtime dir, so the lane
+  # that runs against this dir loads the package with its hooks active.
+  # `mcode plugin add` refuses a local package with
+  # LOCAL_PLUGIN_INSTALL_UNSUPPORTED, so the supported verb is
+  # `mcode plugin enable`.
+  #
+  # Cost, measured: about a second of wall clock, and the CLI materialises its
+  # own builtin skills and state database into the task dir, so the task dir
+  # grows from a few kilobytes to a few tens of megabytes. That is disk inside
+  # the task temp root, which teardown removes with the rest of the task. The
+  # enable runs against the per-task dir alone, so the base runtime's
+  # marketplace and its enabled state are never touched by a spawn.
+  if [ -d "$MCODE_TASK_DIR/plugins/mcode-herdr-agent" ] && command -v mcode >/dev/null 2>&1; then
+    if ! timeout 60 env MINIMAX_DATA_DIR="$MCODE_TASK_DIR" mcode plugin enable mcode-herdr-agent@local >/dev/null 2>&1; then
+      printf 'warn: mcode plugin enable mcode-herdr-agent@local failed in the per-task runtime dir %s; the local package may not load for this lane\n' "$MCODE_TASK_DIR" >&2
+    fi
   fi
 fi
 
