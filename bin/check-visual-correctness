@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# check-visual-correctness - Enforces the Visual Correctness Standard (Ticket 0036).
+# Verifies that any task touching visual/UI/dashboard deliverables includes
+# an on-disk visual artifact (screenshot, rendered snapshot, or image).
+#
+# Fail-closed contract (docs/VISUAL-CORRECTNESS-STANDARD.md):
+#   * A visual artifact counts ONLY when the referenced file actually exists on
+#     disk AND is a real image of the type it claims (magic bytes + plausible
+#     size). A markdown reference to a file that was never captured is not
+#     evidence and must never satisfy the gate.
+#   * A remote URL is not an on-disk artifact and cannot satisfy the gate.
+#   * A missing or implausible artifact is a FAILED_VERIFICATION (exit 1).
+set -euo pipefail
+
+MIN_RASTER_BYTES=128
+MIN_SVG_BYTES=32
+
+TARGET="${1:-}"
+
+if [ -z "$TARGET" ]; then
+  echo "Usage: check-visual-correctness <path-to-report-or-ticket-or-dir>"
+  exit 2
+fi
+
+if [ ! -e "$TARGET" ]; then
+  echo "ERROR: Target '$TARGET' does not exist."
+  exit 2
+fi
+
+# Check if target indicates visual/UI work
+IS_VISUAL=0
+if [ -f "$TARGET" ]; then
+  if grep -qiE "Area:\s*(Frontend|UI|Dashboard|Visual|Website|Theme)|(screenshot|rendered\s*view|viewport)" "$TARGET"; then
+    IS_VISUAL=1
+  fi
+elif [ -d "$TARGET" ]; then
+  if grep -rqiE "Area:\s*(Frontend|UI|Dashboard|Visual|Website|Theme)|(screenshot|rendered\s*view|viewport)" "$TARGET" 2>/dev/null; then
+    IS_VISUAL=1
+  fi
+fi
+
+if [ "$IS_VISUAL" -eq 0 ]; then
+  echo "VISUAL_CHECK: EXEMPT — No frontend/UI/visual scope detected in '$TARGET'."
+  exit 0
+fi
+
+# Search for visual artifact in target path or sibling evidence directory
+SEARCH_DIR="$TARGET"
+if [ -f "$TARGET" ]; then
+  SEARCH_DIR="$(dirname "$TARGET")"
+fi
+
+ext_of() {
+  printf '%s' "${1##*.}" | tr '[:upper:]' '[:lower:]'
+}
+
+# magic_is <file> <hex-prefix>: the first bytes of the file match the hex prefix.
+magic_is() {
+  local file=$1 want=$2 head_hex
+  head_hex=$(head -c 16 "$file" | od -An -tx1 | tr -d ' \n')
+  case "$head_hex" in
+    "$want"*) return 0 ;;
+  esac
+  return 1
+}
+
+# webp_signature <file>: RIFF container with a WEBP form type at bytes 8..11.
+webp_signature() {
+  local file=$1 head_hex
+  head_hex=$(head -c 16 "$file" | od -An -tx1 | tr -d ' \n')
+  case "$head_hex" in
+    ????????????????57454250*) return 0 ;;
+  esac
+  return 1
+}
+
+# plausible_image <file>: the file exists, is non-empty, and really is an image
+# of the extension it claims. A zero-length or truncated file named *.png is
+# not a screenshot and must not satisfy the gate.
+plausible_image() {
+  local file=$1 ext bytes
+  [ -f "$file" ] || return 1
+  [ -r "$file" ] || return 1
+  ext=$(ext_of "$file")
+  bytes=$(wc -c < "$file" | tr -d ' ')
+  case "$ext" in
+    png)
+      [ "$bytes" -ge "$MIN_RASTER_BYTES" ] || return 1
+      magic_is "$file" 89504e470d0a1a0a
+      ;;
+    jpg | jpeg)
+      [ "$bytes" -ge "$MIN_RASTER_BYTES" ] || return 1
+      magic_is "$file" ffd8ff
+      ;;
+    gif)
+      [ "$bytes" -ge "$MIN_RASTER_BYTES" ] || return 1
+      magic_is "$file" 47494638
+      ;;
+    webp)
+      [ "$bytes" -ge "$MIN_RASTER_BYTES" ] || return 1
+      magic_is "$file" 52494646 && webp_signature "$file"
+      ;;
+    svg)
+      [ "$bytes" -ge "$MIN_SVG_BYTES" ] || return 1
+      head -c 1024 "$file" | grep -qi '<svg'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# extract_references <file>: markdown image references and html img tags.
+extract_references() {
+  grep -oiE '!\[[^]]*\]\([^)]+\)|<img[^>]*src[[:space:]]*=[[:space:]]*"[^"]+"' "$1" 2>/dev/null || true
+}
+
+# ref_path <reference>: the path carried by one reference, without title text.
+ref_path() {
+  local ref=$1 path
+  case "$ref" in
+    '!['*)
+      path=$(printf '%s' "$ref" | sed -E 's/^[^!]*!\[[^]]*\]\(([^)]*)\).*$/\1/')
+      ;;
+    *'<img'*)
+      path=$(printf '%s' "$ref" | sed -E 's/.*src[[:space:]]*=[[:space:]]*"([^"]*)".*$/\1/')
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  path=${path%%#*}
+  path=${path%%\?*}
+  # A title after the path is not part of it.
+  path=${path%% *}
+  [ -n "$path" ] || return 1
+  printf '%s' "$path"
+}
+
+VALID_ARTIFACTS=()
+UNVERIFIED_REFS=""
+REFERENCE_COUNT=0
+REFERENCE_VALID=0
+
+# add_artifact <path>: record a verified artifact once, in a normalised form.
+add_artifact() {
+  local candidate=$1 existing
+  candidate=${candidate//\/.\//\/}
+  candidate=${candidate#./}
+  for existing in ${VALID_ARTIFACTS[@]+"${VALID_ARTIFACTS[@]}"}; do
+    [ "$existing" = "$candidate" ] && return 0
+  done
+  VALID_ARTIFACTS+=("$candidate")
+}
+
+# 1. Artifacts physically present near the target.
+if [ -d "$SEARCH_DIR" ]; then
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    if plausible_image "$candidate"; then
+      add_artifact "$candidate"
+    fi
+  done < <(find "$SEARCH_DIR" -maxdepth 3 -type f \
+    \( -name "*.png" -o -name "*.webp" -o -name "*.jpg" -o -name "*.jpeg" \
+       -o -name "*.svg" -o -name "*.gif" \) 2>/dev/null || true)
+fi
+SCAN_ARTIFACT_COUNT="${#VALID_ARTIFACTS[@]}"
+
+# 2. Markdown references count only when they resolve to a real artifact.
+if [ -f "$TARGET" ]; then
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    path=$(ref_path "$ref" || true)
+    [ -n "$path" ] || continue
+    REFERENCE_COUNT=$((REFERENCE_COUNT + 1))
+    case "$path" in
+      http://* | https://*)
+        UNVERIFIED_REFS="${UNVERIFIED_REFS}${path} (remote reference, not an on-disk artifact)"$'\n'
+        continue
+        ;;
+    esac
+    case "$path" in
+      /*) resolved="$path" ;;
+      *) resolved="$SEARCH_DIR/$path" ;;
+    esac
+    if plausible_image "$resolved"; then
+      add_artifact "$resolved"
+      REFERENCE_VALID=$((REFERENCE_VALID + 1))
+    else
+      UNVERIFIED_REFS="${UNVERIFIED_REFS}${path} (referenced file is missing or is not a real image)"$'\n'
+    fi
+  done < <(extract_references "$TARGET")
+fi
+
+# 3. Decision.
+# A report that makes an explicit image claim is judged on that claim: the
+# reference must resolve to a real artifact. A stray image that happens to sit
+# nearby is not the artifact this report claims, so it cannot rescue a dangling
+# reference. A report that makes no image claim falls back to the evidence
+# directory convention: a real artifact physically present beside it counts.
+if [ "$REFERENCE_COUNT" -gt 0 ]; then
+  if [ "$REFERENCE_VALID" -gt 0 ]; then
+    echo "VISUAL_CHECK: PASS — Visual artifact(s) verified:"
+    printf '  %s\n' "${VALID_ARTIFACTS[@]:0:5}"
+    exit 0
+  fi
+  echo "VISUAL_CHECK: FAILED_VERIFICATION — the visual artifact this report references was never captured."
+  if [ -n "$UNVERIFIED_REFS" ]; then
+    echo "  Unverified visual references:" >&2
+    printf '%s' "$UNVERIFIED_REFS" | sed 's/^/    /' >&2
+  fi
+  exit 1
+fi
+
+if [ "$SCAN_ARTIFACT_COUNT" -gt 0 ]; then
+  echo "VISUAL_CHECK: PASS — Visual artifact(s) verified:"
+  printf '  %s\n' "${VALID_ARTIFACTS[@]:0:5}"
+  exit 0
+fi
+
+echo "VISUAL_CHECK: FAILED_VERIFICATION — Task is scoped as visual/UI/frontend but provides NO verified visual artifact (png/webp/jpg/svg)."
+if [ -n "$UNVERIFIED_REFS" ]; then
+  echo "  Unverified visual references:" >&2
+  printf '%s' "$UNVERIFIED_REFS" | sed 's/^/    /' >&2
+fi
+exit 1

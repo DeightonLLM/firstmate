@@ -65,3 +65,4 @@ already committed on main today in `ac35147e`, so applying it risks a double-app
 ruling.
 
 VERDICT: PASS — stash@{0} content archived with diff (119,976 bytes) and metadata, committed e0a98337 and pushed fast-forward with no force, no rewrite and no client data; main does not depend on it and it is recorded as superseded-but-never-merged; both stash entries remain in `git stash list`, neither applied nor dropped.
+NEXT: the archive itself is closed; the two stash entries are deliberately retained and await a ruling on whether to drop them | owner: hetz-firstmate | by: when that ruling arrives

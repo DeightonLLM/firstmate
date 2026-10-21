@@ -71,7 +71,7 @@ hosts:
 
   - id: srv1137994
     classification: client_infra
-    canonical_hostname: srv1137994-aminolifesciences
+    canonical_hostname: srv1137994
     role: Brandon legacy VPS - edge/control
 
   - id: whoosh-runtime

@@ -16,7 +16,7 @@ preflight.
 | Brandon Multi-Project Infrastructure PRD v3.0 (canonical warehouse copy) | `docs/system-context/BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` | Approved architecture direction, project scope, placement, rollout gates, security, DR, agent responsibilities, and acceptance criteria |
 | Brandon PRD delivery map | `data/prd-delivery-plan-20260914/PRD_DELIVERY_MAP.md` | PRD traceability, project status, host tier roles |
 | Brandon software lanes | `data/prd-delivery-plan-20260914/SOFTWARE_LANES.md` | Lane status, dependency order, allowed actions |
-| Brandon server inventory | `data/BR-INV-001/report.md` | AminoVPS facts plus corrected reconciliation of the accepted Hetzner record |
+| Brandon server inventory | `data/BR-INV-001/report.md` | Elevatesci VPS facts plus corrected reconciliation of the accepted Hetzner record |
 | Brandon compute routing contract | `/root/agent-work/BRANDON REWORK/BRANDON_VPS_COMPUTE_ROUTING_CONTRACT.md` | Binding separation of Hostinger/Elevate, Hetzner Brandon Compute, controller, and protected client scopes |
 | Hetzner route evidence | `/root/agent-work/BRANDON REWORK/evidence/BR-HERDR-HETZNER-ROUTE-001/agy-route-repair.md` | Hetzner asset, host coordinates, route classifier, prior read-only capacity probe, and regression evidence |
 | Brandon compute runtime registration and handoff | `/root/agent-work/BRANDON REWORK/evidence/BR-COMPUTE-LLM-001/brandon-compute-runtime-registration-20260922.md` | Registered Hetzner role, `/opt/brandon` canonical-source gate, Ollama containment ruling, and required live evidence packet |
@@ -29,7 +29,7 @@ preflight.
 | Brandon hub backup decision | `/root/agent-work/BRANDON REWORK/BRANDON_HUB_BACKUP_DECISION.md` | Hostinger hub owner/continuity and unapproved backup, restore, key-custody, retention, RPO/RTO gates |
 | HD2Stack placement/capacity audit | `/root/agent-work/BRANDON REWORK/evidence/BR-COMPUTE-LLM-001/hd2stack-capacity.md` | Read-only HD2Stack capacity snapshot and Brandon placement block |
 | Elevate Nginx route containment | `docs/system-context/ELEVATE_NGINX_ROUTE_20260919.md` | Accepted 2026-09-19 route evidence: dashboard/API behavior, no HD2Stack upstream, and scoped rollback |
-| CBD worker canary | `data/cbd-worker-canary/report.md` | `cbd-worker.service` runtime, AminoVPS placement |
+| CBD worker canary | `data/cbd-worker-canary/report.md` | `cbd-worker.service` runtime, Elevatesci VPS placement |
 | Core-Distro audit | `data/BR-AUD-002/report.md` | Core-Distro PHP production, Next.js staging, MySQL/Percona |
 | CBD-Data audit | `data/BR-AUD-005/report.md` | CBD-Data scraping/enrichment/queue/export discovery |
 | Mini-sprint prep report | `data/overnight-control-security-20260914/MINI_SPRINT_PREPARATION_REPORT.md` | SaaS evidence inventory, host tier roles, capacity classification |
