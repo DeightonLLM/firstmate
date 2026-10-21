@@ -1,0 +1,38 @@
+=== BEFORE ===
+date: 2026-10-21T16:42:56Z
+/dev/sda1         75085112 59415376  15653352      80% /
+du -x -s -k /root/fm-reclaim-measurement/comms-receipts/hetzner-secondmate-20260927 : 299752 KB
+owner dirs (all depths): 37241
+owner dirs (depth 1):    37236
+receipt files:           4
+live holder pid 1608572:   1608572 Wed Oct 21 17:42:23 2026
+
+=== COMMAND ===
+FM_RECLAIM_TIERS=1b FM_RECLAIM_STATE_ROOTS=/root/fm-reclaim-measurement bin/fm-capacity-reclaim.sh --apply
+
+=== AFTER ===
+elapsed: 61s
+/dev/sda1         75085112 59117792  15950936      79% /
+du -x -s -k /root/fm-reclaim-measurement/comms-receipts/hetzner-secondmate-20260927 : 1872 KB
+owner dirs (all depths): 6
+owner dirs (depth 1):    1
+receipt files still there: 4
+live holder pid 1608572:   1608572 Wed Oct 21 17:42:23 2026
+live chain dirs left:    6
+
+=== THE RECLAIMER'S OWN REPORT ===
+mode: APPLY | tiers: 1-2 | disk before: 80% used, 15657172 KB free
+--- tier 1: caches and build litter ---
+tier 1: 0 item(s) reclaimed, 0 KB by the files' own size
+--- tier 1b: dead lock owner dirs and stale lock pointers ---
+tier 1b: 37235 dead lock owner dir(s) and 0 lock pointer(s) reclaimed, 297880 KB by the affected parents' own size (4 live holder(s) skipped, 0 undecidable holder(s) skipped)
+--- tier 1c: bounded logs (rotate, keep the recent tail) ---
+SKIP: tier 1c is not in this run's tier set (1b)
+--- tier 2: worktree pool (treehouse prune) ---
+SKIP: tier 2 is not in this run's tier set (1b)
+--- tier 4: archive-class inventory (reported, never deleted) ---
+disk after: 79% used, 15950936 KB free
+measured: the filesystem gave back 293764 KB (df before/after, net over the reclaim window, not what the script believes it deleted)
+capacity: 80% -> 79% used
+RECLAIMED-OWNER lines: 37235
+FAILED lines:          0

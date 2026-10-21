@@ -22,6 +22,12 @@
 #
 # TIERS.
 #   1  caches and build litter - always regenerable, safe by construction.
+#      1b DEAD LOCK SCRATCH - the owner dirs and reclaim pointers of locks
+#         nobody holds any more. A provably dead lock owner dir is pure
+#         garbage, so this is safe-and-automatic like the rest of tier 1.
+#      1c BOUNDED LOGS - an append-only log that grew past its cap is
+#         ROTATED (the recent tail kept, the rest rotated out), never
+#         truncated blind.
 #   2  the worktree pool - delegated to `treehouse prune`, which refuses leased slots and slots with
 #      uncommitted changes, and only removes a slot whose HEAD is already merged.
 #   3  agent session transcripts - regenerable logs, but they are also the fleet's audit trail, so they
@@ -29,6 +35,30 @@
 #   4  archive-class inventory - cold but VALUABLE (old SaaS installs, migrations, release snapshots,
 #      documents). These are never deleted here. They are measured and reported, because archival means
 #      moving them OFF this filesystem, and only the Captain knows where they belong.
+#
+# TIER 1b: WHY THE DEAD LOCK SCRATCH BELONGS IN THE SAFE SET.
+#
+# A lock owner dir is scratch by construction: mktemp made it, it holds only
+# the lock's own pid file, and it is unreferenced the moment its pointer goes.
+# The reclaim is SAFE-and-automatic because the safety is a PROOF rather than
+# a heuristic: the dir is reclaimed only when its recorded pid is provably not
+# the process that created it. The test compares the process's start time with
+# the owner dir's own mtime, because the kernel RECYCLES pids - a naive "is
+# the pid alive?" test kept 21,201 dead dirs alive on this host, because their
+# pids happened to be running again as unrelated processes. When the dir
+# carries a `pid-identity` file the match is exact, and that stronger test
+# wins. A live holder is NEVER touched, and a lock pointer is removed only
+# when its owner dir is one this sweep reclaimed or when its own target is
+# provably dead.
+#
+# TIER 1c: WHY THE LOG IS ROTATED AND NOT DELETED.
+#
+# The comms ingest log reached 40 MB because an oversize file was re-reported
+# on every scan and nothing ever rotated it. The log is the fleet's record of
+# what the remote host said, so it is rotated rather than deleted: the most
+# recent tail is kept for diagnosis and the rest is rotated out. The rotation
+# is copytruncate, and it falls back to a rename when a writer was active
+# during the snapshot, so an in-flight writer never loses output.
 #
 # USAGE.
 #   fm-capacity-reclaim.sh                 dry run: report every tier, change nothing (the default)
@@ -38,20 +68,66 @@
 #   fm-capacity-reclaim.sh --help
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
+
+# The lock scratch sweep and the log rotation need the same roots: a lock
+# owner dir lives beside the lock it belongs to, and the locks live in a
+# home's state/ directory.
+#
+# The list is EXPLICIT, because this script's whole philosophy is explicit
+# lists rather than wildcards: a wildcard over the host could reach a
+# directory another surface owns. FM_RECLAIM_STATE_ROOTS replaces it with a
+# colon-separated list.
+FM_RECLAIM_CONTROLLER_STATE="${FM_RECLAIM_CONTROLLER_STATE:-/root/agent-work/deightonllm-firstmate/state}"
+
+reclaim_state_roots() {
+  if [ -n "${FM_RECLAIM_STATE_ROOTS:-}" ]; then
+    printf '%s\n' "$FM_RECLAIM_STATE_ROOTS" | tr ':' '\n'
+    return 0
+  fi
+  printf '%s\n' "$FM_RECLAIM_CONTROLLER_STATE"
+  printf '%s\n' "$FM_HOME/state"
+}
+
+
 APPLY=0
 TIER=2
 INVENTORY_ONLY=0
-for arg in "$@"; do
+# A while/shift loop, not `for arg in "$@"`. A `for` loop over "$@" keeps
+# iterating over the ORIGINAL positional parameters, so a `shift` inside it
+# cannot consume the value that follows an option: `--tier 3` visited "3" as
+# the next argument and died with "unknown argument: 3". The documented
+# `--apply --tier 3` form had never worked.
+while [ "$#" -gt 0 ]; do
+  arg="$1"
   case "$arg" in
-    --apply) APPLY=1 ;;
-    --dry-run) APPLY=0 ;;
-    --tier) shift; TIER="${1:-2}" ;;
-    --tier=*) TIER="${arg#--tier=}" ;;
-    --inventory) INVENTORY_ONLY=1 ;;
-    -h|--help) sed -n '2,40p' "$0"; exit 0 ;;
+    --apply) APPLY=1; shift ;;
+    --dry-run) APPLY=0; shift ;;
+    --tier) shift; TIER="${1:-2}"; [ "$#" -gt 0 ] && shift ;;
+    --tier=*) TIER="${arg#--tier=}"; shift ;;
+    --inventory) INVENTORY_ONLY=1; shift ;;
+    -h|--help) awk 'NR==1{next} /^#/{print; next} {exit}' "$0"; exit 0 ;;
     *) echo "unknown argument: $arg" >&2; exit 2 ;;
   esac
 done
+
+# The tier groups this run executes. The knob exists so ONE tier can be
+# exercised on its own: an operator who wants only the lock sweep, and a test
+# that must not touch the host's real caches. Empty means the default: the
+# safe-and-automatic set (1, 1b, 1c, 2), plus 3 when --tier 3 asked for it.
+RECLAIM_TIERS="${FM_RECLAIM_TIERS:-1,1b,1c,2}"
+if [ "$TIER" -ge 3 ] && [ -z "${FM_RECLAIM_TIERS:-}" ]; then
+  RECLAIM_TIERS="1,1b,1c,2,3"
+fi
+
+tier_enabled() {  # <tier-group>
+  case ",$RECLAIM_TIERS," in
+    *",$1,"*) return 0 ;;
+  esac
+  return 1
+}
 
 # A malformed tier must be an actionable error, not a silently defaulted one:
 # "the operator asked for tier 3 and got tier 2" is exactly the kind of quiet
@@ -71,9 +147,30 @@ for bin in /usr/bin/rm /bin/rm; do
   REAL_RM="$bin"; break
 done
 
-disk_pct() { df -P / 2>/dev/null | awk 'NR==2{gsub(/%/,"",$5); print $5}'; }
-disk_avail_kb() { df -P / 2>/dev/null | awk 'NR==2{print $4}'; }
+# The df the reclaim measures with. A test seam, so a test can prove that the
+# reported bytes are MEASURED and never a sum of what the script believes it
+# deleted: a fake df that reports MORE free space after the reclaim must not
+# turn into a claim that the reclaim freed those bytes.
+# shellcheck disable=SC2086  # DF_CMD is a command with its own arguments.
+DF_CMD="${FM_RECLAIM_DF:-df -P /}"
+
+disk_pct() { $DF_CMD 2>/dev/null | awk 'NR==2{gsub(/%/,"",$5); print $5}'; }
+disk_avail_kb() { $DF_CMD 2>/dev/null | awk 'NR==2{print $4}'; }
 size_kb() { du -x -s -k "$1" 2>/dev/null | awk '{print $1}'; }
+
+# The whole log family on disk: the live log plus every generation beside it.
+# A rotation moves the live file into a generation, so the bytes that stayed
+# are the generation that was kept - measuring only the live file would
+# overstate what was freed.
+log_family_kb() {
+  local log="$1" p total=0 kb
+  for p in "$log" "$log".1 "$log".rot.*; do
+    [ -f "$p" ] || continue
+    kb=$(size_kb "$p")
+    total=$((total + ${kb:-0}))
+  done
+  printf '%s\n' "$total"
+}
 
 # The archive-class inventory: cold, valuable, and NOT ours to delete. Measured
 # so the Captain can decide where it goes. Archival only frees space if the
@@ -208,6 +305,7 @@ tier1_candidates() {
 echo
 echo "--- tier 1: caches and build litter ---"
 t1=0; t1_kb=0
+if tier_enabled 1; then
 while IFS= read -r p; do
   [ -n "$p" ] || continue
   [ -e "$p" ] || continue
@@ -232,10 +330,101 @@ while IFS= read -r p; do
     t1=$((t1+1)); t1_kb=$((t1_kb+kb)); echo "WOULD-RECLAIM $p (${kb} KB)"
   fi
 done < <(tier1_candidates | dedupe_nested)
+fi
 if [ "$APPLY" = 1 ]; then
   echo "tier 1: $t1 item(s) reclaimed, ${t1_kb} KB by the files' own size"
 else
   echo "tier 1: $t1 item(s) would be reclaimed, ${t1_kb} KB by the files' own size (a projection, NOT freed bytes)"
+fi
+
+# --- Tier 1b: dead lock scratch ------------------------------------------------
+#
+# The lock owner dirs and reclaim pointers of locks nobody holds any more.
+# This is the class the reclaimer used to be blind to: it had no idea a lock
+# owner dir existed, so the biggest reclaimable thing on the host (37,235 dirs,
+# 357 MB, under state/comms-receipts/) was invisible to the thing whose job is
+# reclaiming.
+#
+# The safety is a PROOF, not a heuristic: a dir is reclaimed only when its
+# recorded pid is provably not the process that created it. See
+# bin/fm-lock-reclaim-lib.sh for the argument.
+echo
+echo "--- tier 1b: dead lock owner dirs and stale lock pointers ---"
+lock_roots=()
+lock_root=""
+while IFS= read -r lock_root; do
+  [ -n "$lock_root" ] || continue
+  lock_roots+=("$lock_root")
+done <<< "$(reclaim_state_roots)"
+if [ "${#lock_roots[@]}" -eq 0 ]; then
+  echo "SKIP: no state roots to sweep"
+elif ! tier_enabled 1b; then
+  echo "SKIP: tier 1b is not in this run's tier set (${RECLAIM_TIERS})"
+else
+  FM_LOCK_RECLAIM_APPLY=$APPLY
+  FM_LOCK_RECLAIM_DIRS=0
+  FM_LOCK_RECLAIM_POINTERS=0
+  FM_LOCK_RECLAIM_LIVE=0
+  FM_LOCK_RECLAIM_UNKNOWN=0
+  FM_LOCK_RECLAIM_BYTES=0
+  # shellcheck source=bin/fm-lock-reclaim-lib.sh
+  . "$SCRIPT_DIR/fm-lock-reclaim-lib.sh"
+  # The lib resets its counters when it is sourced, so they are set AFTER it.
+  FM_LOCK_RECLAIM_APPLY=$APPLY
+  fm_lock_reclaim_sweep "${lock_roots[@]+"${lock_roots[@]}"}"
+  lock_dirs=$FM_LOCK_RECLAIM_DIRS
+  lock_pointers=$FM_LOCK_RECLAIM_POINTERS
+  lock_live=$FM_LOCK_RECLAIM_LIVE
+  lock_unknown=$FM_LOCK_RECLAIM_UNKNOWN
+  lock_kb=$FM_LOCK_RECLAIM_BYTES
+  if [ "$APPLY" = 1 ]; then
+    echo "tier 1b: $lock_dirs dead lock owner dir(s) and $lock_pointers lock pointer(s) reclaimed, ${lock_kb} KB by the affected parents' own size (${lock_live} live holder(s) skipped, ${lock_unknown} undecidable holder(s) skipped)"
+  else
+    echo "tier 1b: $lock_dirs dead lock owner dir(s) and $lock_pointers lock pointer(s) would be reclaimed, ${lock_kb} KB by the affected parents' own size (a projection, NOT freed bytes; ${lock_live} live holder(s) skipped, ${lock_unknown} undecidable holder(s) skipped)"
+  fi
+fi
+
+# --- Tier 1c: bounded logs ----------------------------------------------------
+#
+# An append-only log that grew past its cap is ROTATED, never blind-truncated:
+# the recent tail is kept for diagnosis and the rest is rotated out. The
+# comms ingest log reached 40 MB because an oversize file was re-reported on
+# every scan and nothing ever rotated it.
+#
+# The rotation lives in bin/fm-log-rotate.sh so it can also run on its own
+# (from a timer, or by hand) and not only from the reclaim path.
+echo
+echo "--- tier 1c: bounded logs (rotate, keep the recent tail) ---"
+log_count=0
+log_kb=0
+if ! tier_enabled 1c; then
+  echo "SKIP: tier 1c is not in this run's tier set (${RECLAIM_TIERS})"
+else
+for lock_root in ${lock_roots[@]+"${lock_roots[@]}"}; do
+  log="$lock_root/fm-comms-ingest.log"
+  [ -f "$log" ] || continue
+  # The FAMILY, not just the live file: a rotation moves the live file into a
+  # generation, so the bytes that stayed on the filesystem are the generation
+  # that was kept. Measuring only the live file would overstate what was
+  # freed.
+  log_before=$(log_family_kb "$log"); log_before=${log_before:-0}
+  if [ "$APPLY" = 1 ]; then
+    log_out="$("$SCRIPT_DIR/fm-log-rotate.sh" --apply --log "$log" 2>&1)"
+  else
+    log_out="$("$SCRIPT_DIR/fm-log-rotate.sh" --log "$log" 2>&1)"
+  fi
+  printf '%s\n' "$log_out" | sed 's/^/  /'
+  log_after=$(log_family_kb "$log"); log_after=${log_after:-0}
+  log_kb=$((log_kb + log_before - log_after))
+  log_count=$((log_count + 1))
+done
+if [ "$log_count" -eq 0 ]; then
+  echo "tier 1c: no comms ingest log under the swept roots"
+elif [ "$APPLY" = 1 ]; then
+  echo "tier 1c: $log_count log(s) rotated, ${log_kb} KB by the live files' own size"
+else
+  echo "tier 1c: $log_count log(s) would be rotated, ${log_kb} KB by the live files' own size (a projection, NOT freed bytes)"
+fi
 fi
 
 # --- Tier 2: the worktree pool --------------------------------------------------
@@ -246,7 +435,9 @@ fi
 echo
 echo "--- tier 2: worktree pool (treehouse prune) ---"
 pruned=0
-if command -v treehouse >/dev/null 2>&1; then
+if ! tier_enabled 2; then
+  echo "SKIP: tier 2 is not in this run's tier set (${RECLAIM_TIERS})"
+elif command -v treehouse >/dev/null 2>&1; then
   if [ "$APPLY" = 1 ]; then
     treehouse_out="$(treehouse prune --all --yes 2>&1)"
   else
@@ -275,7 +466,7 @@ fi
 # Regenerable logs, but they are the fleet's record of what it did. Age-gated
 # hard, and applied only when asked for by name.
 t3=0
-if [ "$TIER" -ge 3 ]; then
+if [ "$TIER" -ge 3 ] && tier_enabled 3; then
   echo
   echo "--- tier 3: agent session transcripts (older than ${TRANSCRIPT_AGE_DAYS}d) ---"
   t3=0; t3_kb=0
@@ -328,6 +519,8 @@ if [ "$APPLY" = 1 ]; then
   [ "$t1" -gt 0 ] && reclaimed_any=1
   [ "$pruned" -gt 0 ] && reclaimed_any=1
   [ "$t3" -gt 0 ] && reclaimed_any=1
+  [ "${lock_dirs:-0}" -gt 0 ] && reclaimed_any=1
+  [ "${log_count:-0}" -gt 0 ] && reclaimed_any=1
   if [ "$reclaimed_any" = 0 ]; then
     # Nothing was reclaimed, so the df change over the window is NOT this
     # script's doing: the host's own concurrent activity moved the numbers.
@@ -349,7 +542,8 @@ if [ "$APPLY" = 1 ]; then
     echo "measured: the filesystem gave back ${delta} KB (df before/after, net over the reclaim window, not what the script believes it deleted)"
   fi
   echo "capacity: ${before_pct}% -> ${after_pct}% used"
-  if [ "$t1" -eq 0 ] && [ "$pruned" -eq 0 ] && [ "$t3" -eq 0 ]; then
+  if [ "$t1" -eq 0 ] && [ "$pruned" -eq 0 ] && [ "$t3" -eq 0 ] \
+     && [ "${lock_dirs:-0}" -eq 0 ] && [ "${log_count:-0}" -eq 0 ]; then
     echo "idempotent: tiers 1-3 had nothing left to reclaim."
   fi
 else

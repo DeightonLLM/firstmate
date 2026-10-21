@@ -107,7 +107,9 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-public-followup-emit.sh` | Report one typed terminal work result into the home that owes the public reply    |
 | `controller-resource-audit.sh` | Read-only Controller resource sampler on the documented six-hour cadence; overwrite `latest.md`, trim the event ledger, delegate its disk verdict to `fm-capacity-gate.sh`, classify off-allowlist candidates for operator approval |
 | `fm-capacity-gate.sh` | Single shared owner of the disk-capacity ladder and of the reclaim-then-refuse admission decision; consulted by `fm-spawn.sh` before every fresh placement |
-| `fm-capacity-reclaim.sh` | Tiered reclaimer: real-`rm` unlink of regenerable caches and build litter, the merged worktree pool via `treehouse prune`, age-gated transcripts on request, and an archive-class inventory that is reported and never deleted |
+| `fm-capacity-reclaim.sh` | Tiered reclaimer: real-`rm` unlink of regenerable caches and build litter, dead lock scratch, bounded log rotation, the merged worktree pool via `treehouse prune`, age-gated transcripts on request, and an archive-class inventory that is reported and never deleted |
+| `fm-lock-reclaim-lib.sh` | Reclaims DEAD lock scratch (owner dirs and reclaim pointers) from outside the lock: the start-time-vs-dir-mtime test that tells a live holder from a recycled pid, and the lock shapes mirrored from `fm-wake-lib.sh` |
+| `fm-log-rotate.sh` | Bounds an append-only log: copytruncate when the log is quiescent, rename when a writer is active, every generation capped |
 
 ## The disk-capacity ceiling
 
@@ -171,6 +173,75 @@ Tiers: **1** caches and build litter (always safe to apply) and **2** the worktr
 to `treehouse prune`, which refuses leased, dirty, in-use and unmerged slots. **3** age-gated agent
 transcripts stay opt-in (`--tier 3`). **4** archive-class material - cold but valuable - is
 **reported, never deleted**; `fm-capacity-reclaim.sh --inventory` prints that inventory alone.
+
+### Tier 1b: dead lock scratch
+
+Tier 1 carries two more classes, because both of them were invisible to the reclaimer when the
+biggest reclaimable thing on the host was a lock leak.
+
+**`1b` reclaims DEAD lock owner dirs and stale lock pointers.** A lock owner dir is scratch by
+construction: `mktemp` made it, it holds only the lock's own pid file, and it is unreferenced the
+moment its pointer goes. The reclaim is safe-and-automatic because the safety is a **proof**, not a
+heuristic: a dir is reclaimed only when its recorded pid is provably not the process that created
+it.
+
+"Is that pid alive?" is **not** that proof, because the kernel recycles pids. Measured on the
+Controller on 2026-10-21: 21,201 of the leaked dirs recorded a pid that happened to be running
+again as an unrelated process, so a naive liveness test would have kept every one of them alive
+forever; only 6 were held by a genuinely live process. The correct test compares the process's
+**start time** with the owner dir's own **mtime** - a process that started after the dir was created
+cannot be the process that created it. When the dir carries a `pid-identity` file the match is
+exact, and that strictly stronger test wins.
+
+A live holder is **never** touched. A lock pointer is removed only when its owner dir is one this
+sweep reclaimed, or when the pointer's own target is provably dead - never while a live owner
+references it. The pointer goes *before* its dir, so there is never a moment where a lock pointer
+points at a dir that is being destroyed.
+
+Only the lock shapes this repo creates are eligible, and the rules are **mirrored** from
+`bin/fm-wake-lib.sh` (the owner of the lock protocol) rather than invented a second time:
+`*.lock.owner.??????` and `*.lock.steal.owner.??????` at any steal depth, plus the `*.lock` and
+`*.lock.steal` pointer symlinks. Three gates must all pass: the name is a lock shape, a pointer is
+a **symlink** (a plain `.lock` file belongs to another lock family), and an owner dir is
+**owner-private** (mode 0700 - tracked repository content never is). The mirroring is
+cross-checked against the lock library by `tests/fm-lock-reclaim-disk.test.sh` so it cannot drift.
+
+The reclaim unlinks with the **real** `rm`, resolved by absolute path, and refuses the
+recoverable-delete shim even when it is found at one of those paths - the shim would move the
+target into the trash and free nothing.
+
+### Tier 1c: bounded logs
+
+**`1c` rotates an append-only log that grew past its cap.** It never blind-truncates: the most
+recent tail is kept for diagnosis and the rest is rotated out. `state/fm-comms-ingest.log`
+reached 40 MB because an oversize file was re-reported on every scan and nothing ever rotated it.
+
+The rotation lives in `bin/fm-log-rotate.sh` so it can also run on its own. It **copytruncates**
+when the log is quiescent - nothing written for `FM_LOG_ROTATE_QUIESCE_S` seconds and the size
+unchanged while the snapshot was taken - because that is provably lossless. When a writer **is**
+active it **renames** instead: the writer's open descriptor follows the renamed inode, so every
+byte it writes is preserved in the generation, and the generation is capped on a later pass once
+the writer has finished. The whole family (the live file and every generation) is capped, so the
+total on disk is bounded by numbers the operator chose.
+
+| Variable | Effect |
+| -------- | ------ |
+| `FM_RECLAIM_STATE_ROOTS` | Colon-separated state roots the lock sweep and the log rotation look under |
+| `FM_RECLAIM_TIERS` | Which tier groups this run executes (default `1,1b,1c,2`, plus `3` with `--tier 3`) |
+| `FM_RECLAIM_LOCK_GRACE_S` | Age before dead lock scratch may be reclaimed (default 5) |
+| `FM_RECLAIM_LOCK_MAXDEPTH` | How deep under a root the lock sweep looks (default 6) |
+| `FM_RECLAIM_LOCK_MAX` | Owner dirs reclaimed per sweep (default 100000) |
+| `FM_LOG_ROTATE_MAX_BYTES` | Cap on the live log (default 5242880) |
+| `FM_LOG_ROTATE_KEEP_BYTES` | How much of the tail a generation keeps (default 262144) |
+| `FM_LOG_ROTATE_GENERATIONS` | How many generations to keep (default 3) |
+| `FM_LOG_ROTATE_GRACE_S` | Age before a generation may be capped (default 120) |
+| `FM_LOG_ROTATE_QUIESCE_S` | How quiet a log must be for copytruncate to be provably lossless (default 2) |
+
+`tests/fm-lock-reclaim-disk.test.sh` asserts all of it by observed behaviour: a dead owner dir is
+reclaimed, a live holder is not, a recycled pid is (with the start-time comparison read from
+`/proc`), a non-lock-shaped path is never touched, the shim `rm` is refused, the result line
+reports a **measured** `df` delta, a reclaim that removed nothing never claims freed bytes, and an
+active writer's output survives the rotation.
 
 ## Controller resource cadence units
 
