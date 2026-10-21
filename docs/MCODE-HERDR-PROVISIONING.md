@@ -169,11 +169,13 @@ is the one most likely to be rediscovered on a new surface.
 | What | Format | Owner |
 |---|---|---|
 | Preflight lane label | `<domain>-<surface>-<model>-<taskslug>`, exactly four lowercase segments | `/root/bin/fm-dispatch-preflight` |
-| Spawn task id (lane key) | `<model>-<surface>-<task>` | `bin/fm-lane-naming-check.sh`, enforced by `bin/fm-spawn.sh` |
+| Spawn task id (lane key) | `<harness>-<model>-<host>-<task>` | `bin/fm-todo-prefix-check.sh`, enforced by `bin/fm-spawn.sh` through `bin/fm-lane-naming-check.sh` |
 | To-Do board row | far-left `[<harness>·<ModelAbbrev> <effort> @<Host>]` | `bin/fm-todo-prefix-check.sh` |
 
-All three are four-segment-shaped except the enforced lane key, which is three
-segments. The three-segment lane key is what actually dispatches.
+All three are four-segment-shaped, and the enforced lane key is the canonical
+four-segment one. The spawn task id and the To-Do board row share one owner,
+`bin/fm-todo-prefix-check.sh`; `bin/fm-lane-naming-check.sh` is the entry point
+that delegates to it, so the two can never disagree about the format.
 
 ### Preflight lane label
 
@@ -187,18 +189,24 @@ refused on purpose.
 
 ### Lane key (the spawn task id)
 
-`bin/fm-spawn.sh` gates the task id through `bin/fm-lane-naming-check.sh`:
+`bin/fm-spawn.sh` gates the task id through `bin/fm-lane-naming-check.sh`, which
+delegates to the naming owner `bin/fm-todo-prefix-check.sh`:
 
 ```sh
-bin/fm-lane-naming-check.sh "m3.1f-firstmate-disk"   # PASS
-bin/fm-lane-naming-check.sh "mcode-m3.1f-firstmate-disk"   # FAIL, today
+bin/fm-lane-naming-check.sh "mcode-m3.1f-controller-disk"   # PASS
+bin/fm-lane-naming-check.sh "m3.1f-firstmate-disk"           # FAIL, three segments
 ```
 
-Model aliases: `m2.7h`, `m2.7`, `m3.1f`, `luna6`, `glm5.3f`, `gem38f`, `pi`.
-Surface aliases: `dubz`, `hd2`, `brandon`, `evps`, `firstmate`.
+Model aliases: `m3.1f`, `m3.1`, `luna6`, `glm5.3f`, `gem38f`, `pi` (active), and
+`m2.7h`, `m2.7` (retired: they resolve for history and are refused for a new lane key).
+Host segment: any hostname token; this fleet uses `brandon`, `hd2stack`, `controller`
+and `elevate`. A lane in the main firstmate home runs on `controller`.
+Harness segment: `pi`, `codex`, `claude`, `opencode`, `mcode`, `grok`, `kimi`, `agy`,
+`minimax-code`.
 Task: lowercase alphanumeric with hyphens.
 
-The alias derivation rule is in `bin/fm-lane-naming-check.sh` and is single-stated there:
+The alias table and the alias derivation rule live in `bin/fm-todo-prefix-check.sh`
+and are single-stated there:
 a MiniMax model id like `minimax/MiniMax-M3.1-Flash` derives to `m3.1f` (family
 plus a tier marker - `highspeed` -> `h`, `flash` -> `f`). Model ids from other providers
 have no programmatic rule; any alias claimed for them must be verified explicitly.
@@ -216,26 +224,27 @@ The harness token must be one of `pi`, `codex`, `claude`, `opencode`, `mcode`, `
 `kimi`, `agy`. `bin/fm-spawn.sh` extracts the far-left rows of the brief and pipes them
 to `bin/fm-todo-prefix-check.sh --stdin`; a brief with no To-Do rows is tolerated.
 
-### The known drift, stated once
+### The drift is closed, stated once
 
-`bin/fm-todo-prefix-check.sh --lane-key` documents the lane key as
-`<harness>-<model>-<host>-<task>` - four segments, harness first, renewed by the
-Captain on 2026-10-18. `bin/fm-lane-naming-check.sh` defines that same four-segment
-pattern in `_lane_key_pat` but never wires it into `check_one`, so in practice it accepts
-the older three-segment `<model>-<surface>-<task>` form, and `bin/fm-spawn.sh` gates on
-it. The comment in `bin/fm-lane-naming-check.sh` says the harness segment "is NOT
-optional", which is the intent; the implementation does not enforce it yet.
+The lane key has one shape and one owner.
 
-Two checkers, two owners, one contradiction. Until that is reconciled, probe both
-before dispatching:
+`bin/fm-todo-prefix-check.sh` owns the naming vocabulary: the model alias table, the
+harness and effort tokens, the lane-key shape, the board row shape and the registry
+rules. `bin/fm-lane-naming-check.sh` is an entry point that forwards every check to
+that owner and keeps no second copy of the alias table or the pattern, so the two
+checkers cannot disagree. `bin/fm-spawn.sh` gates the task id through
+`bin/fm-lane-naming-check.sh`, which means the gate enforces the canonical
+four-segment `<harness>-<model>-<host>-<task>` form.
+
+The harness segment is NOT optional: without it a `mcode` lane and a `pi` lane
+running the same model are indistinguishable. The comment that said so is now the
+implementation.
+
+One probe is enough, because there is one rule:
 
 ```sh
 bin/fm-lane-naming-check.sh "<candidate>"
-bin/fm-todo-prefix-check.sh --lane-key "<candidate>"
 ```
-
-If they disagree, the spawn-time checker wins, because that is the one on the dispatch
-path.
 
 ## Dispatch
 

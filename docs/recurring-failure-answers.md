@@ -50,18 +50,18 @@ Durable rules, root-cause explanations, enforcement mechanisms, and honest enfor
 
 ## 4. Lanes showing as anonymous "worker" in the operator's async panel
 
-**Durable rule:** Every async lane must carry a named key in the format `<model>-<surface>-<task>` so the operator can identify it in the panel. An unnamed lane is invisible to the operator.
+**Durable rule:** Every async lane must carry a named key in the format `<harness>-<model>-<host>-<task>` so the operator can identify it in the panel. An unnamed lane is invisible to the operator.
 
 **Why it keeps happening:** Direct single-child dispatch shows only the agent kind in the panel. Without a deliberate per-child key, the panel renders "worker" or nothing.
 
 **Mechanism that now enforces it:**
 
-- `bin/fm-spawn.sh` lines 938–945: before any endpoint, worktree, or state mutation, `fm-spawn` validates the task ID against the `<model>-<surface>-<task>` convention using `bin/fm-lane-naming-check.sh`. If validation fails, spawn exits 5 with an explicit error message. Grandfather clause: existing tasks with pre-existing `state/<id>.meta` are exempt so recovery cases are not stranded.
-- `bin/fm-lane-naming-check.sh`: validates lane key format, To-Do board line format, and the `data/async-lanes.tsv` registry file structure including cross-checking lane-key segments against model and surface columns.
+- `bin/fm-spawn.sh`, the lane naming gate: before any endpoint, worktree, or state mutation, `fm-spawn` validates the task ID against the canonical `<harness>-<model>-<host>-<task>` convention using `bin/fm-lane-naming-check.sh`. If validation fails, spawn exits 5 with an explicit error message naming the expected shape. Grandfather clause: existing tasks with pre-existing `state/<id>.meta` are exempt so recovery cases are not stranded.
+- `bin/fm-todo-prefix-check.sh`, the single owner of the naming vocabulary: validates the lane key shape, the To-Do board row format, and the `data/async-lanes.tsv` registry file structure, including cross-checking the lane-key model and host segments against the model and surface columns and requiring every `run_id` to be a UUID unique to one row. `bin/fm-lane-naming-check.sh` delegates to it and keeps no second copy of the alias table or the pattern.
 
-**Enforcement strength:** TESTED AND BLOCKING (spawn level). The lane key must be valid before `fm-spawn` creates the endpoint. An invalid lane key causes an immediate exit 5. The advisory `fm-lane-naming-check.sh` that checks registry files is not wired into a launcher and cannot block on its own, but the spawn-level enforcement is hard and blocks the bad key from ever reaching the panel.
+**Enforcement strength:** TESTED AND BLOCKING (spawn level). The lane key must be valid before `fm-spawn` creates the endpoint. An invalid lane key causes an immediate exit 5. The registry and board-row checks are advisory-only enforcement: they are not wired into a launcher and cannot block on their own, but the spawn-level enforcement is hard and blocks the bad key from ever reaching the panel.
 
-**Remaining gap:** The registry file (`data/async-lanes.tsv`) and To-Do board line format are advisory-only enforcement. A lane spawned with a valid key can still have malformed board lines that go undetected until manual inspection.
+**Remaining gap:** The registry file (`data/async-lanes.tsv`) and To-Do board line format are advisory-only enforcement. A lane spawned with a valid key can still have malformed board lines that go undetected until manual inspection. The registry also does not enforce lane-key uniqueness: two rows may share a lane key as long as their run ids differ.
 
 ---
 

@@ -469,7 +469,7 @@ still answers prompts. Full recipe and evidence:
 | Headless | FORBIDDEN for real task work. mcode lanes are visible, supervised and checkpointed; there is no `mcode exec` path for a crewmate. |
 | Launch | `bin/fm-spawn.sh <lane-key> <project-dir> --harness minimax-code --model minimax/MiniMax-M3.1-Flash --backend herdr [--scout]` |
 | Model | `minimax/MiniMax-M3.1-Flash` is the routed M3.1 Flash model. Lane-key alias `m3.1f`. Never route GLM, and never route M3.1 through Pi. |
-| Label formats | THREE different ones: preflight label `<domain>-<surface>-<model>-<taskslug>`, spawn task id (lane key) `<model>-<surface>-<task>`, To-Do row prefix `[<harness>·<ModelAbbrev> <effort> @<Host>]`. Mixing them is the common dispatch failure. |
+| Label formats | THREE different ones: preflight label `<domain>-<surface>-<model>-<taskslug>`, spawn task id (lane key) `<harness>-<model>-<host>-<task>`, To-Do row prefix `[<harness>·<ModelAbbrev> <effort> @<Host>]`. Mixing them is the common dispatch failure. The lane key's host segment is the host where the owner runs - `controller` for the main firstmate home - and `docs/todo-prefix-canonical-format.md` owns the contract and the alias table. |
 | Supervision | `bash bin/fm-watch-arm.sh` as a tracked background task, re-armed every turn. |
 
 ### Two host prerequisites that are not repo state
