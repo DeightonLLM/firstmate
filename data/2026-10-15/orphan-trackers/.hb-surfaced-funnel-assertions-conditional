@@ -1,1 +1,0 @@
-blocked: the authorized staging tree has no Git repository, so the requested branch commit and no-mistakes handoff cannot be completed without a separately authorized delivery path; report and decision-hold gate are complete.

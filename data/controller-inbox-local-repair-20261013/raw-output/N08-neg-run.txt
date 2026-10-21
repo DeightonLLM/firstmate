@@ -1,3 +1,0 @@
-EXPECTED FAIL (exit 1): message reported because not in handled ledger
-Output: controller inbox update: d1.md sha256=7780e3c78eb42b67c05ba3b2b2964fc7b24fbce716b035831843080a3fba0e15
-EXIT=1

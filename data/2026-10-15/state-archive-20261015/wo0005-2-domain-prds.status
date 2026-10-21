@@ -1,2 +1,0 @@
-working: registry read; preparing scope and evidence mapping
-blocked: [key=completion-gate] `fm-decision-hold.sh complete wo0005-2-domain-prds --none` would write task metadata outside the brief’s report/status allowlist; authorize that metadata write or provide an approved non-writing gate path

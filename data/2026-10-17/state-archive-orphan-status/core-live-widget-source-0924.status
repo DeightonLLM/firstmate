@@ -1,4 +1,0 @@
-working [at=1790207663]: Scout diagnostic for mobile lower-left clipping on core-distro.com
-done [at=1790207910]: Chat widget overflow:hidden+100dvh on mobile clips chat window; fix live inline CSS
-working [at=1790209542]: Investigation started - reading inbox and building todo list
-done [at=1790209859]: Chat widget anchored LOWER-RIGHT per live CSS; lower-left clipping unconfirmed; browser blocked; screenshot needed

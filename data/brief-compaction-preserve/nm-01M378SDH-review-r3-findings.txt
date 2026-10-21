@@ -1,9 +1,0 @@
-ask-user findings from no-mistakes fix-review gate for fm/brief-compaction-preserve (run 01M378SDH1G8NFW9QN1H15JSQ9, after round 3 auto-fixes, keyed escalation):
-
----
-id: worker-brief-native-details-and-retry-regression
-severity: warning
-file: .pi/extensions/fm-worker-brief-preserve.ts
-line: 100
-description: The second automated fix round's native delegation at .pi/extensions/fm-worker-brief-preserve.ts:86-103 does not preserve all native compaction behavior. Pi marks the returned entry as fromHook, skipping prior compaction details, so a second compaction drops file-operation history. The same call omits Pi's configured retry policy/callbacks, causing a transient stream failure to make one failed request before falling back. Fixing this may require a public Pi API or narrower containment; authorize that remedy or revert to the minimal safe change.
-authority: ask-user

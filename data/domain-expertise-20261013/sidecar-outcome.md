@@ -1,9 +1,0 @@
-# M3.1 sidecar preflight blocker
-
-2026-10-13. No child was launched. The original reliability scout and applied settings remain untouched; no CLI, fallback, model substitution, source/config change, or tracker-proof retry occurred.
-
-**Blocker:** the selected `minimax-m31-flash-preview` is an external `mcode exec` runner, not a native Pi child. `subagent get` and `/home/hd2admin/.pi/agent/agents/minimax-m31-flash-preview.md` show the exact configured `--model minimax/MiniMax-M3.1-Flash-Preview`; `subagent list` passively reports `/home/hd2admin/.minimax-code/bin/mcode` discoverable. Neither proves the model executes successfully or that MCode supplies the mandatory dependency-aware tracker. The current pi-subagents external-CLI guide says native Pi tools/options are unsupported unless the runner explicitly implements them; the selected profile declares no tracker implementation. The parent `todo` extension cannot be assumed to transfer into the external process. Per the assignment's stop condition, this is insufficient to launch.
-
-**Evidence:** read `data/domain-expertise-20261013/sidecar-assignment.md`, the exact profile and current external-CLI guide; queried `subagent get/list`. The Pi native model registry has no M3.1 entry, as the assignment anticipated. No quota snapshot was reused: tracker capability failed before launch intake. Isolation was verified at `/home/hd2admin/.treehouse/kun-agent-workspace-46aafc/12/kun-agent-workspace`, detached clean HEAD `cecba8b34cc8f33b67d2a522306696bb17e1f4fc`, distinct from primary.
-
-**Next:** stop here. A future sidecar requires an explicitly reviewed/released MCode runner contract proving the required tracker is available inside that runner before work begins. No substitute child or alternate execution path is proposed.

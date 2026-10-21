@@ -1,2 +1,0 @@
-working: registry inspected; implementing exact-domain read-only checker and fixture tests
-done: read-only scope checker implemented; all six requested cases pass

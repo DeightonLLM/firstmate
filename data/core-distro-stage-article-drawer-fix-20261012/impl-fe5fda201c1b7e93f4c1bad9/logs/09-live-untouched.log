@@ -1,8 +1,0 @@
---- live source sha256 (must still equal the pre-copy baseline) ---
-510cd7ef5d75cf4c8d278dcd6f175e6bac1ed9c805a3573a6f754e7985f7f098  /home/hd2admin/campaign/core-distro-stage/theme/stage-content-fixes.php
-8bf78a0d0fcb2c8f9f96b524a15fae778a822885b3b27ff38a2dc810dfdde9dc  /home/hd2admin/campaign/core-distro-stage/tests/lighthouse-content-fixes.php
-expected helper: 510cd7ef5d75cf4c8d278dcd6f175e6bac1ed9c805a3573a6f754e7985f7f098
-expected test:   8bf78a0d0fcb2c8f9f96b524a15fae778a822885b3b27ff38a2dc810dfdde9dc
---- live source mtime ---
-/home/hd2admin/campaign/core-distro-stage/theme/stage-content-fixes.php mtime=2026-10-10 17:04:50.999090032 +0100 size=5896
-/home/hd2admin/campaign/core-distro-stage/tests/lighthouse-content-fixes.php mtime=2026-10-10 17:17:42.312894936 +0100 size=8926

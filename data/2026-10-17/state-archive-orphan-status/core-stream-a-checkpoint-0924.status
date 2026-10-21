@@ -1,8 +1,0 @@
-working [at=1790203534]: waiting for firstmate reconciliation on checkpoint-baseline tag resolution; branch fm/core-stream-a-checkpoint-0924 already at ba233e1
-paused [at=1790203812]: waiting for firstmate routing review — evidence gathering for /pl/ /es/ path
-needs-decision [at=1790203832]: routing: links /pl/ /es/ have no handler in artifact (0 zip entries); detect_current_lang() parses paths correctly; .htaccess added but untracked; zip CLI and ZipArchive both unavailable — how to proceed with artifact rebuild?
-resolved [key=default] [at=1790203923]: use Python standard-library zipfile; it already produced the artifact. Do not install or download zip tools; validate the archive manifest and SHA locally.working [at=1790203999]: committed fix + artifact; branch divergent from main at ba233e1; ready for review
-done [at=1790204002]: ready in branch fm/core-stream-a-checkpoint-0924
-working [at=1790204153]: .htaccess scoped to language-route only; manifest corrected; wrapper-scan verified clean; all inbox messages handled; commit complete
-done [at=1790204315]: ready in branch fm/core-stream-a-checkpoint-0924; linear atop main (2eb4e12); fast-forward clean; all smoke checks pass
-done [at=1790204460]: ready in branch fm/core-stream-a-checkpoint-0924; 4 commits linear atop main (2eb4e12); all smoke checks pass; hardened validation block confirmed

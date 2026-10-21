@@ -1,1 +1,0 @@
-done [at=1790298572]: PR https://github.com/DeightonLLM/firstmate/pull/3 checks green (pipeline passed with override). Fix: printf format strings in fm-teardown.sh. 3 additional fix commits from pipeline (test regression, jq fix, backtick fix).

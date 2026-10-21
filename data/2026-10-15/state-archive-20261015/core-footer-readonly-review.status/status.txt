@@ -1,2 +1,0 @@
-working [at=1790158090]: Codex Luna medium not in Pi model registry (gap reported, proceeding with owner review in visible pane)
-done [at=1790158182]: Read-only review complete; PASS verdict on saved footer contrast fix; worktree unchanged; no captain calls outstanding; Codex Luna medium gap reported; captain-hold completion gate passed
