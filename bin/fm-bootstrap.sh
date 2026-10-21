@@ -733,7 +733,7 @@ crew_dispatch_validate() {
   fi
   local verified_json
   # Harness verification defers to bin/fm-harness.sh as single source of truth.
-  verified_json=$("$SCRIPT_DIR/fm-harness.sh" verified-json 2>/dev/null || printf '["claude","codex","opencode","pi","pi-signed","grok","kimi","agy"]')
+  verified_json=$("$SCRIPT_DIR/fm-harness.sh" verified-json 2>/dev/null || printf '["claude","codex","opencode","pi","pi-signed","grok","kimi","agy","minimax-code"]')
   err=$(jq -r --argjson verified_harnesses "$verified_json" '
     def verified($h): $verified_harnesses | index($h);
     def effort_ok($h; $e):
