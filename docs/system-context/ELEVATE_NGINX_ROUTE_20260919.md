@@ -1,7 +1,7 @@
 # Elevate dashboard route containment — 2026-09-19
 
 Target: `agents.elevatesci.com` on the Hostinger KVM8 identified in `hosts.yaml`
-as `srv1137994-aminolifesciences` (live hostname `srv1137994.hstgr.cloud`,
+as `srv1137994-elevatesci` (live hostname `srv1137994.hstgr.cloud`,
 Tailscale address `100.69.211.43`). The direct target answered over Tailscale
 and key-only SSH on port 2222; Nginx was active.
 
