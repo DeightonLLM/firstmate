@@ -41,6 +41,14 @@ For whole-fleet read-only review, `bin/fm-fleet-snapshot.sh --json` emits schema
 `bin/fm-fleet-view.sh` renders that snapshot as Markdown for humans, while `bin/fm-bearings-snapshot.sh` provides the bounded bearings projection, so both views consume one structured contract instead of reparsing raw fleet files.
 The script header owns the exact JSON schema.
 
+### The watch cycle's check contract
+
+An authenticated check reports an ACTIONABLE finding on stdout, and the watcher treats any stdout from a check as actionable. Everything else a check learns is absorbed, so the cycle keeps blocking instead of re-arming. A check that reports a condition nobody can act on therefore re-arms the watcher on every cycle, and supervision never holds. Two rules keep that from happening.
+
+**The controller-inbox backstop acknowledges by MESSAGE NAME.** The hash is the evidence of the bytes that were acknowledged, and the acknowledgement record carries the name, that hash, and the UTC time the acknowledgement was made. A name that was never acknowledged is unhandled, and a message that has been sitting longer than the stale threshold is the actionable finding. A name that was acknowledged stays handled even when the Controller republishes it with new bytes, and a republication is reported with both the old and the new hash, so the change stays visible without blocking the watcher. The stale threshold is unchanged: it still decides what blocks, and a never-acknowledged message never passes. [`bin/fm-controller-inbox-backstop.sh`](../bin/fm-controller-inbox-backstop.sh) owns the rule, the acknowledgement ledgers and the republication log.
+
+**The generated to-do board is rebuilt from the live ledger before the to-do gate judges.** The board records the digest of the ledger it was generated from, so every republication of that ledger leaves the board stale, and the to-do gate then refuses to close a lane that is otherwise closed. Rebuilding the board is a separate explicit step that the watch cycle runs, so the board follows the ledger instead of decaying behind the gate's back. It never weakens the gate: a stale board is still a refusal, and the gate keeps its teeth. [`bin/fm-board-refresh.sh`](../bin/fm-board-refresh.sh) owns the refresh, and [NEXT-PROTOCOL.md](NEXT-PROTOCOL.md) owns the board contract itself.
+
 ### Registered secondmate current state
 
 A registered secondmate's validated home is the authority for bearings current state because it owns the child metadata inventory, each child's current-state result, endpoint observations, backlog holds and dependencies, keyed unresolved decisions, and recent Done baseline.
