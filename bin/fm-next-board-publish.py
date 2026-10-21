@@ -1359,7 +1359,13 @@ def read_feedback_entry(path, kind):
         for line in match.group(1).splitlines():
             if not line.strip():
                 continue
-            lines.append(re.sub(r"^\s*>\s?", "", line))
+            stripped = re.sub(r"^\s*>\s?", "", line)
+            # A body that restates the section it is already in adds a heading
+            # to the board, not a message. The heading the section was matched on
+            # has already been consumed above, so a second one is redundant.
+            if re.match(r"^##\s*Comment\s*$", stripped):
+                continue
+            lines.append(stripped)
         comment = "\n".join(lines).strip()
     if not comment:
         comment = text.strip()
