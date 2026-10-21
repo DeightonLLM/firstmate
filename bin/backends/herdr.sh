@@ -1712,10 +1712,39 @@ fm_backend_herdr_agent_state() {  # <target>
   fm_backend_herdr_parse_target "$target" || { printf 'unreadable'; return 0; }
   case "$(fm_backend_herdr_pane_agent_state "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE")" in
     dead) printf 'missing' ;;
-    no-agent) printf 'dead' ;;
+    no-agent)
+      # A harness that does not register its own agent state with herdr (mcode
+      # does not) reads as no-agent, which is indistinguishable from a lane that
+      # never started - the pane paints, the agent works, and the spawn's
+      # liveness probe calls it dead. The pane's foreground process is the
+      # ground truth: when the harness CLI itself is the live foreground
+      # process, the agent IS alive. A bare shell prompt still fails closed,
+      # and "missing"/"unreadable" are untouched.
+      if fm_backend_herdr_pane_harness_process_alive "$FM_BACKEND_HERDR_SESSION" "$FM_BACKEND_HERDR_PANE"; then
+        printf 'alive'
+      else
+        printf 'dead'
+      fi
+      ;;
     live) printf 'alive' ;;
     *) printf 'unreadable' ;;
   esac
+}
+
+# fm_backend_herdr_pane_harness_process_alive: is the harness CLI the live
+# foreground process in this pane? <session> <pane_id>
+fm_backend_herdr_pane_harness_process_alive() {  # <session> <pane_id>
+  local session=$1 pane_id=$2 out argv0 pid
+  out=$(fm_backend_herdr_cli "$session" pane process-info --pane "$pane_id" 2>/dev/null) || return 1
+  argv0=$(printf '%s' "$out" | jq -r '.result.process_info.foreground_processes[0].argv[0] // empty' 2>/dev/null)
+  [ -n "$argv0" ] || return 1
+  case "$(basename "$argv0")" in
+    minimax-code|mcode|pi|pi-signed|claude|codex|opencode|grok|kimi|agy) ;;
+    *) return 1 ;;
+  esac
+  pid=$(printf '%s' "$out" | jq -r '.result.process_info.foreground_processes[0].pid // empty' 2>/dev/null)
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null
 }
 
 # Backward-compatible three-state view for callers that only need a yes/no
