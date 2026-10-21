@@ -1572,7 +1572,8 @@ if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   # locally can only resolve locally, so the lane is cut from exactly the
   # commit the coordinator dispatched on.
   wt_base=""
-  wt_branch="lane/$ID"
+  wt_branch="lane/$ID-$(date +%s)"
+
   if wt_base=$(git -C "$PROJ_ABS" rev-parse --verify HEAD 2>/dev/null) &&
      git -C "$PROJ_ABS" branch -f "spawn-base/$ID" "$wt_base" 2>/dev/null; then
     wt_base="spawn-base/$ID"
@@ -2079,6 +2080,7 @@ META_WINDOW=$T
   echo "mode=$MODE"
   echo "yolo=$YOLO"
   echo "tasktmp=$TASK_TMP"
+  echo "branch=${wt_branch:-}"
   echo "model=${MODEL:-default}"
   echo "effort=${EFFORT:-default}"
   [ -z "${BUSY_GEN:-}" ] || echo "busy_gen=$BUSY_GEN"
