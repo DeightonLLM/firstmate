@@ -250,6 +250,13 @@ SH
 # make_liveness_tmux <dir>: a controllable tmux stub. FM_TEST_PANE_CMD may be
 # a foreground command, `missing` (readable inventory omits the window), or
 # `unreadable` (both pane and inventory reads fail).
+#
+# The stub also models the RELAUNCHED state: once a new-window has been
+# created, the window is in the inventory and its pane runs a live harness.
+# The spawn's own readiness gate reads exactly that (bin/backends/tmux.sh
+# fm_backend_tmux_agent_state reads the window inventory and the pane's
+# command), so a stub that kept reporting the pre-relaunch reading made every
+# relaunch look like it had failed - a fixture defect, not a sweep defect.
 make_liveness_tmux() {
   local dir=$1 fakebin
   fakebin=$(fm_fakebin "$dir")
@@ -257,11 +264,15 @@ make_liveness_tmux() {
 #!/usr/bin/env bash
 set -u
 mode=${FM_TEST_PANE_CMD:-zsh}
+relaunched="${FM_TMUX_CALL_LOG:?}.relaunched"
 case "${1:-}" in
   display-message)
     for a in "$@"; do
       case "$a" in
         *pane_current_command*)
+          if [ -e "$relaunched" ]; then
+            printf '%s\n' claude; exit 0
+          fi
           case "$mode" in
             missing) printf '%s\n' node; exit 0 ;;
             unreadable) exit 1 ;;
@@ -273,6 +284,9 @@ case "${1:-}" in
     exit 0
     ;;
   list-windows)
+    if [ -e "$relaunched" ]; then
+      printf '%s\n' fm-sm1; exit 0
+    fi
     case "$mode" in
       missing) printf '%s\n' main; exit 0 ;;
       unreadable) exit 1 ;;
@@ -283,7 +297,7 @@ case "${1:-}" in
     printf '%s\n' "$*" >> "${FM_TMUX_CALL_LOG:?}"
     [ "${1:-}" = kill-window ] && : > "${FM_TMUX_CALL_LOG}.killed"
     [ "${FM_TEST_FAIL_NEW_WINDOW:-0}" = 1 ] && [ "${1:-}" = new-window ] && exit 1
-    [ "${1:-}" = new-window ] && rm -f "${FM_TMUX_CALL_LOG}.killed"
+    [ "${1:-}" = new-window ] && { rm -f "${FM_TMUX_CALL_LOG}.killed"; : > "$relaunched"; }
     exit 0
     ;;
   has-session) exit 0 ;;
@@ -309,6 +323,13 @@ new_world() {
   mkdir -p "$w/home/state" "$w/home/config"
   touch "$w/home/state/.last-watcher-beat"
   printf 'codex\n' > "$w/home/config/crew-harness"
+  # The secondmate route is pinned WITH its concrete model: the sweep's own
+  # fm-spawn.sh invocation resolves the secondmate harness from
+  # config/secondmate-harness, and a codex spawn with no resolved model is
+  # refused by the dispatch guard (codex defaults to the banned gpt-6.1-sol,
+  # captain ruling 2026-10-11, no bypass). config/secondmate-harness's own
+  # model token is the durable pin the guard's refusal message names.
+  printf 'codex gpt-6-luna\n' > "$w/home/config/secondmate-harness"
   printf '%s\n' "$w"
 }
 

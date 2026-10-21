@@ -77,16 +77,27 @@ test_projects_path_scoping() {
     [ -n "$label" ] || continue
     home="$TMP_ROOT/$id home"
     projects="$TMP_ROOT/$id projects"
-    mkdir -p "$home/data" "$projects/alpha"
+    mkdir -p "$home/data" "$home/state" "$projects/alpha"
+    # The project must be a git repo and the home must have a state dir: a
+    # crew dispatch is admitted under the shared Treehouse project lock, whose
+    # path is derived from the project's git identity and lives in the root
+    # home's state directory. Without both, the spawn stops at the capacity
+    # admission and never reaches the brief check this case probes.
+    fm_git_init_commit "$projects/alpha"
+    # The concrete model is pinned exactly as the dispatch guard's own refusal
+    # message instructs: codex defaults to the banned gpt-6.1-sol (captain
+    # ruling 2026-10-11), so a codex spawn with no resolved model is refused
+    # before it ever reaches the brief check this case is about.
     if [ "$use_override" = yes ]; then
       out=$(FM_ROOT_OVERRIDE='' FM_STATE_OVERRIDE='' FM_DATA_OVERRIDE='' FM_CONFIG_OVERRIDE='' \
         FM_HOME="$home" FM_PROJECTS_OVERRIDE="$projects" FM_SPAWN_NO_GUARD=1 \
-        "$SPAWN" "$id" projects/alpha codex 2>&1)
+        "$SPAWN" "$id" projects/alpha codex --model gpt-6-luna 2>&1)
     else
       mkdir -p "$home/projects/alpha"
+      fm_git_init_commit "$home/projects/alpha"
       out=$(FM_ROOT_OVERRIDE='' FM_STATE_OVERRIDE='' FM_DATA_OVERRIDE='' FM_PROJECTS_OVERRIDE='' FM_CONFIG_OVERRIDE='' \
         FM_HOME="$home" FM_SPAWN_NO_GUARD=1 \
-        "$SPAWN" "$id" projects/alpha codex 2>&1)
+        "$SPAWN" "$id" projects/alpha codex --model gpt-6-luna 2>&1)
     fi
     status=$?
     [ "$status" -ne 0 ] || fail "$label: spawn with missing brief should fail"

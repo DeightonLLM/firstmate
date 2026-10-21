@@ -10,39 +10,116 @@
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-# A fake tmux (window ops are logged to FM_FAKE_TMUX_LOG, list-windows returns
-# FM_FAKE_TMUX_WINDOW, capture-pane echoes FM_FAKE_TMUX_CAPTURE) plus a fake
+# A fake tmux that MODELS WINDOW CREATION (new-window records the window under
+# its session; list-windows reports the recorded inventory) plus a fake
 # treehouse (durable lease of FM_FAKE_TREEHOUSE_HOME, recording the lease holder
 # to FM_FAKE_TREEHOUSE_LEASE_FILE; `return` removes the target and lease unless
 # FM_FAKE_TREEHOUSE_RETURN_FAIL is set). Echoes the fakebin dir.
+#
+# The window inventory is what makes the spawn's own endpoint verification work:
+# bin/backends/tmux.sh fm_backend_tmux_agent_state reads
+# `tmux list-windows -t <session> -F '#{window_name}'` and classifies the agent
+# from that inventory plus the pane's reported command. A fake tmux that logged
+# window ops but never REPORTED them made every freshly spawned agent look
+# MISSING - a fixture defect, not a spawn defect. FM_FAKE_PANE_CMD sets the
+# pane's reported command (the harness running in it); FM_FAKE_TMUX_WINDOW
+# still overrides the reported inventory for callers that want a fixed answer.
 make_fake_tmux() {
   local dir=$1 fakebin capture
   fakebin=$(fm_fakebin "$dir")
   capture="$dir/pane.txt"
   printf 'idle prompt\n' > "$capture"
+  : > "$dir/windows.tsv"
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
 set -u
+LOG="${FM_FAKE_TMUX_LOG:-/dev/null}"
+fake_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd) || exit 1
+WINDOWS="$fake_root/windows.tsv"
+# parse the -t <session> and -n <name> operands tmux was called with
+parse_targets() {
+  target_session=
+  target_name=
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -t) target_session=${2:-}; shift 2 ;;
+      -t*) target_session=${1#-t}; shift ;;
+      -n) target_name=${2:-}; shift 2 ;;
+      -n*) target_name=${1#-n}; shift ;;
+      -F|-c) shift 2 ;;
+      -*) shift ;;
+      *) shift ;;
+    esac
+  done
+}
 case "${1:-}" in
-  has-session|new-session|new-window|send-keys|kill-window)
-    printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
+  has-session|new-session|send-keys|set-window-option|rename-window)
+    printf '%s\n' "$*" >> "$LOG"
+    exit 0
+    ;;
+  kill-window)
+    printf '%s\n' "$*" >> "$LOG"
+    shift
+    # The target is the exact-match form "=<session>:=<window>"; drop the window
+    # from the inventory so a later respawn can create it again. This is what
+    # the fleet's own relaunch path does before relaunching a dead endpoint
+    # (bin/fm-secondmate-liveness-lib.sh, FM_SM_LIVE_KILL).
+    target=
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -t) target=${2:-}; shift 2 ;;
+        -t*) target=${1#-t}; shift ;;
+        *) shift ;;
+      esac
+    done
+    session=${target#*=}
+    session=${session%%:*}
+    window=${target##*:}
+    # The exact-match form wraps both halves in "=", so the window keeps a
+    # leading "=" until it is stripped here.
+    window=${window#=}
+    if [ -n "$session" ] && [ -n "$window" ] && [ -f "$WINDOWS" ]; then
+      awk -F'\t' -v s="$session" -v w="$window" '!($1==s && $2==w)' "$WINDOWS" > "$WINDOWS.new" \
+        && mv "$WINDOWS.new" "$WINDOWS"
+    fi
+    exit 0
+    ;;
+  new-window)
+    printf '%s\n' "$*" >> "$LOG"
+    shift
+    parse_targets "$@"
+    # tmux targets the session with a trailing colon ("<session>:"); strip it.
+    session=${target_session%:}
+    [ -n "$session" ] || session=firstmate
+    name=${target_name:-window}
+    printf '%s\t%s\n' "$session" "$name" >> "$WINDOWS"
+    printf '@%s\n' "$(wc -l < "$WINDOWS" | tr -d ' ')"
     exit 0
     ;;
   list-windows)
+    shift
+    parse_targets "$@"
     if [ -n "${FM_FAKE_TMUX_WINDOW:-}" ]; then
       printf '%s\n' "$FM_FAKE_TMUX_WINDOW"
+    elif [ -n "$target_session" ] && [ -f "$WINDOWS" ]; then
+      awk -F'\t' -v s="$target_session" '$1==s {print $2}' "$WINDOWS"
     fi
     exit 0
     ;;
   display-message)
     case "$*" in
       *'#{cursor_y}'*) printf '0\n' ;;
+      # The pane's command is how the spawn's endpoint verification recognises a
+      # live agent (bin/backends/tmux.sh fm_backend_tmux_agent_state). Every
+      # secondmate spawn in the suites that use this fake is a codex spawn, so
+      # the pane reports codex; a caller can override it per case.
+      *'#{pane_current_command}'*) printf '%s\n' "${FM_FAKE_PANE_CMD:-codex}" ;;
       *) printf 'firstmate\n' ;;
     esac
     exit 0
     ;;
   capture-pane)
-    printf '%s\n' "$*" >> "$FM_FAKE_TMUX_LOG"
+    printf '%s\n' "$*" >> "$LOG"
     cat "$FM_FAKE_TMUX_CAPTURE"
     exit 0
     ;;
