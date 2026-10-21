@@ -47,14 +47,30 @@ import socket
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+
+try:  # zoneinfo is stdlib on 3.9+; a missing tzdata must not stop the collector.
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - only on a stdlib without zoneinfo
+    ZoneInfo = None
 
 SNAPSHOT_SCHEMA = "hd2-quota-board-snapshot/v1"
-COLLECTOR_VERSION = 1
+COLLECTOR_VERSION = 2
 LEDGER_CONTRACT_VERSION = 1
 DEFAULT_TZ = "Europe/London"
 SSH_TIMEOUT = 60
 QUOTA_TIMEOUT = 180
+
+# How old a snapshot may be before the band must call it stale. The bound is
+# published in the snapshot and rendered by the band, so "stale" is a stated
+# rule and never a silent guess.
+SNAPSHOT_STALE_AFTER_SECONDS = 21600  # 6 hours
+# Token figures are only ever as fresh as the newest usage-ledger export. The
+# band marks them stale against this bound, separately from the snapshot's own
+# age, so a fresh snapshot over an old ledger is never presented as fresh data.
+TOKEN_STALE_AFTER_SECONDS = 86400  # 24 hours
+# The weekly aggregate window: the last N completed days ending yesterday.
+WEEK_DAYS = 7
 
 # --------------------------------------------------------------------------
 # fleet definition
@@ -194,6 +210,75 @@ ZAI_PROVIDER = "zai"
 
 def now_iso():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def collection_date(tz=DEFAULT_TZ):
+    """The calendar date of this collection, in the ledger timezone.
+
+    The date is what defines a COMPLETE day: the day the collection runs on is
+    still in progress, so it is never the "previous day".
+    """
+    if ZoneInfo is not None:
+        try:
+            return datetime.now(ZoneInfo(tz)).date().isoformat()
+        except Exception:  # pragma: no cover - unknown tz database
+            pass
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def previous_completed_day(today):
+    """The calendar day before `today` - the most recent COMPLETED day."""
+    return (date.fromisoformat(str(today)[:10]) - timedelta(days=1)).isoformat()
+
+
+def calendar_window(end_date, days):
+    """The `days` calendar dates ending at `end_date`, inclusive.
+
+    The window is a CALENDAR window, not "the days the ledger happens to
+    have". A date with no ledger row is an unmeasured day and is reported as
+    unknown, never silently dropped from the window.
+    """
+    end = date.fromisoformat(str(end_date)[:10])
+    return [
+        (end - timedelta(days=offset)).isoformat()
+        for offset in range(int(days) - 1, -1, -1)
+    ]
+
+
+def sum_window(days_by_date, window_dates):
+    """Sum the KNOWN per-day values inside a calendar window.
+
+    Unknown days are counted, never dropped, and never turned into zeros. A
+    window that knows some days and not others reports a PARTIAL sum, so a
+    thin window can never masquerade as a complete one.
+    """
+    known_entries = []
+    unknown_dates = []
+    for day in window_dates:
+        entry = days_by_date.get(day)
+        if entry and entry["value"] is not None:
+            known_entries.append(entry)
+        else:
+            unknown_dates.append(day)
+    if not known_entries:
+        return {
+            "value": None,
+            "status": "unknown",
+            "coverage": "unknown",
+            "days_known": 0,
+            "days_unknown": len(unknown_dates),
+            "unknown_days": unknown_dates,
+            "reason": "not measured in this window",
+        }
+    return {
+        "value": sum(entry["value"] for entry in known_entries),
+        "status": "known",
+        "coverage": "complete" if not unknown_dates else "partial",
+        "days_known": len(known_entries),
+        "days_unknown": len(unknown_dates),
+        "unknown_days": unknown_dates,
+        "reason": None,
+    }
 
 
 def _int(value):
@@ -794,8 +879,14 @@ def build_account_quota(account, quota_sources):
     }
 
 
-def build_account_tokens(account, series, accounts_meta):
-    """Per-account per-day token usage from the ledger, plus the latest value."""
+def build_account_tokens(account, series, accounts_meta, previous_day=None, window_dates=None):
+    """Per-account per-day token usage from the ledger, plus the latest value.
+
+    `previous_day` and `window_dates` add the two windows the band must show:
+    the most recent COMPLETED day and the weekly aggregate. Both are computed
+    from the same per-day rows, so a day's figure and the week's figure can
+    never disagree.
+    """
     mapping = account["token_map"]
     days = []
     latest = None
@@ -847,6 +938,47 @@ def build_account_tokens(account, series, accounts_meta):
         token_status = "known"
         headline = latest
 
+    by_date = {entry["date"]: entry for entry in days}
+
+    previous_block = {
+        "date": previous_day,
+        "value": None,
+        "status": "unknown",
+        "coverage": None,
+        "source_kind": None,
+        "reason": "no ledger day for this date, so the previous day's use for this account is unknown, not zero",
+    }
+    if previous_day:
+        entry = by_date.get(previous_day)
+        if entry:
+            previous_block.update(
+                {
+                    "value": entry["value"],
+                    "status": entry["status"],
+                    "coverage": entry["coverage"],
+                    "source_kind": entry["source_kind"],
+                    "reason": entry["reason"],
+                }
+            )
+
+    week_block = {
+        "start": window_dates[0] if window_dates else None,
+        "end": window_dates[-1] if window_dates else None,
+        "days": len(window_dates or []),
+        "value": None,
+        "status": "unknown",
+        "coverage": "unknown",
+        "days_known": 0,
+        "days_unknown": len(window_dates or []),
+        "unknown_days": list(window_dates or []),
+        "reason": "not measured in this window",
+    }
+    if window_dates:
+        week_block.update(sum_window(by_date, window_dates))
+        week_block["start"] = window_dates[0]
+        week_block["end"] = window_dates[-1]
+        week_block["days"] = len(window_dates)
+
     return {
         "status": token_status,
         "value": headline["value"] if headline else None,
@@ -857,6 +989,8 @@ def build_account_tokens(account, series, accounts_meta):
         "attribution": "account" if "account" in mapping.values() else ("local_subset" if mapping else "none"),
         "note": account["token_note"],
         "days": days,
+        "previous_day": previous_block,
+        "week": week_block,
     }
 
 
@@ -926,7 +1060,125 @@ def build_unattributed(series, board_accounts):
     return out
 
 
-def build_aggregate(series, board_accounts, accounts_meta, token_records):
+def build_window(series, board_accounts, accounts_meta, window_dates):
+    """Totals over a CALENDAR window of days.
+
+    The window splits into parts that never overlap:
+      * attributable - the sum of the per-account values inside the window;
+      * provider detail - measured at provider level, not attributable to a
+        named account. It gets its own line and is never added to an account;
+      * grand measured total - attributable + provider detail.
+
+    A superseded official supersedes the local subset it overlaps, so the
+    subset is reported as EXCLUDED and is in no total at all.
+    """
+    by_date = {day["date"]: day for day in series}
+    in_window = [by_date[day] for day in window_dates if day in by_date]
+    known_days = [day for day in in_window if day["total_tokens"] is not None]
+    unknown_dates = [
+        day
+        for day in window_dates
+        if day not in by_date or by_date[day]["total_tokens"] is None
+    ]
+
+    account_split = []
+    attributable_total = 0
+    attributable_known = False
+    for account in board_accounts:
+        tokens = build_account_tokens(account, series, accounts_meta, None, window_dates)
+        days_by_date = {entry["date"]: entry for entry in tokens["days"]}
+        window = sum_window(days_by_date, window_dates)
+        if window["value"] is not None:
+            attributable_known = True
+            attributable_total += window["value"]
+        account_split.append(
+            {
+                "account_id": account["id"],
+                "value": window["value"],
+                "status": window["status"],
+                "coverage": window["coverage"],
+                "days_known": window["days_known"],
+                "days_unknown": window["days_unknown"],
+                "unknown_days": window["unknown_days"],
+                "reason": window["reason"],
+                "attribution": tokens["attribution"],
+                "note": tokens["note"],
+            }
+        )
+
+    accounts_known = sum(1 for entry in account_split if entry["value"] is not None)
+    accounts_unknown = len(account_split) - accounts_known
+    if not attributable_known:
+        attributable_coverage = "unknown"
+    elif accounts_unknown:
+        attributable_coverage = "partial"
+    else:
+        attributable_coverage = "complete"
+
+    unattributed = build_unattributed(in_window, board_accounts)
+    provider_detail_total = sum(
+        entry["total_tokens"]
+        for entry in unattributed
+        if entry["bucket"] == "provider_detail" and entry["total_tokens"] is not None
+    )
+    detail_known = any(
+        entry["bucket"] == "provider_detail" and entry["total_tokens"] is not None
+        for entry in unattributed
+    )
+    excluded = [
+        {
+            "provider": entry["provider"],
+            "bucket": entry["bucket"],
+            "total_tokens": entry["total_tokens"],
+            "days": entry["days"],
+            "reason": entry["reason"],
+        }
+        for entry in unattributed
+        if entry["bucket"] != "provider_detail"
+    ]
+
+    grand_total = None
+    if attributable_known or detail_known:
+        grand_total = attributable_total + provider_detail_total
+
+    if not known_days:
+        status = "unknown"
+        coverage = "unknown"
+    elif unknown_dates:
+        status = "known"
+        coverage = "partial"
+    else:
+        status = "known"
+        coverage = "complete"
+
+    return {
+        "start": window_dates[0] if window_dates else None,
+        "end": window_dates[-1] if window_dates else None,
+        "days": len(window_dates or []),
+        "status": status,
+        "coverage": coverage,
+        "days_known": len(known_days),
+        "days_unknown": len(unknown_dates),
+        "unknown_days": unknown_dates,
+        "attributable_total_tokens": attributable_total if attributable_known else None,
+        "attributable_status": "known" if attributable_known else "unknown",
+        "attributable_coverage": attributable_coverage,
+        "accounts_known": accounts_known,
+        "accounts_unknown": accounts_unknown,
+        "accounts_total": len(account_split),
+        "unattributed_total_tokens": provider_detail_total if detail_known else None,
+        "unattributed_status": "known" if detail_known else "unknown",
+        "grand_total_tokens": grand_total,
+        "reason": None
+        if grand_total is not None
+        else "no ledger row in this window carries a known value, so the total is unknown, not zero",
+        "account_split": account_split,
+        "unattributed_detail": unattributed,
+        "excluded": excluded,
+    }
+
+
+def build_aggregate(series, board_accounts, accounts_meta, token_records, previous_day=None, window_dates=None):
     if not series:
         return {
             "day": None,
@@ -937,12 +1189,13 @@ def build_aggregate(series, board_accounts, accounts_meta, token_records):
             "reason": "no ledger day available on any surface",
             "account_split": [],
             "unattributed_detail": [],
+            "windows": {},
             "series": [],
         }
     latest = series[-1]
     split = []
     for account in board_accounts:
-        tokens = build_account_tokens(account, series, accounts_meta)
+        tokens = build_account_tokens(account, series, accounts_meta, previous_day, window_dates)
         on_day = None
         for day in tokens["days"]:
             if day["date"] == latest["date"]:
@@ -954,6 +1207,8 @@ def build_aggregate(series, board_accounts, accounts_meta, token_records):
                 "value": on_day["value"] if on_day else None,
                 "status": on_day["status"] if on_day else "unknown",
                 "reason": on_day["reason"] if on_day else "no ledger row for this account on this day",
+                "previous_day": tokens["previous_day"],
+                "week": tokens["week"],
                 "latest_known": {
                     "date": tokens["date"],
                     "value": tokens["value"],
@@ -967,6 +1222,13 @@ def build_aggregate(series, board_accounts, accounts_meta, token_records):
             }
         )
     unattributed = build_unattributed(series, board_accounts)
+    windows = {}
+    if previous_day:
+        windows["previous_day"] = build_window(
+            series, board_accounts, accounts_meta, [previous_day]
+        )
+    if window_dates:
+        windows["week"] = build_window(series, board_accounts, accounts_meta, window_dates)
     return {
         "day": latest["date"],
         "total_tokens": latest["total_tokens"],
@@ -980,6 +1242,7 @@ def build_aggregate(series, board_accounts, accounts_meta, token_records):
         else "every contributing ledger row is unknown; the day total is unknown, not zero",
         "account_split": split,
         "unattributed_detail": unattributed,
+        "windows": windows,
         "series": [
             {
                 "date": day["date"],
@@ -1051,6 +1314,14 @@ LEGEND = [
 
 
 def build_snapshot(quota_sources, token_records, series, accounts_meta):
+    # ONE epoch for the whole snapshot: the header timestamp and every figure
+    # below come from this same instant, so the band can never show a body
+    # that is fresher (or older) than its own timestamp.
+    generated_at = now_iso()
+    today = collection_date()
+    previous_day = previous_completed_day(today)
+    window_dates = calendar_window(previous_day, WEEK_DAYS)
+
     board_accounts = []
     for account in BOARD_ACCOUNTS:
         entry = {
@@ -1060,10 +1331,14 @@ def build_snapshot(quota_sources, token_records, series, accounts_meta):
             "provider_label": account["provider_label"],
         }
         entry["quota"] = build_account_quota(account, quota_sources)
-        entry["tokens"] = build_account_tokens(account, series, accounts_meta)
+        entry["tokens"] = build_account_tokens(
+            account, series, accounts_meta, previous_day, window_dates
+        )
         board_accounts.append(entry)
 
-    aggregate = build_aggregate(series, BOARD_ACCOUNTS, accounts_meta, token_records)
+    aggregate = build_aggregate(
+        series, BOARD_ACCOUNTS, accounts_meta, token_records, previous_day, window_dates
+    )
 
     not_set_up = []
     not_set_up_index = {}
@@ -1099,10 +1374,21 @@ def build_snapshot(quota_sources, token_records, series, accounts_meta):
         if account["quota"]["status"] == "unknown":
             warnings.append("quota unknown for %s: %s" % (account["id"], account["quota"]["reason"]))
 
+    ledger_stamps = [
+        record["ledger_generated_at"]
+        for record in token_records
+        if record.get("ok") and record.get("ledger_generated_at")
+    ]
+    ledger_days = [
+        record["latest_day"]
+        for record in token_records
+        if record.get("ok") and record.get("latest_day")
+    ]
+
     return {
         "schema": SNAPSHOT_SCHEMA,
         "collector": {"name": "fm-quota-board-snapshot.py", "version": COLLECTOR_VERSION},
-        "generated_at": now_iso(),
+        "generated_at": generated_at,
         "generated_from": {
             "host": socket.gethostname(),
             "surface": socket.gethostname(),
@@ -1110,7 +1396,25 @@ def build_snapshot(quota_sources, token_records, series, accounts_meta):
         },
         "ledger_contract_version": LEDGER_CONTRACT_VERSION,
         "timezone": DEFAULT_TZ,
-        "stale_after_seconds": 21600,
+        "stale_after_seconds": SNAPSHOT_STALE_AFTER_SECONDS,
+        "freshness": {
+            "snapshot_generated_at": generated_at,
+            "snapshot_stale_after_seconds": SNAPSHOT_STALE_AFTER_SECONDS,
+            "token_stale_after_seconds": TOKEN_STALE_AFTER_SECONDS,
+            "today": today,
+            "previous_completed_day": previous_day,
+            "week_start": window_dates[0] if window_dates else None,
+            "week_end": window_dates[-1] if window_dates else None,
+            "newest_ledger_generated_at": max(ledger_stamps) if ledger_stamps else None,
+            "newest_ledger_day": max(ledger_days) if ledger_days else None,
+            "refresh": {
+                "quota_refreshable": True,
+                "quota_command": "bin/fm-quota-board-collect.sh",
+                "quota_note": "quota readings come from quota-axi and can be re-read on demand with the collect command",
+                "tokens_refreshable": False,
+                "tokens_note": "token usage comes from the usage-ledger exports; there is no live endpoint, so these figures are only as fresh as the newest ledger export.",
+            },
+        },
         "quota_sources": [
             {
                 "label": source["label"],
@@ -1285,6 +1589,24 @@ def main(argv=None):
                     account["provider"],
                     windows,
                     ("%s on %s" % (tokens["value"], tokens["date"])) if tokens["value"] is not None else "unknown",
+                )
+            )
+        for name, label in (("previous_day", "previous completed day"), ("week", "last 7 completed days")):
+            window = aggregate.get("windows", {}).get(name)
+            if not window:
+                continue
+            print(
+                "  %s (%s..%s): attributable %s + provider detail %s = %s [%s, %d/%d accounts measured]"
+                % (
+                    label,
+                    window["start"],
+                    window["end"],
+                    window["attributable_total_tokens"],
+                    window["unattributed_total_tokens"],
+                    window["grand_total_tokens"],
+                    window["attributable_coverage"],
+                    window["accounts_known"],
+                    window["accounts_total"],
                 )
             )
         for warning in snapshot["warnings"]:
