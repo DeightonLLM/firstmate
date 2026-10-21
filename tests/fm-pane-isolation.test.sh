@@ -52,7 +52,14 @@ run_guard() {
   local payload
   payload="$(printf '{"tool_name":"Bash","tool_input":{"command":%s},"session_id":"test-session"}' \
     "$(printf '%s' "$cmd" | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read()))')")"
-  printf '%s' "$payload" | PATH="$WORK/bin:$PATH" FM_HOME="$WORK/home" bash "$GUARD" 2>/dev/null
+  # The suite must be hermetic. The guard honours HERDR_BIN_PATH and
+  # HERDR_PANE_ID by design (an operator may pin the real binary and the live
+  # coordinator pane), and a herdr session exports BOTH into the ambient
+  # environment. Inherited, they beat the fake herdr on PATH, so the guard
+  # compared against the LIVE coordinator pane and every "refused" case
+  # silently became "allowed". Clear them so the stub is the only source.
+  printf '%s' "$payload" | env -u HERDR_BIN_PATH -u HERDR_PANE_ID \
+    PATH="$WORK/bin:$PATH" FM_HOME="$WORK/home" bash "$GUARD" 2>/dev/null
 }
 
 is_denied() {
