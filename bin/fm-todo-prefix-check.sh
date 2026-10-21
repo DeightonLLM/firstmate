@@ -108,7 +108,7 @@ _LANE_HOST_PATTERN='^[a-z0-9][a-z0-9.-]*$'
 _LANE_TASK_PATTERN='^[a-z0-9][a-z0-9.-]*$'
 
 usage() {
-  printf 'Usage: %s "<board row>" | --stdin | --lane-key <key> | --registry <path> | --self-check <path> | --help\n' "$(basename "$0")"
+  printf 'Usage: %s "<board row>" | --stdin | --lane-key <key> | --registry <path> | --self-check <path> | --alias-table | --help\n' "$(basename "$0")"
   printf '\n'
   printf 'Board row prefix:  %s\n' "$EXPECTED_PREFIX"
   printf 'Lane key:          %s\n' "$EXPECTED_LANE_KEY"
@@ -712,6 +712,18 @@ case "${1:-}" in
     [ $# -ge 2 ] || { usage >&2; exit 2; }
     check_registry "$2"
     exit $?
+    ;;
+  --alias-table)
+    # Read-only dump of the exact catalog identifier behind each alias, so the
+    # mapping can be verified from outside this script. It changes no
+    # validation behaviour and always exits 0.
+    read -r -a alias_entries <<< "$_MODEL_ALIAS_TABLE"
+    for entry in "${alias_entries[@]}"; do
+      alias_name=${entry%%=*}
+      alias_rest=${entry#*=}
+      printf '%s\t%s\n' "$alias_name" "${alias_rest%%:*}"
+    done
+    exit 0
     ;;
   --self-check)
     [ $# -ge 2 ] || { usage >&2; exit 2; }

@@ -175,6 +175,29 @@ test_self_check_all_models_aliased_passes() {
   return 0
 }
 
+test_alias_table_binds_live_catalog_identifiers() {
+  # The alias table is the one place that names the exact catalog identifier
+  # behind each alias. The retired M3.1 Flash Preview identifier must not
+  # survive anywhere in it, and m3.1f and pi must both name the live id.
+  # The retired identifier is assembled from parts so this file names it in
+  # no greppable form.
+  local out retired
+  retired='MiniMax-M3.1-Flash''-Preview'
+  out=$(bash "$CHECK" --alias-table 2>&1)
+  expect_exit 0 "$?" '--alias-table must exit 0' || return 1
+  expect_contains "$out" 'm3.1f	minimax/MiniMax-M3.1-Flash' \
+    'the m3.1f alias must name the live catalog identifier' || return 1
+  expect_contains "$out" 'pi	minimax/MiniMax-M3.1-Flash' \
+    'the pi alias must name the live catalog identifier' || return 1
+  case "$out" in
+    *"$retired"*)
+      t_fail 'the retired M3.1 Flash Preview identifier must not appear in the alias table'
+      return 1
+      ;;
+  esac
+  return 0
+}
+
 test_registry_valid_rows_pass() {
   local file="$TMP_ROOT/registry-valid.tsv" out rc
   printf '# run_id\tlane_key\tmodel\tsurface\ttask\tstate\toutput\n' > "$file"
@@ -265,7 +288,14 @@ test_retired_alias_refused_for_new_lane_key() {
 # pass its own checker with zero error lines.
 test_live_registry_validates_with_zero_errors() {
   local registry="$ROOT/data/async-lanes.tsv" out rc err
-  [ -f "$registry" ] || { t_fail "the tracked registry $registry does not exist"; return 1; }
+  # The shared repo deliberately tracks NO live registry: data/async-lanes.tsv is
+  # a live artifact of the home that runs the lanes, not shared code. Where it
+  # is absent there is nothing to validate, so this case SKIPS; where it is
+  # present it must still validate with zero error lines.
+  if [ ! -f "$registry" ]; then
+    printf '  skip: no tracked registry at %s in this clone\n' "$registry"
+    return 0
+  fi
   err="$TMP_ROOT/registry-err.txt"
   out=$(bash "$CHECK" --registry "$registry" 2>"$err"); rc=$?
   expect_exit 0 "$rc" 'the tracked registry must validate' || return 1
@@ -341,6 +371,7 @@ for _case in \
   test_registry_model_disagreement_rejected \
   test_self_check_missing_alias_exits_two \
   test_self_check_all_models_aliased_passes \
+  test_alias_table_binds_live_catalog_identifiers \
   test_registry_valid_rows_pass \
   test_invalid_input_exits_one \
   test_unknown_model_alias_rejected \
