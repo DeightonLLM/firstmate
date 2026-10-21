@@ -340,6 +340,23 @@ The full zellij home label also includes a short hash of the resolved `FM_ROOT` 
 For the cmux backend, `FM_CONFIG_OVERRIDE` overrides where `config/cmux-socket-password` is read from, while `FM_HOME` determines the default config path and readable home prefix embedded in workspace titles.
 The full cmux home label also includes a short hash of the resolved `FM_ROOT` path, and there is no per-home container split.
 
+## Steer delivery outcomes (bin/fm-send.sh)
+
+Delivery and confirmation are two separate facts, and `bin/fm-send.sh` never collapses them into one non-zero exit code.
+It types the line once, sends Enter (and retries only Enter), and then asks the target backend for a proof-carrying verdict.
+That verdict selects exactly one of three outcomes, and the exit code is the caller contract:
+
+| Exit | Outcome | Meaning | Caller action |
+| --- | --- | --- | --- |
+| `0` | delivered and confirmed | the backend positively acknowledged the submit (verdict `empty`) and the parent's durable delivery record was committed | treat the steer as landed |
+| `1` | not delivered | the text never reached the target: the backend send itself failed (verdict `send-failed`, or the backend refused the send) | safe to retry; nothing was typed |
+| `2` | delivered, not fully confirmed | the text reached the target but the outcome could not be closed out on the parent side: either the submit was not positively confirmed (verdict `pending`, `pending-unproven`, `unknown`) or the parent's durable delivery record could not be committed | do NOT retry; treat the delivery as made and keep a durable expectation |
+
+Exit `2` is deliberately non-zero, so a confirmed swallow still fails loudly to the caller.
+The distinction exists because an empty-composer proof has known false-negative classes (dim suggestion text, ghost rows, a stale read), so an inconclusive confirmation is not evidence of a non-delivery; the repo's own precedent is `fm_task_inbox_ring` in `bin/fm-task-inbox-lib.sh`, where only `send-failed` counts as a failed keystroke and every other verdict is "never proof".
+On the `2` path `fm-send.sh` keeps the parent-owned pending-reply expectation in its attempted-but-unconfirmed state instead of discarding it, so `bin/fm-pending-reply-lib.sh` can promote it to `delivery_unknown` and escalate it if the target never acknowledges.
+A genuine non-delivery is never reported as success, and the `--key` path, the retired-slug ban, the Sol ban, and the configured-route gate are unaffected by this contract.
+
 ## Fresh-agent baseline resolution (FM_BASELINE_*)
 
 Every fresh agent and every generated brief begins with the `fresh-agent-baseline/v1` pointer manifest, whose policy-family roles resolve from the home rather than from any fixed absolute path.
@@ -526,6 +543,9 @@ The same bootstrap run emits `SECONDMATE_LIVENESS:` only when a registered secon
 For a mid-session inherited local-material edit where tracked-file sync is not needed, run `bin/fm-config-push.sh`.
 It uses the same live secondmate discovery and propagation helper as bootstrap, prints each live home's `dispatch.json`, `crew-dispatch.json`, `crew-harness`, `backlog-backend`, `backend`, `herdr-presentation-spaces`, `startup-memory-budget`, and `data/captain-shared.md` result as `pushed`, `unchanged`, `skipped`, or `error`, and exits non-zero for real propagation errors or config-reread send failures.
 When an allowlisted config item changes for an already-running home, it sends the literal-content reread pointer described in [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md); unchanged allowlisted config sends no pointer unless a previous delivery is pending.
+A reread pointer is retired once it has been handed to the secondmate, and the pending marker that would re-queue it is removed in both the confirmed and the delivered-but-unconfirmed case, so the same generation can never be re-delivered forever.
+Only a genuine non-delivery keeps the retry marker and reports the failure.
+See "Steer delivery outcomes" above for the exit codes that separate those two facts.
 The locked bootstrap inheritance pass uses the same per-home changed-set and reread path for already-running homes; see `secondmate-provisioning` for the single contract owner.
 That live discovery starts from `state/*.meta` records with `kind=secondmate`; `data/secondmates.md` only backfills `home=` for older or incomplete meta records.
 Skipped items, such as a destination checkout that does not yet gitignore the item, are visible warnings but not hard failures.

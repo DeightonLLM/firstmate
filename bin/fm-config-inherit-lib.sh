@@ -501,6 +501,14 @@ FM_CONFIG_REREAD_MAX_PENDING=16
 FM_CONFIG_REREAD_MAX_QUARANTINE=16
 FM_CONFIG_INHERIT_LOCK_REL="state/.fm-inherited-config.lock"
 
+# fm-send.sh exit code for "delivered but not fully confirmed". Delivery and
+# confirmation are separate facts: this pointer reached the secondmate and
+# only the submit acknowledgement is missing. Keep it in sync with the
+# DELIVERY OUTCOMES AND EXIT CODES block in bin/fm-send.sh, which owns the
+# contract (0 delivered and confirmed, 1 not delivered, 2 delivered but not
+# fully confirmed).
+FM_CONFIG_REREAD_SEND_UNCONFIRMED_RC=2
+
 # Framing lines for the config-reread instruction. Defaults/rules only - never
 # an enforcement claim, and never a parsed summary of file contents.
 FM_CONFIG_REREAD_FRAMING='These inherited config files changed. Re-read and apply their exact contents at every future intake. They are defaults/rules and do not remove your judgment to choose differently when warranted.'
@@ -807,9 +815,32 @@ fm_config_reread_send_failure() {
   return 1
 }
 
+# fm_config_reread_send_reason <merged-output>
+# The reason fm-send actually reported. fm-send's merged output can open with a
+# guard banner (worktree tangle, watcher down) whose first line is a rule of
+# characters, so the first line is NOT a reliable reason. Prefer the first line
+# that carries fm-send's own "error:" prefix, and fall back to the first
+# non-empty line. Never return an empty reason when the output had content.
+fm_config_reread_send_reason() {  # <merged-output>
+  local out=$1 line fallback=
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    case "$line" in
+      error:*)
+        printf '%s' "$line"
+        return 0
+        ;;
+    esac
+    [ -n "$fallback" ] || fallback=$line
+  done <<EOF
+$out
+EOF
+  printf '%s' "$fallback"
+}
+
 # fm_config_reread_send_pointer <id> <instruction-path>
 fm_config_reread_send_pointer() {
-  local id=$1 instruction_path=$2 pending_path selector out rc send_bin message pending_pointer
+  local id=$1 instruction_path=$2 pending_path selector out rc send_bin message pending_pointer detail
   pending_path="$instruction_path.pending"
   if [ ! -f "$instruction_path" ] || [ -L "$instruction_path" ]; then
     printf 'CONFIG_REREAD: secondmate %s: send failed: pending instruction file is missing\n' "$id"
@@ -840,7 +871,24 @@ fm_config_reread_send_pointer() {
     rm -f "$pending_path"
     return 0
   fi
-  out=${out%%$'\n'*}
+  if [ "$rc" -eq "$FM_CONFIG_REREAD_SEND_UNCONFIRMED_RC" ]; then
+    # Delivered but not fully confirmed. The pointer reached the secondmate;
+    # only the submit acknowledgement is missing. Delivery and confirmation
+    # are separate facts, so an inconclusive confirmation must NOT re-mark the
+    # pointer for redelivery - that is what re-queued the same generation
+    # forever across the fleet. Retire the marker and record the inconclusive
+    # state instead: the parent-owned pending-reply record keeps the
+    # attempted-but-unconfirmed expectation, so a secondmate that never
+    # acknowledges is still escalated instead of silently lost.
+    detail=$(fm_config_reread_send_reason "$out")
+    [ -n "$detail" ] || detail="fm-send exited $rc"
+    rm -f "$pending_path"
+    printf 'CONFIG_REREAD: secondmate %s: delivered but unconfirmed: %s\n' "$id" "$detail"
+    return 0
+  fi
+  # A genuine non-delivery: the text never reached the secondmate. Keep the
+  # retry marker so the next pass re-queues this exact generation.
+  out=$(fm_config_reread_send_reason "$out")
   [ -n "$out" ] || out="fm-send exited $rc"
   fm_config_reread_send_failure "$id" "$instruction_path" "$pending_path" "$out"
   return 1

@@ -924,6 +924,9 @@ make_fake_toolchain() {
   fm_fake_exit0 "$fakebin" node gh-axi chrome-devtools-axi lavish-axi
   # tmux fake supports fm-send's composer-verified submit path and optional
   # FM_FAKE_TMUX_LOG / FM_FAKE_TMUX_FAIL_LITERAL for reread-nudge assertions.
+  # FM_FAKE_TMUX_COMPOSER_PENDING=1 makes the submit unverifiable: the literal
+  # still reaches the target, but the composer keeps reading as pending, so
+  # fm-send reports "delivered but unconfirmed" instead of a confirmed submit.
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
 if [ -n "${FM_FAKE_TMUX_LOG:-}" ]; then
@@ -932,8 +935,16 @@ fi
 case "$*" in
   *display-message*'#{pane_current_command}'*) printf '%s\n' codex; exit 0 ;;
   *display-message*'#{pane_id}'*) printf '%s\n' '%1'; exit 0 ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 0; exit 0 ;;
-  *capture-pane*) printf '\n'; exit 0 ;;
+  *display-message*'#{cursor_y}'*)
+    if [ "${FM_FAKE_TMUX_COMPOSER_PENDING:-0}" = 1 ]; then printf '%s\n' 1; else printf '%s\n' 0; fi
+    exit 0 ;;
+  *capture-pane*)
+    if [ "${FM_FAKE_TMUX_COMPOSER_PENDING:-0}" = 1 ]; then
+      printf '╭─────────────────╮\n│ > CONFIG_REREAD │\n╰─────────────────╯\n'
+    else
+      printf '\n'
+    fi
+    exit 0 ;;
   *'send-keys'*' -l '*)
     [ "${FM_FAKE_TMUX_FAIL_LITERAL:-0}" = 1 ] && exit 1
     exit 0
@@ -1696,6 +1707,61 @@ test_config_reread_isolation_and_absent_and_send_failure() {
   pass "B16 config reread isolation, ABSENT, generation safety, send failure, and retry"
 }
 
+test_config_reread_unconfirmed_delivery_retires_pointer() {
+  # A pointer that was DELIVERED but could not be CONFIRMED must not be
+  # re-queued forever. The pointer reached the secondmate; only the submit
+  # acknowledgement is missing. The pending marker is retired and the
+  # inconclusive state is recorded. A genuine non-delivery still re-marks the
+  # pointer and still reports failure.
+  local w head log out err status instr pointer second_log second_out second_status
+  local fail_log fail_out fail_status fail_instr fail_pointer
+  w=$(new_world config-reread-unconfirmed)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" alpha "$head"
+  mkdir -p "$w/alpha/config" "$w/alpha/state"
+  printf 'pi\n' > "$w/alpha/config/crew-harness"
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'tmux\n' > "$w/home/config/backend"
+  printf 'tasks-axi\n' > "$w/home/config/backlog-backend"
+
+  # 1. The pointer is delivered, but the submit cannot be confirmed.
+  log="$w/unconfirmed.tmux.log"
+  err="$w/unconfirmed.err"
+  export FM_FAKE_TMUX_COMPOSER_PENDING=1
+  out=$(run_config_push "$w" "$log" 2>"$err"); status=$?
+  unset FM_FAKE_TMUX_COMPOSER_PENDING
+  expect_code 0 "$status" "a delivered-but-unconfirmed reread must not fail the config push"
+  instr=$(reread_instruction_path "$w/alpha") || fail "alpha instruction missing after the unconfirmed send"
+  pointer="CONFIG_REREAD: $instr"
+  assert_contains "$(cat "$log")" "$pointer" "the unconfirmed send must still have typed the pointer"
+  assert_contains "$out" "delivered but unconfirmed" \
+    "the config push must record the inconclusive delivery state"
+  assert_no_reread_pending "$w/alpha"
+
+  # 2. The retired pointer is not re-queued by the next pass.
+  second_log="$w/unconfirmed-second.tmux.log"
+  second_out=$(run_config_push "$w" "$second_log" 2>"$err"); second_status=$?
+  expect_code 0 "$second_status" "the pass after an unconfirmed delivery should succeed"
+  assert_no_reread_pending "$w/alpha"
+  assert_no_reread_retry_stages "$w/home" alpha
+  if [ -e "$second_log" ] && grep -Fq "CONFIG_REREAD:" "$second_log"; then
+    fail "the retired pointer must not be re-queued after a delivered-but-unconfirmed send"
+  fi
+
+  # 3. A genuine non-delivery still re-marks the pointer and still fails.
+  printf 'grok\n' > "$w/home/config/crew-harness"
+  fail_log="$w/not-delivered.tmux.log"
+  fail_out=$(FM_FAKE_TMUX_FAIL_LITERAL=1 run_config_push "$w" "$fail_log" 2>"$err"); fail_status=$?
+  expect_code 1 "$fail_status" "a genuine non-delivery must make the config push fail"
+  assert_contains "$fail_out" "send failed" "a genuine non-delivery must report the failure"
+  fail_instr=$(reread_instruction_path "$w/alpha") || fail "alpha instruction missing after the failed send"
+  fail_pointer="CONFIG_REREAD: $fail_instr"
+  assert_contains "$(cat "$fail_log")" "$fail_pointer" "the failed send must have typed the pointer"
+  assert_present "$(reread_pending_path "$w/alpha")" \
+    "a genuine non-delivery must re-mark the pointer for redelivery"
+  pass "B17 config reread retires a delivered-but-unconfirmed pointer and still re-marks a genuine non-delivery"
+}
+
 test_config_reread_publication_failure_retries_exact_generation() {
   local w head fakebin real_mv alpha_state out status stage log instr retry_out retry_status
   w=$(new_world config-reread-publication-retry)
@@ -2341,6 +2407,7 @@ test_config_push_exits_nonzero_on_copy_error
 test_config_push_rereads_after_partial_propagation
 test_config_reread_per_home_changed_sets_and_exact_bytes
 test_config_reread_isolation_and_absent_and_send_failure
+test_config_reread_unconfirmed_delivery_retires_pointer
 test_config_reread_publication_failure_retries_exact_generation
 test_config_reread_write_failure_retains_exact_retry_generation
 test_config_reread_exact_temp_survives_adoption_failure
