@@ -1,0 +1,38 @@
+=== BEFORE (live path) ===
+/dev/sda1         75085112 59027808  16040920      79% /
+  1613412 bytes  /root/agent-work/deightonllm-firstmate/state/fm-comms-ingest.log
+  41298192 bytes  /root/agent-work/deightonllm-firstmate/state/fm-comms-ingest.log.1
+
+=== COMMAND ===
+FM_RECLAIM_TIERS=1c bin/fm-capacity-reclaim.sh --apply
+
+=== AFTER ===
+/dev/sda1         75085112 58988000  16080728      79% /
+  1615741 bytes  /root/agent-work/deightonllm-firstmate/state/fm-comms-ingest.log
+  262144 bytes  /root/agent-work/deightonllm-firstmate/state/fm-comms-ingest.log.1
+df delta: 39812 KB
+
+=== THE RECLAIMER'S OWN REPORT ===
+mode: APPLY | tiers: 1-2 | disk before: 79% used, 16040912 KB free
+--- tier 1: caches and build litter ---
+tier 1: 0 item(s) reclaimed, 0 KB by the files' own size
+--- tier 1b: dead lock owner dirs and stale lock pointers ---
+--- tier 1c: bounded logs (rotate, keep the recent tail) ---
+tier 1c: 1 log(s) rotated, 40104 KB by the live files' own size
+--- tier 2: worktree pool (treehouse prune) ---
+--- tier 4: archive-class inventory (reported, never deleted) ---
+disk after: 79% used, 16080728 KB free
+measured: the filesystem gave back 39816 KB (df before/after, net over the reclaim window, not what the script believes it deleted)
+capacity: 79% -> 79% used
+    live log: 1613541 bytes
+    the live log is within its cap; only the generations are checked
+    capped /root/agent-work/deightonllm-firstmate/state/fm-comms-ingest.log.1 to 262144 bytes (the most recent tail)
+    live log after: 1613955 bytes
+  tier 1c: 1 log(s) rotated, 40104 KB by the live files' own size
+
+=== the tail that was kept (last 5 lines of the capped generation) ===
+already-received: whoosh-hd2-standup-request-20261018.md
+excluded-own-outbound: work-order-addendum-dsh-triage-20260929.md
+excluded-own-outbound: work-order-addendum-parallel-20260930.md
+excluded-own-outbound: work-order-triad-verify-20260929.md
+ingested: 18

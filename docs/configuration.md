@@ -259,6 +259,9 @@ There is a second, separate ceiling, and it is not in `config/dispatch.json`.
 The treehouse worktree pool refuses a dispatch outright with `all N worktrees are in use or dirty (max_trees = M)`, and that pool ceiling is the `max_trees` value in `treehouse.toml` at the repository root.
 There are two ceilings because they bound two different things, a worktree slot and a lane: the treehouse ceiling binds when the pool has no free or reclaimable slot, and the lane ceiling binds when the host or the shared provider account runs out of lanes.
 
+Tier 1 carries two classes besides caches and build litter, because both were invisible to the reclaimer when the largest reclaimable thing on the host was a lock leak. **1b** reclaims *dead lock scratch* - the owner dirs and reclaim pointers of locks nobody holds any more - and it can do that safely because the safety is a proof rather than a heuristic: a dir is reclaimed only when its recorded pid is provably not the process that created it, which means comparing the process's **start time** with the owner dir's own **mtime** (the kernel recycles pids, and on the Controller 21,201 of the leaked dirs recorded a pid that was running again as an unrelated process). A `pid-identity` file, when present, is an exact match and wins. A live holder is never touched, and a pointer is removed only when its owner dir was reclaimed or its own target is provably dead. **1c** bounds an append-only log: it is **rotated**, not blind-truncated, keeping the most recent tail for diagnosis. See [docs/scripts.md](scripts.md) "Tier 1b" and "Tier 1c" for the full contract, the shape rules, and the losslessness argument.
+
+`FM_CAPACITY_GATE_BYPASS=1` (or the originally briefed `FM_DISPATCH_GUARD_CAPACITY_BYPASS=1`) skips only this check, is logged as `BYPASS_CAPACITY`, and is printed on stderr — never a silent path. `FM_CAPACITY_GATE_RECLAIM_TIMEOUT_S` (default 90), `FM_CAPACITY_GATE_LOCK`, `FM_CAPACITY_GATE_LOCK_WAIT_S` (default 30), `FM_CAPACITY_GATE_DF` and `FM_CAPACITY_GATE_RECLAIMER` tune the bound, the lock, and the two test seams. See [docs/scripts.md](scripts.md) "The disk-capacity ceiling" for the tier contract of the reclaimer.
 
 ## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
 
@@ -773,6 +776,24 @@ FM_DATA_OVERRIDE=        # alternate data dir, mainly for tests
 FM_PROJECTS_OVERRIDE=    # alternate projects dir, mainly for tests
 FM_CONFIG_OVERRIDE=      # alternate config dir, mainly for tests
 FM_PROC_ROOT_OVERRIDE=   # alternate /proc root for the Linux process-identity read in fm-wake-lib.sh, mainly for tests
+FM_CAPACITY_GATE_BYPASS= # skip ONLY the disk-capacity ceiling check in bin/fm-capacity-gate.sh (logged as BYPASS_CAPACITY, printed on stderr); FM_DISPATCH_GUARD_CAPACITY_BYPASS is the same check under its originally briefed name
+FM_CAPACITY_GATE_RECLAIM_TIMEOUT_S=90   # wall-clock bound on the reclaim that runs at the ceiling; the reclaim is stopped rather than allowed to wedge the dispatch path
+FM_CAPACITY_GATE_LOCK=   # lock file that serialises the reclaim; default /var/lock/fm-capacity-gate.lock, else ${TMPDIR}/fm-capacity-gate.lock
+FM_CAPACITY_GATE_LOCK_WAIT_S=30   # seconds to wait for the reclaim lock before deciding on the disk as it reads
+FM_CAPACITY_GATE_DF=    # test seam: a command whose output is parsed like `df -P /`
+FM_CAPACITY_GATE_RECLAIMER= # test seam: the reclaimer bin/fm-capacity-gate.sh runs
+FM_RECLAIM_DF=  # test seam for the reclaimer itself: the command bin/fm-capacity-reclaim.sh measures the filesystem with (default "df -P /")
+FM_RECLAIM_TIERS=   # which tier groups one reclaim run executes; default 1,1b,1c,2 (plus 3 when --tier 3 asked for it)
+FM_RECLAIM_STATE_ROOTS=   # colon-separated state roots the dead-lock sweep and the log rotation look under
+FM_RECLAIM_LOCK_GRACE_S=5   # age before dead lock scratch may be reclaimed
+FM_RECLAIM_LOCK_MAXDEPTH=6   # how deep under a root the dead-lock sweep looks
+FM_RECLAIM_LOCK_MAX=100000   # owner dirs reclaimed per sweep
+FM_LOG_ROTATE_MAX_BYTES=5242880   # cap on the live log
+FM_LOG_ROTATE_KEEP_BYTES=262144   # how much of the tail a rotated generation keeps
+FM_LOG_ROTATE_GENERATIONS=3   # how many generations to keep
+FM_LOG_ROTATE_GRACE_S=120   # age before a generation may be capped; it protects a writer that still holds it
+FM_LOG_ROTATE_QUIESCE_S=2   # how quiet a log must be for copytruncate to be provably lossless
+FM_LOG_ROTATE_TARGET=   # the log bin/fm-log-rotate.sh rotates by default (default $FM_HOME/state/fm-comms-ingest.log)
 FM_BACKEND=             # optional runtime backend override for new spawns; tmux/herdr/zellij/orca/cmux support ship/scout spawns, codex-app is not accepted
 HERDR_SESSION=default  # herdr-only: named session for normal backend ops; not enough for destructive cleanup (docs/herdr-backend.md)
 FM_BACKEND_HERDR_COMPOSER_LINES=20  # herdr-only: tail lines scanned by composer-state guard/fallback paths; idle-baseline submit confirmation uses agent-state
