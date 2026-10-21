@@ -298,7 +298,7 @@ The store is one local, gitignored file, `config/temporary-directives.json`, and
 
 ```bash
 bin/fm-temporary-directive.sh set --id minimax-hold --until 6h \
-  --harness pi --model minimax/MiniMax-M3.1-Flash-Preview --effort medium \
+  --harness pi --model minimax/MiniMax-M3.1-Flash --effort medium \
   --reason "MiniMax 5h window measured at 6% remaining"
 bin/fm-temporary-directive.sh status
 bin/fm-temporary-directive.sh clear --id minimax-hold

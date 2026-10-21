@@ -453,7 +453,7 @@ EOF
 #     tier-marker = last letter of the tier keyword:
 #       'highspeed' -> 'h', 'flash' -> 'f', bare -> ''
 #     Example: minimax/MiniMax-M2.7-highspeed  -> m2.7h
-#              minimax/MiniMax-M3.1-Flash-Preview -> m3.1f
+#              minimax/MiniMax-M3.1-Flash         -> m3.1f
 #              minimax/MiniMax-M2.7                -> m2.7
 #   Other providers (openai-codex, etc.): no programmatic rule defined;
 #   their model ids (gpt-6-luna, gpt-6.1-sol) do not derive to any
