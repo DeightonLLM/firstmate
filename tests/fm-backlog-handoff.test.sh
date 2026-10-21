@@ -55,6 +55,22 @@ assert_block_equals() {
   fi
 }
 
+# The comparison fingerprint of an item block: the same lines with trailing
+# whitespace removed and trailing blank lines dropped. A whitespace-only
+# difference between two copies of the same item is not a difference, which is
+# the same comparison rule the handoff script applies.
+item_block_fingerprint() {
+  local file=$1 key=$2
+  extract_item_block "$file" "$key" | awk '
+    { sub(/[ \t]+$/, "") ; line[NR] = $0 }
+    END {
+      n = NR
+      while (n > 0 && line[n] == "") n--
+      for (i = 1; i <= n; i++) print line[i]
+    }
+  '
+}
+
 test_body_moves_when_followed_by_another_item() {
   local home="$TMP_ROOT/body-next-item-main"
   local sub="$TMP_ROOT/body-next-item-sub"
@@ -472,6 +488,429 @@ EOF
   pass "multi-paragraph body with internal blank lines moves whole and is idempotent"
 }
 
+# A destination copy that differs from the main copy is a stale copy, not a
+# completed handoff. The live incident that motivated this was a secondmate
+# home whose backlog was a frozen snapshot of origin/main's backlog: the
+# destination held an older revision of the item, the handoff reported
+# "already present", exited 0, and moved nothing, so the item stayed stranded
+# in both backlogs with different content. The current main copy must land in
+# the destination and leave the main backlog.
+test_stale_destination_copy_is_replaced_by_the_current_source_copy() {
+  local home="$TMP_ROOT/stale-main"
+  local sub="$TMP_ROOT/stale-sub"
+  setup_homes "$home" "$sub"
+
+  cat > "$home/data/backlog.md" <<'EOF'
+## Queued
+- [ ] stale-item - current copy (repo: alpha)
+  current body line
+  ## Intent
+  current intent
+- [ ] neighbour-item - stays in the main backlog (repo: beta)
+  neighbour body
+
+## Done
+EOF
+
+  cat > "$sub/data/backlog.md" <<'EOF'
+## Queued
+- [ ] stale-item - stale copy (repo: alpha)
+  stale body line
+- [ ] resident-item - stays in the secondmate backlog (repo: alpha)
+  resident body
+
+## Done
+EOF
+
+  local expected_fingerprint
+  expected_fingerprint=$(item_block_fingerprint "$home/data/backlog.md" stale-item)
+
+  local out
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design stale-item 2>&1) \
+    || fail "handoff of a stale destination copy failed"
+
+  assert_contains "$out" "replaced a stale destination copy" \
+    "stale handoff did not report that the stale destination copy was replaced"
+  assert_not_contains "$out" "already present" \
+    "stale handoff still reported the key as already present"
+
+  local dest_fingerprint
+  dest_fingerprint=$(item_block_fingerprint "$sub/data/backlog.md" stale-item)
+  assert_block_equals "destination did not receive the current main copy" \
+    "$expected_fingerprint" "$dest_fingerprint"
+  assert_grep 'current body line' "$sub/data/backlog.md" \
+    "the current body did not arrive at the destination"
+  assert_grep '  ## Intent' "$sub/data/backlog.md" \
+    "the current indented pseudo-heading did not arrive at the destination"
+  assert_no_grep 'stale body line' "$sub/data/backlog.md" \
+    "the stale body line stayed in the destination"
+  assert_no_grep 'stale copy' "$sub/data/backlog.md" \
+    "the stale header stayed in the destination"
+
+  assert_no_grep 'stale-item' "$home/data/backlog.md" \
+    "the item was not removed from the main backlog"
+  assert_no_grep 'current body line' "$home/data/backlog.md" \
+    "the current body stayed in the main backlog"
+
+  # The neighbour rows in both backlogs are untouched.
+  assert_grep 'neighbour-item' "$home/data/backlog.md" \
+    "the neighbour item was wrongly removed from the main backlog"
+  assert_grep '  neighbour body' "$home/data/backlog.md" \
+    "the neighbour body was disturbed in the main backlog"
+  assert_grep 'resident-item' "$sub/data/backlog.md" \
+    "the resident item was wrongly removed from the destination"
+  assert_grep '  resident body' "$sub/data/backlog.md" \
+    "the resident body was disturbed in the destination"
+
+  # Exactly one copy of the item survives, and it is the current one.
+  local count
+  count=$(grep -cF -- '- [ ] stale-item' "$sub/data/backlog.md")
+  [ "$count" -eq 1 ] || fail "the destination does not hold exactly one stale-item header (count=$count)"
+  count=$(grep -cF -- '- [ ] stale-item' "$home/data/backlog.md")
+  [ "$count" -eq 0 ] || fail "the main backlog still holds the stale-item header (count=$count)"
+
+  pass "a stale destination copy is replaced by the current main copy"
+}
+
+# The same item in both backlogs with identical content is a HALF DONE handoff,
+# not a done one: the secondmate already has the item, but the main queue still
+# carries the work, so the primary still owns it. The handoff must be completed:
+# the item ends up out of the main backlog and retained in the destination.
+test_identical_destination_copy_completes_the_half_done_handoff() {
+  local home="$TMP_ROOT/identical-main"
+  local sub="$TMP_ROOT/identical-sub"
+  setup_homes "$home" "$sub"
+
+  cat > "$home/data/backlog.md" <<'EOF'
+## Queued
+- [ ] identical-item - same copy (repo: alpha)
+  same body line
+  ## Intent
+  same intent
+
+## Done
+EOF
+
+  cat > "$sub/data/backlog.md" <<'EOF'
+## Queued
+- [ ] identical-item - same copy (repo: alpha)
+  same body line
+  ## Intent
+  same intent
+
+## Done
+EOF
+
+  local expected_fingerprint
+  expected_fingerprint=$(item_block_fingerprint "$home/data/backlog.md" identical-item)
+
+  local out
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design identical-item 2>&1) \
+    || fail "handoff of an identical destination copy failed"
+
+  assert_contains "$out" "half-done handoff" \
+    "the half-done handoff was not reported as completed"
+  assert_not_contains "$out" "already present" \
+    "the half-done handoff was reported as already present"
+
+  # Removed from the main backlog, retained in the destination.
+  assert_no_grep 'identical-item' "$home/data/backlog.md" \
+    "the identical item was not removed from the main backlog"
+  assert_no_grep 'same body line' "$home/data/backlog.md" \
+    "the identical item body stayed in the main backlog"
+  assert_grep 'identical-item' "$sub/data/backlog.md" \
+    "the identical item was not retained in the destination"
+  local dest_fingerprint
+  dest_fingerprint=$(item_block_fingerprint "$sub/data/backlog.md" identical-item)
+  assert_block_equals "the destination did not retain the item content" \
+    "$expected_fingerprint" "$dest_fingerprint"
+
+  local count
+  count=$(grep -cF -- '- [ ] identical-item' "$sub/data/backlog.md")
+  [ "$count" -eq 1 ] || fail "the destination does not hold exactly one identical-item header (count=$count)"
+
+  pass "an identical destination copy completes the half-done handoff"
+}
+
+# A trailing-whitespace-only difference between the two copies is not a
+# difference, so the two copies are the same item: the half-done handoff is
+# completed rather than read as a stale copy.
+test_trailing_whitespace_difference_is_treated_as_the_same_item() {
+  local home="$TMP_ROOT/whitespace-main"
+  local sub="$TMP_ROOT/whitespace-sub"
+  setup_homes "$home" "$sub"
+
+  cat > "$home/data/backlog.md" <<'EOF'
+## Queued
+- [ ] whitespace-item - same copy (repo: alpha)
+  same body line
+
+## Done
+EOF
+
+  {
+    printf '%s\n' '## Queued'
+    printf '%s\n' '- [ ] whitespace-item - same copy (repo: alpha)'
+    printf '%s \n' '  same body line'
+    printf '%s\n' ''
+    printf '%s\n' '## Done'
+  } > "$sub/data/backlog.md"
+
+  local out
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design whitespace-item 2>&1) \
+    || fail "handoff of a trailing-whitespace-only difference failed"
+
+  assert_contains "$out" "half-done handoff" \
+    "a trailing-whitespace-only difference was not treated as the same item"
+  assert_not_contains "$out" "replaced a stale destination copy" \
+    "a trailing-whitespace-only difference was reported as a stale copy"
+  assert_no_grep 'whitespace-item' "$home/data/backlog.md" \
+    "a trailing-whitespace-only difference left the item in the main backlog"
+  assert_grep 'whitespace-item' "$sub/data/backlog.md" \
+    "a trailing-whitespace-only difference lost the item from the destination"
+
+  pass "a trailing-whitespace-only difference is treated as the same item"
+}
+
+# A key the main backlog no longer holds and the destination holds is a
+# completed handoff: it is reported as already present, nothing moves, exit 0.
+# This is the state a re-run finds, so the handoff converges.
+test_key_only_in_the_destination_is_already_done() {
+  local home="$TMP_ROOT/already-done-main"
+  local sub="$TMP_ROOT/already-done-sub"
+  setup_homes "$home" "$sub"
+
+  cat > "$home/data/backlog.md" <<'EOF'
+## Queued
+- [ ] other-item - stays in the main backlog (repo: alpha)
+
+## Done
+EOF
+
+  cat > "$sub/data/backlog.md" <<'EOF'
+## Queued
+- [ ] done-item - already handed over (repo: alpha)
+  already there body
+
+## Done
+EOF
+
+  local main_before dest_before out rc=0
+  main_before=$(cat "$home/data/backlog.md")
+  dest_before=$(cat "$sub/data/backlog.md")
+
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design done-item 2>&1) || rc=$?
+  expect_code 0 "$rc" "an already-done handoff did not exit 0"
+  assert_contains "$out" "already present" \
+    "an already-done handoff was not reported as already present"
+  [ "$main_before" = "$(cat "$home/data/backlog.md")" ] \
+    || fail "an already-done handoff mutated the main backlog"
+  [ "$dest_before" = "$(cat "$sub/data/backlog.md")" ] \
+    || fail "an already-done handoff mutated the secondmate backlog"
+
+  pass "a key only in the destination is already done"
+}
+
+# A Done row is still refused, with the same message and a non-zero exit, and
+# it is refused whether or not the destination holds a copy of the key.
+test_done_row_is_still_refused() {
+  local home="$TMP_ROOT/refuse-done-main"
+  local sub="$TMP_ROOT/refuse-done-sub"
+  setup_homes "$home" "$sub"
+
+  cat > "$home/data/backlog.md" <<'EOF'
+## Queued
+- [ ] queued-item - stays put (repo: alpha)
+
+## Done
+- [x] shipped-item - shipped thing (repo: alpha)
+EOF
+
+  local before out rc=0
+  before=$(cat "$home/data/backlog.md")
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design shipped-item 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "handoff accepted a Done backlog item"
+  assert_contains "$out" "shipped-item" "the Done refusal did not name the selected item"
+  assert_contains "$out" "queued work only" \
+    "the Done refusal did not state the queued-only contract"
+  [ "$before" = "$(cat "$home/data/backlog.md")" ] \
+    || fail "the Done refusal mutated the main backlog"
+  assert_absent "$sub/data/backlog.md" \
+    "the Done refusal created a secondmate backlog"
+
+  # The same refusal when the destination already holds a copy of the key.
+  cat > "$sub/data/backlog.md" <<'EOF'
+## Queued
+- [ ] shipped-item - shipped thing (repo: alpha)
+
+## Done
+EOF
+  cat > "$home/data/backlog.md" <<'EOF'
+## Queued
+- [ ] queued-item - stays put (repo: alpha)
+
+## Done
+- [x] shipped-item - shipped thing (repo: alpha)
+EOF
+  local dest_before="$TMP_ROOT/refuse-done-sub.before"
+  cp "$sub/data/backlog.md" "$dest_before"
+  before=$(cat "$home/data/backlog.md")
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design shipped-item 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "handoff accepted a Done item the destination already holds"
+  assert_contains "$out" "shipped-item" \
+    "the Done refusal did not name the selected item when the destination held a copy"
+  [ "$before" = "$(cat "$home/data/backlog.md")" ] \
+    || fail "the Done refusal mutated the main backlog when the destination held a copy"
+  cmp -s "$dest_before" "$sub/data/backlog.md" \
+    || fail "the Done refusal mutated the secondmate backlog when it held a copy"
+
+  pass "a Done row is still refused"
+}
+
+# An in-flight row is still refused, with the same message and a non-zero exit,
+# and it is refused whether or not the destination holds a copy of the key.
+test_in_flight_row_is_still_refused() {
+  local home="$TMP_ROOT/refuse-inflight-main"
+  local sub="$TMP_ROOT/refuse-inflight-sub"
+  setup_homes "$home" "$sub"
+
+  cat > "$home/data/backlog.md" <<'EOF'
+## In flight
+- [ ] live-item - active work (repo: alpha)
+
+## Queued
+- [ ] queued-item - stays put (repo: beta)
+
+## Done
+EOF
+
+  local before out rc=0
+  before=$(cat "$home/data/backlog.md")
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design live-item 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "handoff accepted an in-flight backlog item"
+  assert_contains "$out" "live-item" "the in-flight refusal did not name the selected item"
+  assert_contains "$out" "in-flight backlog items" \
+    "the in-flight refusal did not state the in-flight contract"
+  [ "$before" = "$(cat "$home/data/backlog.md")" ] \
+    || fail "the in-flight refusal mutated the main backlog"
+  assert_absent "$sub/data/backlog.md" \
+    "the in-flight refusal created a secondmate backlog"
+
+  # The same refusal when the destination already holds a copy of the key.
+  cat > "$sub/data/backlog.md" <<'EOF'
+## Queued
+- [ ] live-item - active work (repo: alpha)
+
+## Done
+EOF
+  cat > "$home/data/backlog.md" <<'EOF'
+## In flight
+- [ ] live-item - active work (repo: alpha)
+
+## Queued
+- [ ] queued-item - stays put (repo: beta)
+
+## Done
+EOF
+  local dest_before="$TMP_ROOT/refuse-inflight-sub.before"
+  cp "$sub/data/backlog.md" "$dest_before"
+  before=$(cat "$home/data/backlog.md")
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design live-item 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "handoff accepted an in-flight item the destination already holds"
+  assert_contains "$out" "live-item" \
+    "the in-flight refusal did not name the selected item when the destination held a copy"
+  [ "$before" = "$(cat "$home/data/backlog.md")" ] \
+    || fail "the in-flight refusal mutated the main backlog when the destination held a copy"
+  cmp -s "$dest_before" "$sub/data/backlog.md" \
+    || fail "the in-flight refusal mutated the secondmate backlog when it held a copy"
+
+  pass "an In flight row is still refused"
+}
+
+# A non-2-space continuation line is still refused, with the same message and a
+# non-zero exit, and neither backlog changes.
+test_non_2_space_continuation_is_still_refused() {
+  local home="$TMP_ROOT/refuse-body-main"
+  local sub="$TMP_ROOT/refuse-body-sub"
+  setup_homes "$home" "$sub"
+
+  cat > "$home/data/backlog.md" <<'EOF'
+## Queued
+- [ ] malformed-item - must not orphan continuations (repo: alpha)
+ one-space continuation
+EOF
+  printf '\ttab continuation\n' >> "$home/data/backlog.md"
+
+  local before out rc=0
+  before=$(cat "$home/data/backlog.md")
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design malformed-item 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "handoff accepted a noncanonical indented continuation"
+  assert_contains "$out" "malformed-item" \
+    "the noncanonical-continuation refusal did not name the selected item"
+  assert_contains "$out" "non-2-space continuation line" \
+    "the noncanonical-continuation refusal did not state the reason"
+  assert_contains "$out" "one-space continuation" \
+    "the noncanonical-continuation refusal did not name the one-space continuation"
+  assert_contains "$out" "tab continuation" \
+    "the noncanonical-continuation refusal did not name the tab continuation"
+  [ "$before" = "$(cat "$home/data/backlog.md")" ] \
+    || fail "the noncanonical-continuation refusal mutated the main backlog"
+  assert_absent "$sub/data/backlog.md" \
+    "the noncanonical-continuation refusal created a secondmate backlog"
+
+  pass "a non-2-space continuation line is still refused"
+}
+
+# The destination copy of a key that is held by both backlogs has to go before
+# the move, and `tasks-axi mv` refuses to write an id that already exists in
+# the destination. If the move then fails, nothing may move: the destination
+# copy must be back and the main copy must still be in the main backlog.
+test_move_failure_after_destination_cleanup_moves_nothing() {
+  local home="$TMP_ROOT/atomic-main"
+  local sub="$TMP_ROOT/atomic-sub"
+  setup_homes "$home" "$sub"
+
+  cat > "$home/data/backlog.md" <<'EOF'
+## Queued
+- [ ] blocked-item - cannot leave the main backlog (repo: alpha)
+  blocked body
+- [ ] dependent-item - waits for the blocked item (repo: beta) blocked-by: blocked-item - waits
+  dependent body
+
+## Done
+EOF
+
+  cat > "$sub/data/backlog.md" <<'EOF'
+## Queued
+- [ ] blocked-item - stale copy (repo: alpha)
+  stale body
+
+## Done
+EOF
+
+  # A second main-backlog item that is blocked-by the moved item makes the
+  # move itself impossible: tasks-axi refuses to strand the dependency. The
+  # destination copy was already removed at that point, so the handoff has to
+  # put it back and leave the main backlog untouched.
+
+  local main_before dest_before out rc=0
+  main_before="$TMP_ROOT/atomic-main.before"
+  dest_before="$TMP_ROOT/atomic-sub.before"
+  cp "$home/data/backlog.md" "$main_before"
+  cp "$sub/data/backlog.md" "$dest_before"
+
+  out=$(FM_HOME="$home" "$ROOT/bin/fm-backlog-handoff.sh" design blocked-item 2>&1) || rc=$?
+  [ "$rc" -ne 0 ] || fail "a move that would strand a dependency was accepted"
+  assert_contains "$out" "nothing was moved" \
+    "the failed move did not report that nothing was moved"
+  cmp -s "$main_before" "$home/data/backlog.md" \
+    || fail "the failed move mutated the main backlog"
+  cmp -s "$dest_before" "$sub/data/backlog.md" \
+    || fail "the failed move did not restore the destination copy"
+
+  pass "a move failure after the destination cleanup moves nothing"
+}
+
 # Registry lines may carry parentheticals in the summary before the structured
 # (home: ...) field (e.g. "(id is legacy)"). The home extractor must still find
 # the field; the old ^[^(]* regex treated those entries as home-less.
@@ -548,6 +987,14 @@ test_untouched_eof_line_preserves_terminator
 test_body_handoff_is_idempotent
 test_noncanonical_indented_continuations_refuse_without_changes
 test_indented_heading_is_not_section_boundary
+test_stale_destination_copy_is_replaced_by_the_current_source_copy
+test_identical_destination_copy_completes_the_half_done_handoff
+test_trailing_whitespace_difference_is_treated_as_the_same_item
+test_key_only_in_the_destination_is_already_done
+test_done_row_is_still_refused
+test_in_flight_row_is_still_refused
+test_non_2_space_continuation_is_still_refused
+test_move_failure_after_destination_cleanup_moves_nothing
 test_registry_home_with_pre_home_parentheses
 test_registry_home_missing_field_fails_cleanly
 
