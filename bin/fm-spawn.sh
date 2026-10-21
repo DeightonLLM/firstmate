@@ -526,7 +526,7 @@ launch_template() {
     # so permissions are structurally disabled by launching with a per-task config
     # directory (__MCODEDIR__) where permissionMode is set to bypassPermissions.
     # It exposes no effort axis, so __EFFORTFLAG__ is omitted.
-    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MCODEDIR__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MINIMAXBASE__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -2142,6 +2142,13 @@ LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 sq_mcodedir=$(shell_quote "$TASK_TMP/mcode")
 LAUNCH=${LAUNCH//__MCODEDIR__/$sq_mcodedir}
+# mcode must run against the REAL runtime data dir: its MiniMax credential lives
+# there, and an isolated mirror cannot authenticate ("Sign in to MiniMax to use
+# Agent features"). The per-task dir stays the CONFIG dir, where the
+# permissionMode override belongs. Proven by running the same model against
+# the mirror (failed) and against the real dir (worked).
+sq_minimaxbase=$(shell_quote "${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}")
+LAUNCH=${LAUNCH//__MINIMAXBASE__/$sq_minimaxbase}
 # Crewmate panes are created by a long-lived tmux/herdr daemon that does not
 # inherit firstmate's current environment, so a bare `claude` in the pane falls
 # back to the default ~/.claude store even when firstmate itself runs under a
@@ -2162,7 +2169,7 @@ fi
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 if [ "$HARNESS" = minimax-code ]; then
-  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_mcodedir MCODE_CONFIG_DIR=$sq_mcodedir"
+  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_minimaxbase MCODE_CONFIG_DIR=$sq_mcodedir"
 fi
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
