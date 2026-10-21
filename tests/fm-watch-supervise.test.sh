@@ -438,6 +438,348 @@ else
 fi
 
 # ============================================================================
+# 8. PEER RECEIPT COALESCING - one model turn per meaningful peer update,
+#    not one per republication.
+#
+#    A peer that drops files into this home's comms inbox produces one comms
+#    receipt per file, and every receipt enqueues its own signal wake. The
+#    fixture writes exactly what a peer drop produces:
+#
+#      - a receipt ledger line (the receipt's own metadata, with the full
+#        sha256) under state/comms-receipts/<id>/receipts.tsv;
+#      - a comms-received status line on state/<id>.status;
+#      - one PENDING wake record in the durable wake queue.
+#
+#    The stub arm surfaces the peer status file as a signal, the way the
+#    watcher surfaces it. The stub crew verdict is deliberately NOT provably
+#    working, so an escalation here can only come from the supervisor's own
+#    peer decision: if the peer path did not handle the wake, the ordinary
+#    classifier would escalate it and the "absorbed" checks below would fail.
+# ============================================================================
+
+PEER_ID=
+PEER_LEDGER=
+PEER_STATUS=
+PEER_QUEUE=
+PEER_SEQ=0
+
+# peer_reset <id>
+# Prepare a peer source with an empty receipt ledger, an empty status file and
+# an empty wake queue.
+peer_reset() {  # <id>
+  PEER_ID=$1
+  PEER_SEQ=0
+  PEER_LEDGER="$STATE_DIR/comms-receipts/$PEER_ID/receipts.tsv"
+  PEER_STATUS="$STATE_DIR/$PEER_ID.status"
+  PEER_QUEUE="$STATE_DIR/.wake-queue"
+  mkdir -p "$STATE_DIR/comms-receipts/$PEER_ID"
+  : > "$PEER_LEDGER"
+  : > "$PEER_STATUS"
+  : > "$PEER_QUEUE"
+  export FM_WATCH_SUPERVISE_COALESCE_SECS=5
+  export FM_STUB_CREW_VERDICT='state: stopped · source: none · stub'
+  export FM_WATCH_SUPERVISE_PARK_SECS=2
+  export FM_STUB_ARM_DELAY=0.05
+  printf 'signal: %s\n' "$PEER_STATUS" > "$FIXTURE"
+}
+
+# peer_drop <name> [content]
+# One received file: its receipt, its status line, and its pending wake.
+# Prints the file's sha256.
+peer_drop() {  # <name> [content]
+  local name=$1 content="${2:-content of $1}" sha
+  sha=$(printf '%s' "$content" | sha256sum | awk '{print $1}')
+  PEER_SEQ=$((PEER_SEQ + 1))
+  printf '%s\t%s\n' "$sha" "$name" >> "$PEER_LEDGER"
+  printf 'comms-received: %s %s sha=%s bytes=%s | untrusted-reply-text: %s\n' \
+    "$PEER_ID" "$name" "$(printf '%s' "$sha" | cut -c1-12)" "${#content}" "$content" \
+    >> "$PEER_STATUS"
+  printf '%s\t%s\tsignal\t%s.status\tcomms received from %s: %s\n' \
+    "$(date +%s)" "$PEER_SEQ" "$PEER_ID" "$PEER_ID" "$name" >> "$PEER_QUEUE"
+  printf '%s' "$sha"
+}
+
+# --- 8a. A republished machine artefact escalates the FIRST time ------------
+new_home
+export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
+peer_reset peer-a
+sha_board=$(peer_drop CAPTAIN-BOARD.html)
+run_bounded 30 "$SUPERVISE" > "$OUT" 2>&1
+rc=$?
+
+if [ "$rc" -eq 0 ] && grep -q 'ESCALATION' "$OUT" 2>/dev/null; then
+  ok "peer republication: the first republished machine artefact escalates"
+else
+  bad "peer republication: the first republished machine artefact did not escalate (rc=$rc)"
+  sed 's/^/       /' "$OUT"
+fi
+
+if grep -q "source=peer-a" "$OUT" 2>/dev/null \
+   && grep -q "latest=CAPTAIN-BOARD.html" "$OUT" 2>/dev/null \
+   && grep -q "sha=$sha_board" "$OUT" 2>/dev/null; then
+  ok "peer republication: the escalation names the source, the artefact and its sha256"
+else
+  bad "peer republication: the escalation does not name the source, the artefact and its sha256"
+  sed 's/^/       /' "$OUT"
+fi
+
+# --- 8b. Republishing inside the window is absorbed, and the escalation
+#        states the absorbed count, the source, the latest artefact and sha --
+new_home
+export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
+peer_reset peer-a
+sha_board=$(peer_drop CAPTAIN-BOARD.html)
+run_bounded 30 "$SUPERVISE" > "$OUT" 2>&1
+rc=$?
+if [ "$rc" -eq 0 ] && grep -q 'ESCALATION' "$OUT" 2>/dev/null; then
+  ok "peer coalescing: the first republication establishes the window and escalates"
+else
+  bad "peer coalescing: the first republication did not escalate (rc=$rc)"
+  sed 's/^/       /' "$OUT"
+fi
+
+# Two more republications of the same artefact from the same source, inside
+# the window.
+peer_drop CAPTAIN-BOARD.html 'second republication' >/dev/null
+peer_drop CAPTAIN-BOARD.html 'third republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT.2" 2>&1
+rc=$?
+
+if grep -q 'republication absorbed' "$OUT.2" 2>/dev/null; then
+  ok "peer coalescing: republications inside the window are absorbed, not escalated"
+else
+  bad "peer coalescing: the republications inside the window were not absorbed"
+  sed 's/^/       /' "$OUT.2"
+fi
+
+if grep -q 'ESCALATION' "$OUT.2" 2>/dev/null; then
+  bad "peer coalescing: an absorbed republication produced an escalation"
+  sed 's/^/       /' "$OUT.2"
+else
+  ok "peer coalescing: an absorbed republication produced no escalation"
+fi
+
+if grep -q 'absorbed=2' "$OUT.2" 2>/dev/null; then
+  ok "peer coalescing: the absorbed count states how many republications were folded in"
+else
+  bad "peer coalescing: the absorbed count is missing or wrong"
+  sed 's/^/       /' "$OUT.2"
+fi
+
+# The window closes, and the next republication escalates. That escalation is
+# where the absorbed republications are reported.
+sleep 6
+sha_board4=$(peer_drop CAPTAIN-BOARD.html 'fourth republication')
+run_bounded 30 "$SUPERVISE" > "$OUT.3" 2>&1
+rc=$?
+
+if grep -q 'ESCALATION' "$OUT.3" 2>/dev/null; then
+  ok "peer coalescing: the republication after the window escalates again"
+else
+  bad "peer coalescing: the republication after the window did not escalate"
+  sed 's/^/       /' "$OUT.3"
+fi
+
+if grep -q "source=peer-a" "$OUT.3" 2>/dev/null \
+   && grep -q 'absorbed=2' "$OUT.3" 2>/dev/null \
+   && grep -q "latest=CAPTAIN-BOARD.html" "$OUT.3" 2>/dev/null \
+   && grep -q "sha=$sha_board4" "$OUT.3" 2>/dev/null; then
+  ok "peer coalescing: the escalation states the absorbed count, the source, the latest artefact and its sha256"
+else
+  bad "peer coalescing: the escalation does not state the absorbed count, the source, the latest artefact and its sha256"
+  sed 's/^/       /' "$OUT.3"
+fi
+
+# --- 8c. The absorbed count resets after the window ------------------------
+new_home
+export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
+peer_reset peer-a
+peer_drop CAPTAIN-BOARD.html 'first republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT" 2>&1
+peer_drop CAPTAIN-BOARD.html 'second republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT.2" 2>&1
+if grep -q 'absorbed=1' "$OUT.2" 2>/dev/null; then
+  ok "peer coalescing: one republication inside the window is counted as absorbed"
+else
+  bad "peer coalescing: the first absorbed republication was not counted"
+  sed 's/^/       /' "$OUT.2"
+fi
+
+sleep 6
+peer_drop CAPTAIN-BOARD.html 'third republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT.3" 2>&1
+if grep -q 'ESCALATION' "$OUT.3" 2>/dev/null && grep -q 'absorbed=1' "$OUT.3" 2>/dev/null; then
+  ok "peer coalescing: the escalation after the window reports the count that was folded in"
+else
+  bad "peer coalescing: the escalation after the window does not report the folded-in count"
+  sed 's/^/       /' "$OUT.3"
+fi
+
+# The count must start again from zero in the new window.
+peer_drop CAPTAIN-BOARD.html 'fourth republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT.4" 2>&1
+if grep -q 'republication absorbed' "$OUT.4" 2>/dev/null && grep -q 'absorbed=1' "$OUT.4" 2>/dev/null; then
+  ok "peer coalescing: the absorbed count resets after the window"
+else
+  bad "peer coalescing: the absorbed count did not reset after the window"
+  sed 's/^/       /' "$OUT.4"
+fi
+
+# --- 8d. A message to the Controller escalates immediately, inside the
+#        window, even when republications were absorbed before it ----------
+new_home
+export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
+peer_reset peer-a
+export FM_WATCH_SUPERVISE_COALESCE_SECS=300
+peer_drop CAPTAIN-BOARD.html 'board republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT" 2>&1
+if grep -q 'ESCALATION' "$OUT" 2>/dev/null; then
+  ok "peer message: the window is established by the first republication"
+else
+  bad "peer message: the first republication did not escalate"
+  sed 's/^/       /' "$OUT"
+fi
+
+peer_drop lane-ledger.tsv 'ledger republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT.2" 2>&1
+if grep -q 'republication absorbed' "$OUT.2" 2>/dev/null; then
+  ok "peer message: a republication inside the window is absorbed before the message arrives"
+else
+  bad "peer message: the republication before the message was not absorbed"
+  sed 's/^/       /' "$OUT.2"
+fi
+
+sha_msg=$(peer_drop 2026-10-21-hetz-to-controller-three-lanes-landed.md 'a message to the Controller')
+run_bounded 30 "$SUPERVISE" > "$OUT.3" 2>&1
+rc=$?
+
+if grep -q 'ESCALATION' "$OUT.3" 2>/dev/null; then
+  ok "peer message: a message to the Controller escalates immediately, inside the window"
+else
+  bad "peer message: the message to the Controller did not escalate inside the window"
+  sed 's/^/       /' "$OUT.3"
+fi
+
+if grep -q '2026-10-21-hetz-to-controller-three-lanes-landed.md' "$OUT.3" 2>/dev/null; then
+  ok "peer message: the escalation names the message the peer sent"
+else
+  bad "peer message: the escalation does not name the message"
+  sed 's/^/       /' "$OUT.3"
+fi
+
+if grep -q 'absorbed=1' "$OUT.3" 2>/dev/null; then
+  ok "peer message: the escalation still reports the republications that were absorbed before it"
+else
+  bad "peer message: the escalation does not report the absorbed republications"
+  sed 's/^/       /' "$OUT.3"
+fi
+
+# --- 8e. A message and a republication arriving together produce ONE
+#        escalation that names both ----------------------------------------
+new_home
+export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
+peer_reset peer-a
+sha_board=$(peer_drop CAPTAIN-BOARD.html 'board republication')
+sha_msg=$(peer_drop 2026-10-21-hetz-to-controller-three-lanes-landed.md 'a message to the Controller')
+run_bounded 30 "$SUPERVISE" > "$OUT" 2>&1
+rc=$?
+
+escalations=$(grep -c 'ESCALATION' "$OUT" 2>/dev/null || printf '0')
+if [ "$escalations" -eq 1 ]; then
+  ok "peer message and republication together: exactly one escalation was produced"
+else
+  bad "peer message and republication together: expected 1 escalation, got $escalations"
+  sed 's/^/       /' "$OUT"
+fi
+
+if grep -q '2026-10-21-hetz-to-controller-three-lanes-landed.md' "$OUT" 2>/dev/null \
+   && grep -q "latest=CAPTAIN-BOARD.html" "$OUT" 2>/dev/null \
+   && grep -q "sha=$sha_board" "$OUT" 2>/dev/null \
+   && grep -q "sha=$sha_msg" "$OUT" 2>/dev/null; then
+  ok "peer message and republication together: the single escalation names both"
+else
+  bad "peer message and republication together: the single escalation does not name both"
+  sed 's/^/       /' "$OUT"
+fi
+
+# --- 8f. An unrecognised artefact kind escalates, never absorbed ----------
+new_home
+export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
+peer_reset peer-a
+export FM_WATCH_SUPERVISE_COALESCE_SECS=300
+peer_drop CAPTAIN-BOARD.html 'board republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT" 2>&1
+if grep -q 'ESCALATION' "$OUT" 2>/dev/null; then
+  ok "peer unrecognised artefact: the window is established by the first republication"
+else
+  bad "peer unrecognised artefact: the first republication did not escalate"
+  sed 's/^/       /' "$OUT"
+fi
+
+peer_drop 2026-10-21-hetz-ack-capacity-and-brandon-delivery.md 'an unrecognised artefact kind' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT.2" 2>&1
+if grep -q 'ESCALATION' "$OUT.2" 2>/dev/null; then
+  ok "peer unrecognised artefact: an unrecognised artefact kind escalates inside the window"
+else
+  bad "peer unrecognised artefact: the unrecognised artefact kind was not escalated"
+  sed 's/^/       /' "$OUT.2"
+fi
+
+if grep -q 'republication absorbed' "$OUT.2" 2>/dev/null; then
+  bad "peer unrecognised artefact: the unrecognised artefact kind was absorbed"
+  sed 's/^/       /' "$OUT.2"
+else
+  ok "peer unrecognised artefact: the unrecognised artefact kind was not absorbed"
+fi
+
+# --- 8g. The supervisor does not consume or mutate the wake queue ---------
+new_home
+export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
+peer_reset peer-a
+peer_drop CAPTAIN-BOARD.html 'board republication' >/dev/null
+peer_drop lane-ledger.tsv 'ledger republication' >/dev/null
+queue_before=$(sha256sum "$PEER_QUEUE" 2>/dev/null | awk '{print $1}')
+queue_lines_before=$(wc -l < "$PEER_QUEUE" 2>/dev/null | tr -d '[:space:]')
+run_bounded 30 "$SUPERVISE" > "$OUT" 2>&1
+queue_after=$(sha256sum "$PEER_QUEUE" 2>/dev/null | awk '{print $1}')
+queue_lines_after=$(wc -l < "$PEER_QUEUE" 2>/dev/null | tr -d '[:space:]')
+
+if [ -n "$queue_before" ] && [ "$queue_before" = "$queue_after" ]; then
+  ok "peer wake queue: the supervisor did not mutate the wake queue"
+else
+  bad "peer wake queue: the supervisor changed the wake queue"
+  sed 's/^/       /' "$OUT"
+fi
+
+if [ "$queue_lines_before" = "$queue_lines_after" ] && [ "$queue_lines_after" -ge 2 ]; then
+  ok "peer wake queue: the pending records are still in the queue for the primary to drain"
+else
+  bad "peer wake queue: the pending records did not survive (before=$queue_lines_before after=$queue_lines_after)"
+fi
+
+# --- 8h. An absorbed republication is still on disk and in the ledger -----
+new_home
+export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
+peer_reset peer-a
+export FM_WATCH_SUPERVISE_COALESCE_SECS=300
+peer_drop CAPTAIN-BOARD.html 'board republication' >/dev/null
+run_bounded 30 "$SUPERVISE" > "$OUT" 2>&1
+sha_ledger=$(peer_drop lane-ledger.tsv 'ledger republication')
+run_bounded 30 "$SUPERVISE" > "$OUT.2" 2>&1
+
+if grep -qxF "$sha_ledger"$'\t'"lane-ledger.tsv" "$PEER_LEDGER" 2>/dev/null; then
+  ok "peer nothing dropped: the absorbed republication is still in the durable receipt ledger"
+else
+  bad "peer nothing dropped: the absorbed republication is not in the receipt ledger"
+fi
+
+if grep -q "comms-received: peer-a lane-ledger.tsv" "$PEER_STATUS" 2>/dev/null; then
+  ok "peer nothing dropped: the absorbed republication is still recorded on the peer status channel"
+else
+  bad "peer nothing dropped: the absorbed republication is not recorded on the peer status channel"
+fi
+
+# ============================================================================
 # House-style checks on the new script itself.
 # ============================================================================
 if bash -n "$SUPERVISE" 2>/dev/null; then
