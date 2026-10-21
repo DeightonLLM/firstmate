@@ -3,11 +3,17 @@
 Status: ACTIVE.
 Owner: this document owns the canonical format for this repository.
 Machine checker: `bin/fm-todo-prefix-check.sh`.
-Tests: `tests/fm-todo-prefix-check.test.sh`.
+Entry point that delegates to it: `bin/fm-lane-naming-check.sh`.
+Tests: `tests/fm-todo-prefix-check.test.sh`, `tests/fm-lane-naming-check.test.sh`,
+`tests/fm-lane-naming-spawn-integrity.test.sh`.
 
 This contract replaces three competing formats that were live at once.
 The adopted format is the one that is machine-enforced across surfaces, because it is the only one that survives the round trip to the other host's tracker.
 The competing forms are listed under "Rejected legacy formats" below.
+
+There is exactly one implementation of this format.
+`bin/fm-todo-prefix-check.sh` owns the alias table, the token lists, the lane-key shape and the registry rules; `bin/fm-lane-naming-check.sh` forwards every check to it and keeps no second copy.
+Two copies of the vocabulary is how the three-segment and four-segment lane keys drifted apart in the first place.
 
 ## Canonical board row prefix
 
@@ -37,25 +43,45 @@ Lowercase, no spaces.
 The task segment may contain hyphens and dots.
 Example: `pi-luna6-brandon-theme-whoosh`.
 
+The harness segment is NOT optional.
+Without it a `mcode` lane and a `pi` lane running the same model are indistinguishable, which is exactly the confusion the contract exists to prevent.
+Captain renewed this requirement on 2026-10-18, and the canonical checker, the spawn gate and the registry checker all enforce it.
+
 ## Model alias table
 
-The alias table lives in exactly one place, `bin/fm-todo-prefix-check.sh`, and maps each alias to its exact catalog identifier.
+The alias table lives in exactly one place, `bin/fm-todo-prefix-check.sh`, and maps each alias to its exact catalog identifier and its class.
 
-| Alias | Exact catalog identifier |
-|---|---|
-| `m3.1f` | `minimax/MiniMax-M3.1-Flash` |
-| `m3.1` | `minimax/MiniMax-M3.1` |
-| `luna6` | `openai-codex/gpt-6-luna` |
-| `glm5.3f` | `zai/glm-5.3-flash` |
-| `gem38f` | `agy/gemini-3.8-flash-medium` |
-| `pi` | `minimax/MiniMax-M3.1-Flash`, the Pi session default model, kept as a legacy alias |
+| Alias | Exact catalog identifier | Class |
+|---|---|---|
+| `m3.1f` | `minimax/MiniMax-M3.1-Flash` | active |
+| `m3.1` | `minimax/MiniMax-M3.1` | active |
+| `luna6` | `openai-codex/gpt-6-luna` | active |
+| `glm5.3f` | `zai/glm-5.3-flash` | active |
+| `gem38f` | `agy/gemini-3.8-flash-medium` | active |
+| `pi` | `minimax/MiniMax-M3.1-Flash`, the Pi session default model, kept as a legacy alias | active |
+| `m2.7h` | `minimax/MiniMax-M2.7-highspeed` | retired |
+| `m2.7` | `minimax/MiniMax-M2.7` | retired |
 
-Alternate spellings resolve to the same canonical alias: `m31`, `m31f`, `g38f`.
-The cross-surface tracker writes its own abbreviations as `G38F` and `M31`, so the checker accepts those spellings in a board prefix.
+Alternate spellings resolve to the same canonical alias: `m31`, `m31f`, `m27`, `m27h`, `m27highspeed`, `g38f`.
+The cross-surface tracker writes its own abbreviations as `G38F` and `M31`, and the earlier version of the todo prompt style wrote `m27-highspeed` and `m31`, so the checker accepts those spellings in a board prefix.
+
+### Active and retired aliases
+
+The MiniMax M2.7 families were retired for dispatch on 2026-10-19, so a lane minted today must not be named for them.
+But a lane key and a registry row are history: a row that recorded a lane that really ran on M2.7-highspeed cannot be rewritten into a model that lane never ran, and a registry that cannot validate its own history is not a registry.
+
+So an alias has a class:
+
+- **active** - may appear anywhere, including a brand new lane key.
+- **retired** - resolves everywhere a model is NAMED (board row, historical lane key, registry row), and is refused where a NEW lane key is minted.
+
+The dispatch config decides what is dispatched; the alias table decides what may be named.
+A retired alias is not a route back to a retired model.
 
 ## Tokens
 
-Harness tokens: `pi`, `codex`, `claude`, `opencode`, `mcode`, `grok`, `kimi`, `agy`.
+Harness tokens: `pi`, `codex`, `claude`, `opencode`, `mcode`, `grok`, `kimi`, `agy`, `minimax-code`.
+The `minimax-code` harness is written `mcode` in a lane key; `minimax-code` is accepted as well, because every `state/<id>.meta` and `config/crew-dispatch.json` records that long harness name.
 
 Effort tokens: `unknown`, the bare codes `l`, `m`, `h`, `xh`, `x`, and the spelled-out `low`, `medium`, `high`, `xhigh`, `max`.
 `max` is accepted by the checker but is only dispatched on explicit captain preference.
@@ -63,8 +89,12 @@ Effort tokens: `unknown`, the bare codes `l`, `m`, `h`, `xh`, `x`, and the spell
 Use `unknown` when the effort was not measured, never a guess.
 
 Host tokens: any hostname token.
-This fleet uses `brandon` (this host, `157.180.99.39`), `hd2stack`, `controller` and `elevate`.
+This fleet uses `brandon` (`brandon-compute`, `157.180.99.39`), `hd2stack`, `controller` and `elevate`.
 The host segment is a hostname, so a new host needs no code change.
+
+House style for the host segment: the host is where the owner RUNS.
+A lane in the main firstmate home runs on `controller`, so its key is `<harness>-<model>-controller-<task>`.
+`firstmate` names a HOME, not a host, and is not used as a host token.
 
 ## Case policy
 
@@ -79,9 +109,10 @@ Each of these is rejected by the checker with a message naming the expected cano
 |---|---|---|
 | Owner role inside the prefix | `[mcode·luna6 m @brandon \| worker] do the work` | The owner role is not part of the canonical prefix. State it in the task text. |
 | Owner and host only | `[controller @ brandon] reconcile evidence - running` | No harness and model segment. |
-| Model and surface only | `[m3.1f @ brandon] widget fix - working` | No harness, model abbreviation or effort token. |
+| Model and surface only | `[m2.7h @ brandon] widget fix - working` | No harness, model abbreviation or effort token. |
 | No effort token | `[mcode·luna6 @brandon] missing effort` | The effort token is mandatory, or the literal `unknown`. |
-| Legacy lane key | `m3.1f-hd2-build` | A lane key needs a harness segment. |
+| Legacy lane key, three segments | `m2.7-hd2-build` | A lane key needs a harness segment. |
+| Legacy lane key, no model or host | `build-ttft` | A lane key needs the harness, model and host segments. |
 
 ## The checker
 
@@ -90,7 +121,6 @@ Each of these is rejected by the checker with a message naming the expected cano
     bin/fm-todo-prefix-check.sh --lane-key "<lane-key>"
     bin/fm-todo-prefix-check.sh --registry <path.tsv>
     bin/fm-todo-prefix-check.sh --self-check <dispatch-config.json>
-    bin/fm-todo-prefix-check.sh --alias-table
     bin/fm-todo-prefix-check.sh --help
 
 Exit codes:
@@ -99,12 +129,11 @@ Exit codes:
 - `1` one or more inputs are invalid, and the offending input is named on stderr.
 - `2` a usage error, or a fatal `--self-check` alias gap.
 
-`--alias-table` prints the alias table as `<alias><TAB><exact catalog identifier>` lines, one per alias in table order.
-It is read-only and always exits 0.
-It exists so the exact catalog identifier behind each alias is readable from outside the script that owns the table.
-
 The checker never edits or fixes its input.
 It only validates and reports.
+
+`bin/fm-lane-naming-check.sh` is the same contract behind a second entry point, for the callers that already use it.
+It keeps its own CLI (a single string argument, `--stdin`, a registry file path, and `--self-check <dispatch-config.json>`) and its exit codes (`0` valid, `1` invalid, `2` self-check fatal), and forwards every check to the owner, so the two entry points cannot disagree.
 
 ## Registry mode
 
@@ -114,22 +143,39 @@ It only validates and reports.
 
 Comment lines beginning with `#` and blank lines are skipped.
 Every data row must have exactly 7 TAB-separated fields.
-The `lane_key` column must satisfy the canonical lane-key format, and its model segment must agree with the `model` column.
-Run id identity rules are not owned here; `bin/fm-lane-naming-check.sh` owns those.
+
+How the four-segment key maps onto those columns:
+
+| Column | Holds | Cross-check |
+|---|---|---|
+| `run_id` | a UUID that identifies ONE lane | must be a UUID, and no earlier row may claim it |
+| `lane_key` | `<harness>-<model>-<host>-<task>` | must be canonical |
+| `model` | the model that ran: a canonical alias, or the exact catalog identifier with an optional effort marker such as ` (fast)` | the key's model segment must equal the alias of this value |
+| `surface` | the host the lane ran on, optionally with a legacy `/pane` suffix (`brandon/async-1`) | the key's host segment must equal the host token, the part before any `/` |
+| `task` | what the lane was for | not cross-checked against the key |
+| `state` | the lane's state | not cross-checked |
+| `output` | the artifact path | not cross-checked |
+
+Two registry rules this document owns, because the owner script owns the registry rules:
+
+- **run_id identity.** A run id identifies one lane, so every row needs its own UUID. A workflow run id shared by sibling lanes is not a lane id.
+- **legacy row layout.** Rows written before 2026-10-19 recorded the lane's effort marker in the `surface` column instead of a host token. Such a row records no host, so its `lane_key` host segment is not cross-checked; the checker reports how many such rows it found on stdout and never fails them.
 
 ## Self-check mode
 
 `--self-check` binds the hardcoded alias table to a dispatch config.
 It derives the lane-key alias for every configured MiniMax model id and fails with exit 2 when a configured MiniMax model has no alias in the table.
 Aliases that no configured model derives are reported on stdout as informational warnings and never change the exit code.
-This mirrors `bin/fm-lane-naming-check.sh --self-check` so the two checks cannot contradict.
+A configured model that derives to a retired alias still binds, and is reported, because the alias resolves.
 
 The derivation rule, one canonical statement:
 
     minimax/MiniMax-M<family>[-<tier>]  ->  family + tier-marker
     tier-marker: 'highspeed' -> 'h', 'flash' -> 'f', bare or unrecognised -> ''
+    minimax/MiniMax-M2.7-highspeed      -> m2.7h
     minimax/MiniMax-M3.1-Flash  -> m3.1f
-    minimax/MiniMax-M3.1        -> m3.1
+    minimax/MiniMax-M3.1                -> m3.1
+    minimax/MiniMax-M2.7                -> m2.7
 
 Other providers have no derivation rule and are out of scope for this binding.
 
@@ -143,3 +189,8 @@ Other providers have no derivation rule and are out of scope for this binding.
   The checker enforces the canonical prefix on any row it is given, and a row without the prefix is rejected.
   A deliberate action-first title is a deviation this checker will report, so decide it before running the checker over the live board.
 - The owner-role segment of the earlier format is not lost, it moves into the task text.
+- `data/captain.md` (2026-10-17) still records the lane key as `<model>-<surface>-<task>`.
+  That entry is the Captain's own file and predates the 2026-10-18 renewal.
+  The three-segment form is rejected by the checker, as listed under "Rejected legacy formats" above, and the canonical form here is the one the checker enforces.
+  The Captain's file should be brought into line by whoever owns it.
+

@@ -1,28 +1,33 @@
 #!/usr/bin/env bash
-# tests/fm-lane-naming-spawn-integrity.test.sh - TDD: lane naming must fail at spawn.
+# tests/fm-lane-naming-spawn-integrity.test.sh - lane naming must fail at spawn.
 #
-# RED: A lane key is the task ID (AGENT-TODO-PROMPT-STYLE.md). The naming
-# convention (<model>-<surface>-<task>, lowercase) is validated by
-# fm-lane-naming-check.sh, but fm-spawn.sh never calls it. This test proves
-# an invalid lane key is currently ACCEPTED (RED), then the fix turns it GREEN.
+# A lane key is the task ID (AGENT-TODO-PROMPT-STYLE.md). The canonical
+# convention is <harness>-<model>-<host>-<task>, lowercase, enforced by
+# bin/fm-lane-naming-check.sh, which fm-spawn.sh calls before it creates any
+# endpoint, worktree or state.
+#
+# The harness segment is not optional: without it a mcode lane and a pi lane
+# running the same model are indistinguishable.
 #
 # Valid lane key examples:
-#   m3.1f-hd2-build   gem38f-dubz-comms   luna6-brandon-audit
+#   pi-luna6-brandon-theme-whoosh   mcode-m3.1f-hd2stack-build
 #
-# Invalid lane key examples (will be used in RED test then rejected in GREEN):
-#   HD2-BUILD        (uppercase)
-#   m2.7-hd2         (missing task segment)
-#   m2.7hd2build     (no hyphens - not three segments)
+# Invalid lane key examples (each must be refused with exit 5):
+#   m3.1f-firstmate-lockdeadline   (three segments: no harness)
+#   m2.7-hd2                       (three segments: no task)
+#   HD2-BUILD                      (uppercase)
 #
-# Every spawn below runs with FM_DISPATCH_GUARD_BYPASS=1.  The dispatch guard
-# is a DIFFERENT gate from the lane-naming gate this suite measures: it
-# refuses on host load saturation, live-lane count and provider quota, none of
-# which is a lane-naming fact.  Without the bypass the suite aborts on a
-# saturated host before it ever reaches the naming gate, so the naming
-# assertions would be measured only when the machine happened to be idle.
-# The bypass is the same one tests/fm-spawn-liveness-verification.test.sh uses
-# for its spawn calls; the Sol ban is evaluated before any bypass and stays
-# in force.
+# The grandfather clause stays: a lane that already has state/<id>.meta is an
+# existing recovery case and is not blocked by the naming gate, so unlanded
+# work is never stranded.
+#
+# The tests below run the spawn in a scratch home with a scratch project, a
+# Every case function below is invoked through the runner list at the end of
+# this file, which shellcheck cannot resolve. The repo's own convention for
+# indirectly invoked functions is the SC2329 directive (tests/fm-pending-reply.test.sh).
+# shellcheck disable=SC2329
+# scratch tmux socket and a scratch state directory, so nothing outside the
+# temporary directory is touched.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -31,109 +36,70 @@ set -u
 SPAWN="$ROOT/bin/fm-spawn.sh"
 
 # =============================================================================
-# RED: test shows an invalid lane key is currently accepted at spawn
+# helpers
 # =============================================================================
 
-# test_invalid_lane_key_accepted_at_spawn: the current fm-spawn.sh does NOT
-# call fm-lane-naming-check.sh, so a task ID with an invalid lane key format
-# is spawned without error. This test PROVES the gap by expecting spawn to
-# SUCCEED (or at least not exit before the lane-naming gate).
-#
-# After the fix: this test will FAIL because spawn now exits with code 5
-# (lane naming violation). We then add test_invalid_lane_key_rejected_at_spawn
-# to capture the GREEN state.
-test_invalid_lane_key_accepted_at_spawn() {
-  local tmp out rc
-
-  # Build a scratch firstmate home.
+# make_scratch_home: build a scratch firstmate home and print its path.
+make_scratch_home() {
+  local tmp
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-spawn-test.XXXXXX")
-  mkdir -p "$tmp/state" "$tmp/data" "$tmp/config" "$tmp/projects"
-  # Provide a minimal fake project dir so fm-spawn.sh passes its cd gate.
-  mkdir -p "$tmp/projects/firstmate"
-  git init -q "$tmp/projects/firstmate"
-  printf 'first file\n' > "$tmp/projects/firstmate/README.md"
-  git -C "$tmp/projects/firstmate" add README.md
-  git -C "$tmp/projects/firstmate" commit -qm init
-
-  # Write a brief for a ship task whose ID is an INVALID lane key (uppercase).
-  # The brief must exist so fm-spawn.sh does not refuse earlier on "no brief".
-  mkdir -p "$tmp/data/invalid-lane-key"
-  cat > "$tmp/data/invalid-lane-key/brief.md" <<'BRIEF'
-# Task
-Test task with invalid lane key.
-BRIEF
-
-  # Spawn with an invalid lane key as the task ID.
-  # FM_SPAWN_NO_GUARD=1 skips the watcher guard (harmless in test).
-  # We use a raw sh launch so no real agent CLI is needed.
-  out=$(FM_HOME="$tmp" \
-        FM_ROOT_OVERRIDE="$ROOT" \
-        FM_STATE_OVERRIDE="$tmp/state" \
-        FM_DATA_OVERRIDE="$tmp/data" \
-        FM_CONFIG_OVERRIDE="$tmp/config" \
-        FM_PROJECTS_OVERRIDE="$tmp/projects" \
-        FM_SPAWN_NO_GUARD=1 \
-        FM_DISPATCH_GUARD_BYPASS=1 \
-        "$SPAWN" invalid-lane-key firstmate "sh -c 'echo spawned'" 2>&1); rc=$?
-
-  rm -rf "$tmp"
-
-  # RED STATE: spawn currently exits at the lane-naming gate because the check
-  # is NOT wired. It either succeeds (rc=0, agent launched) or fails on a
-  # different gate (brief exists, worktree ok, etc.) — but NOT on lane naming.
-  # After the fix, spawn will refuse at lane naming with exit 5.
-  #
-  # The test below expects the CURRENT broken behavior so we can capture the
-  # RED signature. Commented-out assertion documents what the GREEN state needs.
-  if [ "$rc" -eq 5 ]; then
-    # GREEN: spawn refused at lane naming gate — this is the fixed state.
-    # Comment out or delete this branch after verifying the fix.
-    pass "spawn correctly refused invalid lane key at lane-naming gate (rc=5)"
-  else
-    # RED: spawn did NOT refuse at lane naming gate.
-    # Show what happened so the reviewer can confirm the gap.
-    printf 'RED: fm-spawn.sh accepted invalid lane key "invalid-lane-key" (rc=%d)\n' "$rc" >&2
-    printf 'Output: %s\n' "$out" >&2
-    fail "spawn should refuse invalid lane key; current gap: spawn proceeds (rc=$rc)"
-  fi
-}
-
-# =============================================================================
-# GREEN: after the fix, an invalid lane key is rejected at spawn
-# =============================================================================
-
-# test_invalid_lane_key_rejected_at_spawn_uppercase: uppercase lane key rejected.
-test_invalid_lane_key_rejected_at_spawn_uppercase() {
-  local tmp out rc
-
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-upper-test.XXXXXX")
-  mkdir -p "$tmp/state" "$tmp/data" "$tmp/config" "$tmp/projects"
-  mkdir -p "$tmp/projects/firstmate"
+  mkdir -p "$tmp/state" "$tmp/data" "$tmp/config" "$tmp/projects/firstmate" "$tmp/tmux"
   git init -q "$tmp/projects/firstmate"
   printf 'x\n' > "$tmp/projects/firstmate/README.md"
   git -C "$tmp/projects/firstmate" add README.md
   git -C "$tmp/projects/firstmate" commit -qm init
+  # A low load reading, so the dispatch guard's load ceiling is evaluated and
+  # passes instead of refusing a saturated host before the naming gate.
+  printf '0.10 0.20 0.30 1/100 1234\n' > "$tmp/loadavg"
+  printf '%s\n' "$tmp"
+}
 
-  mkdir -p "$tmp/data/HD2-BUILD"
-  cat > "$tmp/data/HD2-BUILD/brief.md" <<'BRIEF'
-# Task
-Uppercase lane key test.
-BRIEF
+# run_spawn <scratch_home> <lane_key>: spawn a lane in the scratch home.
+run_spawn() {
+  local tmp=$1 key=$2
+  mkdir -p "$tmp/data/$key"
+  printf '# Task\nLane naming spawn test.\n' > "$tmp/data/$key/brief.md"
+  FM_HOME="$tmp" \
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_STATE_OVERRIDE="$tmp/state" \
+  FM_DATA_OVERRIDE="$tmp/data" \
+  FM_CONFIG_OVERRIDE="$tmp/config" \
+  FM_PROJECTS_OVERRIDE="$tmp/projects" \
+  FM_SPAWN_NO_GUARD=1 \
+  FM_DISPATCH_GUARD_LOADAVG="$tmp/loadavg" \
+  FM_DISPATCH_GUARD_QUOTA_BYPASS=1 \
+  TMUX_TMPDIR="$tmp/tmux" \
+  "$SPAWN" "$key" "projects/firstmate" "sh -c 'echo ok'" --backend tmux 2>&1
+}
 
-  out=$(FM_HOME="$tmp" \
-        FM_ROOT_OVERRIDE="$ROOT" \
-        FM_STATE_OVERRIDE="$tmp/state" \
-        FM_DATA_OVERRIDE="$tmp/data" \
-        FM_CONFIG_OVERRIDE="$tmp/config" \
-        FM_PROJECTS_OVERRIDE="$tmp/projects" \
-        FM_SPAWN_NO_GUARD=1 \
-        FM_DISPATCH_GUARD_BYPASS=1 \
-        "$SPAWN" "HD2-BUILD" firstmate "sh -c 'echo ok'" 2>&1); rc=$?
+# =============================================================================
+# The gate must refuse a key that is not canonical
+# =============================================================================
+
+# test_three_segment_lane_key_rejected_at_spawn: the three-segment legacy form
+# is refused with exit 5 and a message naming the expected canonical shape.
+test_three_segment_lane_key_rejected_at_spawn() {
+  local tmp out rc
+  tmp=$(make_scratch_home)
+  out=$(run_spawn "$tmp" "m3.1f-firstmate-lockdeadline"); rc=$?
   rm -rf "$tmp"
 
-  # Spawn MUST refuse with exit 5 (lane naming violation).
-  [ "$rc" -eq 5 ] || fail "spawn must exit 5 for invalid lane key, got $rc: $out"
-  # Error message must name the offending lane key.
+  [ "$rc" -eq 5 ] || fail "spawn must exit 5 for a three-segment lane key, got $rc: $out"
+  printf '%s\n' "$out" | grep -qi "m3.1f-firstmate-lockdeadline" \
+    || fail "error message must name the offending lane key: $out"
+  printf '%s\n' "$out" | grep -qi "<harness>-<model>-<host>-<task>" \
+    || fail "error message must name the expected canonical shape: $out"
+  pass "three-segment lane key refused at spawn with exit 5 and the expected shape named"
+}
+
+# test_invalid_lane_key_rejected_at_spawn_uppercase: uppercase lane key rejected.
+test_invalid_lane_key_rejected_at_spawn_uppercase() {
+  local tmp out rc
+  tmp=$(make_scratch_home)
+  out=$(run_spawn "$tmp" "HD2-BUILD"); rc=$?
+  rm -rf "$tmp"
+
+  [ "$rc" -eq 5 ] || fail "spawn must exit 5 for an invalid lane key, got $rc: $out"
   printf '%s\n' "$out" | grep -qi "HD2-BUILD" \
     || fail "error message must name the offending lane key 'HD2-BUILD': $out"
   pass "uppercase lane key 'HD2-BUILD' rejected at spawn with exit 5"
@@ -142,92 +108,81 @@ BRIEF
 # test_invalid_lane_key_rejected_at_spawn_missing_task_segment: key missing task.
 test_invalid_lane_key_rejected_at_spawn_missing_task_segment() {
   local tmp out rc
-
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-seg-test.XXXXXX")
-  mkdir -p "$tmp/state" "$tmp/data" "$tmp/config" "$tmp/projects"
-  mkdir -p "$tmp/projects/firstmate"
-  git init -q "$tmp/projects/firstmate"
-  printf 'x\n' > "$tmp/projects/firstmate/README.md"
-  git -C "$tmp/projects/firstmate" add README.md
-  git -C "$tmp/projects/firstmate" commit -qm init
-
-  mkdir -p "$tmp/data/m2.7-hd2"
-  cat > "$tmp/data/m2.7-hd2/brief.md" <<'BRIEF'
-# Task
-Missing task segment test.
-BRIEF
-
-  out=$(FM_HOME="$tmp" \
-        FM_ROOT_OVERRIDE="$ROOT" \
-        FM_STATE_OVERRIDE="$tmp/state" \
-        FM_DATA_OVERRIDE="$tmp/data" \
-        FM_CONFIG_OVERRIDE="$tmp/config" \
-        FM_PROJECTS_OVERRIDE="$tmp/projects" \
-        FM_SPAWN_NO_GUARD=1 \
-        FM_DISPATCH_GUARD_BYPASS=1 \
-        "$SPAWN" "m2.7-hd2" firstmate "sh -c 'echo ok'" 2>&1); rc=$?
+  tmp=$(make_scratch_home)
+  out=$(run_spawn "$tmp" "mcode-m3.1f-hd2stack"); rc=$?
   rm -rf "$tmp"
 
-  [ "$rc" -eq 5 ] || fail "spawn must exit 5 for missing task segment, got $rc: $out"
-  printf '%s\n' "$out" | grep -qi "m2.7-hd2" \
-    || fail "error must name the offending key 'm2.7-hd2': $out"
-  pass "lane key 'm2.7-hd2' (missing task) rejected at spawn with exit 5"
+  [ "$rc" -eq 5 ] || fail "spawn must exit 5 for a missing task segment, got $rc: $out"
+  printf '%s\n' "$out" | grep -qi "mcode-m3.1f-hd2stack" \
+    || fail "error must name the offending key 'mcode-m3.1f-hd2stack': $out"
+  pass "lane key 'mcode-m3.1f-hd2stack' (missing task) rejected at spawn with exit 5"
 }
 
-# test_valid_lane_key_accepted_at_spawn: valid lane key still works.
-test_valid_lane_key_accepted_at_spawn() {
+# test_canonical_lane_key_accepted_at_spawn: a canonical four-segment key must
+# pass the naming gate. Any later gate may refuse it; only exit 5 is a naming
+# failure.
+test_canonical_lane_key_accepted_at_spawn() {
   local tmp out rc
-
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-valid-test.XXXXXX")
-  mkdir -p "$tmp/state" "$tmp/data" "$tmp/config" "$tmp/projects"
-  mkdir -p "$tmp/projects/firstmate"
-  git init -q "$tmp/projects/firstmate"
-  printf 'x\n' > "$tmp/projects/firstmate/README.md"
-  git -C "$tmp/projects/firstmate" add README.md
-  git -C "$tmp/projects/firstmate" commit -qm init
-
-  mkdir -p "$tmp/data/m3.1f-hd2-build"
-  cat > "$tmp/data/m3.1f-hd2-build/brief.md" <<'BRIEF'
-# Task
-Valid lane key test.
-BRIEF
-
-  # A valid lane key spawns successfully (rc=0) but may fail later at
-  # the tmux/herdr pane-creation step (no real tmux in test). We only care
-  # that it did NOT exit 5 (lane naming gate) — any non-5 exit means it
-  # passed the naming check and proceeded to the next gate.
-  out=$(FM_HOME="$tmp" \
-        FM_ROOT_OVERRIDE="$ROOT" \
-        FM_STATE_OVERRIDE="$tmp/state" \
-        FM_DATA_OVERRIDE="$tmp/data" \
-        FM_CONFIG_OVERRIDE="$tmp/config" \
-        FM_PROJECTS_OVERRIDE="$tmp/projects" \
-        FM_SPAWN_NO_GUARD=1 \
-        FM_DISPATCH_GUARD_BYPASS=1 \
-        "$SPAWN" "m3.1f-hd2-build" firstmate "sh -c 'echo ok'" 2>&1); rc=$?
+  tmp=$(make_scratch_home)
+  out=$(run_spawn "$tmp" "pi-luna6-brandon-theme-whoosh"); rc=$?
   rm -rf "$tmp"
 
-  [ "$rc" -ne 5 ] || fail "valid lane key 'm3.1f-hd2-build' should NOT be rejected at lane naming gate; got exit 5: $out"
-  pass "valid lane key 'm3.1f-hd2-build' passed the lane-naming gate (exit $rc != 5)"
+  [ "$rc" -ne 5 ] || fail "canonical lane key must NOT be rejected at the naming gate, got exit 5: $out"
+  printf '%s\n' "$out" | grep -qi "violates the canonical" \
+    && fail "canonical lane key must not be reported as a naming violation: $out"
+  pass "canonical lane key 'pi-luna6-brandon-theme-whoosh' passed the lane-naming gate (exit $rc != 5)"
 }
 
-# test_secondmate_spawn_exempt_from_lane_naming: secondmate spawn uses
-# a different naming convention (bare slug) so it must not be blocked.
+# =============================================================================
+# The grandfather clause must keep working
+# =============================================================================
+
+# test_existing_task_with_meta_is_exempt: an existing lane that already has a
+# state/<id>.meta is a recovery case. The naming rule does not apply to it, so
+# the gate must not exit 5 and strand unlanded work.
+test_existing_task_with_meta_is_exempt() {
+  local tmp out rc
+  tmp=$(make_scratch_home)
+  mkdir -p "$tmp/state"
+  printf 'window=firstmate:fm-test\nmodel=luna6\nharness=pi\nkind=task\n' \
+    > "$tmp/state/m3.1f-firstmate-recovery.meta"
+  out=$(run_spawn "$tmp" "m3.1f-firstmate-recovery"); rc=$?
+  rm -rf "$tmp"
+
+  [ "$rc" -ne 5 ] || fail "an existing lane with a .meta must be exempt from the naming gate, got exit 5: $out"
+  pass "existing lane with a .meta is exempt from the naming gate (exit $rc != 5)"
+}
+
+# test_grandfather_clause_is_still_in_spawn_source: the clause itself must stay
+# in the spawn script, or a future edit could strand unlanded work.
+test_grandfather_clause_is_still_in_spawn_source() {
+  grep -qF "\$STATE/\$ID.meta" "$SPAWN" \
+    || fail "the grandfather clause must remain in $SPAWN"
+  pass "the grandfather clause remains in fm-spawn.sh"
+}
+
+# =============================================================================
+# The gate must be wired, and it must name the canonical shape
+# =============================================================================
+
+test_checker_is_called_at_the_spawn_gate() {
+  grep -q 'fm-lane-naming-check.sh' "$SPAWN" \
+    || fail "fm-spawn.sh must call the lane naming checker"
+  grep -qi 'canonical <harness>-<model>-<host>-<task>' "$SPAWN" \
+    || fail "fm-spawn.sh must name the canonical lane key shape in its refusal"
+  pass "fm-spawn.sh calls the lane naming checker and names the canonical shape"
+}
+
+# =============================================================================
+# Secondmates use a different naming convention and stay exempt
+# =============================================================================
+
 test_secondmate_spawn_exempt_from_lane_naming() {
   local tmp out rc
-
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-2ndm-test.XXXXXX")
-  mkdir -p "$tmp/state" "$tmp/data" "$tmp/config" "$tmp/projects"
-  mkdir -p "$tmp/projects/firstmate"
-  git init -q "$tmp/projects/firstmate"
-  printf 'x\n' > "$tmp/projects/firstmate/README.md"
-  git -C "$tmp/projects/firstmate" add README.md
-  git -C "$tmp/projects/firstmate" commit -qm init
+  tmp=$(make_scratch_home)
   # Write the required secondmate home marker.
   printf 'sm-alpha\n' > "$tmp/.fm-secondmate-home"
 
-  # A secondmate with a non-lane-key ID should still be able to attempt
-  # spawn (it may fail for other reasons, but NOT for lane naming).
   out=$(FM_HOME="$tmp" \
         FM_ROOT_OVERRIDE="$ROOT" \
         FM_STATE_OVERRIDE="$tmp/state" \
@@ -235,7 +190,9 @@ test_secondmate_spawn_exempt_from_lane_naming() {
         FM_CONFIG_OVERRIDE="$tmp/config" \
         FM_PROJECTS_OVERRIDE="$tmp/projects" \
         FM_SPAWN_NO_GUARD=1 \
-        FM_DISPATCH_GUARD_BYPASS=1 \
+        FM_DISPATCH_GUARD_LOADAVG="$tmp/loadavg" \
+        FM_DISPATCH_GUARD_QUOTA_BYPASS=1 \
+        TMUX_TMPDIR="$tmp/tmux" \
         "$SPAWN" "sm-alpha" "$tmp" --secondmate 2>&1); rc=$?
   rm -rf "$tmp"
 
@@ -249,10 +206,13 @@ test_secondmate_spawn_exempt_from_lane_naming() {
 # =============================================================================
 
 for _t in \
-  test_invalid_lane_key_accepted_at_spawn \
+  test_three_segment_lane_key_rejected_at_spawn \
   test_invalid_lane_key_rejected_at_spawn_uppercase \
   test_invalid_lane_key_rejected_at_spawn_missing_task_segment \
-  test_valid_lane_key_accepted_at_spawn \
+  test_canonical_lane_key_accepted_at_spawn \
+  test_existing_task_with_meta_is_exempt \
+  test_grandfather_clause_is_still_in_spawn_source \
+  test_checker_is_called_at_the_spawn_gate \
   test_secondmate_spawn_exempt_from_lane_naming; do
   echo "# RUN: $_t"
   if ! "$_t"; then

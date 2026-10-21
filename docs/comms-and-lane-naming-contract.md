@@ -34,11 +34,14 @@ A notification is not delivery. A "delivered" report is not receipt. If you cann
 
 [`AGENT-TODO-PROMPT-STYLE.md`](../AGENT-TODO-PROMPT-STYLE.md) owns the naming format; the validator enforces only part of that contract and is not its definition.
 
+The format has one owner: `bin/fm-todo-prefix-check.sh` holds the model alias table, the harness and effort tokens, the lane-key shape and the registry rules. `bin/fm-lane-naming-check.sh` is an entry point that forwards every check to that owner, so the two cannot disagree.
+
 When given a registry file, `bin/fm-lane-naming-check.sh` requires each `lane_key` to match `<harness>-<model>-<host>-<task>`, with a recognized harness segment, and checks the model and host against the row's model and surface fields.
 The registry check also requires each `run_id` to be a UUID unique to one row; duplicate IDs are rejected, as verified by the negative control in `tests/fm-lane-naming-check.test.sh`.
 
-Known defect: direct single-key input still accepts a key without a harness segment, so a key rejected in the registry can pass when supplied directly to the checker.
-The existing test's passing assertion for a legacy harness-less lane key (see `tests/fm-lane-naming-check.test.sh`) exercises this legacy direct-input behavior; closing this gap is a separate change that needs its own test and the Captain's merge authorization.
+Closed defect: direct single-key input used to accept a key without a harness segment, so a key rejected in the registry could pass when supplied directly to the checker, and `bin/fm-spawn.sh` gated on that accepted form.
+The direct input path now enforces the same canonical four-segment rule as the registry path, so a key that is refused in the registry is refused directly too, and the spawn gate refuses a three-segment key with exit 5.
+The legacy direct-input behavior is gone, and the tests in `tests/fm-lane-naming-check.test.sh` and `tests/fm-lane-naming-spawn-integrity.test.sh` assert the closed behavior in both directions.
 
 ## 5. Model visibility and cost
 
@@ -54,7 +57,7 @@ The existing test's passing assertion for a legacy harness-less lane key (see `t
 
 ## 7. Alias-dispatch binding (m27.12)
 
-The lane-key validator's hardcoded alias set must not drift from the models actually configured for dispatch.  Q2 fixed the surface symptom by adding one MiniMax tier alias, but did not close the mechanism.
+The lane-key validator's hardcoded alias set must not drift from the models actually configured for dispatch.  Q2 fixed the surface symptom by adding `m2.7h`, but did not close the mechanism.
 
 `bin/fm-lane-naming-check.sh --self-check config/crew-dispatch.json` is the binding check.  It reads the dispatch config, derives a lane-key alias for every MiniMax model id present, and:
 
@@ -65,10 +68,12 @@ The alias derivation rule (one canonical statement, one place):
 
 - **MiniMax provider**: model id like `minimax/MiniMax-M<family>[-<tier>]`
   derives to lane-key alias = family + tier-marker, where:
-  - family = text before the first `-` in the model id tail (e.g. `m3.1`)
+  - family = text before the first `-` in the model id tail (e.g. `m2.7`)
   - tier-marker = keyword mapping of the **first** tier segment:
     `highspeed` -> `h`, `flash` -> `f`, bare/unrecognised -> `''`
-  - Example: `minimax/MiniMax-M3.1-Flash` -> `m3.1f`
+  - Example: `minimax/MiniMax-M2.7-highspeed` -> `m2.7h`
+            `minimax/MiniMax-M3.1-Flash` -> `m3.1f`
+            `minimax/MiniMax-M2.7` -> `m2.7`
 - **Other providers** (openai-codex, etc.): no programmatic rule defined.  Their model ids do not derive to lane-key aliases through the above rule.  Adding an alias for a non-MiniMax model requires explicit verification; do not guess.
 
 Adding a new MiniMax model variant to `config/crew-dispatch.json` without adding its alias to the validator's hardcoded set will now cause `--self-check` to fail and stop the pipeline.  This is the correct failure mode: it forces the developer to add the alias at the same time as the model, rather than silently diverging.

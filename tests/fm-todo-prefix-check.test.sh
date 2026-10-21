@@ -6,6 +6,10 @@
 #   Lane key:         <harness>-<model>-<host>-<task>
 #
 # The checker validates and reports. It never edits or fixes its input, and it
+# Every case function below is invoked through the runner list at the end of
+# this file, which shellcheck cannot resolve. The repo's own convention for
+# indirectly invoked functions is the SC2329 directive (tests/fm-pending-reply.test.sh).
+# shellcheck disable=SC2329
 # names the offending input on stderr when it rejects one.
 #
 # Every case runs, each case prints a PASS/FAIL line, and the suite exits
@@ -256,6 +260,81 @@ test_hd2_worked_example_passes() {
   return 0
 }
 
+# --- the lane key is one shape, and the owner holds the vocabulary ----------
+
+# test_three_segment_lane_key_rejected: the three-segment legacy form is
+# refused, and the refusal names the expected canonical shape.
+test_three_segment_lane_key_rejected() {
+  run_check --lane-key 'm3.1f-firstmate-lockdeadline'
+  expect_exit 1 "$RUN_RC" 'a three-segment lane key must be rejected' || return 1
+  expect_contains "$RUN_OUT" 'm3.1f-firstmate-lockdeadline' \
+    'the rejection must name the offending input' || return 1
+  expect_contains "$RUN_OUT" '<harness>-<model>-<host>-<task>' \
+    'the rejection must name the expected lane-key shape' || return 1
+  return 0
+}
+
+# test_retired_alias_refused_for_new_lane_key: a retired alias resolves for
+# history, but a lane minted today must not be named for a retired model.
+test_retired_alias_refused_for_new_lane_key() {
+  run_check --lane-key 'pi-m2.7h-brandon-inbox-review'
+  expect_exit 1 "$RUN_RC" 'a new lane key naming a retired alias must be rejected' || return 1
+  expect_contains "$RUN_OUT" 'retired' \
+    'the rejection must say the alias is retired' || return 1
+  return 0
+}
+
+# test_live_registry_validates_with_zero_errors: the tracked registry must
+# pass its own checker with zero error lines.
+test_live_registry_validates_with_zero_errors() {
+  local registry="$ROOT/data/async-lanes.tsv" out rc err
+  [ -f "$registry" ] || { t_fail "the tracked registry $registry does not exist"; return 1; }
+  err="$TMP_ROOT/registry-err.txt"
+  out=$(bash "$CHECK" --registry "$registry" 2>"$err"); rc=$?
+  expect_exit 0 "$rc" 'the tracked registry must validate' || return 1
+  [ ! -s "$err" ] || { t_fail "the tracked registry must validate with zero error lines: $(cat "$err")"; return 1; }
+  return 0
+}
+
+# test_registry_duplicate_run_id_rejected: a run_id identifies one lane.
+test_registry_duplicate_run_id_rejected() {
+  local file="$TMP_ROOT/registry-dup.tsv" out rc
+  printf '# run_id\tlane_key\tmodel\tsurface\ttask\tstate\toutput\n' > "$file"
+  printf 'abc123de-f123-4567-8901-abcdef123456\tpi-luna6-brandon-theme\tluna6\tbrandon\ttheme\trunning\tone\n' >> "$file"
+  printf 'abc123de-f123-4567-8901-abcdef123456\tpi-luna6-brandon-review\tluna6\tbrandon\treview\trunning\ttwo\n' >> "$file"
+  out=$(bash "$CHECK" --registry "$file" 2>&1); rc=$?
+  expect_exit 1 "$rc" 'a registry that reuses a run_id must be rejected' || return 1
+  expect_contains "$out" 'already claimed' \
+    'the rejection must explain the run_id collision' || return 1
+  return 0
+}
+
+# test_registry_host_disagreement_rejected: the key's host segment must agree
+# with the surface column.
+test_registry_host_disagreement_rejected() {
+  local file="$TMP_ROOT/registry-host.tsv" out rc
+  printf '# run_id\tlane_key\tmodel\tsurface\ttask\tstate\toutput\n' > "$file"
+  printf 'abc123de-f123-4567-8901-abcdef123456\tpi-luna6-brandon-theme\tluna6\thd2stack\ttheme\trunning\tone\n' >> "$file"
+  out=$(bash "$CHECK" --registry "$file" 2>&1); rc=$?
+  expect_exit 1 "$rc" 'a registry row whose host segment disagrees must be rejected' || return 1
+  expect_contains "$out" 'host' 'the rejection must name the host segment' || return 1
+  return 0
+}
+
+# test_registry_exact_catalog_identifier_accepted: the model column may hold
+# the exact catalog identifier, optionally with an effort marker, and the key's
+# model segment must agree with the alias it resolves to.
+test_registry_exact_catalog_identifier_accepted() {
+  local file="$TMP_ROOT/registry-identifier.tsv" out rc
+  printf '# run_id\tlane_key\tmodel\tsurface\ttask\tstate\toutput\n' > "$file"
+  printf 'abc123de-f123-4567-8901-abcdef123456\tpi-luna6-brandon-theme\topenai-codex/gpt-6-luna\tbrandon\ttheme\trunning\tone\n' >> "$file"
+  printf 'abc123de-f234-5678-9012-bcdef1234567\tpi-m3.1f-brandon-probe\tminimax/MiniMax-M3.1-Flash (fast)\tbrandon\tprobe\trunning\ttwo\n' >> "$file"
+  out=$(bash "$CHECK" --registry "$file" 2>&1); rc=$?
+  expect_exit 0 "$rc" 'a registry row may name the exact catalog identifier in the model column' || return 1
+  return 0
+}
+
+
 # --- runner ----------------------------------------------------------------
 
 # run_case <name> <function>: run one case and count the result.
@@ -293,7 +372,13 @@ for _case in \
   test_unknown_harness_rejected \
   test_lane_key_missing_task_rejected \
   test_checker_does_not_edit_input \
-  test_hd2_worked_example_passes; do
+  test_hd2_worked_example_passes \
+  test_three_segment_lane_key_rejected \
+  test_retired_alias_refused_for_new_lane_key \
+  test_live_registry_validates_with_zero_errors \
+  test_registry_duplicate_run_id_rejected \
+  test_registry_host_disagreement_rejected \
+  test_registry_exact_catalog_identifier_accepted; do
   run_case "$_case" "$_case"
 done
 
