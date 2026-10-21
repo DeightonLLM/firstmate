@@ -10,6 +10,8 @@
 #                 "BACKEND_INVALID: <name> (known: <names>)",
 #                 "STARTUP_MEMORY_BUDGET: invalid config/startup-memory-budget - <reason>",
 #                 "CREW_DISPATCH: invalid config/crew-dispatch.json - <reason>",
+#                 "CREW_DISPATCH: invalid config/dispatch.json route - <reason>",
+#                 "DISPATCH_CONFIG: invalid config/dispatch.json - <reason>",
 #                 "FLEET_SYNC: <repo>: skipped|recovered|STUCK: <detail>",
 #                 "PR_CHECK_MIGRATION: <private remediation>",
 #                 "TANGLE: <remediation>",
@@ -720,15 +722,48 @@ EOF
 }
 
 crew_dispatch_validate() {
-  local file err
-  file="$CONFIG/crew-dispatch.json"
+  # Where the routing rules live: config/dispatch.json under "route", or the
+  # legacy config/crew-dispatch.json. The legacy file is validated by path and
+  # never re-serialised, so its diagnostics keep naming that file exactly as
+  # they always did, and a secondmate home that only has the legacy file keeps
+  # working unchanged.
+  local source file label route_tmp=''
+  # A config/dispatch.json that does not parse is already reported by
+  # dispatch_config_validate; do not report the same broken file twice.
+  if [ -f "$CONFIG/dispatch.json" ] && ! "$SCRIPT_DIR/fm-harness.sh" dispatch-config-valid >/dev/null 2>&1; then
+    return 0
+  fi
+  source=$("$SCRIPT_DIR/fm-harness.sh" dispatch-route-source 2>/dev/null || true)
+  case "$source" in
+    'config/dispatch.json')
+      label='config/dispatch.json route'
+      route_tmp=$(mktemp "${TMPDIR:-/tmp}/fm-dispatch-route.XXXXXX" 2>/dev/null || true)
+      if [ -z "$route_tmp" ]; then return 0; fi
+      "$SCRIPT_DIR/fm-harness.sh" dispatch-route-json > "$route_tmp" 2>/dev/null || true
+      file="$route_tmp"
+      ;;
+    'config/crew-dispatch.json')
+      label='config/crew-dispatch.json'
+      file="$CONFIG/crew-dispatch.json"
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+  crew_dispatch_validate_file "$file" "$label"
+  if [ -n "$route_tmp" ]; then rm -f "$route_tmp"; fi
+  return 0
+}
+
+crew_dispatch_validate_file() {
+  local file=$1 label=$2 err
   [ -f "$file" ] || return 0
   if ! command -v jq >/dev/null 2>&1; then
     echo "MISSING: jq (install: $(install_cmd jq))"
     return 0
   fi
   if ! jq -e . "$file" >/dev/null 2>&1; then
-    echo "CREW_DISPATCH: invalid config/crew-dispatch.json - malformed JSON"
+    echo "CREW_DISPATCH: invalid $label - malformed JSON"
     return 0
   fi
   local verified_json
@@ -795,11 +830,11 @@ crew_dispatch_validate() {
     end
   ' "$file" 2>/dev/null || true)
   if [ -n "$err" ]; then
-    echo "CREW_DISPATCH: invalid config/crew-dispatch.json - $err"
+    echo "CREW_DISPATCH: invalid $label - $err"
     return 0
   fi
   if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
-    jq -r '
+    jq -r --arg label "$label" '
     def profile($p):
       ($p.harness | tostring)
       + (if ($p.model? != null) then "/" + ($p.model | tostring)
@@ -811,9 +846,71 @@ crew_dispatch_validate() {
         (($selector // "quota-balanced") + "[" + ([$value[] | profile(.)] | join(", ")) + "]")
       else profile($value)
       end;
-    (["BOOTSTRAP_INFO: crew dispatch active config/crew-dispatch.json"]
+    (["BOOTSTRAP_INFO: crew dispatch active " + $label]
       + [(.rules // [])[]? | "BOOTSTRAP_INFO: crew dispatch rule: " + (.when | tostring) + " -> " + profile_set(.use; .select?)]
       + (if has("default") then ["BOOTSTRAP_INFO: crew dispatch default: " + profile_set(.default; null)] else [] end))
+    | .[]
+  ' "$file"
+  fi
+}
+
+# dispatch_config_validate: validate config/dispatch.json, the ONE dispatch
+# file. It owns the crew harness, the secondmate harness/model/effort, the lane
+# ceilings, and the routing rules. A malformed value is reported here instead
+# of silently selecting around it at spawn time.
+dispatch_config_validate() {
+  local file err verified_json
+  file="$CONFIG/dispatch.json"
+  [ -f "$file" ] || return 0
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "MISSING: jq (install: $(install_cmd jq))"
+    return 0
+  fi
+  if ! jq -e . "$file" >/dev/null 2>&1; then
+    echo "DISPATCH_CONFIG: invalid config/dispatch.json - malformed JSON"
+    return 0
+  fi
+  verified_json=$("$SCRIPT_DIR/fm-harness.sh" verified-json 2>/dev/null || printf '["claude","codex","opencode","pi","pi-signed","grok","kimi","agy","minimax-code"]')
+  err=$(jq -r --argjson verified_harnesses "$verified_json" '
+    def verified($h): $verified_harnesses | index($h);
+    def cap_ok($v):
+      if ($v | type) == "number" then (($v | floor) == $v and $v >= 1)
+      elif ($v | type) == "string" then (($v | test("^[0-9]+$")) and (($v | tonumber) >= 1))
+      else false end;
+    def effort_ok($e):
+      if $e == null then true
+      elif ($e | type) != "string" then false
+      elif ($e | length) == 0 then true
+      else (["low","medium","high","xhigh","max"] | index($e)) != null end;
+    def secondmate: if (.secondmate | type) == "object" then .secondmate else {} end;
+    if type != "object" then "top-level value must be an object"
+    elif has("harness") and ((.harness | type) != "string" or (.harness | length) == 0) then "harness must be a non-empty string"
+    elif has("harness") and (verified(.harness) | not) then "unverified harness: " + (.harness | tostring)
+    elif has("model") and ((.model | type) != "string") then "model must be a string"
+    elif has("effort") and (effort_ok(.effort) | not) then "effort must be low, medium, high, xhigh, max, or empty"
+    elif has("secondmate") and ((.secondmate | type) != "object") then "secondmate must be an object"
+    elif (secondmate | has("harness")) and ((secondmate.harness | type) != "string" or (secondmate.harness | length) == 0) then "secondmate harness must be a non-empty string"
+    elif (secondmate | has("harness")) and (verified(secondmate.harness) | not) then "unverified harness: " + (secondmate.harness | tostring)
+    elif (secondmate | has("model")) and ((secondmate.model | type) != "string") then "secondmate model must be a string"
+    elif (secondmate | has("effort")) and (effort_ok(secondmate.effort) | not) then "secondmate effort must be low, medium, high, xhigh, max, or empty"
+    elif has("max_lanes") and (cap_ok(.max_lanes) | not) then "max_lanes must be a positive integer"
+    elif has("max_provider_lanes") and (cap_ok(.max_provider_lanes) | not) then "max_provider_lanes must be a positive integer"
+    elif has("route") and ((.route | type) != "object") then "route must be an object"
+    else empty end
+  ' "$file" 2>/dev/null || true)
+  if [ -n "$err" ]; then
+    echo "DISPATCH_CONFIG: invalid config/dispatch.json - $err"
+    return 0
+  fi
+  if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ]; then
+    jq -r '
+    (["BOOTSTRAP_INFO: dispatch config active config/dispatch.json"]
+      + (if has("harness") then ["BOOTSTRAP_INFO: dispatch harness: " + (.harness | tostring)] else [] end)
+      + (if has("model") then ["BOOTSTRAP_INFO: dispatch model: " + (.model | tostring)] else [] end)
+      + (if (.secondmate | type) == "object" and (.secondmate | has("harness"))
+         then ["BOOTSTRAP_INFO: dispatch secondmate harness: " + (.secondmate.harness | tostring)] else [] end)
+      + (if has("max_lanes") then ["BOOTSTRAP_INFO: dispatch max lanes: " + (.max_lanes | tostring)] else [] end)
+      + (if has("max_provider_lanes") then ["BOOTSTRAP_INFO: dispatch max provider lanes: " + (.max_provider_lanes | tostring)] else [] end))
     | .[]
   ' "$file"
   fi
@@ -895,11 +992,11 @@ if [ -n "$tangle_branch" ]; then
     echo "TANGLE: primary checkout on feature branch '$tangle_branch' (expected '$tangle_default'); the work is safe on that ref - restore the primary with: git -C $FM_ROOT checkout $tangle_default, then re-validate the branch in a proper worktree"
   fi
 fi
-crew=
-[ -f "$CONFIG/crew-harness" ] && crew=$(tr -d '[:space:]' < "$CONFIG/crew-harness" || true)
+crew=$("$SCRIPT_DIR/fm-harness.sh" dispatch-crew-harness 2>/dev/null || true)
 if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ] && [ -n "$crew" ] && [ "$crew" != "default" ]; then
   echo "BOOTSTRAP_INFO: crew harness override active: $crew"
 fi
+dispatch_config_validate
 crew_dispatch_validate
 if [ "${FM_BOOTSTRAP_VERBOSE_FACTS:-0}" = 1 ] \
   && ! fm_backlog_backend_manual "$CONFIG" && fm_tasks_axi_compatible; then

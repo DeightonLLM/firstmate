@@ -2,8 +2,11 @@
 # Inheritance propagation: the PRIMARY firstmate pushes a declared, extensible
 # set of LOCAL (gitignored) config items down into each secondmate home's
 # config/, so a secondmate's OWN crewmates inherit the primary's settings
-# (e.g. primary config/crew-dispatch.json makes a secondmate use the same dispatch
-# profile rules, primary config/crew-harness=codex makes a secondmate's crewmates
+# (e.g. primary config/dispatch.json makes a secondmate use the same dispatch
+# file - the crew harness, the secondmate harness/model/effort, the lane
+# ceilings, and the routing rules - primary config/crew-dispatch.json makes a
+# secondmate use the same legacy dispatch profile rules, primary
+# config/crew-harness=codex makes a secondmate's crewmates
 # spawn on codex too, primary config/backlog-backend=manual makes that home
 # hand-edit backlog files too, primary config/backend pins that home's local
 # runtime-backend default for future spawns, primary config/startup-memory-budget
@@ -46,7 +49,7 @@ FM_SHARED_CAPTAIN_MODE="444"
 # The declared inheritable set (space-separated, config-dir-relative item paths).
 # Extend here to inherit more of the primary's local config; override via the
 # environment only in tests. Items must not contain whitespace.
-FM_INHERITABLE_CONFIG="${FM_INHERITABLE_CONFIG:-crew-dispatch.json crew-harness backlog-backend backend herdr-presentation-spaces startup-memory-budget}"
+FM_INHERITABLE_CONFIG="${FM_INHERITABLE_CONFIG:-dispatch.json crew-dispatch.json crew-harness backlog-backend backend herdr-presentation-spaces startup-memory-budget}"
 
 fm_inherit_file_mode() {
   if [ "$(uname)" = Darwin ]; then

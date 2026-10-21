@@ -95,9 +95,88 @@ The caller-facing label remains `fm-<id>`, but the actual cmux workspace title i
 Test cleanup must use the guarded path in [`docs/cmux-backend.md`](cmux-backend.md#current-operation-and-safety), never enumerate-and-close every workspace.
 `config/backend` is inherited into secondmate homes under the primary-authoritative contract owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md).
 
-## Dispatch lane ceilings (config/dispatch-max-lanes / config/dispatch-max-provider-lanes)
+## The ONE dispatch file (config/dispatch.json)
 
-`config/dispatch-max-lanes` sets the home-local maximum for all working or unknown worker lanes; `config/dispatch-max-provider-lanes` sets the corresponding per-provider maximum. Both files contain a positive decimal integer, and the per-provider ceiling defaults to the global ceiling when absent or invalid. `FM_DISPATCH_GUARD_MAX_LANES` and `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` override their respective files. Provider identity is read from the provider prefix in each task's recorded `model=` when present, otherwise from its recorded `harness=`; unknown or unreadable lane state occupies both applicable ceilings.
+`config/dispatch.json` is the single file that owns dispatch and routing for a home. It is LOCAL and gitignored, like every other `config/` item. It replaces the five separate files that used to carry the same five concerns, and every one of those five files still works as a compatibility fallback so an existing home, a secondmate home, and an older install all keep resolving exactly as they did.
+
+`bin/fm-harness.sh` is the single owner of this file's schema and of the key names. Every other reader asks it for a value rather than parsing the file again.
+
+```json
+{
+  "_comment": "ONE dispatch file. Owns the harness, the model, the effort, the lane ceilings and the routing rules.",
+  "harness": "minimax-code",
+  "model": "minimax/MiniMax-M3.1-Flash",
+  "effort": "",
+  "secondmate": { "harness": "minimax-code", "model": "minimax/MiniMax-M3.1-Flash", "effort": "" },
+  "max_lanes": 12,
+  "max_provider_lanes": 6,
+  "route": { "_mode": {}, "rules": [], "default": [] }
+}
+```
+
+Every key is optional. A file with only `harness` is valid, and a file with no `route` key is valid and means "this file configures no routing rules".
+A `config/dispatch.json` that exists but does not parse is a BROKEN configuration, not an absent one: it is reported (`DISPATCH_CONFIG: invalid config/dispatch.json - malformed JSON`) and never silently replaced by the legacy routing file, because quietly routing on a different ruleset is the failure mode this file exists to prevent.
+
+| Key | Owns | Legacy fallback, consulted second |
+| --- | --- | --- |
+| `harness` | the adapter for crewmate and scout launches | `config/crew-harness` |
+| `model` | the primary's own model pin | none |
+| `effort` | the primary's own effort pin | none |
+| `secondmate.harness` | the adapter the primary launches secondmates on | `config/secondmate-harness` (1st token) |
+| `secondmate.model` | the model the primary launches secondmates on | `config/secondmate-harness` (2nd token) |
+| `secondmate.effort` | the effort the primary launches secondmates on | `config/secondmate-harness` (3rd token) |
+| `max_lanes` | the live-lane ceiling | `config/dispatch-max-lanes` |
+| `max_provider_lanes` | the per-provider lane ceiling | `config/dispatch-max-provider-lanes` |
+| `route` | the routing rules, in the `config/crew-dispatch.json` schema verbatim | `config/crew-dispatch.json` |
+
+The exact resolution order:
+
+- crew harness: `dispatch.json` `.harness` -> `config/crew-harness` -> the firstmate's own harness.
+- secondmate harness: `dispatch.json` `.secondmate.harness` -> `config/secondmate-harness` 1st token -> the crew harness resolution.
+- secondmate model: `dispatch.json` `.secondmate.model` -> `config/secondmate-harness` 2nd token -> nothing.
+- secondmate effort: `dispatch.json` `.secondmate.effort` -> `config/secondmate-harness` 3rd token -> nothing.
+- live-lane ceiling: `FM_DISPATCH_GUARD_MAX_LANES` -> `dispatch.json` `.max_lanes` -> `config/dispatch-max-lanes` -> 4.
+- per-provider ceiling: `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` -> `dispatch.json` `.max_provider_lanes` -> `config/dispatch-max-provider-lanes` -> the global ceiling.
+- routing rules: `dispatch.json` `.route` -> `config/crew-dispatch.json` -> no rules.
+
+A configured value of `default` means "not configured" and defers to the next source, exactly like the legacy files.
+
+### HOW THE CAPTAIN CHANGES THE ROUTE
+
+One file, one set of keys. The route is changed by editing `config/dispatch.json` in the home and nothing else.
+
+- Change the adapter every crewmate and scout spawns on: set `"harness"` at the top level.
+- Change the model every secondmate spawns on: set `"secondmate": { "model": "..." }`.
+- Change the reasoning effort for secondmates: set `"secondmate": { "effort": "high" }`.
+- Change the live-lane ceiling: set `"max_lanes"`.
+- Change the per-provider ceiling: set `"max_provider_lanes"`.
+- Change the routing RULES (which profile matches which kind of task): set the `"route"` object, whose `rules` and `default` arrays use the `config/crew-dispatch.json` schema unchanged.
+
+To route the whole fleet to MCode, the whole edit is:
+
+```json
+{
+  "harness": "minimax-code",
+  "model": "minimax/MiniMax-M3.1-Flash",
+  "secondmate": { "harness": "minimax-code", "model": "minimax/MiniMax-M3.1-Flash" },
+  "max_lanes": 12,
+  "max_provider_lanes": 6
+}
+```
+
+### The configured-route gate (bin/fm-dispatch-guard.sh)
+
+While a home's CONFIGURED route harness is `minimax-code`, the dispatch guard refuses a spawn on the Pi family (`pi` and `pi-signed`), because the standing directive is that the free MCode route is the route. The rule is conditional on the CONFIGURED route, never on the ambient detected harness: a home that configures nothing keeps whatever it had, and a home that configures `pi` keeps its Pi lanes. The refusal names the configured route and the escape hatch. `FM_DISPATCH_GUARD_ROUTE_BYPASS=1` skips this one check and is logged as `BYPASS_ROUTE`; the global `FM_DISPATCH_GUARD_BYPASS=1` does not rescue it.
+
+The retired slug `minimax/MiniMax-M3.1-Flash-Preview` is refused outright with no bypass, like the `gpt-6.1-sol` ban, because the catalog no longer serves it. The live id is `minimax/MiniMax-M3.1-Flash`.
+
+### Inheritance
+
+`config/dispatch.json` is in the declared inheritable set, so the primary's one file propagates to every secondmate home's `config/` and the secondmate's own crewmates resolve the same harness, model, effort, ceilings, and routing rules. The legacy files stay in the same inheritable set, so a primary that has not migrated yet still converges. `config/secondmate-harness` is still not inherited, because secondmates do not spawn secondmates.
+
+## Dispatch lane ceilings (config/dispatch.json / config/dispatch-max-lanes / config/dispatch-max-provider-lanes)
+
+`config/dispatch.json` is the ONE dispatch file and is the primary source for the lane ceilings: `.max_lanes` sets the home-local maximum for all working or unknown worker lanes, and `.max_provider_lanes` sets the corresponding per-provider maximum. The legacy `config/dispatch-max-lanes` and `config/dispatch-max-provider-lanes` files remain supported as compatibility fallbacks and are consulted only when the one file does not set the value. Both shapes hold a positive decimal integer, and the per-provider ceiling defaults to the global ceiling when absent or invalid. `FM_DISPATCH_GUARD_MAX_LANES` and `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` override their respective config values. Provider identity is read from the provider prefix in each task's recorded `model=` when present, otherwise from its recorded `harness=`; unknown or unreadable lane state occupies both applicable ceilings.
 
 The ceiling is enforced by `bin/fm-dispatch-guard.sh` (`fm_dispatch_guard_lane_cap`), which `bin/fm-spawn.sh` calls before it spawns. The Herdr subagent cap (`MAX_SUBAGENT_PANES` / `MAX_TOTAL_PANES`, `cap.sh`) is a separate, pane-level ceiling on top of it.
 
@@ -108,7 +187,9 @@ as non-authoritative). It was never present in this repository, and no reader fo
 here — `tests/fm-spawn-batch.test.sh` covers batch argument routing, not a task-count cap. Adding a
 third, separately-configured concurrency gate to `bin/fm-spawn.sh` would let two ceilings disagree
 about the same host, so the file is retired rather than implemented. The live ceiling is
-`config/dispatch-max-lanes` and the per-provider ceiling is `config/dispatch-max-provider-lanes`.
+`config/dispatch.json` `.max_lanes` and the per-provider ceiling is `config/dispatch.json`
+`.max_provider_lanes`, with `config/dispatch-max-lanes` and
+`config/dispatch-max-provider-lanes` as the legacy fallbacks.
 
 
 ## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
@@ -228,18 +309,18 @@ Enabled primary-session turn-end guard integrations are tracked as repo-level ho
 Kimi remains outside the primary turn-end guard integrations; [`docs/turnend-guard.md`](turnend-guard.md#compatibility-limits) owns its separate captain-approved crew wake hook.
 Primary-session watcher wake protocols are rendered at session start by [`bin/fm-supervision-instructions.sh`](../bin/fm-supervision-instructions.sh) from [`docs/supervision-protocols/`](supervision-protocols/).
 Claude's Stop `asyncRewake` hook owns tokenless re-arm cycles, Grok uses background-notify cycles, Codex uses bounded foreground checkpoints, Pi and pi-signed use the same two tracked primary extensions, and OpenCode uses its TUI plugin.
-`config/crew-harness` is a local, gitignored file containing one adapter name for crewmate and scout launches.
+`config/dispatch.json` `.harness` is the adapter name for crewmate and scout launches; the legacy `config/crew-harness` is a local, gitignored file containing one adapter name and is the compatibility fallback, consulted only when the one file does not set the value.
 When pi-signed is selected, Firstmate launches the executable named `pi-signed` from `PATH` with `FM_PI_HARNESS=pi-signed` and refuses the launch if it is unavailable rather than falling back to pi.
 Plain Pi launches set `FM_PI_HARNESS=pi`, so a signed primary's environment cannot relabel a plain Pi worker.
-When it is absent or contains `default`, crewmates mirror the firstmate's own harness.
-`config/secondmate-harness` is a separate local, gitignored file containing the adapter the primary uses to launch secondmate agents, optionally followed by model and effort tokens on the same line.
+When the value is absent or contains `default`, crewmates mirror the firstmate's own harness.
+`config/dispatch.json` `.secondmate.harness` is the adapter the primary uses to launch secondmate agents; the legacy `config/secondmate-harness` is a separate local, gitignored file containing that adapter, optionally followed by model and effort tokens on the same line, and is the compatibility fallback.
 The first non-empty, non-comment line is parsed as `<harness> [<model>] [<effort>]`.
 A bare `<harness>` preserves the previous behavior: harness only, with no model or effort launch flag.
-When the harness token is absent or `default`, secondmate launch falls back through `config/crew-harness` and then the primary's own harness, and no model or effort is read from that file.
-`fm-harness.sh secondmate-model` and `fm-harness.sh secondmate-effort` expose only the optional tokens from `config/secondmate-harness`; `config/crew-harness` remains a bare adapter-name file.
-An explicit harness argument to `fm-spawn.sh` still overrides either config file for that spawn only.
-An explicit `--model` or `--effort` overrides the matching token from `config/secondmate-harness`; an explicit harness or raw launch command starts with clean model and effort defaults unless those flags are also passed.
-When `config/crew-dispatch.json` exists, crewmate and scout spawns require an explicit resolved harness instead of automatically falling back to `config/crew-harness`.
+When the secondmate harness token is absent or `default`, secondmate launch falls back through the crew harness resolution and then the primary's own harness, and no model or effort is read from that file.
+`fm-harness.sh secondmate-model` and `fm-harness.sh secondmate-effort` expose the optional secondmate model and effort tokens; `config/crew-harness` remains a bare adapter-name file.
+An explicit harness argument to `fm-spawn.sh` still overrides either config source for that spawn only.
+An explicit `--model` or `--effort` overrides the matching configured token; an explicit harness or raw launch command starts with clean model and effort defaults unless those flags are also passed.
+When routing rules exist, crewmate and scout spawns require an explicit resolved harness instead of automatically falling back to the configured crew harness.
 The inherited-local-material contract is owned by [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md); its harness-relevant consequence is that a secondmate's own crewmates use the primary's dispatch profiles and static harness value.
 Those inherited values are defaults and rules only; `fm-spawn` still permits a consciously chosen explicit runtime outside the config.
 `config/secondmate-harness` is not inherited because secondmates do not launch secondmates.
@@ -260,13 +341,14 @@ environment variable for diagnostics or a deliberately different cadence; an
 unset value resolves to `0.25`. The delay applies only between batch items and
 does not change the launch command or the worker's retry budget.
 
-## Crew dispatch profiles (config/crew-dispatch.json)
+## Crew dispatch profiles (config/dispatch.json route / config/crew-dispatch.json)
 
-`config/crew-dispatch.json` is an optional local, gitignored file containing natural-language rules that firstmate reads before dispatching a crewmate or scout.
+The routing rules live in `config/dispatch.json` under the `route` key, in the schema below unchanged; the legacy `config/crew-dispatch.json` is the compatibility fallback and is used when the one file has no `route` key.
+Both shapes are optional local, gitignored files containing natural-language rules that firstmate reads before dispatching a crewmate or scout.
 The shell scripts do not match those rules; firstmate chooses the best matching rule with judgment, resolves its profile object or array under the operating contract in `AGENTS.md` section 4 and `quota-array-dispatch`, and passes only concrete `--harness`, `--model`, and `--effort` flags to `fm-spawn.sh`.
-When the file exists, `fm-spawn.sh` enforces that contract by refusing crewmate and scout spawns that lack an explicit harness (`--harness`, a positional adapter, or a raw launch command).
+When the rules are present, `fm-spawn.sh` enforces that contract by refusing crewmate and scout spawns that lack an explicit harness (`--harness`, a positional adapter, or a raw launch command).
 Batch spawns satisfy the same requirement with a shared `--harness`.
-Secondmate spawns are exempt and still resolve through `config/secondmate-harness` and its optional model and effort tokens.
+Secondmate spawns are exempt and still resolve through the configured secondmate harness and its optional model and effort tokens.
 This section is the single owner of the canonical schema and its per-field semantics.
 `AGENTS.md` section 4 owns the always-loaded dispatch intake boundary, and `quota-array-dispatch` owns the completion-aware profile-array selection procedure.
 
@@ -295,12 +377,12 @@ An omitted model or effort means the selected harness uses its own default for t
 Every profile array is an implicit quota-aware choice resolved through `quota-array-dispatch`.
 If no dispatch rule fits, firstmate resolves `default` through the same object-or-array path before falling back to `config/crew-harness`.
 If a selected profile carries an effort value the chosen harness does not accept, `fm-spawn.sh` records the requested `effort=` in task meta for traceability but omits the launch flag, and bootstrap reports the invalid harness/effort pair as a `CREW_DISPATCH` diagnostic when it is visible in the file.
-See [`docs/examples/crew-dispatch.json`](examples/crew-dispatch.json) for a starting point to copy into local `config/crew-dispatch.json`.
+See [`docs/examples/crew-dispatch.json`](examples/crew-dispatch.json) for a starting point to copy into the `route` object of local `config/dispatch.json`, or into local `config/crew-dispatch.json`.
 When the file exists, bootstrap validates it with `jq`.
-Valid files stay silent by default; with `FM_BOOTSTRAP_VERBOSE_FACTS=1`, bootstrap emits `BOOTSTRAP_INFO: crew dispatch active config/crew-dispatch.json`, one `BOOTSTRAP_INFO:` fact per rule, and one fact for the optional default profile set.
-Malformed JSON, an empty or malformed rule/default array, an unverified harness, or an effort value unsupported by that harness is reported as `CREW_DISPATCH: invalid config/crew-dispatch.json - ...`; missing `jq` is reported through the normal `MISSING: jq` install-consent flow.
-While the file remains present, no crewmate or scout spawn may proceed without an explicit resolved harness; malformed configuration must be reported and corrected rather than selected around.
-Secondmate homes inherit this file from the primary, so a secondmate's own crewmates apply the same dispatch profile behavior.
+Valid files stay silent by default; with `FM_BOOTSTRAP_VERBOSE_FACTS=1`, bootstrap emits `BOOTSTRAP_INFO: crew dispatch active config/crew-dispatch.json` (or `config/dispatch.json route`), one `BOOTSTRAP_INFO:` fact per rule, and one fact for the optional default profile set.
+Malformed JSON, an empty or malformed rule/default array, an unverified harness, or an effort value unsupported by that harness is reported as `CREW_DISPATCH: invalid config/crew-dispatch.json - ...` (or `CREW_DISPATCH: invalid config/dispatch.json route - ...` when the rules live in the one file); missing `jq` is reported through the normal `MISSING: jq` install-consent flow.
+While the rules remain present, no crewmate or scout spawn may proceed without an explicit resolved harness; malformed configuration must be reported and corrected rather than selected around.
+Secondmate homes inherit both the one file and the legacy file from the primary, so a secondmate's own crewmates apply the same dispatch profile behavior.
 
 ### Dispatch rule field semantics
 
@@ -324,6 +406,7 @@ Never pass `controller` to `fm-spawn.sh`; it refuses it with "error: unknown har
 `fm-spawn.sh` refuses to guess.
 With `config/crew-dispatch.json` present, a crewmate or scout spawn without an explicit `--harness` is refused with "config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)".
 That refusal is the backstop, not an error to work around.
+**Known gap:** `fm-spawn.sh` still detects the backstop by the presence of `config/crew-dispatch.json` alone, so a home that keeps its rules only under `config/dispatch.json` `.route` does not get that refusal until `fm-spawn.sh` learns the one file. The primary must keep `config/crew-dispatch.json` in place until that check is widened.
 
 ### Dispatch profile spawn blocks
 
@@ -339,7 +422,7 @@ A profile that names a harness with no single authoritative provider family in t
 
 ### Which route a dispatch profile names, and who decides it
 
-The CURRENT route lives in `config/crew-dispatch.json`, which is LOCAL and gitignored, and nowhere else.
+The CURRENT route lives in `config/dispatch.json` (the `route` object, or the harness keys), or in the legacy `config/crew-dispatch.json`, which is LOCAL and gitignored, and nowhere else.
 A tracked document states the RULE for choosing a route, never the route that happens to be chosen right now.
 
 That separation matters because a route is often chosen for a reason that expires: a free tier, a quota window, a promotion, a price change.
@@ -368,7 +451,7 @@ Backend tool availability uses the adapter's own executable resolver, so bootstr
 An unknown resolved backend emits `BACKEND_INVALID` and blocks dispatch instead of silently dropping its dependency delta or falling back to tmux.
 Orca provides both the task worktree and terminal endpoint (see "Runtime backend" above), so `backend=orca` requires only `orca` on top of the universal toolchain and skips both `treehouse` and every other backend's session CLI.
 A herdr, zellij, or cmux home is therefore never told `tmux` is missing, and the `treehouse` durable-lease upgrade check runs only for the backends that actually use treehouse.
-When `config/crew-dispatch.json` exists, bootstrap also requires `jq` for dispatch profile validation.
+When `config/crew-dispatch.json` or `config/dispatch.json` exists, bootstrap also requires `jq` for dispatch profile validation.
 When X mode is opted in, bootstrap also requires `curl` and `jq` before arming the relay poll shim.
 `tasks-axi` and `quota-axi` are required bootstrap tools in every profile, the same class as `lavish-axi`.
 An absent or incompatible `tasks-axi` reports `MISSING: tasks-axi (install: npm install -g tasks-axi)`; when `config/backlog-backend` is not `manual` and compatible `tasks-axi` is on `PATH`, bootstrap stays silent and firstmate uses its verbs for routine backlog mutations, otherwise it hand-edits `data/backlog.md` until installation is approved and completed.
@@ -389,7 +472,7 @@ When a running home advances and its loaded instruction surface (`AGENTS.md`, `b
 If that send fails, bootstrap keeps an idempotent retry marker and emits `NUDGE_SECONDMATES:` with the failure reason.
 The same bootstrap run emits `SECONDMATE_LIVENESS:` only when a registered secondmate is skipped or its relaunch fails; already-live and successfully relaunched secondmates are handled silently.
 For a mid-session inherited local-material edit where tracked-file sync is not needed, run `bin/fm-config-push.sh`.
-It uses the same live secondmate discovery and propagation helper as bootstrap, prints each live home's `crew-dispatch.json`, `crew-harness`, `backlog-backend`, `backend`, `herdr-presentation-spaces`, `startup-memory-budget`, and `data/captain-shared.md` result as `pushed`, `unchanged`, `skipped`, or `error`, and exits non-zero for real propagation errors or config-reread send failures.
+It uses the same live secondmate discovery and propagation helper as bootstrap, prints each live home's `dispatch.json`, `crew-dispatch.json`, `crew-harness`, `backlog-backend`, `backend`, `herdr-presentation-spaces`, `startup-memory-budget`, and `data/captain-shared.md` result as `pushed`, `unchanged`, `skipped`, or `error`, and exits non-zero for real propagation errors or config-reread send failures.
 When an allowlisted config item changes for an already-running home, it sends the literal-content reread pointer described in [`secondmate-provisioning`](../.agents/skills/secondmate-provisioning/SKILL.md); unchanged allowlisted config sends no pointer unless a previous delivery is pending.
 The locked bootstrap inheritance pass uses the same per-home changed-set and reread path for already-running homes; see `secondmate-provisioning` for the single contract owner.
 That live discovery starts from `state/*.meta` records with `kind=secondmate`; `data/secondmates.md` only backfills `home=` for older or incomplete meta records.

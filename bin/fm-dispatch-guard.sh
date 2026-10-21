@@ -22,8 +22,14 @@
 #   FM_DISPATCH_GUARD_BYPASS=1        skip every bypassable check (logged)
 #   FM_DISPATCH_GUARD_LOAD_BYPASS=1   skip only the load ceiling (logged)
 #   FM_DISPATCH_GUARD_QUOTA_BYPASS=1  skip only the quota ceiling (logged)
-#   FM_DISPATCH_GUARD_MAX_LANES=<n>   live-lane ceiling; overrides config/dispatch-max-lanes (default 4)
-#   FM_DISPATCH_GUARD_MAX_PROVIDER_LANES=<n>  per-provider ceiling; overrides config/dispatch-max-provider-lanes (default: global ceiling)
+#   FM_DISPATCH_GUARD_ROUTE_BYPASS=1  skip only the configured-route gate (logged);
+#                                        it never rescues the Sol ban or the
+#                                        retired-slug ban, which have no bypass
+#   FM_DISPATCH_GUARD_MAX_LANES=<n>   live-lane ceiling; overrides config/dispatch.json
+#                                        .max_lanes and config/dispatch-max-lanes (default 4)
+#   FM_DISPATCH_GUARD_MAX_PROVIDER_LANES=<n>  per-provider ceiling; overrides
+#                                        config/dispatch.json .max_provider_lanes and
+#                                        config/dispatch-max-provider-lanes (default: global ceiling)
 #   FM_DISPATCH_GUARD_LANE_BUDGET_S=<n>  wall-clock budget for the lane
 #                                        inventory (default 30)
 # Test seams (never set in production; they exist so the rules can be proven by
@@ -105,10 +111,74 @@ else
   esac
 fi
 
+# ---------------------------------------------------------------------------
+# Rule 1b: the retired MCode preview slug is banned for spawned workers.
+#
+# minimax/MiniMax-M3.1-Flash-Preview was retired when the catalog id was
+# retargeted to minimax/MiniMax-M3.1-Flash. A spawn still naming the retired
+# slug resolves to a model the provider no longer serves, so it produces an
+# agent that cannot answer.
+#
+# This ban has NO bypass, for the same reason the Sol ban has none: the
+# retired slug sits in config files and old briefs, and a bypass would turn
+# the rule into a suggestion exactly where it has to be absolute.
+# ---------------------------------------------------------------------------
+case "$MODEL" in
+  *MiniMax-M3.1-Flash-Preview*)
+    refuse "model '$MODEL' names the retired slug minimax/MiniMax-M3.1-Flash-Preview, which the catalog no longer serves (the live id is minimax/MiniMax-M3.1-Flash). Use the live id; this ban has no bypass."
+    ;;
+esac
+
+# ---------------------------------------------------------------------------
+# Rule 1c: the configured-route gate.
+#
+# The Captain's standing directive (2026-10-21, stated four times) is that
+# the MCode route IS the route. While the home's CONFIGURED route harness is
+# minimax-code, a spawn on the Pi family is refused, because the whole point
+# of the directive is that the free MCode route is used instead of a Pi lane.
+#
+# The rule is conditional on the CONFIGURED route, never on the ambient
+# detected harness: a home that configures nothing keeps whatever it had, and
+# a home that configures pi keeps its Pi lanes. A blanket ban on pi would be a
+# different rule and would wedge homes that deliberately route on pi.
+#
+# The escape hatch is narrow, explicit, and logged: FM_DISPATCH_GUARD_ROUTE_BYPASS=1
+# skips THIS check only. It is evaluated before the global bypass block, so
+# FM_DISPATCH_GUARD_BYPASS=1 can never rescue a refused Pi spawn, exactly as
+# it can never rescue the Sol ban.
+# ---------------------------------------------------------------------------
+
+# fm_dispatch_guard_route_harness: the CONFIGURED route harness for this home
+# (config/dispatch.json .harness, then config/crew-harness, then the
+# secondmate route). Empty when the home configures no route at all.
+fm_dispatch_guard_route_harness() {
+  local home=${FM_HOME:-}
+  [ -n "$home" ] || return 0
+  FM_CONFIG_OVERRIDE="$home/config" "$SCRIPT_DIR/fm-harness.sh" dispatch-route-harness 2>/dev/null || true
+}
+
+route_harness=$(fm_dispatch_guard_route_harness)
+case "$route_harness" in
+  minimax-code)
+    case "$HARNESS" in
+      pi|pi-signed)
+        if [ "${FM_DISPATCH_GUARD_ROUTE_BYPASS:-0}" = "1" ]; then
+          log_event "BYPASS_ROUTE route=${route_harness} harness=${HARNESS}"
+        else
+          refuse "the configured route for this home is '${route_harness}', the free MCode route (captain directive 2026-10-21), so a spawn on '$HARNESS' is refused. Spawn on the configured route, or set FM_DISPATCH_GUARD_ROUTE_BYPASS=1 to override this one check (logged)."
+        fi
+        ;;
+    esac
+    ;;
+esac
+
 # From here down, every check is bypassable via the global bypass. The Sol ban
 # above is deliberately evaluated FIRST so FM_DISPATCH_GUARD_BYPASS can never
 # rescue it - an earlier ordering let the bypass return 0 for Sol, which is the
-# exact silent failure this guard exists to prevent.
+# exact silent failure this guard exists to prevent. The retired-slug ban and
+# the configured-route gate sit in the same unbypassable-by-default block for
+# the same reason: they are standing captain directives, and a global bypass
+# that could erase them would make them unenforceable in practice.
 if [ "${FM_DISPATCH_GUARD_BYPASS:-0}" = "1" ]; then
   log_event "BYPASS_ALL"
   exit 0
@@ -228,11 +298,22 @@ fm_dispatch_guard_lane_classify() {  # <backend> <target>
 
 # fm_dispatch_guard_lane_cap: resolve the live-lane ceiling. Precedence:
 # FM_DISPATCH_GUARD_MAX_LANES, then the home-local gitignored
-# config/dispatch-max-lanes knob (same LOCAL-settings family as config/calm and
-# config/backend), then 4. A ceiling that only applied when firstmate remembered to
-# export an env var was never an enforced setting.
+# config/dispatch.json .max_lanes knob (the ONE dispatch file, same
+# LOCAL-settings family as config/calm and config/backend), then the legacy
+# config/dispatch-max-lanes knob, then 4. A ceiling that only applied when
+# firstmate remembered to export an env var was never an enforced setting.
+#
+# The config read is written out inline on purpose: this function is
+# extracted and exercised on its own by tests/fm-dispatch-guard-max-lanes.test.sh,
+# so it must not depend on a helper defined elsewhere in this file.
 fm_dispatch_guard_lane_cap() {
   local cap="${FM_DISPATCH_GUARD_MAX_LANES:-}"
+  if [ -z "$cap" ] && [ -n "${FM_HOME:-}" ] && [ -r "${FM_HOME}/config/dispatch.json" ]; then
+    cap=$(jq -r '
+      if (.max_lanes | type) == "number" then (.max_lanes | floor | tostring)
+      elif (.max_lanes | type) == "string" and (.max_lanes | test("^[0-9]+$")) then .max_lanes
+      else empty end' "${FM_HOME}/config/dispatch.json" 2>/dev/null || true)
+  fi
   if [ -z "$cap" ] && [ -n "${FM_HOME:-}" ] && [ -r "${FM_HOME}/config/dispatch-max-lanes" ]; then
     cap=$(tr -dc '0-9' < "${FM_HOME}/config/dispatch-max-lanes")
   fi
@@ -254,6 +335,12 @@ fm_dispatch_guard_provider_of_meta() {  # <meta-file>
 
 fm_dispatch_guard_provider_cap() {
   local cap="${FM_DISPATCH_GUARD_MAX_PROVIDER_LANES:-}"
+  if [ -z "$cap" ] && [ -n "${FM_HOME:-}" ] && [ -r "${FM_HOME}/config/dispatch.json" ]; then
+    cap=$(jq -r '
+      if (.max_provider_lanes | type) == "number" then (.max_provider_lanes | floor | tostring)
+      elif (.max_provider_lanes | type) == "string" and (.max_provider_lanes | test("^[0-9]+$")) then .max_provider_lanes
+      else empty end' "${FM_HOME}/config/dispatch.json" 2>/dev/null || true)
+  fi
   if [ -z "$cap" ] && [ -n "${FM_HOME:-}" ] && [ -r "${FM_HOME}/config/dispatch-max-provider-lanes" ]; then
     cap=$(tr -dc '0-9' < "${FM_HOME}/config/dispatch-max-provider-lanes")
   fi
