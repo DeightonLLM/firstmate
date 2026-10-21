@@ -168,6 +168,27 @@ cmd_scan() {
       [ -n "$file" ] || continue
       [ -f "$file" ] || continue
       name=${file##*/}
+      # A zero-byte drop is a file caught mid-write by the sync, not a message.
+      # Ingesting it records an empty reply, wakes the parent on nothing, and
+      # produces the empty-string digest that is indistinguishable from a real
+      # report by name alone. Report it as incomplete and wait for a real resend.
+      if [ ! -s "$file" ]; then
+        printf 'incomplete: %s (zero bytes, not ingested)\n' "$name"
+        continue
+      fi
+      # A transport sync pushes this home's outbound into the remote's
+      # controller-replies folder and then mirrors that same folder back for
+      # scanning. Without an exclusion boundary the ingest records our OWN
+      # outbound as an inbound reply and raises a wake, so every message we
+      # send produces a self-trigger that reads as a remote reply.
+      # FM_COMMS_EXCLUDE_NAMES_FROM names this home's outbound directory; a
+      # scanned file whose basename appears there was authored here, not
+      # received, and is skipped visibly rather than silently.
+      if [ -n "${FM_COMMS_EXCLUDE_NAMES_FROM:-}" ] \
+        && [ -e "${FM_COMMS_EXCLUDE_NAMES_FROM%/}/$name" ]; then
+        printf 'excluded-own-outbound: %s\n' "$name"
+        continue
+      fi
       # An entry whose name cannot be a reply name is unusable, not invisible.
       # Report it so a broken pickup cannot hide behind a clean exit status.
       if ! valid_name "$name"; then
@@ -188,6 +209,18 @@ cmd_scan() {
           continue
           ;;
       esac
+
+      # Content-keyed exclusion. A message we send can reach the far side under
+      # a filename this home never authored (the sender writes msg-<time>.msg
+      # remotely, and the transport mirrors it back), so a name-based boundary
+      # cannot see it. The sender records the sha of what it sent; any scanned
+      # file whose content digest appears there was sent BY us, not to us.
+      if [ -n "${FM_COMMS_EXCLUDE_SHA_LEDGER:-}" ] \
+        && [ -f "${FM_COMMS_EXCLUDE_SHA_LEDGER}" ] \
+        && grep -q "^$sha" "${FM_COMMS_EXCLUDE_SHA_LEDGER}" 2>/dev/null; then
+        printf 'excluded-own-outbound: %s\n' "$name"
+        continue
+      fi
 
       # Content-keyed dedup: an unchanged file is already received. Say which
       # of the two terminal states it is in, so a re-sync of an acknowledged

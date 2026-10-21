@@ -688,6 +688,59 @@ test_changed_content_is_a_new_receipt
 test_corr_token_is_recorded
 test_handled_is_durable_and_idempotent
 test_handled_refuses_unreceived_reply
+# The transport pushes this home's outbound into the remote's controller-replies
+# folder and then mirrors that same folder back. Without an exclusion boundary
+# the ingest records our OWN outbound as an inbound reply and raises a wake, so
+# every message we send generates a self-trigger that looks like a Hetz reply.
+test_own_outbound_is_not_ingested_as_inbound() {
+  local home reports outb status out
+  read -r home reports <<<"$(make_env selftrigger)"
+  outb="$TMP_ROOT/selftrigger/outbound"
+  status="$home/state/hetz-inbox.status"
+  mkdir -p "$outb"
+  # Hermetic: a prior run in the shared tmp root must not leave a status file
+  # that already records the outbound and make this case pass or fail falsely.
+  rm -f "$status" "$home/state"/hetz-inbox.status.1 2>/dev/null || true
+
+  write_report "$outb/controller-answers.md" "Controller answers: the gate is lifted."
+  write_report "$reports/controller-answers.md" "Controller answers: the gate is lifted."
+  write_report "$reports/hetz-reply.md" "From Hetz: staging work accepted, starting now."
+
+  out=$(FM_COMMS_EXCLUDE_NAMES_FROM="$outb" \
+    FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetz-inbox "$reports" 2>&1)
+
+  assert_grep "hetz-reply.md" "$status" "a genuine inbound reply must still be received"
+  assert_no_grep "controller-answers.md" "$status" "our own outbound must not be recorded as inbound"
+  assert_contains "$out" "excluded-own-outbound: controller-answers.md" \
+    "the skip must be visible, not silent"
+  pass "own outbound is not ingested as inbound"
+}
+
+# Content-keyed exclusion. A message we send can land on the remote under a
+# filename we never authored (hetz-send-instant writes msg-<time>.msg on the
+# far side only), so a name-based boundary cannot see it. The sender records
+# the sha of what it sent; any scanned file with that content is ours.
+test_own_outbound_excluded_by_content_sha() {
+  local home reports led status out body
+  read -r home reports <<<"$(make_env shakey)"
+  status="$home/state/hetz-inbox.status"
+  body="Controller answers: the gate is lifted."
+  # A far-side-only filename: there is no outbound twin with this basename.
+  printf '%s\n' "$body" > "$reports/msg-062537.msg"
+  led="$TMP_ROOT/shakey/outbound-ledger.tsv"
+  printf '%s\t%s\n' "$(printf '%s\n' "$body" | sha256sum | cut -d' ' -f1)" "hetz-inbox" > "$led"
+  rm -f "$status"
+
+  out=$(FM_COMMS_EXCLUDE_SHA_LEDGER="$led" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetz-inbox "$reports" 2>&1)
+
+  assert_no_grep "msg-062537.msg" "$status" "our own outbound must not be logged as inbound"
+  assert_contains "$out" "excluded-own-outbound: msg-062537.msg" \
+    "content-keyed skip must be visible"
+  pass "own outbound excluded by content sha"
+}
+
 test_traversal_task_id_is_refused
 test_non_regular_entries_are_ignored
 test_oversize_reply_is_reported
@@ -703,3 +756,5 @@ test_handled_refuses_placeholder_review
 test_handled_accepts_substantive_review_evidence
 test_already_handled_reply_is_reported_on_resync
 test_scan_triggers_guarded_notification
+test_own_outbound_is_not_ingested_as_inbound
+test_own_outbound_excluded_by_content_sha

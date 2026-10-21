@@ -9,7 +9,7 @@ skill), it does not exist.
 
 - **What it enforces**: no lane dispatch (mcode, agy-fresh, herdr-send-submit,
   herdr-agent-start-fresh) without confirmed provider headroom (default ≥15%).
-- **Documented source of truth**: quota-axi (`~/.pi/agent/skills/quota-axi/`)
+- **Documented source of truth**: quota-axi (`/root/.pi/agent/skills/quota-axi/`)
   with its `--json` schema — the gate reads only documented fields:
   `providers[].provider` and
   `providers[].quotaSemantics.effectiveAvailability[].effectivePercentRemaining`.
@@ -31,7 +31,7 @@ skill), it does not exist.
 - **Documented source**: herdr CLI `pane process-info` (same call firstmate's
   own herdr backend uses for liveness) + plain stat(1). No screen-scraping
   (herdr alt-screen panes cannot be read programmatically — known limitation,
-  see docs/herdr-backend notes), no invented state files beyond the
+  see `/root/agent-work/deightonllm-firstmate/docs/herdr-backend.md`), no invented state files beyond the
   registration records in volatile state/.
 - **Honest limitation**: CPU delta and artifact growth infer progress; a lane
   sitting at an interactive approval dialog can still burn CPU. Mitigation is

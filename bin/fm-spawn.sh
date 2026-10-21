@@ -945,6 +945,24 @@ if [ "$KIND" != secondmate ] && [ ! -f "$STATE/$ID.meta" ]; then
     exit 5
   fi
 fi
+# Mechanical To-Do prefix format enforcement (Captain-locked 2026-10-13): the brief's
+# mandatory task-breakdown rows must carry the correct prefix format. This
+# validates the scaffold itself, not the worker's live items (those cannot exist yet).
+# The checker validates BOARD ROWS, not files, so the brief's rows are extracted
+# and piped to it; passing the path would be read as one malformed row.
+# The check tolerates absence gracefully: a bare charter or legacy brief without a
+# TODO section is not a non-compliant item list - it simply has no items to check.
+# Non-zero exit from the checker is a spawn-aborting failure.
+TODO_ROWS="$(grep -E '^\[[^]]+\]' "$BRIEF" 2>/dev/null || true)"
+if [ -n "$TODO_ROWS" ]; then
+  printf '%s\n' "$TODO_ROWS" | "$FM_ROOT/bin/fm-todo-prefix-check.sh" --stdin >/dev/null 2>&1
+  rc=$?
+  if [ "$rc" -eq 1 ]; then
+    echo "error: brief $BRIEF contains non-compliant To-Do prefix format; refusing spawn" >&2
+    exit 1
+  fi
+  # rc=2 is a usage error in the checker itself - let it fail visibly
+fi
 BRIEF_DIR_REAL=$(cd "$(dirname "$BRIEF")" && pwd -P)
 BRIEF_REAL="$BRIEF_DIR_REAL/$(basename "$BRIEF")"
 

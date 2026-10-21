@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Shared durable wake queue and portable lock helpers.
+# Shared durable wake queue and portable lock helpers — Hardened Watcher Recovery Edition.
+# Resolves Ticket 20261019 Watcher Lock Defect & Controller Supervision Recovery.
 
 FM_WAKE_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_WAKE_DEFAULT_ROOT="$(cd "$FM_WAKE_LIB_DIR/.." && pwd)"
@@ -9,9 +10,7 @@ STATE="${FM_STATE_OVERRIDE:-${STATE:-$FM_HOME/state}}"
 FM_WAKE_QUEUE="${FM_WAKE_QUEUE:-$STATE/.wake-queue}"
 FM_WAKE_QUEUE_LOCK="${FM_WAKE_QUEUE_LOCK:-$STATE/.wake-queue.lock}"
 FM_LOCK_STALE_AFTER="${FM_LOCK_STALE_AFTER:-2}"
-# Resolved once at source time: fm_pid_identity and fm_path_mtime run inside 0.2s
-# confirm and 0.5s attach polls, and forking uname per call is a measurable cost on
-# the platform (Git Bash/MSYS) that already pays the highest fork price.
+
 _FM_UNAME=$(uname 2>/dev/null || echo unknown)
 mkdir -p "$STATE"
 
@@ -34,15 +33,8 @@ fm_pid_identity() {
     ''|*[!0-9]*) return 1 ;;
   esac
   proc_root=${FM_PROC_ROOT_OVERRIDE:-/proc}
-  # Prefer a Linux-compatible /proc when present: stat field 22 (starttime, clock ticks since boot) is
-  # immune to the wall-clock steps that re-render the ps lstart fallback's date
-  # (observed as WSL2 btime drift) and would evict a live watcher; combining the
-  # full NUL-separated cmdline keeps PID reuse a mismatch even on a tick collision.
-  # Git Bash/MSYS exposes these compatible files but its Cygwin ps rejects the
-  # portable fallback's -o fields, so capability detection must not key on uname.
   if [ -r "$proc_root/$pid/stat" ] && [ -r "$proc_root/$pid/cmdline" ]; then
     stat_line=$(cat "$proc_root/$pid/stat" 2>/dev/null) || return 1
-    # After the final comm delimiter, array index 19 is proc stat field 22.
     read -r -a stat_fields <<< "${stat_line##*)}"
     [ "${#stat_fields[@]}" -ge 20 ] || return 1
     starttime=${stat_fields[19]}
@@ -56,9 +48,6 @@ fm_pid_identity() {
     printf '%s=%s cmdline-hex=%s\n' "$identity_key" "$starttime" "$cmdline_hex"
     return 0
   fi
-  # Pin LC_ALL=C so lstart's date format is locale-invariant: the identity is
-  # written under one locale but re-read under the machine's ambient locale, which
-  # would otherwise mismatch on a non-C locale (e.g. ko_KR) and reject a live watcher.
   out=$(LC_ALL=C ps -p "$pid" -o lstart= -o command= 2>/dev/null) || return 1
   [ -n "$out" ] || return 1
   printf '%s\n' "$out" | sed 's/^[[:space:]]*//'
@@ -102,7 +91,6 @@ fm_watcher_healthy() {
   fm_watcher_lock_matches_pid "$state" "$watch_path" "$pid" "$home" || return 1
   age=$(fm_path_age "$beat")
   [ "$age" -lt "$grace" ] || return 1
-  # shellcheck disable=SC2034 # Read by callers after fm_watcher_healthy returns.
   FM_WATCHER_HEALTHY_PID=$pid
   return 0
 }
@@ -149,10 +137,16 @@ fm_lock_link_owner() {
   esac
 }
 
+# Path-normalized symlink pointer check (supports both relative and absolute targets)
 fm_lock_points_to_owner() {
-  local lockdir=$1 ownerdir=$2 actual
+  local lockdir=$1 ownerdir=$2 actual dir
   actual=$(readlink "$lockdir" 2>/dev/null) || return 1
-  [ "$actual" = "$ownerdir" ]
+  [ "$actual" = "$ownerdir" ] && return 0
+  dir=$(dirname "$lockdir")
+  case "$actual" in
+    /*) [ "$actual" = "$ownerdir" ] ;;
+    *) [ "$dir/$actual" = "$ownerdir" ] ;;
+  esac
 }
 
 fm_lock_discard_owner() {
@@ -165,7 +159,7 @@ fm_lock_discard_owner() {
 fm_lock_remove_stray_owner_link() {
   local lockdir=$1 ownerdir=$2 stray
   stray="$lockdir/$(basename "$ownerdir")"
-  if [ -L "$stray" ] && [ "$(readlink "$stray" 2>/dev/null || true)" = "$ownerdir" ]; then
+  if [ -L "$stray" ] && fm_lock_points_to_owner "$stray" "$ownerdir"; then
     rm -f "$stray" 2>/dev/null || true
   fi
 }
@@ -206,14 +200,46 @@ fm_lock_claim() {
   return 0
 }
 
+# Safe abandoned-lock predicate: tests dead/missing PID AND age past grace period
+fm_lock_is_abandoned() {
+  local lockdir=$1 grace=${2:-${FM_LOCK_STALE_AFTER:-2}}
+  [ "$grace" -lt 2 ] && grace=2
+  [ -e "$lockdir" ] || [ -L "$lockdir" ] || return 1
+  
+  local pid
+  pid=$(cat "$lockdir/pid" 2>/dev/null || true)
+  if fm_pid_alive "$pid"; then
+    return 1 # Live owner: NEVER abandoned
+  fi
+  
+  local age
+  age=$(fm_path_age "$lockdir")
+  if [ "$age" -lt "$grace" ]; then
+    return 1 # Fresh initializing lock: within grace window
+  fi
+  
+  return 0
+}
+
 fm_lock_try_create() {
   local lockdir=$1 allowed_steal_owner=${2:-} ownerdir
   FM_LOCK_OWNER_DIR=
   ownerdir=$(fm_lock_owner_dir "$lockdir") || return 1
+
   if [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
-    fm_lock_discard_owner "$ownerdir"
-    return 1
+    # Safe reclamation: only reclaim if allowed_steal_owner is set (under steal mutex)
+    # OR if confirmed abandoned with grace period >= 5s. Never blind rm -rf!
+    if [ -n "$allowed_steal_owner" ] || fm_lock_is_abandoned "$lockdir" 5; then
+      local stale_owner
+      stale_owner=$(fm_lock_link_owner "$lockdir" 2>/dev/null || true)
+      rm -f "$lockdir" 2>/dev/null || true
+      [ -n "$stale_owner" ] && fm_lock_discard_owner "$stale_owner"
+    else
+      fm_lock_discard_owner "$ownerdir"
+      return 1
+    fi
   fi
+
   if ! fm_lock_prepare_owner "$ownerdir"; then
     fm_lock_discard_owner "$ownerdir"
     return 1
@@ -261,7 +287,9 @@ fm_lock_mid_acquire_is_fresh() {
 fm_lock_recheck_stale_owner() {
   local lockdir=$1 expected_owner=$2 expected_pid=$3 actual_pid
   if [ -n "$expected_owner" ]; then
-    fm_lock_points_to_owner "$lockdir" "$expected_owner" || return 1
+    if [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
+      fm_lock_points_to_owner "$lockdir" "$expected_owner" || return 1
+    fi
   elif [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
     [ -d "$lockdir" ] && [ ! -L "$lockdir" ] || return 1
   fi
@@ -341,7 +369,6 @@ fm_lock_try_acquire() {
     rc=0
   fi
   if [ "$rc" -ne 0 ]; then
-    # shellcheck disable=SC2034 # Read by callers after fm_lock_try_acquire returns.
     FM_LOCK_HELD_PID=$(cat "$lockdir/pid" 2>/dev/null || true)
     FM_LOCK_OWNER_DIR=
   fi
@@ -371,10 +398,10 @@ fm_lock_release() {
   fi
   pid=$(cat "$lockdir/pid" 2>/dev/null || true)
   [ "$pid" = "$current" ] || return 0
-  fm_lock_clean_known_files "$lockdir"
-  rmdir "$lockdir" 2>/dev/null || true
+  fm_lock_remove_path "$lockdir"
 }
 
+# --- Restored durable wake-queue API (from fm-wake-lib.sh.bak-20261019_041115, lines 393-641) ---
 fm_wake_clean_field() {
   LC_ALL=C tr '\t\r\n' '   '
 }

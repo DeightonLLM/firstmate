@@ -259,9 +259,7 @@ Never both present a likely-enough solution and launch a parallel design exercis
 A diagnostic request, report, recommendation, or implementation-ready finding is evidence, not authorization to change code.
 Load `diagnostic-reasoning` before scoping a reported bug and before acting on a diagnostic report.
 
-The primary firstmate is the only dispatch authority in this fleet: only the primary launches agents, and only the primary holds merge, approval, and captain-gated authority. A worker, second mate, or lane never launches another agent on its own initiative and never inherits that authority.
-On the Hetz surface this primary keeps 4-6 independent lanes in flight and dispatches them in waves; serial dispatch is a defect, not caution. That launch amount belongs to the Hetz surface alone — do not apply it to, or change the launch amount of, any other surface or agent.
-Independence requires disjoint write boundaries: isolate work in separate worktrees, output directories, or disposable resources rather than serializing it.
+Treat file or subsystem overlap as a risk signal rather than an automatic reason to wait, and dispatch isolated work immediately. **Captain orders 2026-10-16 and 2026-10-17 supersede the no-concurrency-cap and anti-serial-review language in this paragraph: the dispatch cap is four lanes (one is a single pane, two side by side, four in a 2x2 grid), and every lane is preceded by an independent checker. See docs/DISPATCH-STANDARD.md.** when each change can be independently implemented and validated and the selected delivery path can reconcile ordinary rebases or conflicts.
 Serialize only for a true semantic dependency, shared mutable external state, incompatible concurrent migration, or another concrete condition that makes independent progress or reconciliation unsafe; same-file editing alone is insufficient, and genuine blockers remain durable.
 Write the task-specific brief under section 11 before spawning.
 Every agent definition a lane can reach carries the authority rule above.
@@ -276,7 +274,15 @@ validation, and postflight/closeout. Keep the tracker visible and update it at
 each phase change. A prose plan, backlog entry, or filesystem TODO is not a
 substitute. If the extension is unavailable or the tracker is missing/fewer
 than five items, do not spawn or classify work as started; record the blocker
-and repair the intake first.
+and repair the intake first. The scaffold requires every item to begin with the
+Captain-locked Option C prefix `[<harness>·<ModelAbbrev> <effort> @<Host>]`;
+use bare effort codes `h`, `m`, `l`, `xh`, or `x`, omitting effort only when the
+runtime exposes none. `@Host` identifies where the agent runs, not its work
+target. `data/captain.md` is the source of truth for supported codes and host
+mapping. If the Captain selects another format, change only the
+`TODO_PREFIX_REQUIREMENT` assignment in `bin/fm-brief.sh`; both scaffold variants
+share it. The scaffold contract and its regression test are enforced, but live
+tracker contents are not machine-enforced.
 
 ### The tracker is a live view, not a history
 
@@ -528,6 +534,8 @@ It performs guarded fast-forward updates of firstmate and registered secondmate 
 
 ## 13. Agent-only reference skills
 
+- `handoff` - load before preparing or receiving a coordinator handover, replacement-runtime startup prompt, or canonical-lock takeover; the task packet supplies model-specific routing and the complete jobs index.
+
 These skills are not captain-invocable; load them only at their precise triggers.
 
 - `bootstrap-diagnostics` - load whenever the session-start digest's bootstrap section prints an actionable diagnostic line (`MISSING:`, `MISSING_MANUAL:`, `BACKEND_INVALID:`, `NEEDS_GH_AUTH`, `TANGLE:`, `STARTUP_MEMORY_BUDGET:`, `CREW_DISPATCH: invalid`, `FLEET_SYNC:`, `PR_CHECK_MIGRATION:`, `SECONDMATE_SYNC:`, `SECONDMATE_LIVENESS:`, `NUDGE_SECONDMATES:`, or `FMX:`); silence and `BOOTSTRAP_INFO:` need no load.
@@ -649,3 +657,14 @@ When updating this file, preserve every safety boundary and keep the always-load
 4. HOLDS survive replans: keep standing holds on retries, tasks dependent on an unverified send path, and unresolved safety findings. The first dispatch under a fresh hold is a bounded diagnosis of the blocked mechanism itself (message submission, permission matching); never auto-approve commands or assume wildcard rules work. Lift a blocker only on evidence, never to keep agents busy.
 5. POLL and CLOSE: poll lanes, inspect artifacts and verdicts, obtain an independent check for multi-lane work, and report a compact lane map — running; queued with dependency; blocked with exact recovery condition; completed with evidence.
 6. Stop at spending, credential, production, destructive, or expanded-scope boundaries for the captain's decision.
+
+## Required agent context (fleet safety contracts)
+
+Before task actions, read these on this surface rather than assuming Controller-local context:
+
+- `/root/docs/agent-policy/SURFACE-IDENTITY.md` — machine identity precedence and measurement rules.
+- `/root/docs/agent-policy/HERDR-PAYLOAD-CONTRACT.md` — measured Herdr payload fields and gate-authoring rules.
+- `/root/docs/agent-policy/AGENT-TODO-PROMPT-STYLE.md` — the locked To-Do prefix, structure, and acceptance gate.
+- `/root/docs/agent-policy/OPERATOR-ESCAPE-CONTROL.md` — ESC is the operator's protected stop control; never probe with it.
+
+A gate must be written against a measured interface, never an assumed one. A fact measured only by PATH lookup is never reported as absent. When a guard blocks legitimate work, fix the guard's evidence source; do not delete the check.

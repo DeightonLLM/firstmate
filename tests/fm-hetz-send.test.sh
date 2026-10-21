@@ -116,8 +116,10 @@ exit 0
 SH
   chmod +x "$fakebin/herdr"
 
-  out=$(PATH="$fakebin:$PATH" FM_HETZ_LOG="$TMP_ROOT/outbound.log" \
-    "$SEND" "hello to hetz" 2>&1)
+  # Run through the shared helper so the helper's own preflight contract is
+  # satisfied: a reachable route whose inbox is missing is refused (exit 4)
+  # before any transfer is attempted.
+  out=$(run_send "$fakebin" 0 "hello to hetz" 2>&1)
   code=$?
   expect_code 0 "$code" "send should exit 0"
   assert_contains "$out" "sent at" "send must report delivery"

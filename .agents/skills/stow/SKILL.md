@@ -12,6 +12,7 @@ metadata:
 
 Sweep this session for durable knowledge that exists only in conversation, then leave the next session with a compact current operating map rather than an accumulating journal.
 This skill writes only through the existing Firstmate ownership and write boundaries.
+For a coordinator replacement or lock-taking startup prompt, also load `handoff`; stowing memory alone neither transfers ownership nor proves the successor is running.
 
 ## Required startup-memory pass
 

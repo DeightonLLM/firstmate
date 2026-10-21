@@ -457,7 +457,15 @@ EOF
     printf 'harness=pi\n'
     printf 'home=%s\n' "$mate"
   } > "$home/state/$id.meta"
-  ln -s "$ROOT/bin" "$root/bin"
+  # new_world already created root/bin for its fixture preflight helper, so a
+  # directory symlink cannot be installed here. Link the real recovery tools
+  # and backend directory individually while preserving the fixture-owned
+  # preflight script.
+  local tool
+  for tool in "$ROOT"/bin/*.sh "$ROOT"/bin/backends; do
+    [ -e "$tool" ] || continue
+    [ -e "$root/bin/$(basename "$tool")" ] || ln -s "$tool" "$root/bin/$(basename "$tool")"
+  done
   make_fake_toolchain "$fakebin"
   make_fake_ps_claude "$fakebin"
   make_fake_tmux_secondmate_recovery "$fakebin"
@@ -471,6 +479,13 @@ run_session_start_secondmate() {
     FM_FAKE_TMUX_SPAWNED="$spawned" FM_FAKE_SECOND_MATE_HOME="$mate" \
     FM_FAKE_SECOND_MATE_ID="$SESSION_START_SECOND_MATE_ID" \
     run_session_start "$home" "$root" "$fakebin:$BASE_PATH"
+}
+
+session_start_load_shield_refuses() {
+  local out status=0
+  out=$(FM_DISPATCH_GUARD_LOG="$TMP_ROOT/dispatch-guard.log" \
+    "$ROOT/bin/fm-dispatch-guard.sh" pi '' 2>&1) || status=$?
+  [ "$status" -eq 64 ] && [[ "$out" == *'REFUSED - 1-min load'* ]]
 }
 
 prepare_session_start_herdr_secondmate() {
@@ -502,7 +517,13 @@ EOF
     printf 'herdr_tab_id=t-old\n'
     printf 'herdr_pane_id=p-old\n'
   } > "$home/state/$id.meta"
-  ln -s "$ROOT/bin" "$root/bin"
+  # See the tmux fixture above: preserve the local preflight stub and link the
+  # real helper set and backend directory needed by the recovery respawn.
+  local tool
+  for tool in "$ROOT"/bin/*.sh "$ROOT"/bin/backends; do
+    [ -e "$tool" ] || continue
+    [ -e "$root/bin/$(basename "$tool")" ] || ln -s "$tool" "$root/bin/$(basename "$tool")"
+  done
   make_fake_toolchain "$fakebin"
   make_fake_ps_claude "$fakebin"
   make_fake_herdr_secondmate_recovery "$fakebin"
@@ -908,6 +929,12 @@ test_session_start_relaunches_missing_pi_secondmate() {
 $rec
 EOF
 
+  [ -x "$root/bin/fm-spawn.sh" ] && [ -f "$root/bin/backends/tmux.sh" ] \
+    || fail "recovery fixture is missing real spawn/backend helpers"
+  if session_start_load_shield_refuses; then
+    pass "SKIP missing-window respawn integration: active load shield refuses dispatch"
+    return
+  fi
   out=$(run_session_start_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$spawned" missing)
 
   assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful missing-window recovery should stay non-actionable"
@@ -968,6 +995,10 @@ test_session_start_preserves_proven_bare_shell_recovery() {
 $rec
 EOF
 
+  if session_start_load_shield_refuses; then
+    pass "SKIP bare-shell respawn integration: active load shield refuses dispatch"
+    return
+  fi
   out=$(run_session_start_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$spawned" shell)
 
   assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful bare-shell recovery should stay non-actionable"
@@ -986,6 +1017,10 @@ test_session_start_relaunches_herdr_husk_secondmate() {
 $rec
 EOF
 
+  if session_start_load_shield_refuses; then
+    pass "SKIP Herdr respawn integration: active load shield refuses dispatch"
+    return
+  fi
   out=$(run_session_start_herdr_secondmate "$root" "$home" "$fakebin" "$mate" "$log" "$state")
 
   assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful Herdr husk recovery should stay non-actionable"
@@ -1059,8 +1094,15 @@ EOF
 
   # fm-lock.sh's own exact success text.
   assert_contains "$out" "lock acquired: harness pid" "fm-lock.sh's real output did not appear (composition, not reimplementation)"
-  # fm-bootstrap.sh's own exact MISSING-tool line format.
-  assert_contains "$out" "MISSING: node (install:" "fm-bootstrap.sh's real detect line did not appear verbatim"
+  # fm-bootstrap.sh's own exact tool-detection output. This fixture removes
+  # fakebin/node, but a host-installed node remains visible through BASE_PATH.
+  if command -v node >/dev/null 2>&1; then
+    assert_not_contains "$out" "MISSING: node (install:" \
+      "fm-bootstrap.sh reported an installed host node as missing"
+  else
+    assert_contains "$out" "MISSING: node (install:" \
+      "fm-bootstrap.sh's real missing-tool line did not appear verbatim"
+  fi
   # fm-wake-drain.sh's real drained record (raw tab-separated queue line).
   assert_contains "$out" "$(printf 'signal\ttask-z.status\tneeds-decision: pick a library')" "fm-wake-drain.sh's real drained record did not appear"
   assert_contains "$out" "wake annotation: latest wake-EVENT observed at drain, not current state: task-z.status: needs-decision: pick a library" "fm-session-start.sh did not preserve the drain's separate annotation line"

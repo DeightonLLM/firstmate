@@ -53,26 +53,45 @@ pass() {
 # --- self-cleaning temp root ------------------------------------------------
 #
 # fm_test_tmproot <prefix> echoes a fresh temp dir and registers it for removal
-# on EXIT. The first call installs the cleanup trap. A test file that needs
-# extra teardown (e.g. killing a daemon) should define its own EXIT trap and
-# call fm_test_cleanup from inside it so registered dirs are still removed.
+# on EXIT. A test file that needs extra teardown (e.g. killing a daemon) should
+# define its own EXIT trap and call fm_test_cleanup from inside it so
+# registered dirs are still removed.
+#
+# The cleanup trap belongs to the shell that RUNS the test, not to the
+# command-substitution subshell that fm_test_tmproot runs in. Installing it in
+# the subshell meant the trap fired the instant the substitution ended and the
+# parent's trap never existed, so every registered temp root survived the run
+# and /tmp grew without bound: the secondmate-safety suite builds a ~320 MB
+# tree per run, and the Controller reached 96% root from the accumulation.
+# The trap is therefore installed here, at source time, and INT/TERM are
+# covered as well so a run killed by a timeout or a teardown still cleans up.
 
 FM_TEST_CLEANUP_DIRS=()
+FM_TEST_CLEANUP_FILE="${TMPDIR:-/tmp}/.fm-test-cleanup-$$"
 
 fm_test_cleanup() {
   local d
   for d in "${FM_TEST_CLEANUP_DIRS[@]:-}"; do
     [ -n "$d" ] && rm -rf "$d"
   done
+  if [ -n "${FM_TEST_CLEANUP_FILE:-}" ] && [ -f "$FM_TEST_CLEANUP_FILE" ]; then
+    while IFS= read -r d; do
+      [ -n "$d" ] && rm -rf "$d"
+    done < "$FM_TEST_CLEANUP_FILE"
+    rm -f "$FM_TEST_CLEANUP_FILE"
+  fi
 }
+
+trap fm_test_cleanup EXIT
+trap 'fm_test_cleanup; exit 130' INT TERM
 
 fm_test_tmproot() {
   local prefix=${1:-fm-test} root
   root=$(mktemp -d "${TMPDIR:-/tmp}/${prefix}.XXXXXX")
-  if [ "${#FM_TEST_CLEANUP_DIRS[@]}" -eq 0 ]; then
-    trap fm_test_cleanup EXIT
-  fi
   FM_TEST_CLEANUP_DIRS+=("$root")
+  # The array does not survive the command substitution, so the path is also
+  # written to a per-process registry the parent shell's cleanup reads.
+  [ -n "${FM_TEST_CLEANUP_FILE:-}" ] && printf '%s\n' "$root" >> "$FM_TEST_CLEANUP_FILE"
   printf '%s\n' "$root"
 }
 

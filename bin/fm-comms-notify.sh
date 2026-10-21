@@ -86,19 +86,29 @@ resolve_live_agent() { # <machine> <hint>
   fi
 
   if command -v jq >/dev/null 2>&1; then
+    # A row's identity is its `.name` only when that field is populated. This
+    # Herdr version reports `"name": null` and identifies agents by `.pane_id`,
+    # so a `.name`-only selector emits the literal text "null"; jq -r renders it
+    # as a non-empty string, and it was accepted as a real recipient, which
+    # queued every remote notification against a target that cannot exist.
+    # `ident` prefers a populated name and otherwise falls back to the pane id.
+    local ident_def
+    # A jq program, not a shell string: it must not be expanded by the shell.
+    # shellcheck disable=SC2016
+    ident_def='def ident: (.name // "") as $n | if $n == "" or $n == "null" then (.pane_id // "") else $n end;'
     local matched
-    matched=$(printf '%s' "$agent_out" | jq -r --arg h "$hint" '
-      .result.agents[]? | select(.name == $h) | .name
-    ' 2>/dev/null | head -1)
-    if [ -n "$matched" ]; then
+    matched=$(printf '%s' "$agent_out" | jq -r "$ident_def"'
+      .result.agents[]? | ident | select(. == $h)
+    ' --arg h "$hint" 2>/dev/null | head -1)
+    if [ -n "$matched" ] && [ "$matched" != "null" ]; then
       printf '%s' "$matched"
       return 0
     fi
-    # If no exact name match, select first active non-protected agent
-    matched=$(printf '%s' "$agent_out" | jq -r '
-      .result.agents[]? | select(.label // "" | test("protected"; "i") | not) | .name
+    # If no exact identity match, select first active non-protected agent
+    matched=$(printf '%s' "$agent_out" | jq -r "$ident_def"'
+      .result.agents[]? | select(.label // "" | test("protected"; "i") | not) | ident | select(. != "")
     ' 2>/dev/null | head -1)
-    if [ -n "$matched" ]; then
+    if [ -n "$matched" ] && [ "$matched" != "null" ]; then
       printf '%s' "$matched"
       return 0
     fi
@@ -316,7 +326,27 @@ EOF
   [ -z "$machine" ] || herdr_cmd=(herdr --machine "$machine")
 
   local prompt_out prompt_rc=0
-  if prompt_out=$("${herdr_cmd[@]}" agent prompt "$target" "$prompt_text" --wait --timeout 15000 2>&1); then
+  # REMOTE PROMPTS ARE REFUSED BY DEFAULT.
+  # Measured 2026-10-16: `herdr --machine <remote> agent prompt` silently fell
+  # back to the LOCAL machine when the remote target was not ready. On a host
+  # whose only local agent pane is the Controller's own, that means outbound
+  # secondmate text is delivered into the Controller's own session as if it were
+  # inbound - a live instruction-injection surface, not just a lost message.
+  # Delivering to a remote pane therefore requires an explicit opt-in, so the
+  # unsafe path cannot be taken by an ordinary notification. The durable file
+  # channel is unaffected and is what remote secondmates actually read.
+  if [ -n "$machine" ] && [ "${FM_COMMS_ALLOW_REMOTE_PROMPT:-0}" != "1" ]; then
+    printf 'notice: remote pane prompt refused for route %s (set FM_COMMS_ALLOW_REMOTE_PROMPT=1 to override); file preserved on disk\n' "$route" >&2
+    return 0
+  fi
+
+  # No --wait here. `--wait` requires the recipient to show working/blocked
+  # within 5000ms of submission, which a cold remote agent pane cannot do, so
+  # the caller timeout expired and a message that HAD been submitted was
+  # reported as never delivered. Delivery only needs the submission accepted;
+  # `herdr agent prompt` already refuses a blocked agent before sending any
+  # input, which is the safety property this step actually needs.
+  if prompt_out=$("${herdr_cmd[@]}" agent prompt "$target" "$prompt_text" 2>&1); then
     printf '%s\t%s\t%s\t%s\tnotified\t%s\n' "$sha" "$route" "$file" "$(date +%s)" "$target" >> "$LEDGER"
     printf 'notified: %s (%s)\n' "$target" "$file"
     return 0
@@ -371,7 +401,12 @@ cmd_drain() {
       st_val=$(printf '%s' "$st_line" | awk '{print $1}')
       ready_val=$(printf '%s' "$st_line" | awk '{print $2}')
 
-      if [ "$st_val" = "idle" ] && [ "$ready_val" = "true" ]; then
+      # Same accept-set as cmd_notify: defer only when the recipient is
+      # actively busy, or explicitly reports not-ready. An unreported
+      # readiness ("null") is not evidence of unreadiness, and requiring a real
+      # boolean "true" meant drain never fired for any real remote agent.
+      if ! { [ "$st_val" = "working" ] || [ "$st_val" = "blocked" ]; } &&
+         ! { [ "$ready_val" = "false" ] && [ "$st_val" != "idle" ]; }; then
         local prompt_text
         if [ -n "$p_summary" ]; then
           prompt_text="Inbound communication waiting: $p_file_name ${p_corr:+[$p_corr]} | $p_summary"
@@ -384,7 +419,7 @@ cmd_drain() {
         local -a herdr_cmd=(herdr)
         [ -z "$p_machine" ] || herdr_cmd=(herdr --machine "$p_machine")
 
-        if "${herdr_cmd[@]}" agent prompt "$p_target" "$prompt_text" --wait --timeout 15000 >/dev/null 2>&1; then
+        if "${herdr_cmd[@]}" agent prompt "$p_target" "$prompt_text" >/dev/null 2>&1; then
           printf '%s\t%s\t%s\t%s\tnotified\t%s\n' "$p_sha" "$p_route" "$p_file_name" "$(date +%s)" "$p_target" >> "$LEDGER"
           rm -f -- "$p_file"
           printf 'drained: %s (%s)\n' "$p_target" "$p_file_name"

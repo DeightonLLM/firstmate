@@ -317,6 +317,9 @@ if [ -z "$BRIEF_HARNESS" ]; then
 fi
 [ -n "$BRIEF_HARNESS" ] || BRIEF_HARNESS=unknown
 
+# Captain-locked prefix requirement; change this one assignment if the format changes.
+TODO_PREFIX_REQUIREMENT='Each item must begin at the far left with [<harness>·<ModelAbbrev> <effort> @<Host>], before any state verb or task text. Use bare effort codes h, m, l, xh, or x; omit effort only when the runtime exposes none. See data/captain.md for supported codes and host mappings. The @Host tag names where the agent runs, never what it works on; put the work target in task text.'
+
 # Emit the mandatory task breakdown this harness can actually carry. Both variants
 # name the harness and say which requirement applies, so a reading agent is never
 # left guessing whether it owes a five-item To-Do tracker.
@@ -329,8 +332,9 @@ Before any investigation, edit, test, or other task action, use the harness's
 To-Do List extension and create an in-depth dependency-aware tracker with at
 least five checkable items: preflight, scoped discovery, bounded work/evidence,
 validation, and postflight/closeout. Keep it visible and update it at every
-phase change. Do not substitute prose or a filesystem TODO file. If the
-extension is unavailable or the tracker has fewer than five items, append
+phase change. $TODO_PREFIX_REQUIREMENT
+Do not substitute prose or a filesystem TODO file. If the extension is unavailable
+or the tracker has fewer than five items, append
 \`blocked: To-Do List extension unavailable or incomplete\` to the status file and
 stop; firstmate must not treat the task as started.
 EOF
@@ -340,8 +344,9 @@ EOF
 This requirement applies to you because your harness (\`$BRIEF_HARNESS\`) has no To-Do List extension. The five-item To-Do tracker mandate does NOT apply to you: do not try to produce one, and do not report yourself blocked for lacking one.
 This is the equivalent discipline for your harness and it is mandatory. A stale plan is the same false statement to firstmate that a stale tracker is on a To-Do-capable harness.
 1. Before any investigation, edit, test, or other task action, write your plan in your first reply as at least five markdown checkbox items (\`- [ ] \`), one line each, in dependency order: preflight, scoped discovery, bounded work/evidence, validation, postflight/closeout. firstmate reads your pane, so that reply is where the plan has to be visible.
-2. Keep it true as you work: tick an item only once its work is actually complete, and add an item whenever scope changes. Never tick an item you have not finished.
-3. Report every phase change in band: append \`working: {plan item} - {one short line}\` to the status file as you enter each plan item, exactly as rule 4 requires for any material phase change, so firstmate sees the same five phases in the status record that a To-Do-capable harness shows on its board.
+2. $TODO_PREFIX_REQUIREMENT
+3. Keep it true as you work: tick an item only once its work is actually complete, and add an item whenever scope changes. Never tick an item you have not finished.
+4. Report every phase change in band: append \`working: {plan item} - {one short line}\` to the status file as you enter each plan item, exactly as rule 4 requires for any material phase change, so firstmate sees the same five phases in the status record that a To-Do-capable harness shows on its board.
 EOF
   fi
   TODO_BREAKDOWN=${TODO_BREAKDOWN%$'\n'}

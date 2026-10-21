@@ -80,10 +80,162 @@ SH
   printf '%s\n' "$fb"
 }
 
+# Fixture mirroring the REAL `herdr agent list` payload.
+# Measured on the HETZ saved machine 2026-10-16:
+#   {"name":null,"pane_id":"w2:p32","agent":"pi","agent_status":"idle",...}
+# There is NO populated .name field in this Herdr version; the identity lives in
+# .pane_id, and .agent names the harness. The older fixture above invents a
+# populated .name, which is how a `.name`-only selector shipped a live defect.
+make_fake_herdr_realshape() { # <dir> <agent-status> [interactive-ready]
+  local dir=${1:-} status=${2:-idle} ready=${3:-true} fb="${1:-}/fakebin"
+  mkdir -p "$fb" "$dir/logs"
+  cat > "$fb/herdr" <<SH
+#!/usr/bin/env bash
+set -u
+printf '%s\n' "\$*" >> "$dir/logs/herdr.calls"
+case "\${1:-}" in
+  --machine)
+    shift 2
+    ;;
+esac
+case "\${1:-}" in
+  agent)
+    case "\${2:-}" in
+      list)
+        cat <<EOF
+{"id":"cli:agent:list","result":{"agents":[{"name":null,"pane_id":"w2:p10","agent":"pi","agent_status":"$status","interactive_ready":$ready,"cwd":"/root/workspace"}]},"type":"agent_list"}
+EOF
+        exit 0
+        ;;
+      prompt)
+        printf '%s\t%s\n' "\${3:-}" "\${4:-}" >> "$dir/logs/prompts.log"
+        exit 0
+        ;;
+      send-keys)
+        exit 0
+        ;;
+    esac
+    ;;
+  pane)
+    case "\${2:-}" in
+      list)
+        cat <<EOF
+{"id":"cli:pane:list","result":{"panes":[{"pane_id":"w2:p10","agent":"pi","agent_status":"$status","label":"worker"}]},"type":"pane_list"}
+EOF
+        exit 0
+        ;;
+    esac
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$fb/herdr"
+  printf '%s\n' "$fb"
+}
+
+# 15. Delivery must not depend on the agent entering a new turn.
+# `herdr agent prompt --wait` requires a remote agent to show working/blocked
+# within 5000ms of submission. A cold remote Pi pane cannot do that, so the
+# caller timeout expired and the notification was reported as never delivered
+# even though the text was submitted. The prompt CLI already refuses a blocked
+# agent before sending input, which is the delivery safety property we need.
+test_prompt_timeout_still_delivers() {
+  local home fb log out code
+  home=$(make_env prompt_timeout)
+  mkdir -p "$TMP_ROOT/prompt_timeout/fakebin" "$TMP_ROOT/prompt_timeout/logs"
+  cat > "$TMP_ROOT/prompt_timeout/fakebin/herdr" <<'SH'
+#!/usr/bin/env bash
+set -u
+case "${1:-}" in
+  --machine) shift 2 ;;
+esac
+case "${1:-}" in
+  agent)
+    case "${2:-}" in
+      list)
+        cat <<EOF
+{"id":"cli:agent:list","result":{"agents":[{"name":null,"pane_id":"w2:p10","agent":"pi","agent_status":"idle","interactive_ready":true}]},"type":"agent_list"}
+EOF
+        exit 0
+        ;;
+      prompt)
+        printf '%s\n' "$*" >> "$TMPROOT/logs/prompts.log"
+        # A --wait submission behaves like a cold remote agent: it never
+        # observes a new working state and reports a caller timeout.
+        for a in "$@"; do
+          if [ "$a" = "--wait" ]; then
+            printf '%s\n' '{"error":{"code":"timeout","message":"timed out waiting for agent status"}}'
+            exit 1
+          fi
+        done
+        exit 0
+        ;;
+    esac
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$TMP_ROOT/prompt_timeout/fakebin/herdr"
+  fb="$TMP_ROOT/prompt_timeout/fakebin"
+  log="$TMP_ROOT/prompt_timeout/logs/prompts.log"
+
+  out=$(TMPROOT="$TMP_ROOT/prompt_timeout" PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$NOTIFY" notify --route controller --file "msg-001.msg" --content "hello" 2>&1)
+  code=$?
+  expect_code 0 "$code" "a wait timeout must not fail delivery"
+  assert_contains "$out" "notified" "notification must be reported delivered"
+  assert_present "$log" "the prompt text must still have been submitted"
+  assert_absent "$out" "failed to reach" "must not report an undelivered message"
+  pass "prompt wait timeout still delivers"
+}
+
+# 16. Drain must fire for the real payload, where interactive_ready is null.
+# The drain gate required ready_val == "true", which only ever occurs when the
+# API reports a real boolean. Measured on the HETZ machine it reports null, so
+# drained messages were never re-delivered for real remote agents.
+test_drain_fires_with_null_readiness() {
+  local home fb log out
+  home=$(make_env drain_realshape)
+  fb=$(make_fake_herdr_realshape "$TMP_ROOT/drain_realshape" "idle" "null")
+  log="$TMP_ROOT/drain_realshape/logs/prompts.log"
+  local pend="$home/state/comms-pending-notify/controller"
+  mkdir -p "$pend"
+  printf 'route=controller\ntarget=w2:p10\nfile=msg-001.msg\nsha=deadbeef\nsummary=hello\n' \
+    > "$pend/deadbeef.pending"
+
+  out=$(PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$NOTIFY" drain --route controller 2>&1)
+
+  assert_contains "$out" "drained" "drain must deliver when readiness is unreported"
+  assert_present "$log" "drain must submit the prompt to the real pane"
+  pass "drain fires with null readiness"
+}
+
 make_env() { # <name>
   local home="$TMP_ROOT/$1/home"
   mkdir -p "$home/state" "$home/data"
   printf '%s\n' "$home"
+}
+
+# 14. Real agent-list shape resolves a real pane identity, never the string "null".
+# A `jq -r '... | .name'` over the real payload yields the literal text "null",
+# which is non-empty and was therefore accepted as a target, so notifications
+# were recorded against a recipient that cannot exist and never reached Hetz.
+test_realshape_resolves_pane_not_null() {
+  local home fb log pending out
+  home=$(make_env realshape)
+  fb=$(make_fake_herdr_realshape "$TMP_ROOT/realshape" "idle" "true")
+  log="$TMP_ROOT/realshape/logs/prompts.log"
+  pending="$home/state/comms-pending-notify"
+
+  out=$(PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$NOTIFY" notify --route controller --file "msg-001.msg" --content "hello" 2>&1)
+
+  assert_absent "$out" "null" "resolution must never yield the literal string null"
+  assert_absent "$pending" "a resolvable agent must not be queued as pending"
+  assert_present "$log" "prompt must be submitted to the real pane identity"
+  assert_grep "w2:p10" "$log" "prompt must target the resolved pane_id"
+  pass "real agent-list shape resolves pane, not null"
 }
 
 # 1. Successful post-delivery notification on idle agent
@@ -340,3 +492,6 @@ test_resumed_missed_notification
 test_same_home_scoping
 test_preserved_protected_panes
 test_zero_repeated_model_turns_for_unchanged_mail
+test_realshape_resolves_pane_not_null
+test_prompt_timeout_still_delivers
+test_drain_fires_with_null_readiness
