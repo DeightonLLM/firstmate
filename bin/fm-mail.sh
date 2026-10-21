@@ -375,7 +375,10 @@ wake_for() {
   # shellcheck source=bin/fm-wake-lib.sh
   # shellcheck disable=SC1091
   . "$lib"
-  fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK"
+  if ! fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK"; then
+    echo "fm-mail: could not take the wake queue lock $FM_WAKE_QUEUE_LOCK (holder pid ${FM_LOCK_HELD_PID:-unknown}); retried on next poll" >&2
+    return 3
+  fi
   if fm_wake_append_locked check "$wake_key" "check: mail $id - $summary"; then
     if mail_record_evidence "$generation" "$id" "$tag"; then
       :
@@ -493,7 +496,10 @@ mail_poll() {
   # shellcheck source=bin/fm-wake-lib.sh
   # shellcheck disable=SC1091
   . "$SCRIPT_DIR/fm-wake-lib.sh"
-  fm_lock_acquire_wait "$STATE_DIR/.mail-seen.lock"
+  if ! fm_lock_acquire_wait "$STATE_DIR/.mail-seen.lock"; then
+    echo "fm-mail: could not take the mail-seen lock $STATE_DIR/.mail-seen.lock (holder pid ${FM_LOCK_HELD_PID:-unknown})" >&2
+    return 1
+  fi
   if ! list="$(run_py poll_list)"; then
     # The poll engine already printed its cause on stderr; just release the
     # lock and fail instead of letting set -e abort the whole script with the

@@ -27,6 +27,29 @@
 #    (e.g. to-brandon-compute/ and controller-replies/) and across repeated polls.
 # 6. Drain/resumption: pending deferred notifications are delivered as soon as
 #    the recipient returns to idle.
+#
+# THE PROMPT IS BOUNDED, AND ONLY A PROVEN-IDLE RECIPIENT IS PROMPTED.
+# Measured 2026-10-21 on the Controller: `herdr agent list` returned an EMPTY
+# list ({"id":"cli:agent:list","result":{"agents":[],"type":"agent_list"}}) and
+# the pane path reported agent_status "unknown". The old gate only deferred on
+# "working" or "blocked", and only deferred on ready_val=false, so a status of
+# "unknown" fell straight through to the PROMPT branch. The prompt was then
+# never accepted, because the pane's real state was unknown, and
+# `herdr agent prompt` blocked forever.
+#
+# That single fall-through is what wedged the fleet: bin/fm-comms-ingest.sh
+# called this script while HOLDING the comms receipts lock, so one unresponsive
+# pane became an unbounded comms outage - every later scan piled up behind the
+# stuck lock holder.
+#
+# Two rules follow, and both are load-bearing:
+#   1. A recipient whose state cannot be read is NOT a recipient proven idle.
+#      Only an explicit "idle" may be prompted; "unknown", an absent status,
+#      and anything unrecognised DEFER into the durable pending queue.
+#   2. The prompt call itself is bounded by a timeout, so even a correct gate
+#      cannot be defeated by a pane that stops responding mid-call.
+# Deferring is always safe: the message file is already on disk, so a deferred
+# notification costs latency, never delivery.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,6 +65,22 @@ if [ -f "$SCRIPT_DIR/fm-secondmate-registry-lib.sh" ]; then
   # shellcheck source=bin/fm-secondmate-registry-lib.sh
   . "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
 fi
+
+# The single owner of bounded command execution. The prompt below is run
+# through it so a pane that never answers cannot hold this script (and, when
+# this script is called from the comms ingest, the receipts lock) forever.
+if [ -f "$SCRIPT_DIR/fm-timeout-lib.sh" ]; then
+  # shellcheck source=bin/fm-timeout-lib.sh
+  . "$SCRIPT_DIR/fm-timeout-lib.sh"
+fi
+
+# How long the prompt submission may take before it is abandoned. The reply
+# file is already durable on disk, so an abandoned prompt costs a notification,
+# never a delivery.
+FM_COMMS_NOTIFY_TIMEOUT_S="${FM_COMMS_NOTIFY_TIMEOUT_S:-20}"
+case "$FM_COMMS_NOTIFY_TIMEOUT_S" in
+  '' | *[!0-9]*) FM_COMMS_NOTIFY_TIMEOUT_S=20 ;;
+esac
 
 usage() {
   sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -191,6 +230,30 @@ get_agent_status() { # <machine> <target> -> prints "<status> <ready>"
   printf 'unknown false\n'
 }
 
+# defer_notification <route> <machine> <target> <file> <sha> <summary> <content> <corr> <reason>
+# Record the notification in the durable pending queue instead of prompting.
+# Deferring is always safe: the message file is already on disk, so a deferred
+# notification costs latency, never delivery. The pending entry is drained by
+# `fm-comms-notify.sh drain` once the recipient is back to idle.
+defer_notification() {
+  local route=$1 machine=$2 target=$3 file=$4 sha=$5 summary=$6 content=$7 corr=$8 reason=$9
+  local pending_dir="$PENDING_BASE/$route"
+  mkdir -p "$pending_dir"
+  cat > "$pending_dir/$sha.pending" <<EOF
+route=$route
+machine=$machine
+target=$target
+file=$file
+sha=$sha
+summary=$summary
+content=$content
+corr=$corr
+timestamp=$(date +%s)
+EOF
+  printf 'deferred: %s is %s (recorded pending notification)\n' "$target" "$reason"
+  return 0
+}
+
 cmd_notify() {
   local route="" file="" content="" sha="" summary="" corr="" opt_target="" opt_machine=""
   while [[ $# -gt 0 ]]; do
@@ -275,40 +338,44 @@ cmd_notify() {
     summary=$(printf '%s' "$content" | head -1 | cut -c1-100)
   fi
 
+  # Recipient state gate.
+  #
+  # ONLY a recipient PROVEN idle may be prompted. The measured 2026-10-21
+  # failure was a fall-through: `herdr agent list` returned an empty list and
+  # the pane path reported agent_status "unknown", so st_val matched neither
+  # "working" nor "blocked" and ready_val was not "false" - and the code went
+  # straight to the prompt branch. The prompt was then never accepted and
+  # `herdr agent prompt` blocked forever, holding the caller's receipts lock
+  # with it.
+  #
+  # A recipient whose state cannot be read is NOT a recipient proven idle,
+  # so every status that is not an explicit "idle" defers. Deferring records
+  # the notification in the durable pending queue; the message file is
+  # already on disk, so this costs latency and never delivery.
+  local notify_reason=""
   case "$st_val" in
-    working|blocked)
-      local pending_dir="$PENDING_BASE/$route"
-      mkdir -p "$pending_dir"
-      cat > "$pending_dir/$sha.pending" <<EOF
-route=$route
-machine=$machine
-target=$target
-file=$file
-sha=$sha
-summary=$summary
-content=$content
-corr=$corr
-timestamp=$(date +%s)
-EOF
-      printf 'deferred: %s is %s (recorded pending notification)\n' "$target" "$st_val"
-      return 0
-      ;;
+    idle) notify_reason="" ;;
+    working | blocked) notify_reason="$st_val" ;;
+    *) notify_reason="status unknown (not proven idle)" ;;
   esac
 
-  if [ "$ready_val" = "false" ] && [ "$st_val" != "idle" ]; then
-    local pending_dir="$PENDING_BASE/$route"
-    mkdir -p "$pending_dir"
-    cat > "$pending_dir/$sha.pending" <<EOF
-route=$route
-machine=$machine
-target=$target
-file=$file
-sha=$sha
-summary=$summary
-corr=$corr
-timestamp=$(date +%s)
-EOF
-    printf 'deferred: %s is not interactively ready (recorded pending notification)\n' "$target"
+  if [ -n "$notify_reason" ]; then
+    defer_notification "$route" "$machine" "$target" "$file" "$sha" \
+      "$summary" "$content" "$corr" "$notify_reason"
+    return 0
+  fi
+
+  if [ "$ready_val" = "false" ]; then
+    defer_notification "$route" "$machine" "$target" "$file" "$sha" \
+      "$summary" "$content" "$corr" "not interactively ready"
+    return 0
+  fi
+
+  # A bounded prompt needs the bounded-execution helper. Without it there is
+  # no safe way to prompt, so defer rather than risk an unbounded call.
+  if ! command -v fm_run_timed >/dev/null 2>&1; then
+    defer_notification "$route" "$machine" "$target" "$file" "$sha" \
+      "$summary" "$content" "$corr" "the bounded-execution helper is unavailable"
     return 0
   fi
 
@@ -346,7 +413,13 @@ EOF
   # reported as never delivered. Delivery only needs the submission accepted;
   # `herdr agent prompt` already refuses a blocked agent before sending any
   # input, which is the safety property this step actually needs.
-  if prompt_out=$("${herdr_cmd[@]}" agent prompt "$target" "$prompt_text" 2>&1); then
+  # The prompt is BOUNDED. `herdr agent prompt` blocks until the submission is
+  # accepted, and a pane whose real state is unknown never accepts it. Without
+  # this bound the call waits forever, and when the caller is the comms ingest
+  # it waits forever while HOLDING the receipts lock - which is exactly how
+  # one unresponsive pane became a fleet-wide comms outage on 2026-10-21.
+  if prompt_out=$(fm_run_timed "$FM_COMMS_NOTIFY_TIMEOUT_S" \
+    "${herdr_cmd[@]}" agent prompt "$target" "$prompt_text" 2>&1); then
     printf '%s\t%s\t%s\t%s\tnotified\t%s\n' "$sha" "$route" "$file" "$(date +%s)" "$target" >> "$LEDGER"
     printf 'notified: %s (%s)\n' "$target" "$file"
     return 0
@@ -354,6 +427,10 @@ EOF
     prompt_rc=$?
     printf 'notice: notification failed to reach %s; file preserved on disk\n' "$target" >&2
     [ -z "$prompt_out" ] || printf '%s\n' "$prompt_out" >&2
+    if fm_timed_out "$prompt_rc"; then
+      printf 'notice: the notification prompt exceeded its %ss bound and was abandoned; the reply file is preserved for the next poll\n' \
+        "$FM_COMMS_NOTIFY_TIMEOUT_S" >&2
+    fi
     return "$prompt_rc"
   fi
 }
@@ -377,7 +454,7 @@ cmd_drain() {
     r_name=$(basename "$route_dir")
     [ -z "$route" ] || [ "$route" = "$r_name" ] || continue
 
-    local p_file
+    local p_file prompt_out
     for p_file in "$route_dir"/*.pending; do
       [ -f "$p_file" ] || continue
       local p_route="" p_machine="" p_target="" p_file_name="" p_sha="" p_summary="" p_content="" p_corr=""
@@ -396,17 +473,36 @@ cmd_drain() {
       [ -n "$p_summary" ] || p_summary="$p_content"
 
       # Re-resolve or re-check target status
-      local st_line st_val ready_val
+      local st_line st_val ready_val notify_reason=""
       st_line=$(get_agent_status "$p_machine" "$p_target")
       st_val=$(printf '%s' "$st_line" | awk '{print $1}')
       ready_val=$(printf '%s' "$st_line" | awk '{print $2}')
 
-      # Same accept-set as cmd_notify: defer only when the recipient is
-      # actively busy, or explicitly reports not-ready. An unreported
-      # readiness ("null") is not evidence of unreadiness, and requiring a real
-      # boolean "true" meant drain never fired for any real remote agent.
-      if ! { [ "$st_val" = "working" ] || [ "$st_val" = "blocked" ]; } &&
-         ! { [ "$ready_val" = "false" ] && [ "$st_val" != "idle" ]; }; then
+      # Same gate as cmd_notify: ONLY a recipient PROVEN idle may be prompted.
+      # The old drain gate deferred only on "working" or "blocked", so a status
+      # of "unknown" - exactly what `herdr agent list` returning an empty list
+      # produces - fell straight through to the prompt branch, and the prompt
+      # was never accepted. A recipient whose state cannot be read is not a
+      # recipient proven idle, so every status that is not an explicit "idle"
+      # leaves the pending entry in place. The pending file is durable and the
+      # message file is already on disk, so this costs latency and never
+      # delivery.
+      local notify_reason=""
+      case "$st_val" in
+        idle) notify_reason="" ;;
+        working | blocked) notify_reason="$st_val" ;;
+        *) notify_reason="status unknown (not proven idle)" ;;
+      esac
+
+      if [ -z "$notify_reason" ] && [ "$ready_val" = "false" ]; then
+        notify_reason="not interactively ready"
+      fi
+
+      if [ -z "$notify_reason" ] && ! command -v fm_run_timed >/dev/null 2>&1; then
+        notify_reason="the bounded-execution helper is unavailable"
+      fi
+
+      if [ -z "$notify_reason" ]; then
         local prompt_text
         if [ -n "$p_summary" ]; then
           prompt_text="Inbound communication waiting: $p_file_name ${p_corr:+[$p_corr]} | $p_summary"
@@ -419,10 +515,17 @@ cmd_drain() {
         local -a herdr_cmd=(herdr)
         [ -z "$p_machine" ] || herdr_cmd=(herdr --machine "$p_machine")
 
-        if "${herdr_cmd[@]}" agent prompt "$p_target" "$prompt_text" >/dev/null 2>&1; then
+        # BOUNDED for the same reason as cmd_notify: `herdr agent prompt`
+        # blocks until the submission is accepted, and a pane whose real state
+        # is unknown never accepts it. A drain that blocks forever strands
+        # every pending notification behind it.
+        if prompt_out=$(fm_run_timed "$FM_COMMS_NOTIFY_TIMEOUT_S" \
+          "${herdr_cmd[@]}" agent prompt "$p_target" "$prompt_text" 2>&1); then
           printf '%s\t%s\t%s\t%s\tnotified\t%s\n' "$p_sha" "$p_route" "$p_file_name" "$(date +%s)" "$p_target" >> "$LEDGER"
           rm -f -- "$p_file"
           printf 'drained: %s (%s)\n' "$p_target" "$p_file_name"
+        else
+          printf 'notice: the drained notification to %s was not accepted; the pending entry is preserved\n' "$p_target" >&2
         fi
       fi
     done

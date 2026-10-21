@@ -68,7 +68,8 @@ NEW_EFFORT=$(printf '%s\n' "$RELAUNCH_OUT" | sed -n 's/^effort=//p' | tail -1)
 [ -n "$NEW_HARNESS" ] || die "the host's route confirmation carried no harness to record"
 
 META_LOCK=$(fm_meta_lock_path "$META") || die "metadata lock path is invalid for $ID"
-fm_lock_acquire_wait "$META_LOCK"
+fm_lock_acquire_wait "$META_LOCK" \
+  || die "could not take the metadata lock (holder pid ${FM_LOCK_HELD_PID:-unknown})"
 META_TMP=$(mktemp "$STATE/.fm-remote-relaunch-meta.XXXXXX") || {
   fm_lock_release "$META_LOCK"
   die "cannot stage the updated record"

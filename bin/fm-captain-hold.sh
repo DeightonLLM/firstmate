@@ -296,7 +296,11 @@ validate_one_line() {  # <label> <value>
 
 acquire_task_control_lock() {  # <task-id>
   CAPTAIN_CONTROL_LOCK="$STATE/.control-$1.lock"
-  fm_lock_acquire_wait "$CAPTAIN_CONTROL_LOCK"
+  if ! fm_lock_acquire_wait "$CAPTAIN_CONTROL_LOCK"; then
+    printf 'fm-captain-hold: could not take the task control lock %s (holder pid %s)\n' \
+      "$CAPTAIN_CONTROL_LOCK" "${FM_LOCK_HELD_PID:-unknown}" >&2
+    return 1
+  fi
   CAPTAIN_CONTROL_LOCK_HELD=1
 }
 
@@ -934,7 +938,7 @@ command_hold() {
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z) : ;;
     *) fail "FM_CAPTAIN_HOLD_NOW must be a UTC YYYY-MM-DDTHH:MM:SSZ timestamp" ;;
   esac
-  acquire_task_control_lock "$id"
+  acquire_task_control_lock "$id" || fail "could not take the task control lock for $id"
   require_tasks_axi
   if task_show "$id"; then
     show=$TASK_SHOW_OUTPUT
@@ -1117,7 +1121,7 @@ command_answer() {
   done
   validate_slug task-id "$id"
   load_decision "$decision_file"
-  acquire_task_control_lock "$id"
+  acquire_task_control_lock "$id" || fail "could not take the task control lock for $id"
   require_tasks_axi
   task_show "$id" || fail "captain-held task $id is absent from this home's configured backlog (data directory $DATA)"
   show=$TASK_SHOW_OUTPUT
@@ -1543,7 +1547,7 @@ command_reconcile_requests() {
     esac
     [ "${#id}" -le 128 ] \
       || { printf 'refused: %s (task id is too long)\n' "$id"; skipped=$((skipped + 1)); continue; }
-    acquire_task_control_lock "$id"
+    acquire_task_control_lock "$id" || fail "could not take the task control lock for $id"
     show_status=0
     show=''
     task_show "$id" || show_status=$?
@@ -1621,7 +1625,7 @@ reconcile_close() {
   validate_slug task-id "$id"
   [ -n "$evidence_file" ] || fail "--evidence-file is required; a moot call closes on evidence, never on assertion"
   load_decision "$evidence_file"
-  acquire_task_control_lock "$id"
+  acquire_task_control_lock "$id" || fail "could not take the task control lock for $id"
   reconcile_request_read "$id" \
     || fail "task $id has no pending board-created reconcile request"
   require_tasks_axi
@@ -1691,7 +1695,7 @@ reconcile_note() {
   [ -n "$note" ] || fail "note file must not be empty"
   [ "$(printf '%s' "$note" | LC_ALL=C wc -c | tr -d ' ')" -le 8192 ] \
     || fail "note file exceeds 8192 bytes"
-  acquire_task_control_lock "$id"
+  acquire_task_control_lock "$id" || fail "could not take the task control lock for $id"
   reconcile_request_read "$id" \
     || fail "task $id has no pending board-created reconcile request"
   require_tasks_axi
@@ -1739,7 +1743,8 @@ command_complete() {
   [ -f "$meta" ] && has_meta=1
   if [ "$has_meta" = 1 ]; then
     CAPTAIN_META_LOCK=$(fm_meta_lock_path "$meta") || fail "could not resolve task metadata lock"
-    fm_lock_acquire_wait "$CAPTAIN_META_LOCK"
+    fm_lock_acquire_wait "$CAPTAIN_META_LOCK" \
+      || fail "could not take the task metadata lock (holder pid ${FM_LOCK_HELD_PID:-unknown})"
     CAPTAIN_META_LOCK_HELD=1
     [ -f "$meta" ] || fail "task metadata disappeared while recording completion"
   fi

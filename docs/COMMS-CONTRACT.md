@@ -42,6 +42,23 @@ delivery script lands, prefer the `write` tool into the Controller outbox follow
 4. **If delivery fails twice, say so explicitly** rather than retrying silently. The failure is the
    signal.
 
+## How a received file is turned into a receipt
+
+`bin/fm-comms-ingest.sh scan` receives a file, writes one receipt row, and publishes one wake. Two
+rules about the notification it sends alongside that are load-bearing, both measured on 2026-10-21:
+
+1. **The notification is never sent while the receipts lock is held.** The notification is a courtesy
+   prompt to a live agent pane; the receipt ledger is the durable fact. They do not share a critical
+   section. When the notifier was called under the lock, one pane that never answered held the
+   receipts lock forever and every later scan piled up behind it.
+2. **A recipient whose agent state cannot be read is never prompted.** Only an explicit `idle` may be
+   prompted; `unknown`, an absent status, and anything unrecognised are deferred into the durable
+   pending queue, where the `drain` command picks them up later. The prompt call is itself bounded by
+   `FM_COMMS_NOTIFY_TIMEOUT_S`, so a pane that stops responding mid-call cannot wedge anything.
+
+Deferring is always safe: the file is already on disk, so a deferred notification costs latency and
+never delivery.
+
 ## What these rules replaced
 
 A night of the Controller reporting "delivered" for messages that had not left the machine, and Hetz

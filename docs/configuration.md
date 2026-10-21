@@ -518,6 +518,55 @@ The published `lavish-axi poll` clears feedback destructively before returning i
 Never describe this path as at-least-once, no-loss, or lossless.
 `docs/verification/process-event-sources.md` holds the measurements and `.agents/skills/process-event-sources/SKILL.md` owns the handling procedure.
 
+## Lock wait contract
+
+`bin/fm-wake-lib.sh` owns every portable lock in this repo. Its wait contract
+exists because the unbounded version it replaced turned one wedged lock into a
+host-wide outage on 2026-10-21: the Controller's comms receipt lock was held
+by a scan that never finished, every later scan spun on it at 10 Hz, and each
+spin leaked a lock owner dir and spawned a dozen `git ls-files` subprocesses.
+That was a 14.32 load average on four cores, and `bin/fm-dispatch-guard.sh`
+refused every spawn for over an hour.
+
+**A wait has a deadline.** `fm_lock_acquire_wait` and
+`fm_lock_acquire_wait_bounded` return non-zero when the deadline passes.
+`124` is the timeout status; `FM_LOCK_HELD_PID` names the holder and
+`FM_LOCK_WAIT_REASON` says whether it is `busy` (alive and still inside its
+age budget), `stuck` (alive and past `FM_LOCK_MAX_HOLD_S`), `stale` (dead) or
+`contended`. Every caller must fail closed: a caller that cannot take the
+lock must not proceed as though it holds it.
+
+**A wait does not busy-wait.** It polls on a growing interval
+(`FM_LOCK_POLL_MIN_S` to `FM_LOCK_POLL_MAX_S`), so a contended lock costs a
+handful of process spawns a second rather than 650.
+
+**A live holder is not automatically a working holder.** A process that wedges
+inside its critical section keeps its pid alive and its lock held forever. A
+holder that is alive AND older than `FM_LOCK_MAX_HOLD_S` counts as `stuck` and
+may be broken — but only by a caller that opted in with
+`FM_LOCK_BREAK_STUCK_HOLDERS=1`, and only under the existing steal mutex, which
+re-reads the owner before displacing it so a lock that changed underneath the
+breaker is never broken. The default is off: a live holder is never displaced
+by a caller that did not ask for it. The `state/.watch.lock` watcher lock is
+held for the watcher's whole lifetime and is taken with `fm_lock_try_acquire`,
+never with a wait, so it is outside this rule.
+
+**Owner directories are reclaimed.** A lock owner dir is scratch by
+construction. A release and a successful acquire both sweep the lock's own
+directory for owner dirs that no live lock references, skipping any dir whose
+recorded pid is still alive so an in-flight acquirer is never disturbed. The
+count of owner dirs is the measurable proof of the leak, so it must not grow
+without bound.
+
+Two rules keep that sweep safe and cheap. It runs only while the caller HOLDS
+the lock, so no other process can be mid-claim for it — a sweep that ran
+outside the lock could delete the owner dir an in-flight acquirer is about to
+publish, leaving a dangling pointer that lets a second holder in. And the sweep
+is bounded: the clock is read once per sweep and at most
+`FM_LOCK_RECLAIM_MAX` dirs are removed per sweep, because the sweep runs inside
+a held lock and a large backlog would otherwise turn the recovery into one
+long stall. The backlog drains over successive acquires and releases instead.
+
 ## Environment variables
 
 Runtime tuning via environment variables (defaults shown):
@@ -559,6 +608,16 @@ FM_HEARTBEAT=600        # base seconds between heartbeat scans; no-change heartb
 FM_HEARTBEAT_MAX=7200   # heartbeat backoff cap
 FM_CHECK_INTERVAL=300   # seconds between slow checks (authenticated merge polls, custom checks, or X-mode dispatch)
 FM_CHECK_TIMEOUT=30     # seconds allowed per slow check script
+FM_LOCK_WAIT_TIMEOUT_S=120   # seconds a lock wait may spend on a contended lock; on expiry the wait returns 124 and names the holder (docs/configuration.md "Lock wait contract")
+FM_LOCK_MAX_HOLD_S=900   # age at which a LIVE lock holder counts as stuck; a budget for one whole critical section, so keep it well above the longest legitimate one
+FM_LOCK_BREAK_STUCK_HOLDERS=0   # 1 lets a lock wait break a stuck live holder; 0 (the default) never displaces a live holder
+FM_LOCK_RECLAIM_GRACE_S=5   # grace before an unreferenced lock owner dir may be reclaimed
+FM_LOCK_RECLAIM_MAX=64   # owner dirs removed per reclamation sweep; the sweep runs while the lock is held, so it must stay bounded
+FM_LOCK_POLL_MIN_S=0.05   # first poll interval after a refused lock acquire
+FM_LOCK_POLL_MAX_S=2   # ceiling for that poll interval
+FM_COMMS_NOTIFY_TIMEOUT_S=20   # seconds the comms notifier may spend submitting one prompt before abandoning it (bin/fm-comms-notify.sh)
+FM_COMMS_NOTIFY_DISPATCH_TIMEOUT_S=30   # seconds one comms notification dispatch may take (bin/fm-comms-ingest.sh)
+FM_COMMS_INGEST_LOG_MAX_BYTES=5242880   # size at which state/fm-comms-ingest.log is rotated to one generation
 FM_PROCEVENT_MAX_OUTPUT_BYTES=1048576   # bound on one captured process-to-event result
 FM_PROCEVENT_CLAIM_ROOT=                # machine-wide source claim root; default $XDG_STATE_HOME/firstmate/procevent-claims
 FM_CODEX_WATCH_CHECKPOINT=180   # seconds per foreground watcher checkpoint in Codex primary supervision

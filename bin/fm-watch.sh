@@ -627,7 +627,10 @@ procevent_surface_queued() {
   local key reason
   PROCEVENT_SURFACED=
   [ -s "$FM_WAKE_QUEUE" ] || return 0
-  fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK"
+  if ! fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK"; then
+    echo "watcher: could not take the wake queue lock $FM_WAKE_QUEUE_LOCK (holder pid ${FM_LOCK_HELD_PID:-unknown}); retrying next cycle" >&2
+    return 0
+  fi
   while IFS= read -r key; do
     case "$key" in procevent:*) ;; *) continue ;; esac
     [ -e "$(procevent_surfaced_marker "$key")" ] && continue

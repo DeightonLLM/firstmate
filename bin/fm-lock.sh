@@ -54,7 +54,10 @@ release_claim_lock() {
 }
 trap release_claim_lock EXIT
 trap 'exit 1' HUP INT TERM
-fm_lock_acquire_wait "$CLAIM_LOCK"
+if ! fm_lock_acquire_wait "$CLAIM_LOCK"; then
+  echo "error: could not take the claim lock $CLAIM_LOCK (holder pid ${FM_LOCK_HELD_PID:-unknown}); operate read-only until resolved" >&2
+  exit 1
+fi
 CLAIM_LOCK_HELD=1
 
 if [ -e "$LOCK" ] || [ -L "$LOCK" ]; then
