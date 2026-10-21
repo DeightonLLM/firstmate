@@ -72,6 +72,7 @@ The host's header owns the output contract they read.
 | omp | the watch extension, `.omp/extensions/fm-primary-omp-watch.ts`, which restarts its own successor after each close | the extension's `watcher` follow-up |
 | Grok | the model's tracked background call, rendered as `bin/fm-supervision-host.sh park` at session start | the background task's completion notification |
 | Codex | the foreground checkpoint, `bin/fm-watch-checkpoint.sh`, in the watcher's place | the checkpoint's own output |
+| minimax-code | the self-owned supervisor, `bin/fm-watch-supervise.sh`, which runs `bin/fm-watch-arm.sh` in a loop and re-arms itself after every routine wake | the tracked background task's completion notification |
 
 Hook, plugin, extension, and checkpoint owners pass their harness as the primary pin.
 Grok's model-owned call relies on primary detection.
@@ -80,6 +81,10 @@ The host pins dispatched work to the primary's crew harness rather than the engi
 Grok's arm command is fixed when the session-start block renders.
 So adding or removing the file on a Grok home takes effect at the next session start.
 The other owners read the file at every arm.
+
+minimax-code's arm owner is the ONE row that does not run on a home that runs the host, because the host cannot be reached from that primary at all: `FM_SUPERVISION_ENGINES_VERIFIED` in `bin/fm-supervision-engine-lib.sh` names only Claude, and `bin/fm-host-mirror.sh verified minimax-code` has no mirror writer, so the attended host reports "no verified dialog mirror for minimax-code".
+That primary has no native turn-end hook either, so `bin/fm-watch-supervise.sh` is its arm owner instead: it needs neither an engine nor a mirror, it uses the same arm, the same watcher and the same shared classifier, and it re-arms itself after every routine wake so the model never has to remember a re-arm step.
+`docs/supervision-protocols/minimax-code.md` owns its exact command and its exit contract.
 
 ### The report surface
 
