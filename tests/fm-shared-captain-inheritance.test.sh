@@ -232,9 +232,16 @@ new_git_world() {
     printf '%s\n' 'projects/'
   } > "$root/.gitignore"
   printf '%s\n' "instructions" > "$root/AGENTS.md"
-  mkdir -p "$root/bin" "$root/.agents/skills"
+  mkdir -p "$root/bin" "$root/.agents/skills" "$root/docs/system-context"
   printf '%s\n' "echo spawn" > "$root/bin/fm-spawn.sh"
   printf '%s\n' "skill" > "$root/.agents/skills/example.md"
+  # The fresh-agent baseline is fail-closed: a session start on this root
+  # refuses to emit a digest unless the warehouse index and its preflight
+  # script are present under it. A firstmate repo root carries both, so this
+  # fixture carries them too - the same two files tests/fm-session-start.test.sh
+  # gives its own fixture root.
+  printf '%s\n' '# context index fixture' > "$root/docs/system-context/INDEX.md"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$root/bin/fm-context-preflight.sh"
   git -C "$root" add -A
   git -C "$root" commit -qm initial
   c1=$(git -C "$root" rev-parse HEAD)
@@ -262,7 +269,7 @@ EOF
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$data_override" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 \
-    "$ROOT/bin/fm-spawn.sh" sm "$sm" codex --secondmate >/dev/null 2>&1 || true
+    "$ROOT/bin/fm-spawn.sh" sm "$sm" codex --model gpt-6-luna --secondmate >/dev/null 2>&1 || true
 
   cmp -s "$data_override/captain-shared.md" "$sm/data/captain-shared.md" \
     || fail "spawn convergence point did not copy shared captain preferences from FM_DATA_OVERRIDE"

@@ -551,14 +551,14 @@ case "$ARG3" in
     # The launch_template lookup below is the unverified-adapter guard for both
     # kinds: a harness with no template aborts the spawn.
     if [ "$KIND" = secondmate ]; then
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+      HARNESS=$("$SCRIPT_DIR/fm-harness.sh" secondmate)
       harness_src='config/secondmate-harness (falling back to config/crew-harness)'
     else
       if [ -f "$CONFIG/crew-dispatch.json" ]; then
         echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
         exit 1
       fi
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
+      HARNESS=$("$SCRIPT_DIR/fm-harness.sh" crew)
       harness_src='config/crew-harness'
     fi
     LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2; exit 1; }
@@ -660,7 +660,16 @@ fi
 # any non-zero exit aborts the spawn and the guard's own stderr reason is the
 # captain-facing message. See bin/fm-dispatch-guard.sh for the four rules and
 # their narrow, logged bypasses.
-if ! "$FM_ROOT/bin/fm-dispatch-guard.sh" "$HARNESS" "$GUARD_MODEL"; then
+#
+# The guard is resolved from THIS SCRIPT'S OWN CODE ROOT, never from FM_ROOT.
+# FM_ROOT_OVERRIDE names the firstmate repo root a spawn READS STATE FROM (the
+# primary checkout whose HEAD a secondmate home is fast-forwarded to), and it is
+# allowed to point at a checkout that does not carry this tool's bin/ tree at
+# all. A mandatory policy gate must be the gate the RUNNING firstmate ships:
+# resolving it from a root that need not carry it made a missing gate exit 127
+# on a raw "No such file or directory", which killed the spawn before it could
+# do its job and said nothing about which gate was missing.
+if ! "$SCRIPT_DIR/fm-dispatch-guard.sh" "$HARNESS" "$GUARD_MODEL"; then
   exit 64
 fi
 
@@ -999,7 +1008,7 @@ fi
 # Grandfather clause: if state/<id>.meta already exists, the task is an existing
 # recovery case and the naming rule does not apply (would strand unlanded work).
 if [ "$KIND" != secondmate ] && [ ! -f "$STATE/$ID.meta" ]; then
-  if ! "$FM_ROOT/bin/fm-lane-naming-check.sh" "$ID" 2>&1; then
+  if ! "$SCRIPT_DIR/fm-lane-naming-check.sh" "$ID" 2>&1; then
     echo "error: lane key '$ID' violates the canonical <harness>-<model>-<host>-<task> naming convention; fix the task ID before spawning" >&2
     exit 5
   fi
@@ -2031,8 +2040,11 @@ fi
 # worker dispatch. Refusal here is terminal for this spawn attempt: exit 3 =
 # measured exhaustion, exit 4 = spend surface unmeasurable. There is no bypass
 # flag by design; the thresholds live in the gate's own header contract.
+# Resolved from this script's own code root for the same reason as the dispatch
+# guard above: a mandatory gate must never be missing just because FM_ROOT
+# points at a checkout that does not carry it.
 if [ "$KIND" != secondmate ]; then
-  "$FM_ROOT/bin/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" || exit $?
+  "$SCRIPT_DIR/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" || exit $?
 fi
 
 META_WINDOW=$T
