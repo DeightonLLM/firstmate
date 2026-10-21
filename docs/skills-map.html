@@ -1,0 +1,2389 @@
+<!doctype html><html lang=en><head><meta charset=utf-8>
+<meta name=viewport content='width=device-width,initial-scale=1'>
+<title>HD2Stack skills map - 2026-10-21</title>
+<style>
+:root{
+  --bg:#f7f8fa; --card:#ffffff; --ink:#14181f; --muted:#5b6672; --faint:#8a95a1;
+  --line:#e2e6ea; --line2:#cfd6dd;
+  --runtime:#2563eb; --fleet:#15803d; --host:#b45309; --dead:#94a3b8; --warn:#b45309;
+  --accent:#0f172a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+ -webkit-font-smoothing:antialiased}
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px}
+header{padding:40px 0 24px;border-bottom:1px solid var(--line)}
+h1{margin:0 0 8px;font-size:30px;line-height:1.15;letter-spacing:-.022em;font-weight:700}
+.lede{margin:0;color:var(--muted);font-size:15px;max-width:74ch}
+.meta{margin-top:14px;font-size:12px;color:var(--faint);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:26px 0 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat b{display:block;font-size:25px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.stat span{display:block;font-size:11.5px;color:var(--muted);margin-top:3px;
+ text-transform:uppercase;letter-spacing:.05em}
+.shape{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-top:14px}
+.shape h2{margin:0 0 3px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.shape p{margin:0 0 12px;font-size:12.5px;color:var(--faint)}
+.bar{display:flex;height:26px;border-radius:6px;overflow:hidden;border:1px solid var(--line2)}
+.bar span{display:block;height:100%}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;
+ vertical-align:-1px}
+.toolbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:18px 0 6px;
+ position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);z-index:20}
+.toolbar input{flex:1 1 260px;max-width:340px;padding:8px 11px;border:1px solid var(--line2);
+ border-radius:8px;font:inherit;font-size:13px;background:var(--card);color:var(--ink)}
+.toolbar input:focus{outline:2px solid rgba(37,99,235,.35);outline-offset:1px;border-color:var(--runtime)}
+.toolbar .hint{font-size:12px;color:var(--faint)}
+.toolbar .count{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+nav{display:flex;gap:6px;flex-wrap:wrap;padding:12px 0 4px}
+nav a{font-size:11.5px;color:var(--muted);text-decoration:none;border:1px solid var(--line);
+ border-radius:999px;padding:3px 10px;background:var(--card)}
+nav a:hover{color:var(--accent);border-color:var(--line2);background:#fff}
+main{padding:8px 0 60px}
+section{scroll-margin-top:120px;margin:34px 0 0}
+section>h2{margin:0 0 2px;font-size:19px;letter-spacing:-.014em;display:flex;align-items:baseline;
+ gap:10px;flex-wrap:wrap}
+section>h2 .n{font-size:12px;color:var(--faint);font-weight:400;font-variant-numeric:tabular-nums}
+section>.purpose{margin:0 0 12px;color:var(--muted);font-size:13px;max-width:88ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
+ display:flex;flex-direction:column;gap:5px}
+.card h3{margin:0;font-size:13.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+ font-weight:600;word-break:break-word;letter-spacing:-.01em}
+.card .one{margin:0;font-size:13px;color:var(--ink)}
+.card .when{margin:0;font-size:12px;color:var(--muted)}
+.card .when b{color:var(--ink);font-weight:600}
+.card .foot{margin-top:auto;padding-top:6px;font-size:10.5px;color:var(--faint);
+ font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;
+ display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tag{display:inline-block;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;
+ padding:2px 6px;border-radius:4px;font-weight:600;white-space:nowrap}
+.tag.runtime{background:rgba(37,99,235,.1);color:var(--runtime)}
+.tag.fleet-procedure{background:rgba(21,128,61,.1);color:var(--fleet)}
+.tag.host-local{background:rgba(180,83,9,.1);color:var(--host)}
+.tag.dead{background:rgba(148,163,184,.16);color:#64748b}
+.tag.fleet-public{background:rgba(5,150,105,.1);color:#047857}
+.tag.notload{background:rgba(109,40,217,.1);color:#6d28d9}
+.notes{margin:0;font-size:11px;color:var(--warn);line-height:1.45}
+.deadlist{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+ font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--muted);
+ line-height:2.1}
+.deadname{display:inline-block;margin-right:14px;white-space:nowrap}
+.callout{background:#fff;border:1px solid var(--line);border-left:3px solid var(--warn);
+ border-radius:10px;padding:16px 20px;margin-top:14px}
+.callout h3{margin:0 0 8px;font-size:14px}
+.callout ul{margin:0;padding-left:18px;color:var(--muted);font-size:13px}
+.callout li{margin:5px 0}
+.callout b{color:var(--ink)}
+.reading{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 20px;
+ margin-top:12px}
+.reading ol{margin:0;padding-left:20px;font-size:13.5px}
+.reading li{margin:7px 0}
+.reading code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+ background:rgba(15,23,42,.05);padding:1px 5px;border-radius:4px}
+.reading em{color:var(--muted);display:block;font-size:12.5px}
+footer{border-top:1px solid var(--line);margin-top:46px;padding:22px 0 50px;color:var(--faint);font-size:12px}
+footer code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.hidden{display:none !important}
+@media print{header,section{break-inside:avoid}.toolbar{display:none}}
+</style></head><body>
+<header><div class=wrap>
+<h1>Every skill on this host, grouped by what you are trying to do</h1>
+<p class=lede>The Captain asked for the pile of skills to be sorted into something studyable. This is that: <b>384 distinct skills</b> in <b>32 groups</b>. <b>223</b> of them can actually be loaded in a session. The rest are the fleet's own procedures, skills that belong to other agent surfaces, and 58 entries that look real and load nothing.</p>
+<p class=meta>generated 2026-10-21 · vmi3238503 worker surface · docs/SKILLS-MAP.md · docs/skills-map.json</p>
+<div class=stats>
+<div class=stat><b>384</b><span>distinct skills</span></div>
+<div class=stat><b>223</b><span>loadable here</span></div>
+<div class=stat><b>32</b><span>groups</span></div>
+<div class=stat><b>33</b><span>fleet procedures</span></div>
+<div class=stat><b>58</b><span>dead entries</span></div>
+</div>
+<div class=shape><h2>The shape of the pile</h2>
+<p>Where each skill actually comes from. Only the blue slice is loadable in a minimax/mcode session.</p>
+<div class=bar>
+<span style='width:58.225%;background:#2563eb' title='runtime: 223'></span>
+<span style='width:6.789%;background:#15803d' title='fleet-procedure: 26'></span>
+<span style='width:19.843%;background:#b45309' title='host-local (other surfaces): 76'></span>
+<span style='width:15.144%;background:#94a3b8' title='dead entries: 58'></span>
+</div><div class=legend>
+<span><i style='background:#2563eb'></i>runtime &middot; <b style='color:var(--ink)'>223</b></span>
+<span><i style='background:#15803d'></i>fleet-procedure &middot; <b style='color:var(--ink)'>26</b></span>
+<span><i style='background:#b45309'></i>host-local (other surfaces) &middot; <b style='color:var(--ink)'>76</b></span>
+<span><i style='background:#94a3b8'></i>dead entries &middot; <b style='color:var(--ink)'>58</b></span>
+</div></div>
+</div></header>
+<div class=wrap>
+<div class=toolbar>
+<input id=q type=search placeholder="Filter by name, what it does, or group" aria-label='Filter skills'>
+<span class=count id=count></span>
+<span class=hint>Every skill below is a real file on disk. Nothing here was guessed from a directory name.</span>
+</div>
+<nav>
+<a href='#ship-code'>Shipping code safely</a>
+<a href='#review-verify'>Reviewing and verifying work</a>
+<a href='#planning-design'>Planning and shaping the work before you build</a>
+<a href='#debugging'>Debugging and diagnosing what broke</a>
+<a href='#browser-qa'>Browser and UI QA</a>
+<a href='#documents'>Documents, decks, spreadsheets and notes</a>
+<a href='#security'>Security and hardening</a>
+<a href='#hosting'>Deploying and hosting</a>
+<a href='#frontend'>Frontend and interface design</a>
+<a href='#performance'>Performance and speed</a>
+<a href='#delegation'>Delegating to another agent runtime</a>
+<a href='#agent-tooling'>Tooling and context for agents</a>
+<a href='#research'>Research and fact-finding</a>
+<a href='#games'>Browser games</a>
+<a href='#media'>Video, image and multimodal generation</a>
+<a href='#pm-discovery'>Product management — discovery and user insight</a>
+<a href='#pm-strategy'>Product management — strategy and positioning</a>
+<a href='#pm-planning'>Product management — planning, prioritisation and delivery</a>
+<a href='#pm-launch'>Product management — experiments, launch and comms</a>
+<a href='#marketing'>Marketing, SEO and editorial</a>
+<a href='#adk'>Google ADK agent toolkit</a>
+<a href='#lark-chat'>Feishu/Lark — chat, mail, calendar and tasks</a>
+<a href='#lark-docs'>Feishu/Lark — documents, tables and knowledge base</a>
+<a href='#lark-platform'>Feishu/Lark — platform, identity and diagrams</a>
+<a href='#fleet-session'>Fleet procedure — the session and its memory</a>
+<a href='#fleet-crew'>Fleet procedure — crewmates, projects and harnesses</a>
+<a href='#fleet-evidence'>Fleet procedure — decisions, quota and brand</a>
+<a href='#surface-senpi'>On this host only — Senpi / RPIV surface</a>
+<a href='#surface-antigravity'>On this host only — Antigravity / Gemini CLI surface</a>
+<a href='#surface-codex'>On this host only — Codex plugins and system skills</a>
+<a href='#surface-codex-templates'>On this host only — Codex business-document templates</a>
+<a href='#surface-dead'>On this host only — dead entries (dangling symlinks)</a>
+<a href='#reading'>Start here</a>
+<a href='#conflicts'>Overlaps &amp; conflicts</a>
+</nav><main>
+<section id='reading'><h2>Start here <span class=n>12 skills</span></h2>
+<p class=purpose>Twelve skills that pay for themselves first. Each earns its place for a specific reason.</p>
+<div class=reading><ol>
+<li><code>surface-first</code> &mdash; Never escalate a fact to the Captain that was already on disk. It is the one skill that governs every other escalation, and it is short enough to read in a minute.<em>Never escalate to the Captain a fact that was already sitting on disk.</em></li>
+<li><code>no-mistakes</code> &mdash; The fleet&#x27;s single ship gate: review, tests, lint, docs, push, PR, CI. Everything that leaves this machine is supposed to go through it, so learn what it actually does.<em>Runs the full validation pipeline (review, tests, lint, docs, push, PR, CI) before a change leaves your hands.</em></li>
+<li><code>diagnostic-reasoning</code> &mdash; Most stalled work is a diagnosis problem, not a coding problem. This is the fleet&#x27;s own bug procedure and it is stricter than the generic debugging skills.<em>A fleet procedure for diagnosing reported bugs end-to-end-aligned with the end user.</em></li>
+<li><code>code-review</code> &mdash; The review gate, and the cheapest quality lever there is. The builtin one is deliberately narrow: a named scope, concrete defects, no unsolicited fixes.<em>Reviews a named code scope (changes, commits, branches, PRs, files) for concrete defects.</em></li>
+<li><code>bearings</code> &mdash; The cheapest way back into the fleet after a break: one digest of where the work actually is, instead of asking around.<em>Produces a &#x27;pick up where I left off&#x27; digest from the fleet&#x27;s live state.</em></li>
+<li><code>standup</code> &mdash; One command sweeps every subagent, pane and inbox for status, blockers and drift. It tells you whether the fleet is off-track before you find out the hard way.<em>Runs a fleet standup across subagents, Herdr panes and comms inboxes to collect status, blockers and drift.</em></li>
+<li><code>quota-axi</code> &mdash; This is a hard gate, not advice: it decides whether you are allowed to keep spending a provider. Learn its output before you plan any multi-model job.<em>Reports how much provider quota you actually have left, and how fast you are burning it against the reset clock.</em></li>
+<li><code>handover</code> &mdash; If you are here at the end of a stretch, this is what leaves the home land-reaped-tidy. It is also the difference between a handover and a mess.<em>Prepares a fleet home for a Captain handover, leaving it land-reaped-tidy and never mid-merge.</em></li>
+<li><code>handoff</code> &mdash; The companion to handover: it preserves the jobs and the session lock across a coordinator change. Two different jobs, two different skills, easily confused.<em>Prepares or receives a complete firstmate handover that preserves all jobs and the session lock.</em></li>
+<li><code>project-management</code> &mdash; Every client-facing piece of work hangs off a project registry entry. Learning this teaches you how intake, delivery mode and consent actually work.<em>The procedure for adding, creating, cloning, removing and initializing firstmate projects.</em></li>
+<li><code>harness-adapters</code> &mdash; The verified facts about every agent harness this fleet can spawn onto. Read it before you dispatch work, or you will guess.<em>Verified facts about each agent harness: claude, codex, opencode, pi, pi-signed, grok, kimi, agy.</em></li>
+<li><code>decision-hold-lifecycle</code> &mdash; Stops a captain decision being quietly lost when a review closes. It is the reason the map can promise that decisions survive.<em>Completes investigations and reviews without losing an unresolved decision.</em></li>
+</ol></div></section>
+<section id='ship-code' data-group='Shipping code safely'>
+<h2>Shipping code safely <span class=n data-total='12'>12 skills</span></h2>
+<p class=purpose>Get a change written, tested and merged without hand-waving the evidence.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>mattpocock-skills:implement</h3>
+<p class=one>Implements a piece of work against a spec or a set of tickets.</p>
+<p class=when><b>Use it when:</b> A spec or ticket set exists and the work is now to be done.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:prototype</h3>
+<p class=one>Builds a throwaway prototype to answer a design question.</p>
+<p class=when><b>Use it when:</b> You want to sanity-check whether a state model or a UI idea actually feels right.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:tdd</h3>
+<p class=one>Test-driven development with a red-green-refactor loop and tests worth maintaining.</p>
+<p class=when><b>Use it when:</b> You want to build a feature or fix a bug test-first, possibly with integration tests.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:to-spec</h3>
+<p class=one>Turns the conversation you just had into a written spec and publishes it to the issue tracker.</p>
+<p class=when><b>Use it when:</b> The discussion is done and needs writing down, without another interview.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:to-tickets</h3>
+<p class=one>Breaks a plan or spec into tracer-bullet tickets that declare their blocking edges.</p>
+<p class=when><b>Use it when:</b> A plan needs to become real tickets with dependencies.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>no-mistakes</h3>
+<p class=one>Runs the full validation pipeline (review, tests, lint, docs, push, PR, CI) before a change leaves your hands.</p>
+<p class=when><b>Use it when:</b> You want a change validated or shipped safely, or you typed /no-mistakes.</p>
+<p class=notes>! identical copy of the same skill under fleet-procedure</p>
+<p class=notes>! identical copy of the same skill under host-local-cc</p>
+<p class=notes>! the repo copy and this host copy have drifted apart (different bytes)</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:executing-plans</h3>
+<p class=one>Executes a written implementation plan in its own session, with review checkpoints between steps.</p>
+<p class=when><b>Use it when:</b> A plan already exists and it is time to work through it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:finishing-a-development-branch</h3>
+<p class=one>Decides how a completed branch gets integrated once the tests pass.</p>
+<p class=when><b>Use it when:</b> Implementation is done and you need to choose merge, PR or cleanup.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:test-driven-development</h3>
+<p class=one>Runs a strict test-first loop: red, green, refactor, with the test written before the code.</p>
+<p class=when><b>Use it when:</b> You are implementing any feature or fixing any bug and want the test to come first.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:using-git-worktrees</h3>
+<p class=one>Sets up isolated git worktrees so parallel work never shares a checkout.</p>
+<p class=when><b>Use it when:</b> You are about to start work that must not disturb the main checkout.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:writing-plans</h3>
+<p class=one>Writes an implementation plan you can hand to a separate session.</p>
+<p class=when><b>Use it when:</b> A multi-step change needs a written plan before anyone types code.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>tdd-red-green-refactor</h3>
+<p class=one>Forces a test-first red-green-refactor loop and refuses acceptance without executable evidence.</p>
+<p class=when><b>Use it when:</b> You are changing behaviour, fixing a bug, or refactoring and want the test written first.</p>
+<p class=notes>! identical copy of the same skill under fleet-procedure</p>
+<p class=notes>! identical copy of the same skill under host-local-codex</p>
+<p class=notes>! the repo copy and this host copy have drifted apart (different bytes)</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>repo `.agents/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='review-verify' data-group='Reviewing and verifying work'>
+<h2>Reviewing and verifying work <span class=n data-total='8'>8 skills</span></h2>
+<p class=purpose>Have someone (or something) check the change before it counts as done.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>code-review</h3>
+<p class=one>Reviews a named code scope (changes, commits, branches, PRs, files) for concrete defects.</p>
+<p class=when><b>Use it when:</b> You want a defect review of a specific scope and did not ask for ordinary explanation or a fix.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:code-review</h3>
+<p class=one>Reviews changes since a fixed point on two axes at once: repo Standards, and fidelity to the originating spec.</p>
+<p class=when><b>Use it when:</b> You want a branch or PR reviewed against both the codebase rules and what it was supposed to do.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:resolving-merge-conflicts</h3>
+<p class=one>Resolves a git merge or rebase conflict that is in progress.</p>
+<p class=when><b>Use it when:</b> You are mid-conflict and need it settled.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:triage</h3>
+<p class=one>Moves issues and external PRs through a triage state machine and writes agent-ready briefs.</p>
+<p class=when><b>Use it when:</b> There is a queue of issues or PRs and you need them categorised and briefed.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:receiving-code-review</h3>
+<p class=one>Checks review feedback for technical merit before implementing any of it.</p>
+<p class=when><b>Use it when:</b> You have review comments and want them verified rather than blindly applied.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:requesting-code-review</h3>
+<p class=one>Packages the current change so a reviewer gets the context they need.</p>
+<p class=when><b>Use it when:</b> You want a review requested on work you have just finished.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:verification-before-completion</h3>
+<p class=one>Demands fresh verification evidence before any claim that work is finished.</p>
+<p class=when><b>Use it when:</b> You are about to say something is done and need the proof first.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>typesafe:typesafe-ai</h3>
+<p class=one>Routes, ranks, extracts and verifies typed decisions through TypeSafe Jev instead of loose prompt-and-parse.</p>
+<p class=when><b>Use it when:</b> You are replacing an untyped LLM classifier with typed, testable decisions.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`typesafe`)</span></p>
+</div>
+</div>
+</section>
+<section id='planning-design' data-group='Planning and shaping the work before you build'>
+<h2>Planning and shaping the work before you build <span class=n data-total='12'>12 skills</span></h2>
+<p class=purpose>Turn a vague ask into a decision you can defend, before a line of code is written.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>mattpocock-skills:ask-matt</h3>
+<p class=one>A router that tells you which of these skills fits your situation.</p>
+<p class=when><b>Use it when:</b> You do not yet know which skill to use.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:codebase-design</h3>
+<p class=one>Gives you the vocabulary for deep modules and where to put a seam.</p>
+<p class=when><b>Use it when:</b> You are designing a module interface, hunting deepening opportunities, or making code testable.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:domain-modeling</h3>
+<p class=one>Builds and sharpens the domain model behind a codebase.</p>
+<p class=when><b>Use it when:</b> You are arguing about terminology, editing CONTEXT.md, or writing an ADR.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:grill-me</h3>
+<p class=one>A hard interview aimed at sharpening a plan or design.</p>
+<p class=when><b>Use it when:</b> You want a plan sharpened by being questioned, not by more analysis.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:grill-with-docs</h3>
+<p class=one>The same hard interview, but it writes ADRs and a glossary as it goes.</p>
+<p class=when><b>Use it when:</b> You want the plan sharpened and the decisions recorded as you go.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:grilling</h3>
+<p class=one>Interrogates you relentlessly until a plan or idea survives the questioning.</p>
+<p class=when><b>Use it when:</b> You want your thinking stress-tested before you commit to it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:improve-codebase-architecture</h3>
+<p class=one>Scans a codebase for deepening opportunities, presents them as an HTML report, then grills you on the one you pick.</p>
+<p class=when><b>Use it when:</b> You want a structural review of a codebase and a decision on what to fix.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:teach</h3>
+<p class=one>Teaches a concept or a skill inside the current workspace.</p>
+<p class=when><b>Use it when:</b> You want to be walked through something you do not know yet.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:to-questionnaire</h3>
+<p class=one>Turns a decision you cannot answer into a questionnaire for someone else.</p>
+<p class=when><b>Use it when:</b> You are blocked on a question only another person can answer.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:wayfinder</h3>
+<p class=one>Maps a huge chunk of work as decision tickets on your tracker and resolves them one at a time.</p>
+<p class=when><b>Use it when:</b> The work is bigger than one agent session can hold and you need a route through it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:brainstorming</h3>
+<p class=one>Explores intent, requirements and design before any implementation begins.</p>
+<p class=when><b>Use it when:</b> You are about to create a feature, component or behaviour change.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:writing-skills</h3>
+<p class=one>Writes and edits skill definitions so a procedure becomes a reusable, triggerable skill.</p>
+<p class=when><b>Use it when:</b> You are authoring or revising a SKILL.md for an agent.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+</div>
+</section>
+<section id='debugging' data-group='Debugging and diagnosing what broke'>
+<h2>Debugging and diagnosing what broke <span class=n data-total='6'>6 skills</span></h2>
+<p class=purpose>Find the actual cause before you touch anything.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>ai-infra-benchmark</h3>
+<p class=one>Benchmarks AI-serving latency: time to first token, tokens/sec, RAG retrieval stages, chunking and proxy buffering.</p>
+<p class=when><b>Use it when:</b> You need numbers on an LLM or RAG serving stack rather than a guess.</p>
+<p class=notes>! identical copy of the same skill under fleet-procedure</p>
+<p class=notes>! the repo copy and this host copy have drifted apart (different bytes)</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>ai-infra-probe<span class='tag notload'>other surface</span></h3>
+<p class=one>Measures AI-serving and RAG latency from an explicit target and reports unknown internals as unknown.</p>
+<p class=when><b>Use it when:</b> You need a latency measurement and would rather hear &#x27;unknown&#x27; than a guess.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>diagnostic-reasoning<span class='tag notload'>other surface</span></h3>
+<p class=one>A fleet procedure for diagnosing reported bugs end-to-end-aligned with the end user.</p>
+<p class=when><b>Use it when:</b> You are scoping a reported bug or acting on a diagnostic report.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>dubzai-vps-resource-purge</h3>
+<p class=one>Inventories and safely purges VPS disk, CPU and memory pressure, with capacity gating before any change.</p>
+<p class=when><b>Use it when:</b> You need to free resources, investigate pressure, or check a host can absorb a service.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:diagnosing-bugs</h3>
+<p class=one>A diagnosis loop for hard bugs and performance regressions.</p>
+<p class=when><b>Use it when:</b> You said diagnose, debug this, or something is broken and you want it properly diagnosed.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:systematic-debugging</h3>
+<p class=one>A disciplined debugging loop that finds the root cause instead of patching symptoms.</p>
+<p class=when><b>Use it when:</b> Something is broken, throwing, failing or slow and you need the real cause.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+</div>
+</section>
+<section id='browser-qa' data-group='Browser and UI QA'>
+<h2>Browser and UI QA <span class=n data-total='8'>8 skills</span></h2>
+<p class=purpose>Drive a real browser, look at the real pixels, and prove the UI works.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>browser-use:control-in-app-browser</h3>
+<p class=one>Drives the chat&#x27;s built-in browser: navigate, click, type, upload, screenshot, test a local site.</p>
+<p class=when><b>Use it when:</b> You want browser automation in the panel beside the chat, on a signed-in session.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`browser-use`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>chrome-devtools-mcp:a11y-debugging</h3>
+<p class=one>Audits accessibility against web.dev guidance: semantics, ARIA, focus, tap targets, contrast.</p>
+<p class=when><b>Use it when:</b> You are checking whether a page is usable by keyboard and screen reader.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`chrome-devtools-mcp`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>chrome-devtools-mcp:chrome-devtools</h3>
+<p class=one>Drives Chrome over DevTools MCP to debug pages, inspect the network and automate the browser.</p>
+<p class=when><b>Use it when:</b> You are debugging a web page or automating browser interaction.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`chrome-devtools-mcp`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>chrome-devtools-mcp:debug-optimize-lcp</h3>
+<p class=one>Debugs and improves Largest Contentful Paint using real DevTools traces.</p>
+<p class=when><b>Use it when:</b> A page&#x27;s main content is appearing too slowly and you want it measured, then fixed.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`chrome-devtools-mcp`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>chrome-devtools-mcp:memory-leak-debugging</h3>
+<p class=one>Diagnoses JavaScript and Node.js memory leaks using heap snapshot capture and comparison.</p>
+<p class=when><b>Use it when:</b> Memory is climbing, you are hitting OOM, or you want heap snapshots compared.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`chrome-devtools-mcp`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>chrome-devtools-mcp:troubleshooting</h3>
+<p class=one>Fixes DevTools MCP when it cannot list, open or navigate a page.</p>
+<p class=when><b>Use it when:</b> list_pages, new_page or navigate_page is failing on you.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`chrome-devtools-mcp`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>lighthouse-safe-optimization</h3>
+<p class=one>Runs Lighthouse-style audits without letting the fix destabilise the site.</p>
+<p class=when><b>Use it when:</b> You want a performance audit applied safely to a live page.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>saas-qa-dubz</h3>
+<p class=one>Runs authenticated browser QA against the DubzAi SaaS apps as a release gate.</p>
+<p class=when><b>Use it when:</b> You are qualifying a release on Core-Distro, Music Metrics or Lawyer Data.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='documents' data-group='Documents, decks, spreadsheets and notes'>
+<h2>Documents, decks, spreadsheets and notes <span class=n data-total='11'>11 skills</span></h2>
+<p class=purpose>Produce a file a human will actually read: Word, PDF, slides, sheets, notes.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>docx</h3>
+<p class=one>Creates, template-applies, edits, fills, reads, repairs and compares Word documents.</p>
+<p class=when><b>Use it when:</b> A Word document is the deliverable and you need it produced or diagnosed.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>obsidian-skills:json-canvas</h3>
+<p class=one>Maps concepts and relationships as an Obsidian JSON Canvas file.</p>
+<p class=when><b>Use it when:</b> You want a visual map of ideas, systems or relationships.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`obsidian-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>obsidian-skills:obsidian-bases</h3>
+<p class=one>Creates and edits Obsidian Base views over vault data.</p>
+<p class=when><b>Use it when:</b> You want a Base view over an Obsidian vault.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`obsidian-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>obsidian-skills:obsidian-markdown</h3>
+<p class=one>Writes Obsidian-flavoured Markdown with properties, links and callouts.</p>
+<p class=when><b>Use it when:</b> You are authoring notes for an Obsidian vault.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`obsidian-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pdf</h3>
+<p class=one>Generates, reformats, fills and reads PDFs, including LaTeX, Markdown-to-PDF and OCR.</p>
+<p class=when><b>Use it when:</b> A PDF is the input or the output of the task.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>pptx</h3>
+<p class=one>Reads, creates and edits PowerPoint decks while preserving their theme and layout.</p>
+<p class=when><b>Use it when:</b> A PowerPoint file is what you are producing or inspecting.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>slides</h3>
+<p class=one>Builds slide decks as a first-class deliverable rather than a converted document.</p>
+<p class=when><b>Use it when:</b> You are making a presentation for someone to present.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>spreadsheet</h3>
+<p class=one>Spreadsheet work in the general sense: create, read, format and convert tabular data.</p>
+<p class=when><b>Use it when:</b> You need a spreadsheet artefact and are not attached to a particular file format yet.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>visual-page</h3>
+<p class=one>Turns information that markdown cannot carry into a single self-contained HTML page.</p>
+<p class=when><b>Use it when:</b> The content is a diagram, comparison, timeline or layout that deserves a real page.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>word:docx</h3>
+<p class=one>The Word plugin&#x27;s DOCX skill: create, template, edit, fill, read, repair and compare .docx files.</p>
+<p class=when><b>Use it when:</b> You are producing a formal Word deliverable from the Word plugin.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`word`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>xlsx</h3>
+<p class=one>Reads, edits, creates and converts spreadsheet files, including formulas, formatting and charts.</p>
+<p class=when><b>Use it when:</b> A spreadsheet file is the primary input or output.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='security' data-group='Security and hardening'>
+<h2>Security and hardening <span class=n data-total='11'>11 skills</span></h2>
+<p class=purpose>Lock a host or a codebase down without locking yourself out.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>dubzai-fail-closed-security</h3>
+<p class=one>Enforces fail-closed handling of secrets, auth walls and reverse-proxy rules on DubzAi infra.</p>
+<p class=when><b>Use it when:</b> Any VPS, hardening or deploy task touches keys, tokens, domains or proxy rules.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>hard</h3>
+<p class=one>Applies repeatable, lockout-safe hardening to an Ubuntu VPS: sudo naming, key-only SSH, UFW, Fail2ban.</p>
+<p class=when><b>Use it when:</b> You are hardening a VPS and must not lock yourself out doing it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>hd2-client-baseline</h3>
+<p class=one>Plans, audits and safely executes a reusable HD2 client VPS baseline with staged access and rollback.</p>
+<p class=when><b>Use it when:</b> You are standing up or auditing a client VPS against the HD2 baseline.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>hetzner-ide-ssh</h3>
+<p class=one>Sets up a key-only IDE SSH connection to a Hetzner VPS while keeping a break-glass route.</p>
+<p class=when><b>Use it when:</b> You are wiring a local IDE to a Hetzner box for the first time.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>hygiene</h3>
+<p class=one>Routine hygiene pass over the fleet: inventory, update and verify.</p>
+<p class=when><b>Use it when:</b> You want a quick sweep of what&#x27;s installed and what needs updating.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.claude/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>hygiene-full</h3>
+<p class=one>The full-surface version of the hygiene sweep, including the large fleet inventory.</p>
+<p class=when><b>Use it when:</b> You want the thorough hygiene run rather than the quick pass.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.claude/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lawyer-geo-guard</h3>
+<p class=one>Protects lawyer-data.com&#x27;s Add Leads pages from leaking geo-sensitive information.</p>
+<p class=when><b>Use it when:</b> You are editing or auditing anything on the lawyer-data.com Add Leads flow.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>security-best-practices</h3>
+<p class=one>Language and framework specific secure-coding guidance to apply while writing code.</p>
+<p class=when><b>Use it when:</b> You are writing or reviewing code and want the security rules for that stack.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>security-ownership-map</h3>
+<p class=one>Maps which code owns which security boundary in a repository.</p>
+<p class=when><b>Use it when:</b> You need to know who owns which security-sensitive area before changing it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>security-threat-model</h3>
+<p class=one>Builds a repository-grounded threat model: entry points, trust boundaries, sensitive paths.</p>
+<p class=when><b>Use it when:</b> You need to reason about what an attacker would target in this codebase.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>vps-safe-ssh-hardening</h3>
+<p class=one>Hardens SSH on a Linux host with a verified break-glass path left intact.</p>
+<p class=when><b>Use it when:</b> You are locking down SSH on a server that is already in production.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='hosting' data-group='Deploying and hosting'>
+<h2>Deploying and hosting <span class=n data-total='10'>10 skills</span></h2>
+<p class=purpose>Get the thing on the internet and keep it there.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>cloudflare-deploy</h3>
+<p class=one>Deploys apps and infrastructure to Cloudflare Workers and Pages.</p>
+<p class=when><b>Use it when:</b> You are hosting a project on Cloudflare.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>deploy-website</h3>
+<p class=one>Publishes a local static site or frontend build to a public URL for the first time.</p>
+<p class=when><b>Use it when:</b> You want a local site or build live on the internet for the first time.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>dubzai-anythingllm-chatbot</h3>
+<p class=one>Applies the DubzAi/HD2 standard for embedding the AnythingLLM chatbot, especially on mobile.</p>
+<p class=when><b>Use it when:</b> You are embedding or repairing the chatbot widget on a client host page.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>edit-deployed-website</h3>
+<p class=one>Edits and redeploys a site that is already published, keeping its existing URL.</p>
+<p class=when><b>Use it when:</b> You are changing something that is already live.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>hd2-stack-astra-port</h3>
+<p class=one>Ports elevatesci.com or core-distro.com into an autonomous Astra WordPress build on the HD2 stack.</p>
+<p class=when><b>Use it when:</b> You want one of the HD2 sites ported, migrated or made self-running on our own infrastructure.</p>
+<p class=notes>! identical copy of the same skill under fleet-procedure</p>
+<p class=notes>! the repo copy and this host copy have drifted apart (different bytes)</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>hd2-wordpress</h3>
+<p class=one>Builds, audits, designs, maintains, QA-secures and publishes HD2.ai WordPress sites.</p>
+<p class=when><b>Use it when:</b> The site in question is HD2.ai, JungleSound or HumanRequirements on WordPress.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>namecheap-mail-dns</h3>
+<p class=one>Verifies and configures Namecheap DNS for a cPanel mail domain (MX, SPF, DKIM, DMARC) with a full zone snapshot.</p>
+<p class=when><b>Use it when:</b> You are changing or signing off a Namecheap mail DNS zone for client email.</p>
+<p class=notes>! the repo copy is only a trigger stub; the canonical skill is the copy listed first</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>namecheap-saas-install</h3>
+<p class=one>Guards a Namecheap cPanel SaaS install so it cannot take the host or the mail config down.</p>
+<p class=when><b>Use it when:</b> You are installing a SaaS app on cPanel and want it done safely.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>vercel-deploy</h3>
+<p class=one>Deploys applications and websites to Vercel.</p>
+<p class=when><b>Use it when:</b> You are shipping to Vercel specifically.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>video-to-website</h3>
+<p class=one>Turns a video into a premium scroll-driven animated site with GSAP and layered choreography.</p>
+<p class=when><b>Use it when:</b> You have footage and want it to become the centerpiece of a web page.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='frontend' data-group='Frontend and interface design'>
+<h2>Frontend and interface design <span class=n data-total='6'>6 skills</span></h2>
+<p class=purpose>Design and build interfaces that look deliberate rather than generated.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>design-md</h3>
+<p class=one>Generates and validates DESIGN.md token files and the CSS, Tailwind or component code derived from them.</p>
+<p class=when><b>Use it when:</b> You are working from a design spec and need tokens, CSS variables or components to match it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>frontend-design</h3>
+<p class=one>Builds production-grade frontends with deliberate visual identity instead of generic AI styling.</p>
+<p class=when><b>Use it when:</b> You are asked to build a web component, page or application.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>senior-fullstack-developer:engineering-workflow</h3>
+<p class=one>The router for non-trivial frontend, backend and full-stack builds: what to do, in what order, with what checks.</p>
+<p class=when><b>Use it when:</b> You ask for a substantial feature to be built rather than a small edit.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`senior-fullstack-developer`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>senior-fullstack-developer:frontend-dev</h3>
+<p class=one>Implements substantial production frontend work after the workflow router picks the UI path.</p>
+<p class=when><b>Use it when:</b> The workflow has routed you to frontend work, or you name this skill directly.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`senior-fullstack-developer`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>senior-fullstack-developer:fullstack-dev</h3>
+<p class=one>Implements substantial cross-layer work: API contracts, auth, data, background jobs, uploads.</p>
+<p class=when><b>Use it when:</b> The work spans frontend and backend and you have routed to it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`senior-fullstack-developer`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superdesign:superdesign</h3>
+<p class=one>Designs or redesigns interfaces on the Superdesign canvas, including design systems and variants.</p>
+<p class=when><b>Use it when:</b> You want a page, flow or brand-new product designed before code exists.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superdesign`)</span></p>
+</div>
+</div>
+</section>
+<section id='performance' data-group='Performance and speed'>
+<h2>Performance and speed <span class=n data-total='7'>7 skills</span></h2>
+<p class=purpose>Measure first, fix the bottleneck, then verify the gain.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>performance-experts:core-web-vitals</h3>
+<p class=one>Core Web Vitals focused optimisation: LCP, INP and CLS.</p>
+<p class=when><b>Use it when:</b> You are chasing a specific Core Web Vitals score.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`performance-experts`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>performance-experts:performance</h3>
+<p class=one>A general performance playbook: measure, find the bottleneck, fix it, verify the gain.</p>
+<p class=when><b>Use it when:</b> Something is slow and you do not yet know which layer is responsible.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`performance-experts`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>performance-experts:performance-optimization</h3>
+<p class=one>A deeper performance optimisation workflow across the whole stack.</p>
+<p class=when><b>Use it when:</b> You have already located the problem and now want the fix applied properly.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`performance-experts`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>performance-experts:python-performance-optimization</h3>
+<p class=one>Profiles and optimises Python services for latency and memory.</p>
+<p class=when><b>Use it when:</b> A Python service is slow or leaky and you need it measured.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`performance-experts`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>performance-experts:swiftui-perf</h3>
+<p class=one>Reviews SwiftUI code for modern API use, maintainability and performance.</p>
+<p class=when><b>Use it when:</b> You are reading, writing or reviewing SwiftUI.</p>
+<p class=notes>! the runtime catalogue lists it as `performance-experts:swiftui-perf`; the file on disk says `performance-experts:swiftui-pro`</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`performance-experts`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>performance-experts:vercel-react-best-practices</h3>
+<p class=one>Vercel&#x27;s React and Next.js performance guidelines.</p>
+<p class=when><b>Use it when:</b> You are writing, reviewing or refactoring React or Next.js code.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`performance-experts`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>performance-experts:vercel-react-native-skills</h3>
+<p class=one>Vercel&#x27;s React Native performance guidelines.</p>
+<p class=when><b>Use it when:</b> You are tuning a React Native app for jank and startup.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`performance-experts`)</span></p>
+</div>
+</div>
+</section>
+<section id='delegation' data-group='Delegating to another agent runtime'>
+<h2>Delegating to another agent runtime <span class=n data-total='9'>9 skills</span></h2>
+<p class=purpose>Hand a hard job to a second brain and get the result back cleanly.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>codex:codex-cli-runtime</h3>
+<p class=one>Chooses the right Codex MCP call, sandbox, approval policy and delegation boundary.</p>
+<p class=when><b>Use it when:</b> You are handing diagnosis, planning, research, review or implementation to a local Codex.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`codex`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>codex:codex-prompt-engineering</h3>
+<p class=one>Builds compact XML contracts for Codex prompts so its output is stable.</p>
+<p class=when><b>Use it when:</b> You are writing a prompt for a Codex review, diagnosis or implementation run.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`codex`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>codex:codex-result-handling</h3>
+<p class=one>Turns a returned Codex result into ordered, verified findings without auto-fixing anything.</p>
+<p class=when><b>Use it when:</b> A Codex run has come back and you need its result read properly.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`codex`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>codex:codex-workflow</h3>
+<p class=one>The end-to-end path for using a local Codex for review, diagnosis, research or authorised repair.</p>
+<p class=when><b>Use it when:</b> You asked for a Codex review, adversarial review, diagnosis or research task.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`codex`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>dsh:dsh</h3>
+<p class=one>Starts, opens and operates a local DeepSeek Harness Web instance.</p>
+<p class=when><b>Use it when:</b> You mention DeepSeek Harness or want Harness running in the built-in browser.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`dsh`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>herdr</h3>
+<p class=one>Drives Herdr, the terminal multiplexer that hosts coding agents.</p>
+<p class=when><b>Use it when:</b> You explicitly mention Herdr and want to inspect or control panes, tabs or workspaces.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>resume-codex</h3>
+<p class=one>Safely continues the work from a Codex CLI or VS Code session in this workspace.</p>
+<p class=when><b>Use it when:</b> You typed /resume-codex, or you want to pick up your latest Codex work.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:dispatching-parallel-agents</h3>
+<p class=one>Splits two or more independent tasks across separate agents.</p>
+<p class=when><b>Use it when:</b> You have independent tasks that need no shared state or sequencing.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:subagent-driven-development</h3>
+<p class=one>Runs implementation work through subagents that each get their own review.</p>
+<p class=when><b>Use it when:</b> You are executing a plan and want each task delegated and independently checked.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+</div>
+</section>
+<section id='agent-tooling' data-group='Tooling and context for agents'>
+<h2>Tooling and context for agents <span class=n data-total='13'>13 skills</span></h2>
+<p class=purpose>Manage the machinery around the model: context, memory, skills, tool interfaces.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>axi</h3>
+<p class=one>Defines ergonomic standards for CLIs that agents drive through the shell.</p>
+<p class=when><b>Use it when:</b> You are building, changing or reviewing any command-line tool an agent will run.</p>
+<p class=notes>! identical copy of the same skill under host-local-codex</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>init</h3>
+<p class=one>Bootstraps a repo for AI agents by generating the root AGENTS.md file from the agents.md spec.</p>
+<p class=when><b>Use it when:</b> A project has no AGENTS.md and you want agents to onboard to it automatically.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lean-ctx</h3>
+<p class=one>Local tooling to select, shape, reuse and recover the context you hand to the model before inference.</p>
+<p class=when><b>Use it when:</b> You need to control what the model actually reads instead of dumping a whole tree at it.</p>
+<p class=notes>! identical copy of the same skill under host-local-cc</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:handoff</h3>
+<p class=one>Compacts the current conversation into a handoff document another agent can pick up.</p>
+<p class=when><b>Use it when:</b> You need to hand a running thread to a fresh session without losing the thread.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:setup-matt-pocock-skills</h3>
+<p class=one>Sets up the issue tracker, triage label vocabulary and domain doc layout the other skills expect.</p>
+<p class=when><b>Use it when:</b> You are about to use the other Matt Pocock skills for the first time in a repo.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:wait-what</h3>
+<p class=one>Stops and re-pitches the last message because it did not land.</p>
+<p class=when><b>Use it when:</b> Your last instruction was not understood and you want it restated properly.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:wizard</h3>
+<p class=one>Generates an interactive bash wizard that walks a human through the steps only they can do.</p>
+<p class=when><b>Use it when:</b> You are provisioning infrastructure, setting up credentials, or driving a third-party dashboard.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:writing-for-agents</h3>
+<p class=one>How to write documents that agents read: skills, AGENTS.md, CLAUDE.md.</p>
+<p class=when><b>Use it when:</b> You are creating or editing a skill, AGENTS.md or CLAUDE.md.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>mcode-tools-master</h3>
+<p class=one>The gateway skill for multimodal generation and for discovering and calling App/Connector tools.</p>
+<p class=when><b>Use it when:</b> You need to generate or read an image/video/audio, or you need an App the tool list does not show.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>nowledge-mem:nowledge-mem</h3>
+<p class=one>Stores and retrieves cross-tool context so facts survive beyond one conversation.</p>
+<p class=when><b>Use it when:</b> You want a fact to be remembered and found again later, across tools.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`nowledge-mem`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>skill-creator</h3>
+<p class=one>Creates a new skill through a short eval-driven loop, so a repeatable workflow becomes a named skill.</p>
+<p class=when><b>Use it when:</b> You want to turn a procedure you repeat into a skill of your own.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>skill-refiner</h3>
+<p class=one>Patches an existing skill when you have evidence of a concrete flaw, and nothing else.</p>
+<p class=when><b>Use it when:</b> A skill you already use has a specific bug, stale instruction or missing case.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>superpowers:using-superpowers</h3>
+<p class=one>The entry card that says which of the superpowers skills to reach for and how to use them.</p>
+<p class=when><b>Use it when:</b> You are about to start work and want the right superpowers skill first.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`superpowers`)</span></p>
+</div>
+</div>
+</section>
+<section id='research' data-group='Research and fact-finding'>
+<h2>Research and fact-finding <span class=n data-total='5'>5 skills</span></h2>
+<p class=purpose>Go and check something properly instead of guessing.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>crawl4ai</h3>
+<p class=one>Crawls and extracts structured data from sites, including JavaScript-heavy pages.</p>
+<p class=when><b>Use it when:</b> You need to scrape web pages or build an extraction pipeline.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>deep-research</h3>
+<p class=one>Runs a five-step research routine that verifies facts against sources and writes a cited answer.</p>
+<p class=when><b>Use it when:</b> You need market, industry or technical research where the facts must be externally verified.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>llm-call</h3>
+<p class=one>Calls a configured LLM directly through a local script so you can test prompts and compare models.</p>
+<p class=when><b>Use it when:</b> You want a raw model call, a prompt test or a model comparison outside normal agent execution.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>mattpocock-skills:research</h3>
+<p class=one>Investigates a question against high-trust primary sources and saves the findings as a repo Markdown file.</p>
+<p class=when><b>Use it when:</b> You want docs or API facts gathered and the reading delegated.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`mattpocock-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>x-link-reader</h3>
+<p class=one>Reads X/Twitter posts and profiles through the FxTwitter API, bypassing X&#x27;s anti-bot wall.</p>
+<p class=when><b>Use it when:</b> You share an x.com link and want what it actually says.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='games' data-group='Browser games'>
+<h2>Browser games <span class=n data-total='9'>9 skills</span></h2>
+<p class=purpose>Everything needed to design, build and playtest a game that runs in a browser tab.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>game-studio:game-playtest</h3>
+<p class=one>Playtests a browser game with screenshots, HUD review and structured issue finding.</p>
+<p class=when><b>Use it when:</b> You want the game smoke-tested and the issues written down.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>game-studio:game-studio</h3>
+<p class=one>Routes early browser-game work: which stack, which workflow, which specialist next.</p>
+<p class=when><b>Use it when:</b> You are starting a browser game and have not picked a stack yet.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>game-studio:game-ui-frontend</h3>
+<p class=one>Designs game UI surfaces: HUDs, menus, overlays and responsive layouts that protect the playfield.</p>
+<p class=when><b>Use it when:</b> You are building the interface around a game.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>game-studio:phaser-2d-game</h3>
+<p class=one>Builds 2D browser games in Phaser, TypeScript and Vite: scenes, gameplay, cameras, sprite animation, HUD.</p>
+<p class=when><b>Use it when:</b> You want a 2D browser game on the Phaser stack.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>game-studio:react-three-fiber-game</h3>
+<p class=one>Builds React-hosted 3D browser games with React Three Fiber and shared React state.</p>
+<p class=when><b>Use it when:</b> The game must live inside a React app.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>game-studio:sprite-pipeline</h3>
+<p class=one>Generates and normalises 2D sprite animation strips with consistent anchors and scale.</p>
+<p class=when><b>Use it when:</b> You need consistent sprite animation frames for a browser game.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>game-studio:three-webgl-game</h3>
+<p class=one>Builds browser-game runtimes on plain Three.js: scene control, GLB assets, loaders, physics, WebGL debugging.</p>
+<p class=when><b>Use it when:</b> You want a 3D browser game with low-level control.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>game-studio:web-3d-asset-pipeline</h3>
+<p class=one>Prepares and optimises GLB/glTF assets: Blender cleanup, collision, LOD, compression, texture packaging.</p>
+<p class=when><b>Use it when:</b> You are shipping 3D assets into a browser game.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>game-studio:web-game-foundations</h3>
+<p class=one>Sets browser-game architecture: engine choice, simulation/render split, input model, assets, save strategy.</p>
+<p class=when><b>Use it when:</b> You need the architecture settled before writing any game code.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`game-studio`)</span></p>
+</div>
+</div>
+</section>
+<section id='media' data-group='Video, image and multimodal generation'>
+<h2>Video, image and multimodal generation <span class=n data-total='11'>11 skills</span></h2>
+<p class=purpose>Generate video, images and other media with the right prompt discipline.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>imagegen-cli</h3>
+<p class=one>Generates and edits raster images (illustration, texture, sprite, mockup, cutout) from the command line.</p>
+<p class=when><b>Use it when:</b> The task needs an AI-made bitmap rather than a diagram or a photo you already have.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:3d-animation-short-generator</h3>
+<p class=one>Generates a short 3D animation from a written brief.</p>
+<p class=when><b>Use it when:</b> You want a short 3D animated clip.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:brand-promo-video-generator</h3>
+<p class=one>Generates a branded promotional video from a logo or product brief.</p>
+<p class=when><b>Use it when:</b> You are producing promo video for a brand, product or site.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:co-op-game-intro-generator</h3>
+<p class=one>Generates a two-player co-op game intro or menu animation.</p>
+<p class=when><b>Use it when:</b> You are building the opening animation for a co-op game.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:h3-prompt-writing</h3>
+<p class=one>Writes MiniMax H3 video prompts that hold up frame by frame.</p>
+<p class=when><b>Use it when:</b> You are about to brief a H3 video generation run.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:handdrawn-live-video-generator</h3>
+<p class=one>Generates a surreal hand-drawn-style short video that blends with live-action space.</p>
+<p class=when><b>Use it when:</b> You want a deliberately rough, glowing, hand-drawn look.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:minimalist-product-ad-generator</h3>
+<p class=one>Turns product images and an ad brief into a minimalist product ad short.</p>
+<p class=when><b>Use it when:</b> You are running an e-commerce or product-launch ad video.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:music-video-subtitle-generator</h3>
+<p class=one>Generates an AI music video with lyric typography and emotional short-film framing.</p>
+<p class=when><b>Use it when:</b> You are producing a music video or lyric-titled short.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:paper-collage-explainer-generator</h3>
+<p class=one>Generates a tactile paper-collage explainer video for a topic or narration.</p>
+<p class=when><b>Use it when:</b> You want a knowledge point explained in a paper-collage visual language.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>minimax-h3-skills:papercraft-stop-motion-explainer</h3>
+<p class=one>Generates a handmade papercraft stop-motion explainer for science or general knowledge.</p>
+<p class=when><b>Use it when:</b> You want to teach something through tactile stop-motion visuals.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`minimax-h3-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>video-creater:write-h3-prompts</h3>
+<p class=one>Writes H3 video prompts, including the writing of prompts for longer narrative pieces.</p>
+<p class=when><b>Use it when:</b> You are preparing a longer or more scripted H3 video generation.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`video-creater`)</span></p>
+</div>
+</div>
+</section>
+<section id='pm-discovery' data-group='Product management — discovery and user insight'>
+<h2>Product management — discovery and user insight <span class=n data-total='11'>11 skills</span></h2>
+<p class=purpose>Understand the customer before the roadmap does.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>pm-skills:analyze-feature-requests</h3>
+<p class=one>Analyses and prioritises a pile of feature requests.</p>
+<p class=when><b>Use it when:</b> Customers keep asking for things and you need to read the pattern.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:brainstorm-ideas-existing</h3>
+<p class=one>Brainstorms and structures new ideas on top of an existing product.</p>
+<p class=when><b>Use it when:</b> You have a product and need new ideas for it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:brainstorm-ideas-new</h3>
+<p class=one>Brainstorms and structures entirely new product ideas.</p>
+<p class=when><b>Use it when:</b> You are starting from a blank page.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:dummy-dataset</h3>
+<p class=one>Generates realistic dummy datasets for testing and demos.</p>
+<p class=when><b>Use it when:</b> You need plausible test data that is not real customer data.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:interview-script</h3>
+<p class=one>Writes a structured customer interview script.</p>
+<p class=when><b>Use it when:</b> You are about to interview someone and want the questions right.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:job-stories</h3>
+<p class=one>Writes job stories that capture the progress a customer is trying to make.</p>
+<p class=when><b>Use it when:</b> You need to express a customer&#x27;s job rather than a feature list.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:opportunity-solution-tree</h3>
+<p class=one>Builds an Opportunity Solution Tree linking an outcome to opportunities, solutions and experiments.</p>
+<p class=when><b>Use it when:</b> You are structuring discovery and deciding what to build next.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:summarize-interview</h3>
+<p class=one>Summarises an interview transcript into JTBD, satisfaction signals and action items.</p>
+<p class=when><b>Use it when:</b> A customer interview is recorded and needs processing.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:summarize-meeting</h3>
+<p class=one>Summarises a meeting transcript into date, participants, decisions and actions.</p>
+<p class=when><b>Use it when:</b> A meeting is recorded and you need minutes.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:user-stories</h3>
+<p class=one>Writes user stories to the 3 C&#x27;s and INVEST, with acceptance criteria.</p>
+<p class=when><b>Use it when:</b> You are breaking a feature into backlog items.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:value-proposition</h3>
+<p class=one>Designs a value proposition on the 6-part JTBD template.</p>
+<p class=when><b>Use it when:</b> You need to articulate why a customer would choose you.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+</div>
+</section>
+<section id='pm-strategy' data-group='Product management — strategy and positioning'>
+<h2>Product management — strategy and positioning <span class=n data-total='13'>13 skills</span></h2>
+<p class=purpose>Decide where the product is going and how it wins.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>pm-skills:ansoff-matrix</h3>
+<p class=one>Builds an Ansoff Matrix of growth directions.</p>
+<p class=when><b>Use it when:</b> You need a structured map of market and product growth options.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:business-model</h3>
+<p class=one>Generates a Business Model Canvas covering costs and revenue.</p>
+<p class=when><b>Use it when:</b> You are modelling how the business makes money.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:lean-canvas</h3>
+<p class=one>Generates a Lean Canvas for testing a business hypothesis.</p>
+<p class=when><b>Use it when:</b> You are testing a new venture or hypothesis cheaply.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:monetization-strategy</h3>
+<p class=one>Brainstorms 3-5 monetisation strategies with fit, risk and validation experiments.</p>
+<p class=when><b>Use it when:</b> You are choosing how to make money from the product.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:outcome-roadmap</h3>
+<p class=one>Rewrites a feature-list roadmap as outcome statements.</p>
+<p class=when><b>Use it when:</b> Your roadmap lists features and needs to state intent instead.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:pestle-analysis</h3>
+<p class=one>Runs a PESTLE analysis of the macro environment.</p>
+<p class=when><b>Use it when:</b> External forces are affecting the plan and you need them named.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:porters-five-forces</h3>
+<p class=one>Runs Porter&#x27;s Five Forces on the industry.</p>
+<p class=when><b>Use it when:</b> You need to judge whether the market is worth entering.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:pre-mortem</h3>
+<p class=one>Pre-mortems a PRD or launch plan, sorting risks into Tigers, Paper Tigers and Elephants.</p>
+<p class=when><b>Use it when:</b> You want to stress-test a plan before you commit to it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:pricing-strategy</h3>
+<p class=one>Analyses pricing models, competitor pricing, willingness to pay and elasticity.</p>
+<p class=when><b>Use it when:</b> You are setting or changing a price and need the numbers.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:product-strategy</h3>
+<p class=one>Builds a 9-section product strategy canvas covering vision, segments, value, metrics and defensibility.</p>
+<p class=when><b>Use it when:</b> You are defining product direction, not just features.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:product-vision</h3>
+<p class=one>Brainstorms an inspiring, achievable product vision that aligns the team.</p>
+<p class=when><b>Use it when:</b> You need the north star before the roadmap.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:startup-canvas</h3>
+<p class=one>Generates a Startup Canvas combining product strategy with a business model.</p>
+<p class=when><b>Use it when:</b> You are evaluating a new product concept end to end.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:swot-analysis</h3>
+<p class=one>Runs a SWOT analysis with actionable recommendations.</p>
+<p class=when><b>Use it when:</b> You need an honest read of position and surroundings.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+</div>
+</section>
+<section id='pm-planning' data-group='Product management — planning, prioritisation and delivery'>
+<h2>Product management — planning, prioritisation and delivery <span class=n data-total='12'>12 skills</span></h2>
+<p class=purpose>Turn a strategy into a backlog with a defensible order of work.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>linear</h3>
+<p class=one>Manages Linear issues, projects and team workflows.</p>
+<p class=when><b>Use it when:</b> Your team&#x27;s work lives in Linear and you need to read or change it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:create-prd</h3>
+<p class=one>Creates a product requirements document from a problem statement.</p>
+<p class=when><b>Use it when:</b> A feature needs a PRD before anyone builds it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:identify-assumptions-existing</h3>
+<p class=one>Identifies and documents the assumptions an existing product already rests on.</p>
+<p class=when><b>Use it when:</b> You are reviewing a product you did not build.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:identify-assumptions-new</h3>
+<p class=one>Identifies and documents the assumptions behind a brand-new product idea.</p>
+<p class=when><b>Use it when:</b> You are about to commit resources to something unproven.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:metrics-dashboard</h3>
+<p class=one>Defines a product metrics dashboard with key metrics, sources, visualisations and alert thresholds.</p>
+<p class=when><b>Use it when:</b> You need to decide what gets measured and when it pages you.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:prioritization-frameworks</h3>
+<p class=one>A reference for nine prioritisation frameworks, with formulas and when-to-use guidance.</p>
+<p class=when><b>Use it when:</b> You need to choose a prioritisation method rather than apply one.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:prioritize-assumptions</h3>
+<p class=one>Prioritises assumptions on an Impact x Risk matrix and proposes an experiment for each.</p>
+<p class=when><b>Use it when:</b> You have a list of assumptions and need to test the right ones first.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:prioritize-features</h3>
+<p class=one>Ranks feature ideas by impact, effort, risk and alignment, with a top five.</p>
+<p class=when><b>Use it when:</b> The backlog is too big and you must cut it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:retro</h3>
+<p class=one>Runs a structured sprint retrospective with prioritised actions and owners.</p>
+<p class=when><b>Use it when:</b> The sprint is over and you want the learning captured.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:sprint-plan</h3>
+<p class=one>Plans a sprint with capacity estimation, story selection, dependencies and risk.</p>
+<p class=when><b>Use it when:</b> Sprint planning is next and you need the scope defended.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:test-scenarios</h3>
+<p class=one>Derives test scenarios with objectives, steps, roles and expected outcomes from user stories.</p>
+<p class=when><b>Use it when:</b> QA cases need to exist before a feature ships.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:wwas</h3>
+<p class=one>Writes backlog items in Why-What-Acceptance format.</p>
+<p class=when><b>Use it when:</b> You want independent, testable backlog items.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+</div>
+</section>
+<section id='pm-launch' data-group='Product management — experiments, launch and comms'>
+<h2>Product management — experiments, launch and comms <span class=n data-total='6'>6 skills</span></h2>
+<p class=purpose>Test the risky assumptions, then launch without surprises.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>pm-skills:brainstorm-experiments-existing</h3>
+<p class=one>Designs experiments for an existing product.</p>
+<p class=when><b>Use it when:</b> You have a product and need to learn from it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:brainstorm-experiments-new</h3>
+<p class=one>Designs experiments for a new product idea.</p>
+<p class=when><b>Use it when:</b> You need to test a hypothesis before building.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:brainstorm-okrs</h3>
+<p class=one>Brainstorms and structures objectives and key results.</p>
+<p class=when><b>Use it when:</b> You are setting a period goal and need it measurable.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:release-notes</h3>
+<p class=one>Writes user-facing release notes grouped into features, improvements and fixes.</p>
+<p class=when><b>Use it when:</b> A release needs announcing.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:stakeholder-map</h3>
+<p class=one>Maps stakeholders on a power/interest grid and produces a communication plan.</p>
+<p class=when><b>Use it when:</b> A launch needs the right people talked to the right way.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>pm-skills:strategy-red-team</h3>
+<p class=one>Attacks a PRD or strategy&#x27;s load-bearing assumptions and returns the cheapest test for each.</p>
+<p class=when><b>Use it when:</b> You want a plan pressure-tested before reality tests it.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`pm-skills`)</span></p>
+</div>
+</div>
+</section>
+<section id='marketing' data-group='Marketing, SEO and editorial'>
+<h2>Marketing, SEO and editorial <span class=n data-total='12'>12 skills</span></h2>
+<p class=purpose>Get found, get read, get bought.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>dubzai-editorial-team</h3>
+<p class=one>A human-style editorial team that researches, fact-checks, illustrates and packages DubzAI blog posts.</p>
+<p class=when><b>Use it when:</b> You are planning, writing or reviewing a DubzAI article.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>geo-ai-optimization</h3>
+<p class=one>AI discoverability work: knowledge graphs, structured data, llm.txt, citation and entity engineering.</p>
+<p class=when><b>Use it when:</b> A client wants to be found and cited by AI assistants.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>marketing-skills:analytics</h3>
+<p class=one>Sets up, audits and repairs analytics tracking, events and conversion measurement.</p>
+<p class=when><b>Use it when:</b> You need to know whether your tracking is actually working.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`marketing-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>marketing-skills:competitor-profiling</h3>
+<p class=one>Researches and profiles competitors from their own URLs into a structured dossier.</p>
+<p class=when><b>Use it when:</b> You need to know who you are up against and how they present themselves.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`marketing-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>marketing-skills:copywriting</h3>
+<p class=one>Writes and rewrites marketing copy for landing, pricing, feature and homepage pages.</p>
+<p class=when><b>Use it when:</b> A page&#x27;s words are weak and you want them sharper.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`marketing-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>marketing-skills:customer-research</h3>
+<p class=one>Runs and synthesises customer research into ICPs, personas and jobs-to-be-done.</p>
+<p class=when><b>Use it when:</b> You need to know what customers actually say and struggle with.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`marketing-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>marketing-skills:launch</h3>
+<p class=one>Plans a launch: announcement, go-to-market, waitlist, beta and release checklist.</p>
+<p class=when><b>Use it when:</b> You are about to release something publicly.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`marketing-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>marketing-skills:marketing-plan</h3>
+<p class=one>Writes a full 13-section AARRR marketing plan or growth roadmap.</p>
+<p class=when><b>Use it when:</b> You need a complete marketing plan for a client or product.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`marketing-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>marketing-skills:pricing</h3>
+<p class=one>Reasons about pricing tiers, packaging, free tiers and value metrics.</p>
+<p class=when><b>Use it when:</b> You are setting or changing prices and want the trade-offs laid out.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`marketing-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>marketing-skills:seo-audit</h3>
+<p class=one>Audits technical and on-page SEO and diagnoses why rankings moved.</p>
+<p class=when><b>Use it when:</b> Your traffic dropped, your pages are not ranking, or you want a health check.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>runtime plugin cache (`marketing-skills`)</span></p>
+</div>
+<div class='card runtime'>
+<h3>seo-auditor</h3>
+<p class=one>A dedicated SEO audit skill for site-wide technical and content review.</p>
+<p class=when><b>Use it when:</b> You want a full SEO audit rather than a marketing plan around one.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>seo-geo-intelligence-agent</h3>
+<p class=one>Combined traditional SEO, GEO and AI-search optimisation across search engines and AI answers.</p>
+<p class=when><b>Use it when:</b> Clients need visibility in classic search and in AI answer engines.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.codex/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='adk' data-group='Google ADK agent toolkit'>
+<h2>Google ADK agent toolkit <span class=n data-total='7'>7 skills</span></h2>
+<p class=purpose>Build, evaluate, deploy, observe and publish Google ADK agents.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>google-agents-cli-adk-code</h3>
+<p class=one>ADK Python patterns for agent types, tools, callbacks and state.</p>
+<p class=when><b>Use it when:</b> You are writing ADK agent code and need the API shapes.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>google-agents-cli-deploy</h3>
+<p class=one>Deploys ADK agents to Agent Runtime, Cloud Run or GKE with rollback planning.</p>
+<p class=when><b>Use it when:</b> The ADK agent is built and now it has to run somewhere.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>google-agents-cli-eval</h3>
+<p class=one>ADK evaluation methodology: datasets, LLM-as-judge, failure analysis.</p>
+<p class=when><b>Use it when:</b> You want to measure whether an ADK agent is good.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>google-agents-cli-observability</h3>
+<p class=one>Traces and logs deployed ADK agents with Cloud Trace and BigQuery analytics.</p>
+<p class=when><b>Use it when:</b> A deployed ADK agent is misbehaving in production.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>google-agents-cli-publish</h3>
+<p class=one>Publishes ADK agents to Gemini Enterprise and manages the Agent Registry.</p>
+<p class=when><b>Use it when:</b> The agent is built and now needs registering for others to use.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>google-agents-cli-scaffold</h3>
+<p class=one>Creates, enhances and upgrades an ADK agent project from templates.</p>
+<p class=when><b>Use it when:</b> You are starting an ADK project or adding CI/CD to one.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>google-agents-cli-workflow</h3>
+<p class=one>The full ADK lifecycle: scaffold, build, evaluate, deploy, publish, monitor.</p>
+<p class=when><b>Use it when:</b> You are building an ADK agent and want the whole path in one place.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.agents/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='lark-chat' data-group='Feishu/Lark — chat, mail, calendar and tasks'>
+<h2>Feishu/Lark — chat, mail, calendar and tasks <span class=n data-total='10'>10 skills</span></h2>
+<p class=purpose>Message, schedule and track work in Feishu/Lark.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>lark-attendance</h3>
+<p class=one>Queries Lark attendance records.</p>
+<p class=when><b>Use it when:</b> You need someone&#x27;s own attendance history.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-calendar</h3>
+<p class=one>Manages Lark calendars and events, checks free/busy and books meeting rooms.</p>
+<p class=when><b>Use it when:</b> The task is scheduling.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-im</h3>
+<p class=one>Sends and receives Lark messages, searches chat history, manages group chats and reactions.</p>
+<p class=when><b>Use it when:</b> You need to talk to people or read a Lark conversation.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-mail</h3>
+<p class=one>Composes, sends, reads and files Lark email, with rules and attachments.</p>
+<p class=when><b>Use it when:</b> The task is Lark email.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-minutes</h3>
+<p class=one>Finds and downloads Lark Minutes recordings and their AI artefacts.</p>
+<p class=when><b>Use it when:</b> You need a Lark Minutes recording and its summary.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-task</h3>
+<p class=one>Creates and tracks Lark tasks and checklists, including subtasks and assignment.</p>
+<p class=when><b>Use it when:</b> The task is Lark to-dos.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-tools</h3>
+<p class=one>The front door to Feishu/Lark: drives the official lark-cli across every Lark capability.</p>
+<p class=when><b>Use it when:</b> Anything at all involving Feishu or Lark.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-vc</h3>
+<p class=one>Queries Lark video meetings and their AI artefacts: summary, action items, transcript.</p>
+<p class=when><b>Use it when:</b> You want the record of a meeting that has already happened.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-workflow-meeting-summary</h3>
+<p class=one>Aggregates Lark meeting minutes over a date range into a structured report.</p>
+<p class=when><b>Use it when:</b> You want a weekly meeting report out of Lark.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-workflow-standup-report</h3>
+<p class=one>Combines today&#x27;s calendar agenda with unfinished Lark tasks into a daily summary.</p>
+<p class=when><b>Use it when:</b> You want to know what today looks like.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='lark-docs' data-group='Feishu/Lark — documents, tables and knowledge base'>
+<h2>Feishu/Lark — documents, tables and knowledge base <span class=n data-total='7'>7 skills</span></h2>
+<p class=purpose>Read and write Lark docs, sheets, bases, drive and wiki.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>lark-base</h3>
+<p class=one>Operates Lark Base tables: fields, records, views, formulas, permissions.</p>
+<p class=when><b>Use it when:</b> The work is in a Lark Base multi-dimensional table.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-doc</h3>
+<p class=one>Creates and edits Lark documents, including images and document search.</p>
+<p class=when><b>Use it when:</b> The deliverable is a Lark document.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-drive</h3>
+<p class=one>Manages Lark drive files, folders, sharing, permissions and imports.</p>
+<p class=when><b>Use it when:</b> The task is files and folders in Lark drive.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-sheets</h3>
+<p class=one>Creates and operates Lark spreadsheets: headers, cells, rows, lookups, export.</p>
+<p class=when><b>Use it when:</b> The deliverable is a Lark spreadsheet.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-slides</h3>
+<p class=one>Reads and manages Lark presentation pages via XML.</p>
+<p class=when><b>Use it when:</b> The deliverable is a Lark slide deck.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-whiteboard</h3>
+<p class=one>Queries and edits Lark whiteboards, exporting images or node structure.</p>
+<p class=when><b>Use it when:</b> You want to read or draw a diagram inside Lark.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-wiki</h3>
+<p class=one>Manages Lark wiki spaces, nodes and hierarchy.</p>
+<p class=when><b>Use it when:</b> The content lives in a Lark knowledge base.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='lark-platform' data-group='Feishu/Lark — platform, identity and diagrams'>
+<h2>Feishu/Lark — platform, identity and diagrams <span class=n data-total='7'>7 skills</span></h2>
+<p class=purpose>The plumbing: auth, scopes, raw API, and drawing.</p>
+<div class=grid>
+<div class='card runtime'>
+<h3>lark-approval</h3>
+<p class=one>Manages Lark approval instances and approval tasks.</p>
+<p class=when><b>Use it when:</b> The workflow runs on Lark approvals.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-contact</h3>
+<p class=one>Looks up people, departments and org structure in Lark.</p>
+<p class=when><b>Use it when:</b> You need a colleague&#x27;s open_id, email or team.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-event</h3>
+<p class=one>Subscribes to Lark events over a WebSocket and emits them as NDJSON.</p>
+<p class=when><b>Use it when:</b> You are building an event-driven Lark pipeline.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-openapi-explorer</h3>
+<p class=one>Digs the raw Lark OpenAPI surface out of the official docs for calls the CLI does not wrap.</p>
+<p class=when><b>Use it when:</b> No lark-* skill or lark-cli command covers what you need.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-shared</h3>
+<p class=one>Lark CLI setup and identity: config, auth login, scope and permission troubleshooting.</p>
+<p class=when><b>Use it when:</b> lark-cli is not set up, or a call is permission-denied.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-skill-maker</h3>
+<p class=one>Wraps Lark API operations into your own reusable lark-cli skill.</p>
+<p class=when><b>Use it when:</b> You keep repeating the same Lark API calls and want them packaged.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>lark-whiteboard-cli</h3>
+<p class=one>Guides whiteboard-cli diagram layout for architecture, flow, mind-map and sequence diagrams.</p>
+<p class=when><b>Use it when:</b> You are drawing a structured diagram in a Lark whiteboard.</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>`~/.minimax/.builtin-skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='fleet-session' data-group='Fleet procedure — the session and its memory'>
+<h2>Fleet procedure — the session and its memory <span class=n data-total='13'>13 skills</span></h2>
+<p class=purpose>How firstmate keeps a live session coherent, recap-able and handover-safe.</p>
+<div class=grid>
+<div class='card fleet-procedure'>
+<h3>afk<span class='tag notload'>other surface</span></h3>
+<p class=one>Sets a durable away-mode flag so the daemon self-handles routine wakes and batches only what matters.</p>
+<p class=when><b>Use it when:</b> You are stepping away, or an away-mode marker is in play.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>ahoy<span class='tag notload'>other surface</span></h3>
+<p class=one>Recaps session events and unanswered decisions since your last real message.</p>
+<p class=when><b>Use it when:</b> You want a catch-up on what has happened in this session.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>bearings<span class='tag notload'>other surface</span></h3>
+<p class=one>Produces a &#x27;pick up where I left off&#x27; digest from the fleet&#x27;s live state.</p>
+<p class=when><b>Use it when:</b> You ask for a bearings report, a morning brief, or where you left off.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>bootstrap-diagnostics<span class='tag notload'>other surface</span></h3>
+<p class=one>The playbook for every actionable line the session-start bootstrap diagnostic can print.</p>
+<p class=when><b>Use it when:</b> The startup digest prints a MISSING, TANGLE, NEEDS_GH_AUTH or similar line.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>firstmate-coding-guidelines<span class='tag notload'>other surface</span></h3>
+<p class=one>The rules for changing firstmate&#x27;s shared tracked material: where knowledge lives, who owns it, how to style it.</p>
+<p class=when><b>Use it when:</b> You are about to edit the firstmate repo&#x27;s shared, tracked content.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>fmx-respond<span class='tag notload'>other surface</span></h3>
+<p class=one>Handles X mode mentions, follow-ups and promised public replies.</p>
+<p class=when><b>Use it when:</b> An x-mention, x-mode-error, public-followup or milestone wake arrives.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>handoff<span class='tag notload'>other surface</span></h3>
+<p class=one>Prepares or receives a complete firstmate handover that preserves all jobs and the session lock.</p>
+<p class=when><b>Use it when:</b> You request a takeover, a replacement coordinator, or a startup prompt.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>handover<span class='tag notload'>other surface</span></h3>
+<p class=one>Prepares a fleet home for a Captain handover, leaving it land-reaped-tidy and never mid-merge.</p>
+<p class=when><b>Use it when:</b> You say handover, hand over, step away, or are about to reset the session.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>plan-page<span class='tag notload'>other surface</span></h3>
+<p class=one>How to write a durable execution plan page with live gauges, checkboxes and standing reminders.</p>
+<p class=when><b>Use it when:</b> You are authoring or maintaining a plan page.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>process-event-sources<span class='tag notload'>other surface</span></h3>
+<p class=one>The contract for registered process-to-event sources and their wakes.</p>
+<p class=when><b>Use it when:</b> You are arming a long-polling source or handling a procevent wake.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-public'>
+<h3>repo:stow<span class='tag notload'>other surface</span></h3>
+<p class=one>The public, installer-facing stow: files durable knowledge from the conversation to a local file, and is deliberately a separate file from the firstmate-internal one.</p>
+<p class=when><b>Use it when:</b> You want the portable version of stow to ship to a user or another project.</p>
+<p class=foot><span class='tag fleet-public'>fleet-public</span><span>repo `skills/` (public)</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>stow<span class='tag notload'>other surface</span></h3>
+<p class=one>Sweeps the session for uncaptured durable knowledge and files it to disk.</p>
+<p class=when><b>Use it when:</b> You typed /stow, or you are about to reset or compact the context.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>surface-first<span class='tag notload'>other surface</span></h3>
+<p class=one>Never escalate to the Captain a fact that was already sitting on disk.</p>
+<p class=when><b>Use it when:</b> Before any &#x27;I need X&#x27; or &#x27;where is Y&#x27; message to a human authority.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='fleet-crew' data-group='Fleet procedure — crewmates, projects and harnesses'>
+<h2>Fleet procedure — crewmates, projects and harnesses <span class=n data-total='9'>9 skills</span></h2>
+<p class=purpose>How work is dispatched, isolated, recovered and updated across the fleet.</p>
+<div class=grid>
+<div class='card fleet-procedure'>
+<h3>firstmate-codexapp<span class='tag notload'>other surface</span></h3>
+<p class=one>Coordinates visible Codex Desktop threads alongside firstmate without pretending they are a shell backend.</p>
+<p class=when><b>Use it when:</b> You are creating, steering or reviewing a Codex App thread for firstmate work.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>firstmate-orca<span class='tag notload'>other surface</span></h3>
+<p class=one>The operator checklist for the Orca runtime backend.</p>
+<p class=when><b>Use it when:</b> You are switching to Orca, supervising Orca work or debugging Orca task state.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>harness-adapters<span class='tag notload'>other surface</span></h3>
+<p class=one>Verified facts about each agent harness: claude, codex, opencode, pi, pi-signed, grok, kimi, agy.</p>
+<p class=when><b>Use it when:</b> You are spawning, recovering or verifying a crewmate on a harness.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>harness-update-sweep<span class='tag notload'>other surface</span></h3>
+<p class=one>Version-reads, compares, backs up, updates and verifies every agent harness across every surface.</p>
+<p class=when><b>Use it when:</b> You ask to update the harnesses or sweep them for a new version.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>project-management<span class='tag notload'>other surface</span></h3>
+<p class=one>The procedure for adding, creating, cloning, removing and initializing firstmate projects.</p>
+<p class=when><b>Use it when:</b> You are about to add, register or retire a project.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>quota-array-dispatch<span class='tag notload'>other surface</span></h3>
+<p class=one>Resolves a dispatch profile array from quota output, including effective headroom evidence.</p>
+<p class=when><b>Use it when:</b> A dispatch rule resolves to more than one possible profile.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>secondmate-provisioning<span class='tag notload'>other surface</span></h3>
+<p class=one>The reference for setting up, seeding, launching, recovering and retiring a secondmate home.</p>
+<p class=when><b>Use it when:</b> You are touching a persistent secondmate home.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>stuck-crewmate-recovery<span class='tag notload'>other surface</span></h3>
+<p class=one>Reconciles a stuck or missing crewmate&#x27;s recorded work before escalating or relaunching.</p>
+<p class=when><b>Use it when:</b> A direct report&#x27;s endpoint is dead, a wake is stale, or a crewmate has gone quiet.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>updatefirstmate<span class='tag notload'>other surface</span></h3>
+<p class=one>Fast-forwards firstmate and every secondmate home to origin and re-reads AGENTS.md.</p>
+<p class=when><b>Use it when:</b> You typed /updatefirstmate or want the whole tree on the latest code.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='fleet-evidence' data-group='Fleet procedure — decisions, quota and brand'>
+<h2>Fleet procedure — decisions, quota and brand <span class=n data-total='5'>5 skills</span></h2>
+<p class=purpose>Decide well, keep the ledger honest, stay on brand.</p>
+<div class=grid>
+<div class='card fleet-procedure'>
+<h3>ask-user-authority<span class='tag notload'>other surface</span></h3>
+<p class=one>Distinguishes a correction within accepted intent from a contract expansion that needs the Captain.</p>
+<p class=when><b>Use it when:</b> You have an ask-user finding and must decide whether to act or escalate.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>core-distro-imagery<span class='tag notload'>other surface</span></h3>
+<p class=one>The Core Distro brand palette, typography and image rules, so output matches the live site.</p>
+<p class=when><b>Use it when:</b> You are selecting, prompting or sourcing imagery for core-distro.com.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card fleet-procedure'>
+<h3>decision-hold-lifecycle<span class='tag notload'>other surface</span></h3>
+<p class=one>Completes investigations and reviews without losing an unresolved decision.</p>
+<p class=when><b>Use it when:</b> You are about to close out work that exposed a decision the Captain still owes.</p>
+<p class=foot><span class='tag fleet-procedure'>fleet-procedure</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>quota-axi</h3>
+<p class=one>Reports how much provider quota you actually have left, and how fast you are burning it against the reset clock.</p>
+<p class=when><b>Use it when:</b> You need to know whether it is safe to keep spending a provider, or what your remaining runway is.</p>
+<p class=notes>! identical copy of the same skill under fleet-procedure</p>
+<p class=notes>! the repo copy and this host copy have drifted apart (different bytes)</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>repo `.agents/skills/`</span></p>
+</div>
+<div class='card runtime'>
+<h3>standup</h3>
+<p class=one>Runs a fleet standup across subagents, Herdr panes and comms inboxes to collect status, blockers and drift.</p>
+<p class=when><b>Use it when:</b> You typed /standup, or you want a status check, blocker sweep or scope-drift review.</p>
+<p class=notes>! identical copy of the same skill under host-local-gemini</p>
+<p class=notes>! the repo copy is the maintained one (it names M3.1F); the host copies still carry the retired M2.7 name in their example table, so they are stale forks</p>
+<p class=foot><span class='tag runtime'>runtime</span><span>repo `.agents/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='surface-senpi' data-group='On this host only — Senpi / RPIV surface'>
+<h2>On this host only — Senpi / RPIV surface <span class=n data-total='29'>29 skills</span></h2>
+<p class=purpose>A separate coding-agent surface&#x27;s skills. Not loadable from this runtime.</p>
+<div class=grid>
+<div class='card host-local'>
+<h3>pi:gbrain-herdr-loop<span class='tag notload'>other surface</span></h3>
+<p class=one>A GBrain-backed autonomous Herdr/Pi dispatch loop: claim tasks, store results, coordinate with other workers.</p>
+<p class=when><b>Use it when:</b> You are building an autonomous loop or coordinating a multi-agent campaign.</p>
+<p class=notes>! identical copy under host-local-senpi</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.pi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:annotate-guidance<span class='tag notload'>other surface</span></h3>
+<p class=one>Writes architecture.md guidance files under .rpiv/guidance/ to onboard an AI assistant to a codebase.</p>
+<p class=when><b>Use it when:</b> You want an agent onboarded to a codebase through the shadow guidance tree.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:annotate-inline<span class='tag notload'>other surface</span></h3>
+<p class=one>Writes CLAUDE.md files next to the source they describe, documenting architecture per directory.</p>
+<p class=when><b>Use it when:</b> You want CLAUDE.md guidance living alongside the code.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:architecture-review<span class='tag notload'>other surface</span></h3>
+<p class=one>Reviews a module layer by layer against a fixed 10-dimension checklist and triages each finding.</p>
+<p class=when><b>Use it when:</b> You want a structured structural review of a module.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:blueprint<span class='tag notload'>other surface</span></h3>
+<p class=one>Plans a complex feature as vertical slices with a developer checkpoint between each slice.</p>
+<p class=when><b>Use it when:</b> A feature is too big for one pass and needs a phased plan.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:changelog<span class='tag notload'>other surface</span></h3>
+<p class=one>Regenerates the [Unreleased] section of every affected CHANGELOG.md from the commits since the last tag.</p>
+<p class=when><b>Use it when:</b> You are preparing a release or drafting changelog entries.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:code-review<span class='tag notload'>other surface</span></h3>
+<p class=one>Runs parallel specialist agents over a diff, branch or PR and audits it against peer code.</p>
+<p class=when><b>Use it when:</b> You want a code review of pending changes, a branch, a PR or a diff.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:commit<span class='tag notload'>other surface</span></h3>
+<p class=one>Groups staged and unstaged changes into logical git commits with descriptive messages.</p>
+<p class=when><b>Use it when:</b> You want the changes committed properly, in more than one commit if that fits.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:context-mode<span class='tag notload'>other surface</span></h3>
+<p class=one>Routes large-output processing through context-mode tools instead of Bash and cat.</p>
+<p class=when><b>Use it when:</b> Tool output may exceed about twenty lines and you need it handled efficiently.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:create-handoff<span class='tag notload'>other surface</span></h3>
+<p class=one>Compacts the current task, decisions, in-flight changes and open questions into one handoff file.</p>
+<p class=when><b>Use it when:</b> The session is getting large or you want to hand work to another session.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:ctx-doctor<span class='tag notload'>other surface</span></h3>
+<p class=one>Runs context-mode diagnostics: runtimes, hooks, FTS5, plugin registration, npm and marketplace versions.</p>
+<p class=when><b>Use it when:</b> context-mode is misbehaving, or you want /context-mode:ctx-doctor.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:ctx-index<span class='tag notload'>other surface</span></h3>
+<p class=one>Indexes a file or directory into context-mode&#x27;s FTS5 knowledge base so later searches are precise.</p>
+<p class=when><b>Use it when:</b> You want a path searchable by context-mode, or you typed /context-mode:ctx-index.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:ctx-insight<span class='tag notload'>other surface</span></h3>
+<p class=one>Opens the context-mode Insight dashboard: tool usage, error rate, parallel work patterns, project focus.</p>
+<p class=when><b>Use it when:</b> You want usage analytics on how you have been working.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:ctx-search<span class='tag notload'>other surface</span></h3>
+<p class=one>Searches context-mode&#x27;s FTS5 knowledge base for previously indexed project content or session memory.</p>
+<p class=when><b>Use it when:</b> You want to retrieve something already indexed, or you typed /context-mode:ctx-search.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:ctx-stats<span class='tag notload'>other surface</span></h3>
+<p class=one>Shows how much context window context-mode saved this session.</p>
+<p class=when><b>Use it when:</b> You want the context savings number for this session.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:ctx-upgrade<span class='tag notload'>other surface</span></h3>
+<p class=one>Updates context-mode from GitHub and repairs its hooks and settings.</p>
+<p class=when><b>Use it when:</b> context-mode needs updating, or you typed /context-mode:ctx-upgrade.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:design<span class='tag notload'>other surface</span></h3>
+<p class=one>Designs a feature as vertical slices with per-slice verification and an independent final review.</p>
+<p class=when><b>Use it when:</b> You are designing before you implement, and want the design artefact.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:discover<span class='tag notload'>other surface</span></h3>
+<p class=one>Interviews you one question at a time and synthesises a Feature Requirements Document.</p>
+<p class=when><b>Use it when:</b> A feature&#x27;s intent and requirements are not yet written down.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:explore<span class='tag notload'>other surface</span></h3>
+<p class=one>Compares solution options for a change with pros, cons, trade-offs and a recommended path.</p>
+<p class=when><b>Use it when:</b> You are weighing approaches and want them compared side by side.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:frontend-design<span class='tag notload'>other surface</span></h3>
+<p class=one>Injects tailored visual design direction for frontend work.</p>
+<p class=when><b>Use it when:</b> You are building a page or a full layout and want design guidance applied.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:frontend-testing-debugging<span class='tag notload'>other surface</span></h3>
+<p class=one>Tests, debugs and improves rendered frontend apps: dev servers, UI regressions, interaction bugs, console errors, responsive layout.</p>
+<p class=when><b>Use it when:</b> You are testing or fixing a rendered frontend app and need it looked at in a browser.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:implement<span class='tag notload'>other surface</span></h3>
+<p class=one>Executes an approved implementation plan phase by phase, verifying each phase against its criteria.</p>
+<p class=when><b>Use it when:</b> A phased plan exists and you want it carried out.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:plan<span class='tag notload'>other surface</span></h3>
+<p class=one>Turns a design artefact into a phased implementation plan with parallel phases and success criteria.</p>
+<p class=when><b>Use it when:</b> A design exists and you want the plan written from it.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:research<span class='tag notload'>other surface</span></h3>
+<p class=one>Answers structured research questions about a codebase with parallel analysis agents and writes a research doc.</p>
+<p class=when><b>Use it when:</b> You need to understand an area of the codebase properly.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:resume-handoff<span class='tag notload'>other surface</span></h3>
+<p class=one>Reviews and summarises a handoff document, and only continues work when you explicitly authorise it.</p>
+<p class=when><b>Use it when:</b> You picked up a handoff document from another session.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:revise<span class='tag notload'>other surface</span></h3>
+<p class=one>Updates an existing implementation plan in place after feedback, discovery or a constraint change.</p>
+<p class=when><b>Use it when:</b> A plan needs adjusting rather than rewriting.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:roadmap-manager<span class='tag notload'>other surface</span></h3>
+<p class=one>Organises, tracks and updates project tasks, roadmaps and TODO items.</p>
+<p class=when><b>Use it when:</b> You are managing the project roadmap or task list.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:validate<span class='tag notload'>other surface</span></h3>
+<p class=one>Replays each phase&#x27;s success criteria against the working tree and writes a validation report.</p>
+<p class=when><b>Use it when:</b> Implementation is claimed done and you want it checked against the plan.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>senpi:vps-operations<span class='tag notload'>other surface</span></h3>
+<p class=one>Checks VPS system health, logs, service status and running containers.</p>
+<p class=when><b>Use it when:</b> You need the operational state of a VPS.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.senpi/agent/skills/`</span></p>
+</div>
+</div>
+</section>
+<section id='surface-antigravity' data-group='On this host only — Antigravity / Gemini CLI surface'>
+<h2>On this host only — Antigravity / Gemini CLI surface <span class=n data-total='17'>17 skills</span></h2>
+<p class=purpose>Google Antigravity&#x27;s own skill set. Not loadable from this runtime.</p>
+<div class=grid>
+<div class='card host-local'>
+<h3>agy:agy-customizations<span class='tag notload'>other surface</span></h3>
+<p class=one>Explains how the Antigravity customization system works and how to author skills, rules, plugins, hooks and MCP servers.</p>
+<p class=when><b>Use it when:</b> You need to know how Antigravity loads customizations, or you are creating one.</p>
+<p class=notes>! identical copy of the same skill</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:antigravity-guide<span class='tag notload'>other surface</span></h3>
+<p class=one>A guide, quick reference and sitemap for Antigravity: the CLI, the IDE, the SDK, slash commands and customizations.</p>
+<p class=when><b>Use it when:</b> You need to know how to use, configure or extend Antigravity.</p>
+<p class=notes>! identical copy of the same skill</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:automation<span class='tag notload'>other surface</span></h3>
+<p class=one>Designs and creates a scheduled background automation, such as a daily summary.</p>
+<p class=when><b>Use it when:</b> You want a recurring task that runs without you.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:create-security-implementation-plan<span class='tag notload'>other surface</span></h3>
+<p class=one>Writes a security verification plan for new code or for fixing a scanner finding.</p>
+<p class=when><b>Use it when:</b> You are generating new code or fixing a vulnerability the scanner reported.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:determine-threat-model<span class='tag notload'>other surface</span></h3>
+<p class=one>Builds a threat model: entry points, trust boundaries, sensitive data paths and review priorities.</p>
+<p class=when><b>Use it when:</b> You need to reason about what an attacker would target here.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:generate-security-audit-report<span class='tag notload'>other surface</span></h3>
+<p class=one>Writes a walkthrough audit report of the vulnerabilities found and fixed in a session.</p>
+<p class=when><b>Use it when:</b> You want the security outcome of a coding session documented.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:generative_ui<span class='tag notload'>other surface</span></h3>
+<p class=one>Renders rich interactive HTML widgets inline in the chat or as standalone artefacts.</p>
+<p class=when><b>Use it when:</b> The answer needs to be an interactive widget, chart or walkthrough, not text.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:migrate-workflows<span class='tag notload'>other surface</span></h3>
+<p class=one>Migrates legacy workflow files into modern skills, archiving the originals safely.</p>
+<p class=when><b>Use it when:</b> You have old workflow files and want them turned into skills.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:permissioned-github<span class='tag notload'>other surface</span></h3>
+<p class=one>How to interact with GitHub and ask for permission when the environment blocks a command.</p>
+<p class=when><b>Use it when:</b> A GitHub command fails because of environment restrictions.</p>
+<p class=notes>! identical copy of the same skill</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:plugin<span class='tag notload'>other surface</span></h3>
+<p class=one>How to create, enable, disable and uninstall plugins that bundle skills, agents, rules, MCP servers and hooks.</p>
+<p class=when><b>Use it when:</b> You are packaging or managing a plugin as one unit.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:run-poc<span class='tag notload'>other surface</span></h3>
+<p class=one>Builds a proof-of-concept that demonstrates whether a security fix actually holds.</p>
+<p class=when><b>Use it when:</b> A vulnerability was fixed and you want proof it is no longer exploitable.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:run-security-scanner<span class='tag notload'>other surface</span></h3>
+<p class=one>Scans source files for vulnerabilities such as XSS, SQL injection, hardcoded secrets and other CWE classes.</p>
+<p class=when><b>Use it when:</b> You want source scanned for common security defects.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:run-workflow<span class='tag notload'>other surface</span></h3>
+<p class=one>Writes and runs a dynamic workflow script that fans work out across many agents.</p>
+<p class=when><b>Use it when:</b> The task splits into many independent or staged pieces of agent work.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:scan_dependencies<span class='tag notload'>other surface</span></h3>
+<p class=one>The exclusive authority for package safety: validates any new dependency before it is allowed in.</p>
+<p class=when><b>Use it when:</b> Before any new package is imported or added to dependencies.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:securecoder-persona<span class='tag notload'>other surface</span></h3>
+<p class=one>Defines the SecureCoder agent&#x27;s role and workflow rules for fixing vulnerabilities.</p>
+<p class=when><b>Use it when:</b> You clicked Fix All with Agent in the SecureCoder panel.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:securecoder_generation<span class='tag notload'>other surface</span></h3>
+<p class=one>SecureCoder&#x27;s generation rules: how it writes the fix code itself.</p>
+<p class=when><b>Use it when:</b> You are the SecureCoder agent generating a remediation patch.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>agy:ui-plugin-navigation<span class='tag notload'>other surface</span></h3>
+<p class=one>Finds relevant UI plugin panels and surfaces a one-click pill to open them in the side pane.</p>
+<p class=when><b>Use it when:</b> A running UI plugin panel would help with what you are doing.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.gemini/`</span></p>
+</div>
+</div>
+</section>
+<section id='surface-codex' data-group='On this host only — Codex plugins and system skills'>
+<h2>On this host only — Codex plugins and system skills <span class=n data-total='10'>10 skills</span></h2>
+<p class=purpose>Codex CLI&#x27;s bundled plugin and system skills. Not loadable from this runtime.</p>
+<div class=grid>
+<div class='card host-local'>
+<h3>codex:create-pet<span class='tag notload'>other surface</span></h3>
+<p class=one>Creates, repairs, validates, previews and uploads an animated v2 pet in ChatGPT Work mode.</p>
+<p class=when><b>Use it when:</b> You are making a custom mascot or sprite sheet for ChatGPT Pets.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:imagegen<span class='tag notload'>other surface</span></h3>
+<p class=one>Generates and edits raster images: illustrations, textures, sprites, mockups, transparent cutouts.</p>
+<p class=when><b>Use it when:</b> You need an AI-made bitmap rather than a diagram or an existing photo.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:openai-docs<span class='tag notload'>other surface</span></h3>
+<p class=one>Answers questions about Codex itself: models, pricing, skills, settings, automations and troubleshooting.</p>
+<p class=when><b>Use it when:</b> The question is about how Codex works, or &#x27;you&#x27; means Codex.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:pets<span class='tag notload'>other surface</span></h3>
+<p class=one>Lists, inspects, selects, downloads and deletes animated pets in ChatGPT Work mode.</p>
+<p class=when><b>Use it when:</b> You want to see or manage the pets you already have.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:plugin-management<span class='tag notload'>other surface</span></h3>
+<p class=one>Discovers plugins, inspects their permissions and dependencies, and connects or removes them.</p>
+<p class=when><b>Use it when:</b> You ask about plugins, or a task needs an external app the current tools cannot reach.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:review-agent<span class='tag notload'>other surface</span></h3>
+<p class=one>Performs a read-only, defect-first review of a named code change and returns every actionable finding.</p>
+<p class=when><b>Use it when:</b> Another agent delegates a review of uncommitted changes, a diff or a commit.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:sites<span class='tag notload'>other surface</span></h3>
+<p class=one>Builds, edits and publishes Sites: landing pages, portfolios, dashboards, trackers and hosted tools.</p>
+<p class=when><b>Use it when:</b> You want a website built, edited, remixed or managed with Sites hosting.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:skill-creator<span class='tag notload'>other surface</span></h3>
+<p class=one>Creates or updates a Codex skill with appropriately scoped instructions and supporting resources.</p>
+<p class=when><b>Use it when:</b> You are authoring or revising a Codex skill.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:skill-installer<span class='tag notload'>other surface</span></h3>
+<p class=one>Installs Codex skills into $CODEX_HOME/skills from a curated list or a GitHub repo path.</p>
+<p class=when><b>Use it when:</b> You want to list installable skills or install one from a repo.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/skills/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex:update-pet<span class='tag notload'>other surface</span></h3>
+<p class=one>Inspects, validates, previews, repairs and updates an existing custom pet.</p>
+<p class=when><b>Use it when:</b> You have a pet that needs fixing or changing.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+</div>
+</section>
+<section id='surface-codex-templates' data-group='On this host only — Codex business-document templates'>
+<h2>On this host only — Codex business-document templates <span class=n data-total='20'>20 skills</span></h2>
+<p class=purpose>Ready-made Word/PPT/sheet templates for common business artefacts.</p>
+<div class=grid>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-analytics-dashboard<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a spreadsheet using the Analytics Dashboard template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Analytics Dashboard.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-business-review<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a presentation using the Business Review template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Business Review.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-design-report<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a document using the Design Report template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Design Report.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-experiment-analysis<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a document using the Experiment Analysis template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Experiment Analysis.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-financial-budget<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a spreadsheet using the Financial Budget template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Financial Budget.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-investment-committee-memo<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a document using the Investment Committee Memo template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Investment Committee Memo.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-legal-memorandum<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a document using the Legal Memorandum template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Legal Memorandum.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-market-trends-report<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a presentation using the Market Trends Report template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Market Trends Report.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-minimal-letterhead<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a document using the Minimal Letterhead template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Minimal Letterhead.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-operating-calendar<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a spreadsheet using the Operating Calendar template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Operating Calendar.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-operating-review<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a presentation using the Operating Review template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Operating Review.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-project-kickoff<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a presentation using the Project Kickoff template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Project Kickoff.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-project-tracker<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a spreadsheet using the Project Tracker template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Project Tracker.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-sales-pipeline<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a spreadsheet using the Sales Pipeline template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Sales Pipeline.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-simple-dark-mode<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a presentation using the Simple Dark Mode template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Simple Dark Mode.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-simple-light-mode<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a presentation using the Simple Light Mode template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Simple Light Mode.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-strategy-memorandum<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a document using the Strategy Memorandum template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Strategy Memorandum.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-system-design<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a document using the System Design template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names System Design.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-team-alignment<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a presentation using the Team Alignment template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Team Alignment.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+<div class='card host-local'>
+<h3>codex-tpl:artifact-template-three-statement-forecast<span class='tag notload'>other surface</span></h3>
+<p class=one>Create a spreadsheet using the Three-Statement Forecast template and its retained reference file.</p>
+<p class=when><b>Use it when:</b> Use when the user selects or names Three-Statement Forecast.</p>
+<p class=foot><span class='tag host-local'>host-local</span><span>`~/.codex/plugins/`</span></p>
+</div>
+</div>
+</section>
+<section id='surface-dead' data-group='On this host only — dead entries (dangling symlinks)'>
+<h2>On this host only — dead entries (dangling symlinks) <span class=n data-total='58'>58 skills</span></h2>
+<p class=purpose>Directories that LOOK like skills but point at a tree that no longer exists.</p>
+<div class=deadlist><span class=deadname>_gstack-command (host-local-cc)</span> <span class=deadname>autoplan (host-local-cc)</span> <span class=deadname>benchmark (host-local-cc)</span> <span class=deadname>benchmark-models (host-local-cc)</span> <span class=deadname>browse (host-local-cc)</span> <span class=deadname>canary (host-local-cc)</span> <span class=deadname>careful (host-local-cc)</span> <span class=deadname>codex (host-local-cc)</span> <span class=deadname>connect-chrome (host-local-cc)</span> <span class=deadname>context-restore (host-local-cc)</span> <span class=deadname>context-save (host-local-cc)</span> <span class=deadname>cso (host-local-cc)</span> <span class=deadname>design-consultation (host-local-cc)</span> <span class=deadname>design-html (host-local-cc)</span> <span class=deadname>design-review (host-local-cc)</span> <span class=deadname>design-shotgun (host-local-cc)</span> <span class=deadname>devex-review (host-local-cc)</span> <span class=deadname>diagram (host-local-cc)</span> <span class=deadname>document-generate (host-local-cc)</span> <span class=deadname>document-release (host-local-cc)</span> <span class=deadname>freeze (host-local-cc)</span> <span class=deadname>gstack (host-local-codex)</span> <span class=deadname>gstack-upgrade (host-local-cc)</span> <span class=deadname>gstack-upgrade (host-local-codex)</span> <span class=deadname>guard (host-local-cc)</span> <span class=deadname>health (host-local-cc)</span> <span class=deadname>investigate (host-local-cc)</span> <span class=deadname>ios-clean (host-local-cc)</span> <span class=deadname>ios-design-review (host-local-cc)</span> <span class=deadname>ios-fix (host-local-cc)</span> <span class=deadname>ios-qa (host-local-cc)</span> <span class=deadname>ios-sync (host-local-cc)</span> <span class=deadname>land-and-deploy (host-local-cc)</span> <span class=deadname>landing-report (host-local-cc)</span> <span class=deadname>learn (host-local-cc)</span> <span class=deadname>make-pdf (host-local-cc)</span> <span class=deadname>office-hours (host-local-cc)</span> <span class=deadname>office-hours (host-local-codex)</span> <span class=deadname>open-gstack-browser (host-local-cc)</span> <span class=deadname>pair-agent (host-local-cc)</span> <span class=deadname>plan-ceo-review (host-local-cc)</span> <span class=deadname>plan-design-review (host-local-cc)</span> <span class=deadname>plan-devex-review (host-local-cc)</span> <span class=deadname>plan-eng-review (host-local-cc)</span> <span class=deadname>plan-tune (host-local-cc)</span> <span class=deadname>qa (host-local-cc)</span> <span class=deadname>qa-only (host-local-cc)</span> <span class=deadname>retro (host-local-cc)</span> <span class=deadname>review (host-local-cc)</span> <span class=deadname>scrape (host-local-cc)</span> <span class=deadname>setup-browser-cookies (host-local-cc)</span> <span class=deadname>setup-deploy (host-local-cc)</span> <span class=deadname>setup-gbrain (host-local-cc)</span> <span class=deadname>ship (host-local-cc)</span> <span class=deadname>skillify (host-local-cc)</span> <span class=deadname>spec (host-local-cc)</span> <span class=deadname>sync-gbrain (host-local-cc)</span> <span class=deadname>unfreeze (host-local-cc)</span></div>
+<p class=purpose style='margin-top:10px'>Every one of these is a dangling <code>SKILL.md</code> symlink pointing into the removed <code>/root/gstack</code> tree. They show up as directories and in a <code>ls</code>, and nothing can load them. This is the largest single reason the pile feels like a mess.</p>
+</section>
+<section id='conflicts'><h2>Overlaps &amp; conflicts</h2>
+<p class=purpose>The honest list: same names meaning different things, near-duplicate families, copies that have drifted apart, and entries that cannot load. The grouping above does not hide any of it.</p>
+<div class=callout><h3>Same name, different skill</h3><ul>
+<li><b>code-review</b> &mdash; the runtime builtin, <b>mattpocock-skills:code-review</b>, and the Senpi surface. The builtin reviews a named scope for defects; the Matt Pocock one runs Standards and Spec axes in parallel; the Senpi one runs parallel specialist agents and belongs to another surface.</li>
+<li><b>handoff</b> &mdash; the fleet's own <b>handoff</b> preserves the jobs and the session lock across a coordinator takeover. <b>mattpocock-skills:handoff</b> only compacts a conversation. Same word, different job.</li>
+<li><b>implement</b> and <b>research</b> &mdash; Matt Pocock's versions work from a spec or from primary sources; the Senpi versions work from a phased plan in <code>.rpiv/artifacts/plans/</code> and from codebase questions. The Senpi pair is not loadable here.</li>
+<li><b>frontend-design</b>, <b>skill-creator</b> and <b>docx</b> each exist twice, once per surface. The runtime copy wins; the Codex or Word plugin copy is the variant.</li>
+<li><b>stow</b> &mdash; the repo keeps two on purpose. <code>skills/stow/</code> is the public, installer-facing copy (standalone, no private paths, user-invocable). <code>.agents/skills/stow/</code> is the firstmate-internal copy (knows about <code>state/</code> and internal conventions). Both files say so in their own maintainer comment.</li>
+</ul></div>
+<div class=callout"><h3>Near-duplicates and drift</h3><ul>
+<li><b>Three grilling skills</b> (<code>grilling</code>, <code>grill-me</code>, <code>grill-with-docs</code>) are three variants of one idea. <b>Three TDD skills</b> and <b>three code-review skills</b> likewise. Take one, not all.</li>
+<li><b>Six pm-skills canvases</b> (<code>lean-canvas</code>, <code>startup-canvas</code>, <code>business-model</code>, <code>product-strategy</code>, <code>swot-analysis</code>) overlap heavily in output shape. <b>Three SEO skills</b> too: <code>marketing-skills:seo-audit</code>, <code>seo-auditor</code> and <code>seo-geo-intelligence-agent</code>.</li>
+<li><b>Drift:</b> the repo copy of <code>standup</code> names M3.1F; the copies under <code>~/.agents/skills/</code> and <code>~/.gemini/</code> still name the retired M2.7. One byte apart, but the host copies teach a retired model name. The repo copy wins.</li>
+<li><b>Pointer, not a skill:</b> the repo copy of <code>namecheap-mail-dns</code> is a 489-byte stub telling you to load the canonical skill from <code>~/.codex/skills/namecheap-mail-dns/</code>. The canonical skill is the <code>~/.codex</code> copy.</li>
+<li><b>Contradiction:</b> the builtin <code>code-review</code> refuses ordinary fix requests while <code>mattpocock-skills:code-review</code> always runs two sub-agents; <code>superpowers:brainstorming</code> says MUST before any creative work while <code>mattpocock-skills:grilling</code> treats the interview as optional. <code>surface-first</code> and <code>skill-refiner</code> override everything else when they conflict.</li>
+</ul></div>
+</section>
+</main>
+</div>
+<footer><div class=wrap>Built 2026-10-21 from every SKILL.md on this host: the runtime builtin catalogue, the runtime plugin cache, the per-user agent skill roots, and this repo's .agents/skills. Machine-readable index: <code>docs/skills-map.json</code>. Full prose: <code>docs/SKILLS-MAP.md</code>. This page is one self-contained file: no build step, no network access.</div></footer>
+<script>
+(function(){
+  var q=document.getElementById('q'), count=document.getElementById('count');
+  var cards=[].slice.call(document.querySelectorAll('.card'));
+  var sections=[].slice.call(document.querySelectorAll('section[data-group]'));
+  function run(){
+    var v=(q.value||'').trim().toLowerCase();
+    var shown=0;
+    cards.forEach(function(c){
+      var hit = !v || c.textContent.toLowerCase().indexOf(v)>-1;
+      c.classList.toggle('hidden', !hit);
+      if(hit) shown++;
+    });
+    sections.forEach(function(s){
+      var any=s.querySelectorAll('.card:not(.hidden)').length;
+      s.classList.toggle('hidden', !any && v!=='');
+      var n=s.querySelector('.n'); if(n && v!=='') n.textContent=any+' of '+n.dataset.total;
+      else if(n) n.textContent=n.dataset.total+' skills';
+    });
+    count.textContent=shown+' of '+cards.length+' skills shown';
+  }
+  if(q){ q.addEventListener('input',run); run(); }
+})();
+</script>
+</body></html>
