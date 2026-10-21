@@ -45,15 +45,13 @@ The alias table lives in exactly one place, `bin/fm-todo-prefix-check.sh`, and m
 |---|---|
 | `m3.1f` | `minimax/MiniMax-M3.1-Flash-Preview` |
 | `m3.1` | `minimax/MiniMax-M3.1` |
-| `m2.7h` | `minimax/MiniMax-M2.7-highspeed` |
-| `m2.7` | `minimax/MiniMax-M2.7` |
 | `luna6` | `openai-codex/gpt-6-luna` |
 | `glm5.3f` | `zai/glm-5.3-flash` |
 | `gem38f` | `agy/gemini-3.8-flash-medium` |
 | `pi` | `minimax/MiniMax-M3.1-Flash-Preview`, the Pi session default model, kept as a legacy alias |
 
-Alternate spellings resolve to the same canonical alias: `m31`, `m31f`, `m27`, `m27h`, `m27highspeed`, `g38f`.
-The cross-surface tracker writes its own abbreviations as `G38F` and `M31`, and the earlier version of the todo prompt style wrote `m27-highspeed` and `m31`, so the checker accepts those spellings in a board prefix.
+Alternate spellings resolve to the same canonical alias: `m31`, `m31f`, `g38f`.
+The cross-surface tracker writes its own abbreviations as `G38F` and `M31`, so the checker accepts those spellings in a board prefix.
 
 ## Tokens
 
@@ -81,9 +79,9 @@ Each of these is rejected by the checker with a message naming the expected cano
 |---|---|---|
 | Owner role inside the prefix | `[mcode·luna6 m @brandon \| worker] do the work` | The owner role is not part of the canonical prefix. State it in the task text. |
 | Owner and host only | `[controller @ brandon] reconcile evidence - running` | No harness and model segment. |
-| Model and surface only | `[m2.7h @ brandon] widget fix - working` | No harness, model abbreviation or effort token. |
+| Model and surface only | `[m3.1f @ brandon] widget fix - working` | No harness, model abbreviation or effort token. |
 | No effort token | `[mcode·luna6 @brandon] missing effort` | The effort token is mandatory, or the literal `unknown`. |
-| Legacy lane key | `m2.7-hd2-build` | A lane key needs a harness segment. |
+| Legacy lane key | `m3.1f-hd2-build` | A lane key needs a harness segment. |
 
 ## The checker
 
@@ -125,10 +123,8 @@ The derivation rule, one canonical statement:
 
     minimax/MiniMax-M<family>[-<tier>]  ->  family + tier-marker
     tier-marker: 'highspeed' -> 'h', 'flash' -> 'f', bare or unrecognised -> ''
-    minimax/MiniMax-M2.7-highspeed      -> m2.7h
     minimax/MiniMax-M3.1-Flash-Preview  -> m3.1f
     minimax/MiniMax-M3.1                -> m3.1
-    minimax/MiniMax-M2.7                -> m2.7
 
 Other providers have no derivation rule and are out of scope for this binding.
 

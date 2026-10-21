@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fleet ticket dashboard</title>
+<style>
+:root{color-scheme:dark;--bg:#101820;--panel:#192630;--line:#30434e;--ink:#e9f0f2;--muted:#a8b9c1;--accent:#75d4c3;--warn:#ffd27a;--dim:var(--muted);--ok:var(--accent);--bad:#ff9c91}
+*{box-sizing:border-box}body{margin:0;padding:28px;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;justify-content:space-between;align-items:end;gap:16px;margin:0 auto 22px;max-width:1400px}h1{margin:0;font-size:clamp(1.6rem,3vw,2.4rem)}h2{margin:0 0 14px;font-size:1.15rem}small,.muted{color:var(--muted)}main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;max-width:1400px;margin:auto}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}.wide{grid-column:1/-1}.capacity{font-size:1.3rem;color:var(--accent);font-weight:700}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}th{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}td{overflow-wrap:anywhere}.state{font-weight:700;color:var(--accent)}.ticket{white-space:normal}.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:#263b47;color:var(--accent)}.blocker{color:var(--warn)}.empty{color:var(--muted);font-style:italic}.receipt{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}.gate{font-family:ui-monospace,monospace}.status-pass{color:var(--accent)}.status-fail{color:#ff9c91}button,select,textarea{font:inherit;color:var(--ink);background:#1e303a;border:1px solid var(--line);border-radius:7px;padding:7px 10px}button{cursor:pointer}button:hover{border-color:var(--accent)}.filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}.filters label{display:grid;gap:3px;color:var(--muted);font-size:.85rem}details summary{cursor:pointer;color:var(--accent);font-weight:650}details[open] summary{margin-bottom:8px}.lane-detail,.ticket-detail{padding:8px;border-left:2px solid var(--line);overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;color:var(--muted);margin:6px 0}.feedback-form{display:grid;gap:8px;margin-top:10px;max-width:680px}.feedback-form textarea{min-height:90px;resize:vertical}.feedback-status{min-height:1.4em;color:var(--accent)}.dashboard-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+@media(max-width:800px){body{padding:14px}main{grid-template-columns:1fr}.wide{grid-column:auto}header{align-items:start;flex-direction:column}table{font-size:.9rem}th,td{padding:7px 4px}}
+@media(min-width:401px){body{padding-right:96px !important}}
+@media(max-width:400px){body{padding-right:14px !important}}
+.none{color:var(--dim);font-style:italic}
+#pill{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:60;background:var(--panel);border:1px solid var(--line);border-right:none;border-radius:10px 0 0 10px;padding:10px 8px;width:46px;box-shadow:-4px 0 18px rgba(0,0,0,.5);cursor:pointer;transition:width .25s ease,padding .25s ease;overflow:hidden}
+#pill:hover{width:252px;padding:12px 14px}
+#pill .pnum{font-size:14px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+#pill .ptrack{height:4px;background:#010409;border-radius:3px;margin-top:7px;overflow:hidden}
+#pill .pfill{height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,#a371f7,#58a6ff,#3fb950);transition:width .6s ease}
+#pill .detail{display:none}
+#pill:hover .pnum,#pill:hover .ptrack{display:none}
+#pill:hover .detail{display:block}
+#pill .drow{display:flex;justify-content:space-between;gap:12px;font-size:11.5px;line-height:1.75}
+#pill .dk{color:var(--dim)}
+#pill .dv{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+#pill .dhead{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);font-weight:600;margin-bottom:7px}
+#pill .deta{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:12px;font-weight:600}
+#pill .warn{color:var(--warn)} #pill .ok{color:var(--ok)} #pill .bad{color:var(--bad)}
+@media(max-width:860px){#pill{display:none}}
+
+/* === TICKET 0026: DISCRETE STATUS AND METADATA PILLS === */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+/* Subdued styling for normal states */
+.pill-verified { background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.35); }
+.pill-claimed { background: rgba(88, 166, 255, 0.15); color: #58a6ff; border: 1px solid rgba(88, 166, 255, 0.35); }
+.pill-in-progress { background: rgba(188, 140, 255, 0.15); color: #bc8cff; border: 1px solid rgba(188, 140, 255, 0.35); }
+.pill-not-started { background: rgba(139, 148, 158, 0.12); color: #8b949e; border: 1px solid rgba(139, 148, 158, 0.25); }
+
+/* Strong contrast for BLOCKED and HELD (solid colors with clear readable text) */
+.pill-blocked { background: #f85149; color: #ffffff; border: 1px solid #da3633; font-weight: 700; box-shadow: 0 0 0 1px rgba(248,81,73,0.35); }
+.pill-held { background: #d29922; color: #0d1117; border: 1px solid #bb8009; font-weight: 700; }
+
+/* Secondary pills for Priority, Surface, and Owner */
+.pill-sec {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+.pill-p0 { background: rgba(248, 81, 73, 0.2); color: #ff7b72; border: 1px solid rgba(248, 81, 73, 0.35); }
+.pill-p1 { background: rgba(210, 153, 34, 0.2); color: #e3b341; border: 1px solid rgba(210, 153, 34, 0.35); }
+.pill-p2 { background: rgba(88, 166, 255, 0.15); color: #79c0ff; border: 1px solid rgba(88, 166, 255, 0.3); }
+.pill-p3, .pill-p4 { background: rgba(139, 148, 158, 0.15); color: #8b949e; border: 1px solid rgba(139, 148, 158, 0.3); }
+.pill-surface { background: rgba(255, 255, 255, 0.06); color: #c9d1d9; border: 1px solid rgba(255, 255, 255, 0.12); font-family: ui-monospace, SFMono-Regular, monospace; }
+.pill-owner { background: rgba(117, 212, 195, 0.12); color: #75d4c3; border: 1px solid rgba(117, 212, 195, 0.25); }
+.pill-group { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+</style></head><body><header><div><h1>Fleet ticket dashboard</h1><small>Local snapshot · no external resources</small></div><div class="dashboard-tools"><small>Generated <time datetime="2026-10-18T23:40:00Z">2026-10-18T23:40:00Z</time></small><form action="/" method="get"><button type="submit">Refresh snapshot</button></form></div></header><main>
+<section class="card wide"><h2>Filters</h2><div class="filters"><label>State<select id="state-filter"><option value="">All states</option></select></label><label>Priority<select id="priority-filter"><option value="">All priorities</option></select></label><label>Host<select id="host-filter"><option value="">All hosts</option></select></label></div></section>
+<section class="card wide"><h2>Lane activity</h2><table><thead><tr><th>Lane / model</th><th>Surface / host</th><th>Task</th><th>State</th><th>Last activity</th></tr></thead><tbody>
+<tr><td colspan="5" class="empty">No registered lanes</td></tr>
+</tbody></table></section>
+
+<section class="card wide"><h2>Tickets by priority</h2><table><thead><tr><th style="width:110px;">Priority</th><th>Ticket</th><th style="width:150px;">State</th><th style="width:160px;">Surface / Owner</th><th style="width:150px;">Blocker</th></tr></thead><tbody>
+<p class="muted">Backlog: live from controller · refreshed 2026-10-18T23:40:00Z</p>
+
+<!-- P0 Tickets -->
+<tr class="ticket-row" data-state="held" data-priority="P0" data-host="hetzner">
+  <td><span class="pill pill-sec pill-p0">P0</span></td>
+  <td class="ticket"><details><summary>gate8-hetz-comms-reestablish-20261013 - FINAL GATE: re-establish verified comms with Hetz once all surfaces adopt</summary><div class="ticket-detail"><p><strong>Claim:</strong> unclaimed<br><strong>Blocker:</strong> waiting for gate</p></div></details></td>
+  <td><span class="pill pill-held">HELD</span></td>
+  <td><span class="pill pill-sec pill-surface">hetzner</span></td>
+  <td><span class="pill pill-held">HELD</span></td>
+</tr>
+<tr class="ticket-row" data-state="blocked" data-priority="P0" data-host="hetzner">
+  <td><span class="pill pill-sec pill-p0">P0</span></td>
+  <td class="ticket"><details><summary>hetz-blocker-response-20261013 - Answer Hetz's blocker evidence and unstick reliability reports</summary><div class="ticket-detail"><p><strong>Claim:</strong> unclaimed<br><strong>Blocker:</strong> hetzner response pending</p></div></details></td>
+  <td><span class="pill pill-blocked">BLOCKED</span></td>
+  <td><span class="pill pill-sec pill-surface">hetzner</span></td>
+  <td><span class="pill pill-blocked">BLOCKED</span></td>
+</tr>
+<tr class="ticket-row" data-state="claimed" data-priority="P0" data-host="hd2stack">
+  <td><span class="pill pill-sec pill-p0">P0</span></td>
+  <td class="ticket"><details><summary>recovery-actual-channel-20261012 - Prove actual reply consumer and fresh automatic review</summary><div class="ticket-detail"><p><strong>Claim:</strong> hd2-worker<br><strong>Blocker:</strong> none</p></div></details></td>
+  <td><span class="pill pill-claimed">CLAIMED</span></td>
+  <td><span class="pill-group"><span class="pill pill-sec pill-surface">hd2stack</span><span class="pill pill-sec pill-owner">hd2-worker</span></span></td>
+  <td><span class="muted">none</span></td>
+</tr>
+
+<!-- P1 Tickets -->
+<tr class="ticket-row" data-state="in-progress" data-priority="P1" data-host="hetzner">
+  <td><span class="pill pill-sec pill-p1">P1</span></td>
+  <td class="ticket"><details><summary>crossover-reconciliation-20261012 - Draft six-area Controller reconciliation reply for Hetz crossover</summary><div class="ticket-detail"><p><strong>Claim:</strong> luna-6-med<br><strong>Blocker:</strong> none</p></div></details></td>
+  <td><span class="pill pill-in-progress">IN PROGRESS</span></td>
+  <td><span class="pill-group"><span class="pill pill-sec pill-surface">hetzner</span><span class="pill pill-sec pill-owner">luna-6-med</span></span></td>
+  <td><span class="muted">none</span></td>
+</tr>
+<tr class="ticket-row" data-state="not-started" data-priority="P1" data-host="hd2stack">
+  <td><span class="pill pill-sec pill-p1">P1</span></td>
+  <td class="ticket"><details><summary>skill-drift-guard-20261012 - Fix SKILL_DRIFT scoped reconciliation guard with fail-closed tests</summary><div class="ticket-detail"><p><strong>Claim:</strong> unclaimed<br><strong>Blocker:</strong> none</p></div></details></td>
+  <td><span class="pill pill-not-started">NOT STARTED</span></td>
+  <td><span class="pill pill-sec pill-surface">hd2stack</span></td>
+  <td><span class="muted">none</span></td>
+</tr>
+<tr class="ticket-row" data-state="verified" data-priority="P1" data-host="hd2stack">
+  <td><span class="pill pill-sec pill-p1">P1</span></td>
+  <td class="ticket"><details><summary>todo-naming-enforcement-20261013 - Enforce LOCKED abbreviated To-Do prefix format in brief scaffold</summary><div class="ticket-detail"><p><strong>Claim:</strong> completed<br><strong>Blocker:</strong> none</p></div></details></td>
+  <td><span class="pill pill-verified">VERIFIED</span></td>
+  <td><span class="pill-group"><span class="pill pill-sec pill-surface">hd2stack</span><span class="pill pill-sec pill-owner">secondmate</span></span></td>
+  <td><span class="muted">none</span></td>
+</tr>
+<tr class="ticket-row" data-state="verified" data-priority="P1" data-host="hd2stack">
+  <td><span class="pill pill-sec pill-p1">P1</span></td>
+  <td class="ticket"><details><summary>0030-consolidate-warehouse-docs-by-domain - Inventory and consolidate warehouse documents by domain</summary><div class="ticket-detail"><p><strong>Claim:</strong> secondmate<br><strong>Blocker:</strong> none</p></div></details></td>
+  <td><span class="pill pill-verified">VERIFIED</span></td>
+  <td><span class="pill-group"><span class="pill pill-sec pill-surface">hd2stack</span><span class="pill pill-sec pill-owner">secondmate</span></span></td>
+  <td><span class="muted">none</span></td>
+</tr>
+
+</tbody></table></section>
+
+<aside id="pill" aria-label="Fleet metrics: tickets done 50%"><div class="pnum">50%</div><div class="ptrack" role="progressbar" aria-label="Tickets done" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="pfill" style="width:50%"></div></div><div class="detail"><div class="dhead">Fleet metrics</div><div class="drow"><span class="dk">Capacity used</span><span class="dv ok">25%</span></div><div class="drow"><span class="dk">Tickets done</span><span class="dv">2 / 4 · 50%</span></div><div class="drow"><span class="dk">Compaction headroom</span><span class="dv ok">35%</span></div><div class="deta">1 running · 4 declared capacity</div><div class="none">No live context reading reported</div></div></aside>
+
+<section class="card wide"><h2>General feedback</h2><p class="muted">Feedback is saved in state/dash-feedback for agent intake.</p><form class="feedback-form" action="/feedback" method="post"><input type="hidden" name="ticket" value="General feedback"><label>Comment<textarea name="comment" maxlength="8000" required></textarea></label><button type="submit">Send feedback</button><span class="feedback-status" aria-live="polite"></span></form></section>
+</main></body></html>

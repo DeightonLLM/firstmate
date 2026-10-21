@@ -25,13 +25,22 @@ publishes per vendor. The mapping is deliberately small and explicit:
 | `agy` | `gemini` | AGY publishes AGY's effective availability under its own `gemini` scope token, not the generic `all_models` token that legacy fixtures used. |
 | `zai` (GLM) | `all_models` | Continues to use the legacy `all_models` scope. |
 | `codex` | `all_models` | Continues to use the legacy `all_models` scope. |
-| `minimax` (M2.7 / M3) | `all_models` | See "MiniMax M3 quota semantics" below; absence is not eligibility. |
+| `minimax` (M3 / M3.1 Flash Preview) | `all_models` | See "MiniMax M3 quota semantics" below; absence is not eligibility. |
 | anything else | `all_models` | Predictable no-match → existing `provider_missing` / `quota_unproven` decision. |
 
 The mapping is owned by `provider_scope()` in the route script and exercised
 end-to-end by `tests/fm-provider-route.test.sh`. Adding a new provider or
 changing a scope requires updating that helper and its fixtures in the same
 patch.
+
+## Prohibited Providers and Endpoints
+
+### OpenRouter Endpoints (Operator Policy 2026-10-17)
+
+OpenRouter (`openrouter.ai`, `openrouter/*`, or any models proxied through OpenRouter) is **strictly prohibited across all internal and client infrastructure**. 
+- Never configure, route, or execute tasks via OpenRouter endpoints.
+- All requests must use direct first-party vendor credentials (`zai` direct, `minimax` direct, Google Gemini via AGY, OpenAI direct).
+- OpenRouter API keys, model aliases (`openai/*` through OpenRouter), and proxy routes are banned in all environments, scripts, and agent settings.
 
 ## Published vendor facts
 
@@ -51,7 +60,7 @@ and is not used as a general routing assumption; the calendar gate therefore
 continues to apply the normal schedule.
 
 MiniMax currently documents Token Plan usage as a shared usage bar with a
-five-hour rolling window and a weekly window. M3 and M2.7 usage therefore must
+five-hour rolling window and a weekly window. M3 and M3.1 Flash Preview usage therefore must
 not be modeled as independent pools, and the console usage bar is the quota
 source of truth.
 
@@ -102,7 +111,7 @@ separately authored check.
 
 ### Model vs CLI adapter distinction
 
-MiniMax M2.7 and M3 are model designations; `mcode` is the MiniMax Code CLI
+MiniMax M3.1 Flash Preview and M3 are model designations; `mcode` is the MiniMax Code CLI
 execution adapter. Quota and schedule eligibility do not imply that `mcode` is
 installed in PATH or authenticated. Runtime availability, adapter presence,
 authentication/quota, and environment capabilities must still be verified
@@ -310,3 +319,17 @@ cannot reach the production host without an explicit, separately authorized
 cable that does not exist in this controller charter. A future lane that
 needs active failover must be a separate, operator-authorized campaign with
 its own host, credential, and write boundary.
+
+---
+
+## Model Ladder & Section Review Gates (Operator Invariant 2026-10-17)
+
+### Model Ladder
+- **Retired**: `gpt-5.6-luna`.
+- **Active Triage / Coordination Tier**: **Luna 6 latest** (`gpt-6-luna` / `gpt-luna-latest`).
+- **Super High-Level Escalation**: **Sol (medium reasoning)** (`gpt-5.6-sol` / `gpt-sol-latest`) for cross-system architecture, deep debugging, and security refactors.
+
+### Solid Review & Test Gate
+- All worker deliverables must ultimately be reviewed before final acceptance (`CHECK_PASS`).
+- Enforcement applies at **solid section-level milestones** (e.g. deliverable completion, test suite green, artifact creation) rather than micro-interrupting every intermediate command.
+- Measurement gates believing: every review claim must cite real test commands and stdout.

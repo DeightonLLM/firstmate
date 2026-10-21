@@ -103,7 +103,7 @@ Captain requested less primary execution and the job list moved to the existing 
 
 ## Main focus: CORE
 
-Captain approved SAVE, PLOT, EXECUTE. All new execution uses proper interactive MCode CLI / M3.1 Flash this promotional week. No fresh Luna/Gemini/Codex/M2.7 or headless/async workaround.
+Captain approved SAVE, PLOT, EXECUTE. All new execution uses proper interactive MCode CLI / M3.1 Flash this promotional week. No fresh Luna/Gemini/Codex or headless/async workaround.
 
 | Work | Owner | Actual state / dependency | Evidence |
 |---|---|---|---|

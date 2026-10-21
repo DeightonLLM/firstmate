@@ -10,7 +10,7 @@
 #   Each data row is TAB-separated: run_id, lane_key, model, surface, task, state, output.
 #   Cross-checks lane_key segments against the separate model and surface columns.
 #
-# Model aliases:  m3.1f, m2.7, luna6, glm5.3f, gem38f, pi
+# Model aliases:  m3.1f, m3.1, luna6, glm5.3f, gem38f, pi
 # Surface aliases: dubz, hd2, brandon, evps, firstmate
 #
 # The check exits non-zero naming the offending input and never edits or fixes it.
@@ -43,27 +43,27 @@ test_script_exists_and_executable() {
 
 # --- lane key: valid -------------------------------------------------------
 
-test_lane_key_valid_m2_7() {
+test_lane_key_valid_m3_1f_hd2_build() {
   local out rc
-  out=$(bash "$CHECK" "m2.7-hd2-build" 2>&1); rc=$?
-  [ "$rc" -eq 0 ] || fail "valid key m2.7-hd2-build should pass, got exit $rc: $out"
-  pass "m2.7-hd2-build passes"
+  out=$(bash "$CHECK" "m3.1f-hd2-build" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "valid key m3.1f-hd2-build should pass, got exit $rc: $out"
+  pass "m3.1f-hd2-build passes"
 }
 
-# m2.7h is MiniMax M2.7 Highspeed, the tier live worker lanes actually run. Without it the
+# m3.1f is MiniMax M3.1 Flash Preview, the tier live worker lanes actually run. Without it the
 # validator rejected every real lane key we dispatched, which is the defect Q2 fixed.
-test_lane_key_valid_m2_7h() {
+test_lane_key_valid_m3_1f_brandon_build() {
   local out rc
-  out=$(bash "$CHECK" "m2.7h-brandon-build" 2>&1); rc=$?
-  [ "$rc" -eq 0 ] || fail "valid key m2.7h-brandon-build should pass, got exit $rc: $out"
-  pass "m2.7h-brandon-build passes"
+  out=$(bash "$CHECK" "m3.1f-brandon-build" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "valid key m3.1f-brandon-build should pass, got exit $rc: $out"
+  pass "m3.1f-brandon-build passes"
 }
 
-test_board_line_valid_m2_7h() {
+test_board_line_valid_m3_1f_brandon() {
   local out rc
-  out=$(bash "$CHECK" "[m2.7h @ brandon] widget fix — working" 2>&1); rc=$?
-  [ "$rc" -eq 0 ] || fail "valid board line [m2.7h @ brandon] should pass, got exit $rc: $out"
-  pass "[m2.7h @ brandon] board line passes"
+  out=$(bash "$CHECK" "[m3.1f @ brandon] widget fix — working" 2>&1); rc=$?
+  [ "$rc" -eq 0 ] || fail "valid board line [m3.1f @ brandon] should pass, got exit $rc: $out"
+  pass "[m3.1f @ brandon] board line passes"
 }
 
 test_lane_key_valid_m3_1f() {
@@ -154,7 +154,7 @@ test_lane_key_spaces_rejected() {
 
 test_board_line_valid() {
   local out rc
-  out=$(bash "$CHECK" "[m2.7 @ hd2] build lane" 2>&1); rc=$?
+  out=$(bash "$CHECK" "[m3.1f @ hd2] build lane" 2>&1); rc=$?
   [ "$rc" -eq 0 ] || fail "valid board line should pass, got exit $rc: $out"
   pass "valid board line passes"
 }
@@ -184,11 +184,34 @@ test_board_line_no_brackets() {
   pass "board line without [ ] is rejected"
 }
 
+# --- retired model names stay rejected -----------------------------------
+#
+# The retired-model-name sweep removed the retired id from the canonical alias
+# set.  A retired id that is still REJECTED is a live guarantee, not rot: these
+# cases pin that the retired model can no longer be used as a lane-key model
+# segment or as a board-line model.  They are negative fixtures and are never
+# retargeted onto a live alias.
+test_retired_model_names_rejected() {
+  local out rc retired
+  for retired in \
+    "m2.7-hd2-build" \
+    "m2.7h-brandon-build" \
+    "m27-hd2-build" \
+    "m2-7-hd2-build" \
+    "[m2.7 @ hd2] build lane"; do
+    out=$(bash "$CHECK" "$retired" 2>&1); rc=$?
+    [ "$rc" -ne 0 ] || fail "retired name '$retired' must exit non-zero, got $rc: $out"
+    printf '%s\n' "$out" | grep -qF "$retired" \
+      || fail "error message must name the offending input '$retired': $out"
+  done
+  pass "retired model names are rejected and named in the error"
+}
+
 # --- stdin mode ---------------------------------------------------------
 
 test_stdin_valid_list() {
   local out rc
-  out=$(printf 'm2.7-hd2-build\nm3.1f-dubz-comms\nluna6-brandon-audit\n' \
+  out=$(printf 'm3.1f-hd2-build\nm3.1f-dubz-comms\nluna6-brandon-audit\n' \
     | bash "$CHECK" 2>&1); rc=$?
   [ "$rc" -eq 0 ] || fail "valid stdin list must pass, got exit $rc: $out"
   pass "stdin valid list passes"
@@ -196,7 +219,7 @@ test_stdin_valid_list() {
 
 test_stdin_invalid_line_rejected() {
   local out rc
-  out=$(printf 'm2.7-hd2-build\nhd2-build\nm3.1f-dubz-comms\n' \
+  out=$(printf 'm3.1f-hd2-build\nhd2-build\nm3.1f-dubz-comms\n' \
     | bash "$CHECK" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "stdin with invalid line must exit non-zero, got $rc: $out"
   printf '%s\n' "$out" | grep -qi "hd2-build" \
@@ -207,7 +230,7 @@ test_stdin_invalid_line_rejected() {
 test_stdin_mixed_valid_and_invalid() {
   local out rc
   # Should report all bad lines or at minimum the first.
-  out=$(printf 'm2.7-hd2-ok\ngem38f-evps\ngem38f\nglm5.3f-brandon-x\n' \
+  out=$(printf 'm3.1f-hd2-ok\ngem38f-evps\ngem38f\nglm5.3f-brandon-x\n' \
     | bash "$CHECK" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "stdin with invalid lines must exit non-zero, got $rc: $out"
   printf '%s\n' "$out" | grep -qi "gem38f" \
@@ -292,7 +315,7 @@ test_registry_missing_field() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123	mcode-m2.7-hd2-build	m2.7	hd2	build	running	https://...
+abc123	mcode-m3.1f-hd2-build	m3.1f	hd2	build	running	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "registry with 6 fields must exit non-zero, got $rc: $out"
@@ -310,13 +333,13 @@ test_registry_model_disagrees() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123-def	mcode-m2.7-hd2-build	gem38f	hd2	build	running	https://...
+abc123-def	mcode-m3.1f-hd2-build	gem38f	hd2	build	running	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "model disagreement must exit non-zero, got $rc: $out"
   printf '%s\n' "$out" | grep -qi "$tmp/registry.tsv" \
     || fail "error must name the offending file: $out"
-  printf '%s\n' "$out" | grep -qiE "model|m2.7|gem38f" \
+  printf '%s\n' "$out" | grep -qiE "model|m3\.1f|gem38f" \
     || fail "error must name the disagreeing model: $out"
   rm -rf "$tmp"
   pass "lane_key model disagrees with model column: rejected with file + reason"
@@ -328,7 +351,7 @@ test_registry_surface_disagrees() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123-def	mcode-m2.7-hd2-build	m2.7	brandon	build	running	https://...
+abc123-def	mcode-m3.1f-hd2-build	m3.1f	brandon	build	running	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "surface disagreement must exit non-zero, got $rc: $out"
@@ -362,7 +385,7 @@ test_registry_non_uuid_run_id() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-not-a-uuid	mcode-m2.7-hd2-build	m2.7	hd2	build	running	https://...
+not-a-uuid	mcode-m3.1f-hd2-build	m3.1f	hd2	build	running	https://...
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "non-UUID run_id must exit non-zero, got $rc: $out"
@@ -380,7 +403,7 @@ test_registry_valid_multi_row() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123de-f123-4567-8901-abcdef123456	mcode-m2.7-hd2-build	m2.7	hd2	build	running	https://...
+abc123de-f123-4567-8901-abcdef123456	mcode-m3.1f-hd2-build	m3.1f	hd2	build	running	https://...
 abc123de-f234-5678-9012-bcdef1234567	mcode-m3.1f-dubz-comms	m3.1f	dubz	comms	done	https://...
 abc123de-f345-6789-0123-cdef12345678	mcode-luna6-brandon-audit	luna6	brandon	audit	idle	https://...
 EOF
@@ -396,8 +419,8 @@ test_registry_duplicate_run_id_rejected() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123de-f123-4567-8901-abcdef123456	mcode-m2.7-hd2-build	m2.7	hd2	build	running	first
-abc123de-f123-4567-8901-abcdef123456	mcode-m2.7-hd2-review	m2.7	hd2	review	running	second
+abc123de-f123-4567-8901-abcdef123456	mcode-m3.1f-hd2-build	m3.1f	hd2	build	running	first
+abc123de-f123-4567-8901-abcdef123456	mcode-m3.1f-hd2-review	m3.1f	hd2	review	running	second
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -ne 0 ] || fail "duplicate run_id must be rejected, got exit $rc: $out"
@@ -413,8 +436,8 @@ test_registry_distinct_run_ids_accepted() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-abc123de-f123-4567-8901-abcdef123456	mcode-m2.7-hd2-build	m2.7	hd2	build	running	first
-def234ef-f234-5678-9012-bcdef1234567	mcode-m2.7-hd2-review	m2.7	hd2	review	running	second
+abc123de-f123-4567-8901-abcdef123456	mcode-m3.1f-hd2-build	m3.1f	hd2	build	running	first
+def234ef-f234-5678-9012-bcdef1234567	mcode-m3.1f-hd2-review	m3.1f	hd2	review	running	second
 EOF
   out=$(bash "$CHECK" "$tmp/registry.tsv" 2>&1); rc=$?
   [ "$rc" -eq 0 ] || fail "distinct run_ids should pass, got exit $rc: $out"
@@ -428,7 +451,7 @@ test_registry_does_not_edit() {
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-reg.XXXXXX")
   cat > "$tmp/registry.tsv" <<'EOF'
 # run_id	lane_key	model	surface	task	state	output
-bad-run-id	mcode-m2.7-hd2-build	m2.7	hd2	build	running	https://...
+bad-run-id	mcode-m3.1f-hd2-build	m3.1f	hd2	build	running	https://...
 EOF
   bash "$CHECK" "$tmp/registry.tsv" > /dev/null 2>&1 || true
   grep -q "bad-run-id" "$tmp/registry.tsv" \
@@ -442,7 +465,7 @@ EOF
 #
 # Root defect: the hardcoded alias set in the validator could drift from
 # the models actually configured for dispatch.  Q2 fixed the symptom by
-# adding m2.7h, but did not close the mechanism.  The fix adds a
+# adding a single alias, but did not close the mechanism.  The fix adds a
 # --self-check mode that reads config/crew-dispatch.json, derives the
 # expected alias for every model id present, and fails loudly when a
 # configured model has no alias or when an alias has no corresponding model.
@@ -452,9 +475,8 @@ EOF
 #   -> lane-key alias = 'm' + family (strip leading M) + tier-marker
 #     tier-marker = last letter of the tier keyword:
 #       'highspeed' -> 'h', 'flash' -> 'f', bare -> ''
-#     Example: minimax/MiniMax-M2.7-highspeed  -> m2.7h
-#              minimax/MiniMax-M3.1-Flash-Preview -> m3.1f
-#              minimax/MiniMax-M2.7                -> m2.7
+#     Example: minimax/MiniMax-M3.1-Flash-Preview -> m3.1f
+#              minimax/MiniMax-M3.1                -> m3.1
 #   Other providers (openai-codex, etc.): no programmatic rule defined;
 #   their model ids (gpt-6-luna, gpt-6.1-sol) do not derive to any
 #   lane-key alias through the above rule.  Any alias claimed for them
@@ -479,57 +501,63 @@ test_self_check_configured_model_has_alias() {
 }
 
 # test_self_check_proves_alias_removed_causes_failure: prove the self-check
-# catches the Q2 defect by patching the script to remove m2.7h (the alias
-# that should have been present when workers ran minimax/MiniMax-M2.7-highspeed).
-# We sed-out m2.7h, run --self-check against the patched script, and assert
+# catches the Q2 defect by patching the script to remove m3.1f (the alias
+# that must be present when workers run minimax/MiniMax-M3.1-Flash-Preview).
+# We sed-out m3.1f, run --self-check against the patched script, and assert
 # non-zero exit with a diagnostic that names the missing alias or model.
 # RED: current script exits 2 (--self-check not implemented).
-# GREEN: patched script (m2.7h removed) exits non-zero because the configured
-# model minimax/MiniMax-M2.7-highspeed has no alias.
+# GREEN: patched script (m3.1f removed) exits non-zero because the configured
+# model minimax/MiniMax-M3.1-Flash-Preview has no alias.
 test_self_check_proves_alias_removed_causes_failure() {
   local tmp out rc
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-alias-sim.XXXXXX")
   cat > "$tmp/dispatch.json" <<'JSON'
-{"default":{"model":"minimax/MiniMax-M2.7-highspeed"}}
+{"default":{"model":"minimax/MiniMax-M3.1-Flash-Preview"}}
 JSON
   # First establish that the live checker accepts this configured alias.
   out=$(bash "$CHECK" --self-check "$tmp/dispatch.json" 2>&1); rc=$?
-  [ "$rc" -eq 0 ] || fail "self-check must accept configured m2.7h before mutation; got $rc: $out"
+  [ "$rc" -eq 0 ] || fail "self-check must accept configured m3.1f before mutation; got $rc: $out"
   # Remove precisely the literal alias token; no regex wildcard is introduced.
   python3 - "$CHECK" "$tmp/patched-check.sh" <<'PY_PATCH'
 from pathlib import Path
 import sys
 source, destination = map(Path, sys.argv[1:])
 text = source.read_text()
-token = "_model_pat='m2\\.7h|"
-assert text.count(token) == 1, "expected exactly one canonical m2.7h token"
+token = "_model_pat='m3\\.1f|"
+assert text.count(token) == 1, "expected exactly one canonical m3.1f token"
 destination.write_text(text.replace(token, "_model_pat='", 1))
 PY_PATCH
   chmod +x "$tmp/patched-check.sh"
   out=$(bash "$tmp/patched-check.sh" --self-check "$tmp/dispatch.json" 2>&1); rc=$?
   rm -rf "$tmp"
-  [ "$rc" -ne 0 ] || fail "self-check must reject configured m2.7h when that alias is removed"
-  printf '%s\n' "$out" | grep -qiE 'm2\.7h|highspeed|alias|model' \
+  [ "$rc" -ne 0 ] || fail "self-check must reject configured m3.1f when that alias is removed"
+  printf '%s\n' "$out" | grep -qiE 'm3\.1f|flash|alias|model' \
     || fail "self-check error must identify the missing alias/model: $out"
-  pass "self-check accepts configured m2.7h, then rejects it when the alias is removed"
+  pass "self-check accepts configured m3.1f, then rejects it when the alias is removed"
 }
 
 # test_self_check_reports_orphaned_aliases: the self-check must name any
 # hardcoded alias that has no corresponding model in the dispatch config.
 # This catches the root cause class (alias list grows independently of config).
-# m2.7 is hardcoded; minimax/MiniMax-M2.7 is NOT in dispatch config (that
-# family was retired 2026-10-19).  The self-check must report it.
+# m3.1 is hardcoded; minimax/MiniMax-M3.1 is NOT in the dispatch config used
+# here, which names only minimax/MiniMax-M3.1-Flash-Preview (that model derives
+# to m3.1f).  The self-check must therefore report m3.1 as orphaned.
 # RED: current script exits 2 (--self-check not implemented).
-# GREEN: --self-check runs and names m2.7 as orphaned in its output.
+# GREEN: --self-check runs and names m3.1 as orphaned in its output.
 test_self_check_reports_orphaned_aliases() {
-  local out rc
-  out=$(bash "$CHECK" --self-check "$ROOT/config/crew-dispatch.json" 2>&1)
+  local tmp out rc
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-orphan-sim.XXXXXX")
+  cat > "$tmp/dispatch.json" <<'JSON'
+{"default":{"model":"minimax/MiniMax-M3.1-Flash-Preview"}}
+JSON
+  out=$(bash "$CHECK" --self-check "$tmp/dispatch.json" 2>&1)
   rc=$?
+  rm -rf "$tmp"
   # Self-check may exit 0 (all configured models have aliases) OR exit non-zero
-  # (orphaned aliases reported).  Either is acceptable as long as m2.7 is named.
-  printf '%s\n' "$out" | grep -qiE 'm2\.7[^h]|orphaned|not.*configured' \
-    || fail "self-check output must name m2.7 as orphaned (no dispatch-config model): $out"
-  pass "self-check names orphaned alias m2.7 (no corresponding dispatch model)"
+  # (orphaned aliases reported).  Either is acceptable as long as m3.1 is named.
+  printf '%s\n' "$out" | grep -qiE 'orphaned alias m3\.1([[:space:]]|$)' \
+    || fail "self-check output must name m3.1 as orphaned (no dispatch-config model): $out"
+  pass "self-check names orphaned alias m3.1 (no corresponding dispatch model)"
 }
 
 # ========================================================================
@@ -538,12 +566,12 @@ test_self_check_reports_orphaned_aliases() {
 
 for _t in \
   test_script_exists_and_executable \
-  test_lane_key_valid_m2_7 \
-  test_lane_key_valid_m2_7h \
+  test_lane_key_valid_m3_1f_hd2_build \
+  test_lane_key_valid_m3_1f_brandon_build \
   test_self_check_configured_model_has_alias \
   test_self_check_proves_alias_removed_causes_failure \
   test_self_check_reports_orphaned_aliases \
-  test_board_line_valid_m2_7h \
+  test_board_line_valid_m3_1f_brandon \
   test_lane_key_valid_m3_1f \
   test_lane_key_valid_glm \
   test_lane_key_valid_gem \
@@ -558,6 +586,7 @@ for _t in \
   test_board_line_missing_model \
   test_board_line_missing_surface \
   test_board_line_no_brackets \
+  test_retired_model_names_rejected \
   test_stdin_valid_list \
   test_stdin_invalid_line_rejected \
   test_stdin_mixed_valid_and_invalid \

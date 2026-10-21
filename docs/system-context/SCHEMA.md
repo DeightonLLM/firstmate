@@ -35,7 +35,7 @@ Every record carries these fields:
 
 ```yaml
 - id: string                     # stable identifier
-  provider: string               # hostinger | contabo | hetzner | aminovps | namecheap | local | UNKNOWN
+  provider: string               # hostinger | contabo | hetzner | elevatesci-vps | namecheap | local | UNKNOWN
   alias: string                  # operator alias (may be empty)
   canonical_hostname: string     # documented hostname or UNKNOWN
   tailscale_ip: string | UNKNOWN
@@ -53,7 +53,7 @@ Every record carries these fields:
 `tier` values and what they mean (do not invent new tiers):
 
 - `HD2_IN_HOUSE` — HD2/Contabo infrastructure (controller, HD2stack, HD2.ai edge).
-- `BRANDON_LEGACY_VPS` — Brandon legacy AminoVPS / Elevate legacy VPS.
+- `BRANDON_LEGACY_VPS` — Brandon legacy Elevatesci VPS / Elevate legacy VPS.
 - `BRANDON_HUB` — Brandon hub host (PostgreSQL, Redis, Qdrant, LiteLLM, OpenResty/OnePanel).
 - `KVM1_HOSTINGER` — KVM1 Hostinger node (HD2.ai / brandon edge candidate).
 - `HETZNER_COMPUTE` — Hetzner compute plane (scraping, workers, queues).

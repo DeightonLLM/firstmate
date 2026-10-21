@@ -181,8 +181,8 @@ services:
     platform_owner: brandon
     tenant_or_client: core-distro
     brand_or_domain: core-distro.com
-    current_host: srv1137994-aminolifesciences
-    intended_host: srv1137994-aminolifesciences
+    current_host: srv1137994-elevatesci
+    intended_host: srv1137994-elevatesci
     runtime: node
     allowed_actions:
       - read
@@ -201,7 +201,7 @@ services:
     platform_owner: brandon
     tenant_or_client: core-distro
     brand_or_domain: core-distro.com
-    current_host: srv1137994-aminolifesciences
+    current_host: srv1137994-elevatesci
     intended_host: UNKNOWN
     runtime: php-fpm
     allowed_actions:
@@ -221,7 +221,7 @@ services:
     platform_owner: brandon
     tenant_or_client: cbd-data
     brand_or_domain: cbd-data.com
-    current_host: srv1137994-aminolifesciences
+    current_host: srv1137994-elevatesci
     intended_host: hetzner-compute
     runtime: systemd
     allowed_actions:
@@ -259,7 +259,7 @@ services:
     platform_owner: elevate
     tenant_or_client: elevate
     brand_or_domain: agents.elevatesci.com
-    current_host: srv1137994-aminolifesciences
+    current_host: srv1137994-elevatesci
     intended_host: UNKNOWN
     runtime: static
     allowed_actions:

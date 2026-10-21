@@ -130,7 +130,7 @@
 ## 2026-10-03 03:08 — Elevate work order queued; capacity and skills follow-ups retained
 - Created the bounded remote work order at `BRANDON-COMPUTE-COMMS/to-brandon-compute/2026-10-03-elevate-assistant-outage-work-order.md`. The work owner must be a fresh, eligible Brandon Secondmate/worker; scope is Elevate at `agents.elevatesci.com` on `brandon-compute :3001`, with Core read-only during repair. No remote acknowledgement or production change has occurred yet.
 - The work order requires pre-write checkpoint, smallest reversible Elevate-only repair, Core health recheck, sanitized Git checkpoints for code/config only, and an independent cross-workspace review. Shared service restarts, Core writes, data deletion, Docker/DB mutation, or secret changes require a separate stop/approval.
-- User directs Codex Luna 6 XHigh/Max for Secondmate coding rather than M2.7. Fresh local pane inventory still shows blocked/unknown lanes; remote panes are idle/unknown but carry existing task/session context, so none was reused.
+- User directs Codex Luna 6 XHigh/Max for Secondmate coding rather than MiniMax. Fresh local pane inventory still shows blocked/unknown lanes; remote panes are idle/unknown but carry existing task/session context, so none was reused.
 - Fresh no-refresh quota report: Codex 96%, MiniMax 94%, Gemini 99% with runway unknown, Z.AI tools quota 0%. Captain reports Z.AI weekly refills that are not reflected in the tool's current evidence.
 - Captain clarifies the 6-pane limit is local to this controller; remote hosts must be counted against their own verified capacity. A per-host capacity map/test is queued after the outage is stable; no production load test is authorized.
 - A delegated skills-freshness audit and T3Code CLI/surface map remain queued; no skill or warehouse edits have been made.
@@ -139,7 +139,7 @@
 - The exact stale Pi arm child (PID 791872) was terminated after verifying its command and the home watcher lock identity. Its own cleanup stopped the stale watcher; the Pi extension automatically launched a fresh cycle.
 - Current process evidence shows new arm child PID 364684 and lock owner PID 364699. `bash bin/fm-guard.sh` returned no warning while 93 tasks are in flight, confirming a fresh healthy beacon. No broad kill, duplicate cycle, pane close, or primary restart occurred.
 - The current user requests a deterministic primary coding/review guard and T3Code CLI/surface onboarding. Both are entered in the main queue. The guard brief requires an isolated worker, TDD RED/GREEN/REFACTOR, and no-mistakes independent review; no source change has been made by the primary.
-- AGY Gemini quota is 99% weekly remaining but its installed runtime lacks the required visible To-Do extension. MiniMax M2.7 is available at 94% general quota with runway through reset; Z.AI tool quota is exhausted.
+- AGY Gemini quota is 99% weekly remaining but its installed runtime lacks the required visible To-Do extension. MiniMax is available at 94% general quota with runway through reset; Z.AI tool quota is exhausted.
 - T3Code CLI support, safe install instructions, and exact coding-surface list remain unverified. No installation or warehouse edit has been made.
 
 ## 2026-10-03 00:35 — Client sprint consolidated; Hetz provisioning needs scope choice
@@ -183,7 +183,7 @@
 - Re-ran `/root/bin/agent-secret-scan check /root`: SUCCESS, no new leaked files, 194 existing paths accepted. A path-only `agent-secret-scan list` found existing test-file matches, but no reliable mapping to the Secondmate's seven-file claim; no files were moved or read for contents.
 - The documented `SECRET_SECURITY.md` path is absent from `/root/docs/agent-policy`; read the current `agent-secret-scan` implementation and the available Security SOP instead. Do not make broad doc or scanner changes from the uncorrelated claim.
 - The clean scoped branch is `fm/bearings-snapshot-arg-limit-20261002` at `462d9a021aedbd7b2fd386e071df380cc42ebf5e`, with only the script and regression test. The previous local CI commit remains out of the proposed PR.
-- No-mistakes attempts on the scoped branch failed at Review because Pi exited 1 (first with GPT-6 Luna, then MiniMax M2.7); logs contain no detail, and no tests, push, or PR occurred. Both outcomes left the branch clean and user-owned.
+- No-mistakes attempts on the scoped branch failed at Review because Pi exited 1 (first with GPT-6 Luna, then MiniMax); logs contain no detail, and no tests, push, or PR occurred. Both outcomes left the branch clean and user-owned.
 - Next: finish the four-section Bearings view and local Lavish HTML; separately reconcile the Secondmate's path-only secret finding and find a supported no-mistakes review recovery. No merge is authorized.
 
 ## 2026-10-02 17:31 — Bearings branch clean, validation and quarantine status reconciled
@@ -213,7 +213,7 @@
 - Drain warned that the monitoring beacon was stale; `fm_watch_arm_pi` reports the Pi extension already owns an arm child, so no manual re-arm was needed. Do not repeat unless a later notification reports the cycle missing, failed, or unhealthy.
 
 ## 2026-10-02 04:06 — Visible audit evidence reviewed; no accepted independent check
-- Brandon parent p6's report and visible pane pA conflict on the effective compaction trigger (reported as 93.98% vs about 98.4% from the stated context window and reserve). pA used the same MiniMax M2.7 family, so it is not an independent checker; do not accept the audit or change settings/hooks yet.
+- Brandon parent p6's report and visible pane pA conflict on the effective compaction trigger (reported as 93.98% vs about 98.4% from the stated context window and reserve). pA used the same MiniMax family, so it is not an independent checker; do not accept the audit or change settings/hooks yet.
 - The pane labeled AGY checker, pB, was actually Pi. Its To-Do was not created through the extension; AGY access was blocked. Its report remains unaccepted; pB is closed and pA's evidence pane remains preserved.
 - Brandon SystemOps Secondmate `w1D:p2` stopped before task completion because Pi could not import `anthropic-messages-J5WXPPPC.js`. The `/6` vs `/7` task-ownership disagreement remains with the lock owner. Preserve task/artifacts; do not reuse the failed session.
 - HD2Stack Secondmate reset was not confirmed; supported reuse helper refused because `interactive_ready` was absent. Its process remains untouched; no manual reset or kill.

@@ -64,4 +64,5 @@ that belongs on its own branch. It was deliberately not applied because `bin/fm-
 already committed on main today in `ac35147e`, so applying it risks a double-apply. Awaiting its own
 ruling.
 
+NEXT: the Captain rules on the two stash entries this report leaves open - stash@{0} is archived, superseded and never merged so it may be dropped by decision, and stash@{1} still holds coherent test-first work (fm-classify-lib.sh, docs/architecture.md, fm-teardown.test.sh) that was not archived because fm-classify-lib.sh already landed in ac35147e | owner: captain | by: 2026-10-22
 VERDICT: PASS — stash@{0} content archived with diff (119,976 bytes) and metadata, committed e0a98337 and pushed fast-forward with no force, no rewrite and no client data; main does not depend on it and it is recorded as superseded-but-never-merged; both stash entries remain in `git stash list`, neither applied nor dropped.

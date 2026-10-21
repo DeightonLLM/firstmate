@@ -12,7 +12,7 @@ THE REPO: /root/agent-work/deightonllm-firstmate on Controller (root@100.117.47.
 - Brandon hd2admin@100.106.6.22 (path /home/hd2admin/agent-work/deightonllm-firstmate) — client work
 
 YOUR FIRST TASK (in priority order after that):
-1. Quota-fallback routing: extend bin/fm-dispatch-guard.sh Rule 4 from REFUSE to FALLBACK. Gemini first for Hetz hard work, MiniMax M2.7 light-only, cross-host quota only once a model is genuinely empty. Never weaken a threshold; never add a bypass. The full brief survived at data/quota-fallback-routing-20261012/brief.md on HD2. This was attempted twice and lost twice — to the reap-gate bug and to the Gemini quota wall.
+1. Quota-fallback routing: extend bin/fm-dispatch-guard.sh Rule 4 from REFUSE to FALLBACK. Gemini first for Hetz hard work, MiniMax M3.1 Flash Preview light-only, cross-host quota only once a model is genuinely empty. Never weaken a threshold; never add a bypass. The full brief survived at data/quota-fallback-routing-20261012/brief.md on HD2. This was attempted twice and lost twice — to the reap-gate bug and to the Gemini quota wall.
 2. Then land the three completed Brandon client jobs: cbd-local-source-config-audit, elevatesci-canonical, core-distro-coordinates-doc. All three crews returned done. Note the CBD audit report is in gitignored data/ on Brandon and will not propagate — flag whether data/domain-warehouses-20260915/ should be tracked.
 3. Then calm-for-spawned-crews, plan-page-harden landing, then stale-worktree-guard (LAST and most careful — it modifies fm-spawn.sh and fm-dispatch-guard.sh).
 

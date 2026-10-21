@@ -1,0 +1,1616 @@
+# Whoosh Performance WordPress, Data & Outreach Infrastructure PRD v1.0
+
+**Client:** Brandon / Whoosh Performance  
+**Primary domain:** `whooshperformance.com`  
+**Prepared for:** Dubz / CrispR  
+**Orchestration and technical acceptance:** Dubz / CrispR  
+**Development and infrastructure implementation:** Saad  
+**Design, brand touch-ups, and social imagery:** Sawar  
+**Business and final production approval:** Eric and Brandon  
+**Status:** Approved direction; implementation is gated by inventory and backup validation  
+**Last updated:** October 17, 2026  
+
+---
+
+## 0. Executive Directive
+
+HD2 will convert the existing Whoosh Performance static-site work into a secure, maintainable WordPress website on `whooshperformance.com`, while preserving and validating the supporting data and cold-email services.
+
+This is a focused implementation. It is not a full redesign, a Figma project, a new marketing platform, or a broad infrastructure rebuild.
+
+The required placement is:
+
+- **Brandon's existing Hostinger KVM8:** WordPress frontend, WordPress database, Nginx reverse proxy, TLS, public website files, and website monitoring.
+- **Brandon's existing Hetzner dedicated server:** Whoosh scraping and enrichment workloads behind `data.whooshperformance.com`, including only the services proven necessary by the current implementation audit.
+- **Brandon's Namecheap VPS:** encrypted backups and recovery material for the WordPress site, database, Nginx configuration, data-service configuration, and release manifests.
+- **Aspire:** existing cold-email function associated with `lc.whooshperformance.com`; preserve the service and validate its DNS, authentication, tracking, and expected web behavior before making changes.
+
+All system alerts, failure notifications, backup reports, certificate warnings, and uptime notices must be delivered to:
+
+`info@whooshperformance.com`
+
+The delivery chain is intentionally simple:
+
+1. **Dubz orchestrates the entire project.**
+2. **Saad performs all development and infrastructure work.**
+3. **Sawar performs the approved visual touch-ups and creates every web and social asset needed for launch across Instagram, Facebook, X/Twitter, and LinkedIn.**
+4. **Eric and Brandon approve scope, customer-facing content, launch, and any material change.**
+
+No one may silently change this ownership model or expand the scope.
+
+---
+
+## 1. Purpose
+
+This PRD defines the complete delivery plan for:
+
+- Auditing the current domain, DNS, hosting, static-site source, and active services.
+- Converting the approved current site into WordPress without unnecessary redesign.
+- Applying basic visual, responsive, accessibility, and SEO touch-ups.
+- Hardening the domain, WordPress stack, Nginx reverse proxy, and administrative access.
+- Validating `data.whooshperformance.com` on Hetzner.
+- Validating `lc.whooshperformance.com` and the existing Aspire cold-email configuration.
+- Sending all operational notifications to `info@whooshperformance.com`.
+- Backing up the Whoosh systems to the Namecheap VPS.
+- Producing all approved website and reusable social-media imagery needed for launch.
+- Testing, documenting, launching, and handing off the system.
+
+Dubz must convert this PRD into small, reviewable task packets for Saad and Sawar. Work is complete only when the acceptance criteria and evidence requirements in this document are satisfied.
+
+---
+
+## 2. Business and Project Context
+
+### 2.1 Whoosh Performance Website
+
+**Primary domain:** `whooshperformance.com`  
+**Preferred canonical URL:** `https://whooshperformance.com/` unless Brandon approves `www` as canonical  
+**Project code:** `whoosh`  
+**Target CMS:** WordPress  
+**Target host:** Brandon's existing Hostinger KVM8  
+
+The approved goal is to reproduce the current static-site design and content in WordPress, then make restrained improvements to presentation and usability.
+
+The work includes:
+
+- Editable WordPress pages and navigation.
+- Faithful reproduction of the approved site content and visual hierarchy.
+- Mobile and tablet cleanup.
+- Basic accessibility improvements.
+- Basic on-page SEO, sitemap, robots, canonical tags, and verified structured data.
+- Secure contact or inquiry forms if the current site contains them.
+- Correct redirects from any existing indexed URLs.
+- Minimal, supportable plugins.
+
+### 2.2 Data and Enrichment Service
+
+**Service domain:** `data.whooshperformance.com`  
+**Target host:** Brandon's Hetzner dedicated server  
+**Business requirement:** scraping and enrichment services remain active and isolated from the WordPress server  
+
+The service audit must establish:
+
+- What application currently answers for the subdomain.
+- Its repository, runtime, container/process, port, proxy, and owner.
+- Whether it has a web UI, API, internal-only endpoint, or combination.
+- Its health endpoint and expected public behavior.
+- Its authentication and rate-limiting requirements.
+- Its storage, queue, schedule, and enrichment dependencies.
+- Its logging, retention, backup, and restore requirements.
+
+Do not rebuild or add queues, vector databases, browsers, AI services, or databases merely because the Hetzner server can run them. Retain only what the audited Whoosh data service actually requires.
+
+### 2.3 Aspire Cold Email
+
+**Mail-out subdomain:** `lc.whooshperformance.com`  
+**Service:** Aspire cold-email service  
+**Business requirement:** keep the service active and protect deliverability  
+
+The audit must identify the exact DNS and provider requirements for:
+
+- SPF
+- DKIM
+- DMARC
+- MX, CNAME, A, and TXT records as applicable
+- Click/open tracking behavior
+- Redirect or landing-page behavior, if applicable
+- Return-path and bounce handling
+- Sending-domain alignment
+- Provider ownership and account administrator
+
+No DNS record associated with Aspire may be deleted, flattened, proxied, or replaced until Saad documents its purpose and Dubz approves the change.
+
+### 2.4 Website and Social Asset Package
+
+Sawar will create every approved visual asset required to finish the WordPress site and launch a consistent social presence across:
+
+- Instagram
+- Facebook
+- X/Twitter
+- LinkedIn
+
+This includes required website imagery, responsive crops, optimized web exports, profile and cover graphics, post imagery, and reusable promotional templates. It is asset production, not social account management, posting, paid ads, or community management unless separately approved.
+
+### 2.5 Current External Baseline
+
+A public check on October 17, 2026 found:
+
+- `whooshperformance.com` displayed a Hostinger parked-domain page.
+- `data.whooshperformance.com` returned `502 Bad Gateway` over HTTPS.
+- `lc.whooshperformance.com` returned `502 Bad Gateway` over HTTPS.
+
+These observations are discovery inputs, not a conclusion that the underlying systems are absent. The static-site source may be stored elsewhere, and `lc.whooshperformance.com` may be intended primarily for email or tracking rather than a public website. Saad must confirm intended behavior before any repair or DNS change.
+
+---
+
+## 3. Goals
+
+### 3.1 Primary Goals
+
+- Launch a secure WordPress version of the approved Whoosh static site.
+- Preserve the existing design direction and content while applying basic touch-ups.
+- Keep public WordPress delivery separate from scraping and enrichment compute.
+- Restore or validate the intended behavior of `data.whooshperformance.com`.
+- Preserve and validate Aspire on `lc.whooshperformance.com`.
+- Harden the domain, DNS, TLS, Nginx, WordPress, and administrative access.
+- Make deployment, backup, restore, and rollback repeatable.
+- Route all operational notifications to `info@whooshperformance.com`.
+- Produce every approved website and social asset needed for launch in the correct formats and platform sizes.
+- Give Dubz a clear orchestration, review, evidence, and acceptance process.
+
+### 3.2 Success Definition
+
+The project is successful when:
+
+- `whooshperformance.com` serves the approved WordPress site over valid HTTPS.
+- The site is editable without changing code for routine content updates.
+- The desktop and mobile presentation match the approved design closely.
+- Existing pages, content, forms, analytics, and URLs are preserved or intentionally redirected.
+- WordPress remains responsive while Hetzner performs scraping or enrichment.
+- `data.whooshperformance.com` meets its documented health and access expectations.
+- Aspire DNS and cold-email authentication pass the provider's required checks.
+- Backups arrive on Namecheap, are encrypted, and can be restored.
+- Operational alerts reach `info@whooshperformance.com`.
+- Sawar's final exports are approved and ready for the four named social networks.
+- Dubz, Eric, and Brandon have a concise handoff pack and know how to recover the system.
+
+---
+
+## 4. Non-Goals
+
+The following are excluded unless separately approved:
+
+- Full rebranding or full website redesign.
+- Figma files, Figma prototypes, or a formal design-system project.
+- Custom headless WordPress architecture.
+- E-commerce, customer portals, memberships, subscriptions, or mobile apps not already in the approved static site.
+- A new CRM or replacement of Aspire.
+- Social account administration, daily posting, paid campaigns, or influencer management.
+- A large copywriting, original photography, or video-production engagement unless those source materials are separately approved.
+- New data products, scraping targets, or enrichment vendors.
+- Kubernetes.
+- Moving compute-heavy scraping onto Hostinger.
+- Moving the public WordPress site onto Hetzner.
+- Public exposure of databases, queues, container dashboards, or server-management tools.
+- Unreviewed changes to nameservers, mail records, or domain ownership.
+- Storing passwords, API keys, private keys, or recovery codes in Git, chat, tickets, screenshots, or the PRD.
+- Destructive migration without a verified backup and rollback path.
+
+---
+
+## 5. Mandatory Discovery Gates
+
+No production change begins until Gates A-E are complete and Dubz has reviewed the findings.
+
+### Gate A — Account and Server Inventory
+
+Saad records:
+
+- Domain registrar and account owner.
+- Current nameservers and DNS manager.
+- Hostinger KVM8 hostname, IP, region, CPU, RAM, disk, OS, firewall, Docker, Nginx, and current workloads.
+- Hetzner hostname, IP, region, CPU, RAM, disk, OS, firewall, Docker, proxy, current Whoosh services, and current workloads.
+- Namecheap VPS hostname, IP, storage, OS, access method, backup capacity, and existing backup jobs.
+- Existing Tailscale, Cloudflare, Coolify, GitHub, monitoring, and password-manager usage.
+- Current human and service accounts.
+- Existing backup/snapshot features and last successful backup.
+
+### Gate B — Domain and DNS Inventory
+
+Export and document every record for the root domain and relevant subdomains:
+
+- Apex/root
+- `www`
+- `data`
+- `lc`
+- `mail`
+- Autodiscover/autoconfig records if present
+- MX
+- SPF
+- DKIM selectors
+- DMARC
+- Verification TXT records
+- CAA
+- Any wildcard records
+
+The export must be saved before edits. Saad must identify the owner and purpose of every mail-related record. Unknown records are preserved until explained.
+
+### Gate C — Static Site and WordPress Migration Audit
+
+Saad identifies:
+
+- Current static-site source or deployed files.
+- Repository and production branch, if any.
+- Framework/build process, if any.
+- Complete page and URL inventory.
+- Navigation, footer, forms, downloads, embeds, analytics, pixels, scripts, and integrations.
+- Image, icon, logo, font, and licensing inventory.
+- Existing redirects, canonical rules, metadata, sitemap, robots directives, and structured data.
+- Existing search-engine indexing and top landing pages where access exists.
+- Content owner and approval owner.
+- WordPress theme/build approach.
+- Required plugins with owner and purpose.
+- PHP and database version requirements.
+
+If the source cannot be located, Saad stops the migration build and reports the missing asset list to Dubz. He must not reconstruct business content from guesses.
+
+### Gate D — Data and Aspire Service Audit
+
+For `data.whooshperformance.com`, record:
+
+- Expected user flow and availability.
+- Repository, branch, image, container, or process.
+- Runtime, port, proxy route, health endpoint, and authentication.
+- Data store, queue, scheduler, browser, enrichment, and third-party API dependencies actually used.
+- Environment variables by name only; never record values in this PRD.
+- Current errors, logs, resource use, and last known successful run.
+- Data classification, retention, and backup needs.
+
+For `lc.whooshperformance.com`, record:
+
+- Aspire account owner and administrator.
+- Required DNS records and provider validation results.
+- Expected HTTP/HTTPS behavior, if any.
+- Tracking-domain configuration.
+- Sender identities, bounce path, and DMARC alignment.
+- Last known successful campaign or provider health indicator, without exposing recipient data.
+
+### Gate E — Ownership, Access, and Notification Test
+
+Record each human and machine identity with:
+
+- Name or service name.
+- Role.
+- Required access.
+- Authentication method.
+- MFA status.
+- Approver.
+- Review or expiration date.
+
+Then confirm:
+
+- `info@whooshperformance.com` exists and can receive external mail.
+- A test system alert reaches it.
+- The mailbox has a named human owner.
+- Spam filtering or forwarding will not hide urgent alerts.
+- Emergency access is stored in the approved password manager.
+
+---
+
+## 6. Target Architecture
+
+### 6.1 High-Level Architecture
+
+```mermaid
+flowchart TD
+    V[Website Visitors] --> D[DNS / CDN / WAF if approved]
+    D --> N[Nginx on Hostinger KVM8]
+    N --> WP[Whoosh WordPress]
+    WP --> DB[(Whoosh WordPress Database)]
+    N --> F[Public Media and Static Assets]
+
+    U[Approved Data Users or Systems] --> DD[data.whooshperformance.com]
+    DD --> H[Nginx / Proxy on Hetzner]
+    H --> S[Whoosh Scraping and Enrichment]
+
+    A[Aspire] --- LC[lc.whooshperformance.com DNS / Tracking]
+
+    WP --> B[Encrypted Backups]
+    S --> B
+    B --> NC[Namecheap VPS]
+
+    N --> M[Monitoring and Alerts]
+    H --> M
+    NC --> M
+    M --> I[info@whooshperformance.com]
+```
+
+### 6.2 Domain and Service Routing
+
+| Hostname | Function | Destination | Public behavior |
+|---|---|---|---|
+| `whooshperformance.com` | Canonical WordPress website | Hostinger KVM8 | HTTPS website |
+| `www.whooshperformance.com` | Alternate website hostname | Hostinger KVM8 | 301 to canonical hostname |
+| `data.whooshperformance.com` | Scraping/enrichment service | Hetzner dedicated server | Documented UI/API behavior; authenticated where required |
+| `lc.whooshperformance.com` | Aspire mail/tracking domain | Aspire-required destination | Provider-defined behavior; do not improvise |
+
+Do not create `api`, `app`, `admin`, `staging`, or `status` hostnames unless the audited application needs them and Dubz approves them.
+
+### 6.3 Failure Behavior
+
+#### If Hostinger fails
+
+- The public WordPress site becomes unavailable or displays an approved maintenance/cached page.
+- The Hetzner data service remains isolated and does not attempt to write to the WordPress database.
+- Alerts go to `info@whooshperformance.com` if the notification path remains available.
+- Recovery uses the latest verified Namecheap backup plus version-controlled configuration.
+
+#### If Hetzner fails
+
+- The WordPress site remains online.
+- New scraping/enrichment work pauses or queues only if the existing audited service supports durable queueing.
+- The system reports delayed/unavailable data processing truthfully.
+- No job is repeatedly retried without limits.
+
+#### If Aspire or `lc` fails
+
+- WordPress and the data service remain available.
+- Cold email pauses until DNS/provider health is restored.
+- Saad does not redirect the mail/tracking subdomain to WordPress as a workaround.
+
+#### If Namecheap backup fails
+
+- Production continues.
+- A backup-failure alert is sent to `info@whooshperformance.com`.
+- Local short-retention backups remain until offsite coverage is restored.
+- The project is marked as not meeting disaster-recovery requirements.
+
+---
+
+## 7. Server and Service Roles
+
+### 7.1 Hostinger KVM8 — Public WordPress Plane
+
+#### Required Responsibilities
+
+- Nginx reverse proxy and TLS origin handling.
+- WordPress application runtime.
+- Whoosh-only WordPress database and database user.
+- WordPress media and approved downloads.
+- Contact/inquiry form delivery if required.
+- Website health checks and logs.
+- Local backup staging before encrypted transfer.
+
+#### Prohibited Responsibilities
+
+- Scraping or browser automation.
+- Bulk enrichment.
+- Cold-email sending infrastructure.
+- Unbounded scheduled jobs.
+- Raw scrape-file accumulation.
+- Public database or container-management ports.
+
+#### Recommended Reproducible Layout
+
+```text
+/opt/whoosh/
+├── compose/
+├── nginx/
+├── wordpress/
+├── database/
+├── backups/
+├── monitoring/
+└── scripts/
+
+/srv/whoosh/
+├── public-media/
+├── private-exports/
+└── logs/
+```
+
+Use Docker Compose if it matches the existing KVM8 operating model. If Whoosh is deployed natively, Saad must document an equally reproducible build, backup, and rollback process. Dubz approves the final method after Gate A.
+
+### 7.2 Hetzner Dedicated Server — Data Compute Plane
+
+#### Required Responsibilities
+
+- Existing Whoosh scraping workers.
+- Existing enrichment workers.
+- Required scheduler, queue, browser, API, or database components proven by audit.
+- Temporary working files with explicit retention.
+- Data-service health checks, logs, and resource limits.
+- Local backup staging for irreplaceable configuration and data.
+
+#### Required Isolation
+
+- Whoosh-specific directory, containers/processes, network, credentials, logs, and backup manifest.
+- CPU, memory, concurrency, timeout, and disk limits.
+- No unrestricted access to another Brandon project.
+- No direct access to the Hostinger Docker socket or WordPress database.
+- No storage of WordPress administrator credentials.
+
+#### Suggested Layout
+
+```text
+/opt/brandon/whoosh/
+├── proxy/
+├── data-service/
+├── scraper/
+├── enrichment/
+├── schedules/
+├── workspace/
+├── backups/
+└── monitoring/
+```
+
+Components not found in the audit are omitted rather than invented.
+
+### 7.3 Namecheap VPS — Backup and Recovery Target
+
+#### Minimum Backup Contents
+
+- WordPress database dump.
+- WordPress uploads/media.
+- WordPress theme and approved custom-plugin code, or a release reference if fully reproducible from Git.
+- Plugin/theme inventory and versions.
+- Nginx and TLS configuration excluding private keys unless encrypted.
+- Docker Compose or native service definitions.
+- DNS export and domain recovery notes.
+- Data-service code/configuration references.
+- Irreplaceable data-service state identified by Gate D.
+- Aspire DNS inventory and provider recovery notes.
+- Monitoring and alert configuration.
+- Release manifest, checksums, and restore scripts.
+
+#### Backup Layout
+
+```text
+/backups/whoosh/
+├── wordpress-database/
+├── wordpress-files/
+├── data-service/
+├── config/
+├── dns-mail/
+├── releases/
+├── manifests/
+├── restore-tests/
+└── logs/
+```
+
+The Namecheap VPS is a backup/recovery target. It is not automatically a production failover host unless its capacity is tested and Dubz approves a separate DR design.
+
+---
+
+## 8. Data and Service Isolation
+
+### 8.1 WordPress Isolation
+
+- Dedicated Whoosh database.
+- Dedicated database user with access only to that database.
+- Unique WordPress salts and administrator credentials.
+- Separate PHP-FPM pool or container.
+- Separate filesystem paths and backups.
+- Separate Nginx server block.
+- No shared writable directory with other sites.
+- No plugin licensed or configured with another project's credentials unless approved.
+
+### 8.2 Data-Service Isolation
+
+- Dedicated service identity.
+- Dedicated environment/secrets file managed outside Git.
+- Dedicated container network or equivalent process boundary.
+- Dedicated workspace and cleanup job.
+- Dedicated logs and backup manifest.
+- Authenticated ingress for non-public endpoints.
+- Outbound controls that block private network ranges and metadata endpoints where browser automation is used.
+
+### 8.3 Data Classification
+
+Saad labels persistent data as:
+
+- **Public:** approved site content and public social assets.
+- **Internal:** routine operating metrics and non-sensitive configuration metadata.
+- **Confidential:** leads, contacts, campaign data, scraped/enriched records, inquiry submissions, business data, and non-public reports.
+- **Restricted:** credentials, API keys, private keys, recovery codes, identity documents, or regulated data.
+
+Restricted data requires explicit approval and stronger handling. Payment-card data, protected health information, and password storage outside approved systems are prohibited.
+
+### 8.4 Retention
+
+- Raw scrape artifacts are retained only as long as operationally necessary.
+- Enriched lead/contact data follows Brandon's approved retention rule.
+- WordPress form submissions are not stored indefinitely by default.
+- Logs exclude message bodies, secrets, and unnecessary personal data.
+- Backup retention is automated and documented.
+
+---
+
+## 9. WordPress Conversion and File Handling
+
+### 9.1 Conversion Requirements
+
+Saad will:
+
+1. Inventory every approved static page and route.
+2. Identify reusable header, footer, navigation, button, card, and form patterns.
+3. Build the smallest maintainable WordPress theme or child-theme solution.
+4. Recreate approved content and layouts closely.
+5. Make routine text and image fields editable.
+6. Preserve or map existing URLs.
+7. Implement responsive behavior.
+8. Add only necessary plugins.
+9. Validate forms, analytics, metadata, redirects, and performance.
+10. Obtain Dubz review before production deployment.
+
+### 9.2 Basic Touch-Ups
+
+The permitted touch-up scope is:
+
+- Consistent spacing and alignment.
+- Cleaner typography hierarchy using approved fonts.
+- Button and form consistency.
+- Image cropping/compression.
+- Mobile navigation and responsive fixes.
+- Contrast, focus state, alt text, form label, and keyboard-access improvements.
+- Removal of obvious broken or duplicate elements.
+- Basic footer, contact, and trust-information cleanup.
+
+Material changes to brand, layout, copy, page count, conversion flow, or navigation require Eric/Brandon approval.
+
+### 9.3 Media and File Rules
+
+- Use WebP/AVIF where supported, with safe fallbacks.
+- Preserve high-quality source assets outside the WordPress media library when appropriate.
+- Sanitize filenames.
+- Validate MIME type server-side.
+- Set upload-size limits.
+- Disable directory listing.
+- Prevent executable files in upload directories.
+- Serve public immutable assets with cache headers.
+- Do not place private lead or campaign exports in public WordPress paths.
+
+### 9.4 URL and SEO Preservation
+
+- Select one canonical hostname.
+- Force HTTPS.
+- Redirect `www` to apex or apex to `www`, according to the approved canonical choice.
+- Create a source-to-target URL map.
+- Use 301 redirects for retired URLs with clear replacements.
+- Preserve meaningful slugs.
+- Generate XML sitemap and correct robots directives.
+- Set unique page titles and descriptions.
+- Add organization/local-business/product/service schema only when the facts are verified.
+- Preserve existing analytics and search verification only after account ownership is confirmed.
+- Test for broken links and redirect chains before launch.
+
+---
+
+## 10. Networking, DNS, Nginx, and TLS
+
+### 10.1 Domain Hardening
+
+- Confirm Brandon or the approved business owner controls the registrar account.
+- Enable MFA on registrar and DNS accounts.
+- Enable registrar lock.
+- Record renewal owner, renewal date, and payment method owner without recording payment details.
+- Enable DNSSEC if the registrar/DNS provider and Aspire configuration support it safely.
+- Use least-privilege access.
+- Export DNS before every change set.
+- Avoid wildcard DNS unless justified.
+- Set CAA records only after confirming every legitimate certificate issuer.
+- Preserve mail verification records.
+
+### 10.2 DNS Change Rules
+
+- Saad drafts the change set.
+- Dubz reviews the exact before/after record table.
+- Eric or Brandon approves nameserver or material mail changes.
+- TTL is reduced in advance when a controlled migration requires it.
+- Records are changed in a maintenance window.
+- Website, data, mail, and certificate checks run immediately afterward.
+- Rollback values are retained until acceptance.
+
+### 10.3 Nginx Reverse Proxy
+
+Hostinger Nginx requirements:
+
+- Separate Whoosh server block.
+- HTTP-to-HTTPS redirect.
+- Canonical-host redirect.
+- Valid certificate chain.
+- Proxy/PHP timeouts appropriate to WordPress.
+- Maximum request body size explicitly set.
+- Static asset caching.
+- Compression where safe.
+- Rate limits for login and sensitive endpoints.
+- Block access to hidden files, environment files, backups, and repository metadata.
+- Structured access and error logs with rotation.
+- Health endpoint that does not expose sensitive data.
+
+Hetzner Nginx/proxy requirements:
+
+- Route only to the documented Whoosh data upstream.
+- Provide TLS for `data.whooshperformance.com`.
+- Apply authentication and rate limits appropriate to the audited service.
+- Return a controlled maintenance/error response when the upstream is unavailable.
+- Never reveal internal IPs, stack traces, or secrets.
+
+### 10.4 TLS and Security Headers
+
+- TLS 1.2 and 1.3 only, unless a documented compatibility need exists.
+- Automated certificate renewal.
+- Certificate-expiry alert at 30, 14, and 7 days.
+- HSTS enabled only after all required HTTPS hostnames pass validation.
+- `X-Content-Type-Options: nosniff`.
+- `Referrer-Policy` appropriate to analytics and Aspire tracking.
+- Frame protection through CSP `frame-ancestors` or `X-Frame-Options`.
+- Permissions Policy limited to features the site uses.
+- Content Security Policy introduced in report-only mode, corrected, then enforced when safe.
+
+### 10.5 Public Ports
+
+**Hostinger:** public `80/tcp` for redirect/ACME as needed and `443/tcp`; administrative SSH becomes private/Tailscale-only after validation.  
+**Hetzner:** public `443/tcp` for the approved data endpoint; `80/tcp` only for redirect/ACME as needed; management and SSH remain private.  
+**Namecheap VPS:** no public database or management service; SSH restricted by firewall/Tailscale where supported.
+
+---
+
+## 11. Security Requirements
+
+### 11.1 Host Hardening
+
+- Supported operating system and current security patches.
+- Named non-root administrator accounts.
+- SSH keys only.
+- Direct root login disabled.
+- Default-deny inbound firewall.
+- Tailscale or equivalent private administration where already approved.
+- Time synchronization.
+- Disk, inode, and hardware-health alerts where available.
+- Automatic security updates with controlled reboot procedure.
+- Quarterly human access review.
+
+### 11.2 WordPress Hardening
+
+- Unique administrator accounts; no shared `admin` login.
+- MFA for all administrator accounts.
+- Strong password policy and password manager use.
+- Least-privilege WordPress roles.
+- Disable XML-RPC unless a proven integration requires it.
+- Protect login and password-reset endpoints with rate limits.
+- Disable theme/plugin editing in the WordPress dashboard.
+- Disable unnecessary user enumeration.
+- Restrict file permissions and prevent PHP execution in uploads.
+- Remove unused themes and plugins.
+- Pin, review, and update required plugins/themes.
+- Daily malware/integrity checks where practical.
+- Security logging for logins, admin changes, plugin changes, and failed authentication.
+- CAPTCHA or anti-spam control on public forms where needed without harming accessibility.
+
+### 11.3 Secrets
+
+Approved locations:
+
+- Existing approved team password manager.
+- Hostinger/Hetzner secret store or protected environment files.
+- SOPS/age for encrypted configuration when already supported.
+- CI secret store for deployment-only credentials.
+
+Rules:
+
+- No secret values in Git, PR descriptions, screenshots, logs, task comments, or handoff documents.
+- Separate production and staging credentials.
+- Separate WordPress, database, data-service, Aspire, backup, and notification credentials.
+- Rotate anything found in plaintext or of uncertain ownership.
+- Record owner, scope, and rotation date without recording the value.
+
+### 11.4 Container and Application Security
+
+- Pinned images or versions.
+- Non-root runtime where practical.
+- No privileged containers without Dubz approval.
+- No application container access to the host Docker socket.
+- Explicit networks, volumes, CPU, memory, and process limits.
+- Health checks and restart limits.
+- Dependency and vulnerability scanning.
+- Server-side validation and output encoding.
+- Parameterized database access.
+- CSRF protection for forms and administration.
+- Secure, HttpOnly, SameSite cookies.
+- No stack traces or secret-bearing errors shown publicly.
+
+### 11.5 Cold-Email Safety
+
+- Aspire credentials remain in the approved secret store.
+- Sending identities are approved by Brandon.
+- SPF/DKIM/DMARC alignment is validated after DNS changes.
+- Suppression, unsubscribe, and bounce handling remain active.
+- No recipient list is copied into WordPress or the PRD.
+- Monitoring emails do not use the cold-email sending domain unless Aspire explicitly supports that operational use.
+
+---
+
+## 12. Deployment and Change Control
+
+### 12.1 Approved Flow
+
+```mermaid
+flowchart TD
+    T[Dubz Task Packet] --> B[Saad or Sawar Work Branch]
+    B --> R[Evidence and Self-Test]
+    R --> D[Dubz Review]
+    D --> S[Staging / Draft Review]
+    S --> A[Eric / Brandon Approval if Customer-Facing]
+    A --> P[Production Release]
+    P --> H[Health and Acceptance Gate]
+    H -->|Pass| C[Close and Document]
+    H -->|Fail| X[Rollback]
+```
+
+### 12.2 Branch and Review Rules
+
+- One task packet per branch.
+- One logical change per pull request.
+- No direct production-branch commits.
+- Saad does not approve his own infrastructure or code changes.
+- Sawar's assets require Dubz review and Eric/Brandon visual approval before public use.
+- Dubz approves merge and deployment readiness.
+- Production releases use a tag or immutable commit reference.
+- Every production change includes rollback instructions.
+
+### 12.3 Staging
+
+Staging must provide:
+
+- Private WordPress preview.
+- Separate database and credentials.
+- Sanitized or sample form data.
+- No live cold-email sending.
+- No uncontrolled live scraping.
+- Protected access through an approved control.
+- Accurate mobile, desktop, form, SEO, and migration testing.
+
+### 12.4 Deployment Gates
+
+Before production:
+
+- Backup and restore point created.
+- DNS before-state exported.
+- WordPress and data-service configuration validated.
+- Lint/build/configuration checks pass where applicable.
+- Malware, vulnerability, and secret scans pass.
+- Staging smoke test passes.
+- Customer-facing content is approved.
+- DNS change and rollback plan is approved.
+- `info@whooshperformance.com` receives the test alert.
+
+### 12.5 Health Gate
+
+A release succeeds only when:
+
+- Canonical site returns HTTPS 200.
+- Alternate hostname redirects correctly.
+- Main pages, navigation, images, and forms work.
+- WordPress admin is available to authorized users only.
+- Database health is normal.
+- No restart loop or critical log error appears.
+- `data.whooshperformance.com` meets its documented expectation.
+- Aspire validation and mail authentication remain healthy.
+- Backup job remains scheduled.
+- Monitoring sends a successful test notification.
+
+### 12.6 Rollback
+
+Rollback order:
+
+1. Restore prior DNS values if the failure is routing-related.
+2. Redeploy the previous WordPress release.
+3. Restore the previous Nginx configuration.
+4. Restore files or database only from the verified pre-release backup.
+5. Restore the previous data-service release/configuration.
+6. Reapply the prior Aspire DNS set if a reviewed DNS change caused the issue.
+
+No destructive database restore or DNS rollback occurs without Dubz approval and a verified target.
+
+---
+
+## 13. Resource Management
+
+### 13.1 Hostinger Priority
+
+1. Nginx and TLS.
+2. WordPress and PHP.
+3. WordPress database.
+4. Static/media delivery.
+5. Monitoring and local backup staging.
+6. Staging.
+
+If Hostinger is constrained, staging and nonessential background tasks stop before the public website.
+
+### 13.2 Hetzner Priority
+
+1. Existing shared critical infrastructure that Saad must not disrupt.
+2. Whoosh data endpoint availability.
+3. Active approved scraping/enrichment work.
+4. Scheduled Whoosh work.
+5. Staging and experiments.
+
+### 13.3 Limits and Backpressure
+
+Every Whoosh compute service must define:
+
+- CPU and memory limit/reservation.
+- Process or container limit.
+- Browser and worker concurrency.
+- Job or request timeout.
+- Retry count and delay.
+- Maximum payload and page size.
+- Temporary disk quota and cleanup schedule.
+- Rate limit by endpoint or target domain where applicable.
+
+Hard values are chosen after inventory and load observation. Saad must not increase concurrency simply to hide a failing upstream.
+
+---
+
+## 14. Monitoring, Logging, and Notifications
+
+### 14.1 Required Monitoring
+
+**Website/Hostinger:**
+
+- Root and key-page uptime.
+- HTTPS status and certificate age.
+- Nginx 4xx/5xx rate.
+- WordPress/PHP response time.
+- Database connectivity and storage growth.
+- CPU, memory, load, disk, inode use, and container/process restarts.
+- Form-delivery success if forms exist.
+- WordPress core/plugin/theme update status.
+- Backup success and age.
+
+**Data/Hetzner:**
+
+- `data` endpoint availability.
+- Upstream health.
+- Worker heartbeat, success, failure, retry, and runtime.
+- Queue depth/message age if a queue exists.
+- Browser crash/timeout rate if browsers exist.
+- CPU, memory, disk, and temporary-workspace age.
+- External enrichment/API failures.
+
+**Aspire/domain:**
+
+- DNS record presence.
+- SPF, DKIM, and DMARC validation.
+- Tracking-domain/provider health where available.
+- Certificate health if HTTPS is required.
+- Domain expiration and renewal reminders.
+
+**Namecheap:**
+
+- Backup success.
+- Backup age and size plausibility.
+- Checksum verification.
+- Free storage.
+- Restore-test age.
+
+### 14.2 Alert Destination
+
+Every operational monitoring system must send alerts to:
+
+`info@whooshperformance.com`
+
+Use the subject prefix:
+
+`[WHOOSH][SEVERITY][SERVICE]`
+
+Examples:
+
+- `[WHOOSH][CRITICAL][WEBSITE] Site unavailable`
+- `[WHOOSH][HIGH][DATA] Upstream health check failed`
+- `[WHOOSH][HIGH][BACKUP] Latest backup is stale`
+- `[WHOOSH][WARNING][TLS] Certificate expires in 14 days`
+
+Alerts must include service, environment, UTC timestamp, short error, current impact, owner, and runbook link. They must not include passwords, tokens, full lead records, or private message content.
+
+### 14.3 Initial Alert Thresholds
+
+- Public site unavailable for two consecutive checks.
+- `data` service fails two consecutive expected health checks.
+- HTTP 5xx above 1% for five minutes after baseline traffic exists.
+- p95 response above two seconds for five minutes, excluding known external calls.
+- Memory above 85% for ten minutes.
+- Disk alerts at 70%, 85%, and 95%.
+- Process/container restarts more than three times in ten minutes.
+- Backup missing or stale by more than 26 hours.
+- Restore test older than 35 days.
+- Certificate expiry at 30, 14, and 7 days.
+- WordPress security update available longer than the approved maintenance SLA.
+
+Dubz may tune thresholds from measured baselines, but alerting may not simply be disabled to reduce noise.
+
+### 14.4 Logging
+
+Logs should include timestamp, environment, service, release, request/job identifier where applicable, severity, and safe error summary.
+
+Logs must exclude:
+
+- Passwords and API keys.
+- Session and reset tokens.
+- Full email bodies or recipient lists.
+- Full form submissions unless explicitly required and protected.
+- Private files.
+- Unredacted restricted data.
+
+---
+
+## 15. Backup Architecture
+
+### 15.1 Backup Principles
+
+- Backups are encrypted before transfer to Namecheap.
+- Backup credentials are limited to the Whoosh backup path.
+- A backup is not considered valid until a restore test succeeds.
+- Every backup has a manifest and checksum.
+- Production does not hold the only decryption key where practical.
+- Retention is automatic.
+- Backup failures alert `info@whooshperformance.com`.
+
+### 15.2 Backup Schedule
+
+Initial target, adjusted after storage inventory:
+
+- WordPress database: daily; more frequently if form or content activity justifies it.
+- WordPress files/uploads: daily incremental plus weekly full snapshot.
+- Nginx, Compose/service definitions, and release manifests: every production change and daily when changed.
+- Data-service irreplaceable state: daily or according to its audited recovery requirement.
+- DNS/Aspire record export: before and after every approved change and monthly.
+
+### 15.3 Retention
+
+- Daily: 7 copies.
+- Weekly: 4 copies.
+- Monthly: 3 copies.
+- Quarterly release/configuration archive: 4 copies.
+
+Retention must fit actual Namecheap capacity. Dubz approves any reduction after Saad documents the tradeoff.
+
+### 15.4 Encryption and Verification
+
+Use restic, `age`, SOPS-compatible age encryption, or an approved equivalent.
+
+Daily automated verification:
+
+- Backup exists and is recent.
+- Size is plausible.
+- Checksum matches.
+- Manifest parses.
+- Encryption is valid.
+- Destination storage has safe free capacity.
+
+Monthly restore verification:
+
+- Restore WordPress database to an isolated temporary environment.
+- Restore a sample of media/files.
+- Start the release with restored configuration.
+- Validate key pages and admin login.
+- Restore audited data-service configuration/state.
+- Record duration, failures, and actual recovery point.
+
+---
+
+## 16. Disaster Recovery
+
+### 16.1 Initial Recovery Objectives
+
+| Failure | Target RPO | Target RTO | Expected impact |
+|---|---:|---:|---|
+| WordPress application failure | Last release; database within backup interval | 2-4 hours | Public site unavailable or in maintenance mode |
+| Hostinger KVM8 loss | 24 hours initially; improve after activity review | 4-8 hours | Public site unavailable until rebuilt |
+| Hetzner Whoosh service loss | No accepted work lost where durable queueing exists; otherwise documented actual | 4-8 hours | Data work delayed; WordPress remains online |
+| Aspire/DNS failure | Last known-good DNS export | 2-6 hours after provider/DNS access | Cold email or tracking paused |
+| Namecheap backup loss | Production unaffected | 24 hours to restore offsite coverage | DR protection degraded |
+| Credential compromise | Depends on exposure | Immediate containment; four hours for critical rotation | Affected service isolated |
+
+Targets become commitments only after a successful drill.
+
+### 16.2 Hostinger Recovery Sequence
+
+1. Confirm failure and preserve logs/evidence.
+2. Enable approved maintenance/cached response if possible.
+3. Freeze content/admin changes.
+4. Prepare replacement Hostinger environment or repaired KVM8.
+5. Restore Nginx and runtime configuration.
+6. Restore WordPress files and database.
+7. Apply the approved release manifest.
+8. Run private smoke tests.
+9. Restore DNS/origin routing after Dubz approval.
+10. Monitor and send recovery notice to `info@whooshperformance.com`.
+11. Complete incident report.
+
+### 16.3 Hetzner Recovery Sequence
+
+1. Stop new Whoosh data dispatch if applicable.
+2. Preserve durable pending work.
+3. Rebuild the Whoosh service from version-controlled definitions.
+4. Restore only required persistent state.
+5. Validate authentication, rate limits, and target restrictions.
+6. Run a small smoke job.
+7. Restore concurrency gradually.
+8. Requeue only idempotent work.
+9. Complete incident report.
+
+### 16.4 Aspire/DNS Recovery Sequence
+
+1. Compare current DNS with the last approved export.
+2. Confirm Aspire provider health and account access.
+3. Identify whether the failure is DNS, TLS, redirect/tracking, authentication, or provider-side.
+4. Restore only the affected known-good record set.
+5. Validate SPF, DKIM, DMARC, tracking, bounce, and unsubscribe functions.
+6. Resume sending only after Dubz and Brandon approve.
+
+### 16.5 DR Drills
+
+- Monthly backup restore test.
+- Quarterly WordPress rebuild/restore test.
+- Quarterly data-service configuration restore test.
+- Semiannual DNS/Aspire tabletop exercise.
+- Annual credential-compromise tabletop exercise.
+
+Each drill records owner, start/end time, backup/release used, RPO, RTO, failures, manual steps, and corrective actions.
+
+---
+
+## 17. Delivery Team Operating Model
+
+### 17.1 Authority and Roles
+
+| Person | Primary role | Owns | Does not own |
+|---|---|---|---|
+| Eric | HD2 business/project authority | Scope direction, priorities, client-facing approval with Brandon, major change approval | Day-to-day coding or visual production |
+| Brandon | Client/business owner | Brand/content truth, account ownership confirmation, final launch acceptance | Technical implementation details |
+| Dubz / CrispR | Orchestrator and technical owner | Task breakdown, sequencing, technical decisions, reviews, merge/deploy gates, risk tracking, final technical acceptance, communication to the boys | Unreviewed expansion of business scope |
+| Saad | Development and infrastructure implementer | Audit, WordPress build, migration, Nginx, DNS change drafts, security, data-service validation, monitoring, backup, restore, technical QA, documentation | Final business approval or independent production approval |
+| Sawar | Design and asset producer | Visual audit, all approved website imagery, basic site touch-up specifications/assets, platform exports, reusable social templates, asset organization | Server access, DNS, WordPress deployment, code, copy approval, social publishing |
+
+### 17.2 Dubz's Orchestration Duties
+
+Dubz must:
+
+- Create the project board and phase order.
+- Give Saad and Sawar written task packets with inputs, output, acceptance tests, and deadline.
+- Resolve dependencies between development and design.
+- Prevent Sawar from designing against outdated screenshots or content.
+- Review Saad's inventories, DNS change sets, architecture, pull requests, deployment plan, and evidence.
+- Review Sawar's asset package for completeness before Eric/Brandon approval.
+- Control staging and production gates.
+- Maintain the decision register, risk log, and change log.
+- Send Eric and Brandon concise status summaries and escalate blockers.
+
+### 17.3 Saad's Required Deliverables
+
+- Account/server/DNS inventory.
+- Static-site and URL audit.
+- Whoosh WordPress staging site.
+- Nginx and TLS configuration.
+- WordPress hardening configuration.
+- `data` service audit and repaired/validated deployment.
+- Aspire DNS validation report.
+- Monitoring and notification setup.
+- Namecheap backup and restore process.
+- Test evidence.
+- Technical runbooks and handoff notes.
+
+### 17.4 Sawar's Required Deliverables
+
+- Short visual audit of the approved site with only actionable touch-ups.
+- Every approved replacement, corrected, resized, or newly created web image needed to complete the WordPress launch.
+- Approved logo, avatar, icon, favicon, header, hero, section, card, thumbnail, background, and responsive image variants required by the final page inventory.
+- Reusable post-image master(s) and platform exports for:
+  - Instagram feed: `1080x1080` and, where appropriate, `1080x1350`.
+  - Facebook/LinkedIn link or promotional image: `1200x628`.
+  - X/Twitter post image: `1600x900` or the approved current platform ratio.
+  - Profile and cover/banner variants sized to current platform requirements at delivery time.
+- Source files in the working design format Sawar normally uses; **no Figma deliverable is required**.
+- Final PNG/JPG/WebP exports as appropriate.
+- Asset index listing name, platform, dimensions, and intended use.
+
+The package is complete only when every asset in Dubz's approved website and social asset inventory has a final source file, platform/web export, clear filename, dimensions, and intended-use entry. Use one consistent approved visual direction; do not turn this into a separate brand-strategy or Figma project.
+
+### 17.5 Work Rules
+
+- One task packet, one owner, one branch/folder, one review.
+- No one approves their own production work.
+- No production DNS, database, or credential change without Dubz approval.
+- Customer-facing visual/content changes require Eric/Brandon approval.
+- Destructive actions require a verified backup and explicit approval.
+- Credentials are never copied into task output.
+- Every completed task includes evidence and rollback.
+- Blockers and assumptions are written down immediately.
+
+### 17.6 Evidence Pack
+
+Each completed task must include:
+
+- Task and owner.
+- Summary.
+- Files/assets changed.
+- Commands or configuration changed, with secrets removed.
+- Tests run and results.
+- Before/after images where relevant and safe.
+- Security and resource impact.
+- Rollback steps.
+- Known limitations.
+- Approval required and approval received.
+
+---
+
+## 18. Repository and Asset Structure
+
+Recommended structure:
+
+```text
+whoosh-performance/
+├── README.md
+├── docs/
+│   ├── architecture/
+│   ├── adr/
+│   ├── inventory/
+│   ├── dns/
+│   ├── access/
+│   ├── evidence/
+│   └── handoff/
+├── wordpress/
+│   ├── theme/
+│   ├── custom-plugins/
+│   └── config/
+├── hostinger/
+│   ├── compose/
+│   ├── nginx/
+│   ├── monitoring/
+│   └── backup/
+├── hetzner/
+│   ├── data-service/
+│   ├── proxy/
+│   ├── monitoring/
+│   └── backup/
+├── namecheap/
+│   ├── backup/
+│   └── restore/
+├── social-assets/
+│   ├── source/
+│   ├── instagram/
+│   ├── facebook/
+│   ├── x-twitter/
+│   ├── linkedin/
+│   └── asset-index.md
+├── tests/
+├── runbooks/
+└── releases/
+```
+
+Repository rules:
+
+- No secret values.
+- Protected production branch.
+- Dubz review required for infrastructure, DNS, security, deployment, and shared changes.
+- Sawar may own asset branches; Dubz reviews package structure and Eric/Brandon approve public-facing results.
+- Required checks must pass before merge.
+- Every production release has a manifest and rollback note.
+- Large source images use the approved large-file or asset-storage method rather than uncontrolled Git history.
+
+---
+
+## 19. Rollout Plan
+
+### Phase 0 — Freeze and Baseline
+
+**Owner:** Dubz orchestrates; Saad executes  
+
+Tasks:
+
+- Pause untracked Whoosh infrastructure changes.
+- Capture DNS, Nginx, firewall, Docker/process, and current service state.
+- Back up current site/data configurations.
+- Locate the static-site source.
+- Capture current external behavior of root, `data`, and `lc`.
+- Create repository/project board.
+
+Exit gate:
+
+- Baseline pack exists and a rollback to the starting state is possible.
+
+### Phase 1 — Inventory and Discovery
+
+**Owner:** Saad; reviewed by Dubz  
+
+Tasks:
+
+- Complete Gates A-E.
+- Classify current outages or misrouting.
+- Approve canonical hostname.
+- Confirm WordPress implementation approach.
+- Confirm Aspire DNS requirements.
+- Confirm Namecheap capacity.
+- Produce risks and dependencies.
+
+Exit gate:
+
+- Dubz approves the discovery report; Eric/Brandon approve any scope/content question.
+
+### Phase 2 — Security, Access, and Network Foundation
+
+**Owner:** Saad; approved by Dubz  
+
+Tasks:
+
+- Harden administrative access.
+- Validate firewall and private management path.
+- Create Whoosh-specific accounts, networks, and secrets.
+- Prepare Nginx server blocks.
+- Prepare certificates.
+- Prepare exact DNS change set and rollback.
+- Confirm `info@whooshperformance.com` alert delivery.
+
+Exit gate:
+
+- Access, firewall, TLS, and notification tests pass without changing production routing prematurely.
+
+### Phase 3 — WordPress Build
+
+**Owner:** Saad; Sawar supplies approved imagery/touch-up assets  
+
+Tasks:
+
+- Build the WordPress staging stack.
+- Convert every approved static page.
+- Implement editable content areas.
+- Apply basic touch-ups.
+- Optimize media.
+- Recreate forms and integrations.
+- Apply SEO/redirect requirements.
+- Apply WordPress hardening.
+
+Exit gate:
+
+- Desktop/mobile staging review passes and all source URLs are accounted for.
+
+### Phase 4 — Website and Social Asset Package
+
+**Owner:** Sawar; orchestrated by Dubz  
+
+Tasks:
+
+- Receive approved brand assets, copy, and screenshots.
+- Create one approved visual direction.
+- Produce every approved website and reusable social asset required by the final inventory.
+- Export platform variants.
+- Optimize and name files consistently.
+- Produce the asset index.
+
+Exit gate:
+
+- Dubz confirms package completeness; Eric/Brandon approve visuals.
+
+### Phase 5 — Data Service Validation and Repair
+
+**Owner:** Saad; approved by Dubz  
+
+Tasks:
+
+- Trace `data` DNS and reverse-proxy route.
+- Identify the failing/current upstream.
+- Validate the existing app and dependencies.
+- Repair only the confirmed fault.
+- Add health check, limits, log rotation, and monitoring.
+- Run a controlled scrape/enrichment smoke job.
+- Confirm isolation from WordPress and other projects.
+
+Exit gate:
+
+- Documented `data` behavior works and the smoke job completes without cross-project access.
+
+### Phase 6 — Aspire and Mail Validation
+
+**Owner:** Saad; Brandon confirms provider/account state  
+
+Tasks:
+
+- Validate the exact Aspire DNS set.
+- Correct only proven errors.
+- Validate SPF, DKIM, DMARC, return-path, tracking, and unsubscribe behavior.
+- Confirm whether HTTPS response on `lc` is required.
+- Document provider ownership and recovery steps.
+
+Exit gate:
+
+- Aspire/provider checks pass and no website/DNS change breaks email delivery.
+
+### Phase 7 — Monitoring, Backup, and Recovery
+
+**Owner:** Saad; reviewed by Dubz  
+
+Tasks:
+
+- Deploy uptime and system checks.
+- Route alerts to `info@whooshperformance.com`.
+- Configure encrypted Namecheap backups.
+- Enforce retention.
+- Run WordPress and data-service restore tests.
+- Record actual RPO/RTO.
+
+Exit gate:
+
+- A recent verified backup and successful restore report exist.
+
+### Phase 8 — Pre-Launch QA and Failure Testing
+
+**Owner:** Dubz coordinates; Saad executes technical QA; Sawar corrects visual assets  
+
+Tests:
+
+- Desktop, tablet, and mobile review.
+- Browser compatibility.
+- Links, redirects, forms, mail, analytics, sitemap, robots, and schema.
+- Accessibility basics and keyboard navigation.
+- Performance and image loading.
+- WordPress login, role, update, and file-upload controls.
+- TLS, headers, DNS, and mail authentication.
+- `data` upstream failure and recovery.
+- Backup transfer failure.
+- WordPress release rollback.
+- DNS rollback tabletop.
+
+Exit gate:
+
+- No critical issue remains; Dubz approves launch readiness.
+
+### Phase 9 — Production Launch and Handoff
+
+**Owner:** Dubz controls launch; Saad deploys; Eric and Brandon approve  
+
+Tasks:
+
+- Create final pre-launch backup.
+- Deploy approved WordPress release.
+- Apply approved DNS/routing changes.
+- Run the health gate.
+- Monitor closely for 24 hours.
+- Deliver runbooks, access matrix, release manifest, asset package, backup proof, and known limitations.
+- Record final approvals.
+
+Exit gate:
+
+- All required acceptance boxes are checked and ownership is handed off.
+
+---
+
+## 20. Component-Specific Acceptance Tests
+
+### 20.1 WordPress Website
+
+- Canonical site loads over valid HTTPS.
+- `www`/apex redirect is correct and singular.
+- No parked-domain page remains.
+- All approved pages, navigation, images, buttons, and downloads work.
+- Mobile layout is usable and visually approved.
+- Forms deliver correctly and do not expose submissions.
+- Routine page text/images are editable by an authorized WordPress user.
+- No unnecessary plugin/theme remains installed.
+- Admin MFA, rate limits, backups, and security logging work.
+- Sitemap, robots, canonical tags, titles, descriptions, and verified schema are correct.
+- Redirect map has no loop or material broken link.
+
+### 20.2 Data Service
+
+- `data.whooshperformance.com` reaches the documented upstream.
+- Expected HTTP status and health endpoint pass.
+- Authentication works where required.
+- One controlled scrape/enrichment job completes.
+- Timeout, retry, and concurrency limits work.
+- Logs omit secrets and protected records.
+- Temporary files expire according to policy.
+- The service cannot access unrelated project networks, credentials, or data.
+- Failure does not take down WordPress.
+- Required state/configuration restores from backup.
+
+### 20.3 Aspire / Cold Email
+
+- Aspire recognizes the domain/subdomain configuration.
+- SPF passes for approved senders.
+- DKIM passes.
+- DMARC aligns and reports according to the approved policy.
+- Tracking/redirect behavior matches provider requirements.
+- Bounce and unsubscribe processing work.
+- A controlled internal test message succeeds without exposing a recipient list.
+- WordPress/DNS changes do not break the business mailbox.
+
+### 20.4 Social Assets
+
+- All required website and social assets in the approved inventory are present and consistent with Whoosh branding.
+- Each platform has the required export dimensions.
+- Text remains legible on desktop and mobile.
+- Safe margins prevent platform cropping.
+- Images are compressed without visible degradation.
+- Files use clear names and are listed in the asset index.
+- Source files and final exports are included.
+- No Figma deliverable is expected.
+
+### 20.5 Backup and Notifications
+
+- Hostinger backup reaches the Whoosh path on Namecheap.
+- Required Hetzner state/configuration reaches Namecheap.
+- Backups are encrypted and checksum-verified.
+- Restore test succeeds.
+- Backup failure and recovery alerts reach `info@whooshperformance.com`.
+- Website, data, TLS, disk, and certificate tests send to the same mailbox.
+
+---
+
+## 21. Global Acceptance Criteria
+
+The project is production-ready only when all applicable boxes are checked.
+
+### Inventory and Ownership
+
+- [ ] Hostinger KVM8 inventory documented
+- [ ] Hetzner Whoosh services documented
+- [ ] Namecheap VPS capacity and access documented
+- [ ] Registrar, DNS, Aspire, repository, and monitoring ownership confirmed
+- [ ] Static-site source and all current URLs inventoried
+- [ ] Human and service access matrix approved
+- [ ] `info@whooshperformance.com` ownership and receipt tested
+
+### Domain, DNS, and Mail
+
+- [ ] Complete before-state DNS export stored
+- [ ] Root, `www`, `data`, and `lc` purpose documented
+- [ ] Canonical hostname approved
+- [ ] Registrar lock and MFA enabled
+- [ ] DNSSEC decision documented
+- [ ] Website routing works
+- [ ] Aspire-required records preserved and validated
+- [ ] SPF, DKIM, and DMARC pass
+- [ ] Rollback record set retained
+
+### Hostinger / WordPress
+
+- [ ] WordPress replaces the parked-domain response
+- [ ] Static content and approved design are faithfully converted
+- [ ] Basic visual and responsive touch-ups approved
+- [ ] WordPress database/user/files are isolated
+- [ ] Nginx and TLS configuration pass
+- [ ] Security headers and login controls pass
+- [ ] Forms, media, links, redirects, analytics, and SEO pass
+- [ ] Resource limits, logs, and health checks exist
+- [ ] WordPress release rollback demonstrated
+
+### Hetzner / Data
+
+- [ ] `data` routing and upstream documented
+- [ ] Existing services audited before change
+- [ ] 502 or other current mismatch resolved according to documented expected behavior
+- [ ] Required workers have resource, retry, timeout, and concurrency limits
+- [ ] Temporary workspace retention works
+- [ ] Authentication/rate limiting works where required
+- [ ] Cross-project access tests fail as intended
+- [ ] Controlled scrape/enrichment smoke job passes
+
+### Aspire / `lc`
+
+- [ ] Expected `lc` behavior documented
+- [ ] Current 502 is either repaired or documented as irrelevant to the provider's approved function
+- [ ] Provider validation passes
+- [ ] Tracking, bounce, suppression, and unsubscribe functions pass
+- [ ] No unauthorized sending occurs during testing
+
+### Security
+
+- [ ] Root login disabled
+- [ ] Public SSH removed after private access validation
+- [ ] MFA required for registrar, DNS, WordPress admin, and Aspire where supported
+- [ ] Secrets absent from repositories, logs, and evidence
+- [ ] Plugins/images/dependencies pass review and scanning
+- [ ] Backups encrypted before transfer
+- [ ] Vulnerability and secret scans pass
+- [ ] WordPress upload and admin controls pass
+
+### Design and Social
+
+- [ ] Sawar's visual audit reviewed by Dubz
+- [ ] Website touch-up assets implemented and approved
+- [ ] Instagram exports delivered
+- [ ] Facebook exports delivered
+- [ ] X/Twitter exports delivered
+- [ ] LinkedIn exports delivered
+- [ ] Source files and asset index delivered
+- [ ] Eric/Brandon visual approval recorded
+
+### Monitoring, Backup, and Recovery
+
+- [ ] Website, data, Aspire/domain, host, and backup monitoring active
+- [ ] All alerts route to `info@whooshperformance.com`
+- [ ] Test alerts received
+- [ ] Namecheap backup schedule and retention active
+- [ ] WordPress restore test passed
+- [ ] Data-service restore test passed
+- [ ] Actual RPO/RTO recorded
+- [ ] Runbooks link correctly from alerts
+
+### Final Approval
+
+- [ ] Saad confirms implementation reality and provides evidence pack
+- [ ] Sawar confirms asset package completion
+- [ ] Dubz/CrispR approves technical acceptance
+- [ ] Eric approves HD2 delivery acceptance
+- [ ] Brandon approves customer-facing production acceptance
+- [ ] Final handoff summary delivered
+
+---
+
+## 22. Required Runbooks
+
+At minimum:
+
+- `ACCESS-AND-ONBOARDING.md`
+- `DEPLOY-WORDPRESS.md`
+- `ROLLBACK-WORDPRESS.md`
+- `WORDPRESS-SECURITY-UPDATE.md`
+- `WORDPRESS-COMPROMISE.md`
+- `DATABASE-BACKUP.md`
+- `DATABASE-RESTORE.md`
+- `WORDPRESS-FILE-RESTORE.md`
+- `NGINX-TLS-RECOVERY.md`
+- `DNS-CHANGE-AND-ROLLBACK.md`
+- `ASPIRE-DNS-AND-DELIVERABILITY.md`
+- `DATA-SERVICE-DEPLOY.md`
+- `DATA-SERVICE-FAILURE.md`
+- `SCRAPER-OR-ENRICHMENT-BACKLOG.md` if applicable
+- `HOSTINGER-OUTAGE.md`
+- `HETZNER-WHOOSH-OUTAGE.md`
+- `NAMECHEAP-BACKUP-FAILURE.md`
+- `CREDENTIAL-COMPROMISE.md`
+- `MONITORING-ALERT-RESPONSE.md`
+- `SOCIAL-ASSET-EXPORT-GUIDE.md`
+
+---
+
+## 23. Decision Register
+
+Dubz must record at least:
+
+- **ADR-001:** Hostinger KVM8 as the WordPress public plane.
+- **ADR-002:** Hetzner dedicated server as the scraping/enrichment plane.
+- **ADR-003:** Namecheap VPS as the encrypted backup/recovery target.
+- **ADR-004:** Canonical apex or `www` hostname.
+- **ADR-005:** WordPress theme/child-theme/build approach.
+- **ADR-006:** Docker Compose or documented native WordPress deployment.
+- **ADR-007:** DNS/CDN/WAF provider and DNSSEC decision.
+- **ADR-008:** `data.whooshperformance.com` public/authenticated behavior.
+- **ADR-009:** `lc.whooshperformance.com` Aspire function and expected HTTPS behavior.
+- **ADR-010:** Backup encryption, retention, and tested recovery targets.
+- **ADR-011:** Monitoring platform and `info@whooshperformance.com` notification path.
+- **ADR-012:** Final social asset count, formats, and source-file type.
+
+Every ADR records context, decision, owner, date, alternatives, consequences, and rollback/exit path.
+
+---
+
+## 24. Final Instruction to Dubz
+
+Keep this project controlled and practical.
+
+The standard is not the number of plugins, dashboards, services, or design files produced. The standard is whether:
+
+- Saad can show exactly what runs on Hostinger and Hetzner.
+- The WordPress conversion faithfully preserves the approved site.
+- Sawar's touch-ups and social images are useful, approved, and correctly exported.
+- Domain, DNS, mail, Nginx, TLS, and WordPress are secure.
+- `data` and Aspire work according to documented expectations.
+- Heavy data work cannot damage the public website.
+- All operational notices reach `info@whooshperformance.com`.
+- The Namecheap backups can actually restore the system.
+- Every production change is reviewed, reversible, and supported by evidence.
+- Eric and Brandon receive a short, clear handoff rather than a large unexplained technical dump.
+
+A 10/10 result is a clean WordPress launch, stable data and outreach services, a complete polished web/social asset package, and an operating system that Dubz can confidently hand to Saad and Sawar without ambiguity.

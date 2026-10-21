@@ -1,0 +1,321 @@
+#!/usr/bin/env bash
+# lane-hygiene - Mechanically surface stale lanes, phantom in-flight records,
+# idle capacity, and broken gates without mutating state.
+#
+# Exit codes:
+#   0 = HEALTHY (all checks clean)
+#   1 = FINDINGS DETECTED (or error during inspection)
+#
+# Hard requirements:
+#   - Read-only: never mutate, reap, kill, or clean.
+#   - Fail-closed: non-zero exit on any finding or inspection error.
+#   - Always announce: print the verdict even when healthy.
+#   - Reuse owners: bin/fm-guard.sh, bin/fm-lock.sh, bin/fm-project-capacity-lib.sh.
+#   - Bounded runtime: completes well under 20 seconds.
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Resolve FM_ROOT
+if [ -n "${FM_ROOT_OVERRIDE:-}" ]; then
+  FM_ROOT="$FM_ROOT_OVERRIDE"
+elif [ -n "${FM_ROOT:-}" ]; then
+  : # preserve ambient FM_ROOT
+elif [ -d "$SCRIPT_DIR/../bin" ] && [ -f "$SCRIPT_DIR/../bin/fm-guard.sh" ]; then
+  FM_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+elif [ -d "/root/agent-work/deightonllm-firstmate/bin" ]; then
+  FM_ROOT="/root/agent-work/deightonllm-firstmate"
+else
+  FM_ROOT="/root/agent-work/deightonllm-firstmate"
+fi
+
+FM_HOME="${FM_HOME:-$FM_ROOT}"
+STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
+
+# Source required firstmate libs safely
+if [ -f "$FM_ROOT/bin/fm-wake-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$FM_ROOT/bin/fm-wake-lib.sh"
+fi
+if [ -f "$FM_ROOT/bin/fm-secondmate-registry-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$FM_ROOT/bin/fm-secondmate-registry-lib.sh"
+fi
+if [ -f "$FM_ROOT/bin/fm-backend.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$FM_ROOT/bin/fm-backend.sh"
+fi
+if [ -f "$FM_ROOT/bin/fm-project-capacity-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  . "$FM_ROOT/bin/fm-project-capacity-lib.sh"
+fi
+
+has_findings=0
+finding_reasons=()
+
+echo "================================================================================"
+echo "LANE HYGIENE SWEEP (read-only)"
+echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date)"
+echo "Host: $(uname -n)"
+echo "FM_ROOT: $FM_ROOT"
+echo "FM_HOME: $FM_HOME"
+echo "================================================================================"
+
+# ------------------------------------------------------------------------------
+# 1. Stale watcher & session lock
+# ------------------------------------------------------------------------------
+echo "=== 1. WATCHER & SESSION GUARD ==="
+guard_out=""
+guard_rc=0
+if [ -x "$FM_ROOT/bin/fm-guard.sh" ]; then
+  guard_out=$(FM_GUARD_READ_ONLY=1 FM_ROOT_OVERRIDE="$FM_ROOT" FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_CONFIG_OVERRIDE="$CONFIG" timeout 10s "$FM_ROOT/bin/fm-guard.sh" 2>&1) || guard_rc=$?
+  guard_rc=${guard_rc:-0}
+  if [ "$guard_rc" -ne 0 ]; then
+    echo "GUARD ERROR (exit $guard_rc): $guard_out"
+    has_findings=1
+    finding_reasons+=("Guard execution failed (exit $guard_rc)")
+  elif [ -n "$guard_out" ]; then
+    echo "GUARD WARNING / ALARM:"
+    echo "$guard_out"
+    has_findings=1
+    finding_reasons+=("Watcher/guard warning active")
+  else
+    echo "Watcher: healthy (no guard warnings)"
+  fi
+else
+  echo "GUARD ERROR: $FM_ROOT/bin/fm-guard.sh not found or not executable"
+  has_findings=1
+  finding_reasons+=("fm-guard.sh missing")
+fi
+
+if [ -x "$FM_ROOT/bin/fm-lock.sh" ]; then
+  lock_rc=0
+  lock_out=$(FM_ROOT_OVERRIDE="$FM_ROOT" FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" timeout 5s "$FM_ROOT/bin/fm-lock.sh" status 2>&1) || lock_rc=$?
+  lock_rc=${lock_rc:-0}
+  echo "Session lock: $lock_out"
+  if [ "$lock_rc" -ne 0 ]; then
+    has_findings=1
+    finding_reasons+=("fm-lock.sh status failed (exit $lock_rc)")
+  else
+    case "$lock_out" in
+      *"stale"* | *"unreadable"*)
+        has_findings=1
+        finding_reasons+=("Session lock issue: $lock_out")
+        ;;
+    esac
+  fi
+fi
+
+# ------------------------------------------------------------------------------
+# 2. Phantom in-flight records
+# ------------------------------------------------------------------------------
+echo "=== 2. PHANTOM IN-FLIGHT RECORDS ==="
+phantom_count=0
+if [ -d "$STATE" ]; then
+  for meta in "$STATE"/*.meta; do
+    [ -f "$meta" ] || continue
+    id=$(basename "$meta" .meta)
+
+    # Secondmates are persistent homes, not ordinary in-flight worker tasks
+    kind=$(fm_meta_get "$meta" kind 2>/dev/null || true)
+    [ "$kind" != "secondmate" ] || continue
+
+    # Check endpoint liveness
+    window=$(fm_meta_get "$meta" window 2>/dev/null || true)
+    target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
+    backend=$(fm_backend_of_meta "$meta" 2>/dev/null || true)
+    [ -n "$backend" ] || backend="tmux"
+
+    endpoint_alive=0
+    if [ -n "$window" ]; then
+      if command -v fm_backend_target_exists >/dev/null 2>&1; then
+        if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
+          endpoint_alive=1
+        fi
+      fi
+    fi
+
+    if [ "$endpoint_alive" -eq 1 ]; then
+      # Genuinely live worker - NOT a phantom
+      continue
+    fi
+
+    # Endpoint is dead. Inspect worktree to see if clean/landed.
+    wt=$(fm_meta_get "$meta" worktree 2>/dev/null || true)
+    wt_clean_landed=0
+
+    if [ -z "$wt" ] || [ ! -e "$wt" ]; then
+      # Worktree directory does not exist: already removed or never created
+      wt_clean_landed=1
+    elif [ -d "$wt" ]; then
+      # Check uncommitted changes
+      dirty=$(git -C "$wt" status --porcelain 2>/dev/null | grep -vE '^\?\? (\.claude/|\.fm-(grok|kimi)-turnend$)' | head -1 || true)
+      if [ -z "$dirty" ]; then
+        # No uncommitted changes! Check if commits are on remote or merged into default branch
+        unpushed=$(git -C "$wt" log --oneline HEAD --not --remotes -- 2>/dev/null | head -1 || true)
+        if [ -z "$unpushed" ]; then
+          wt_clean_landed=1
+        else
+          default_ref=$(git -C "$wt" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || true)
+          default_branch=${default_ref##*/}
+          [ -n "$default_branch" ] || default_branch=$(git -C "$wt" branch --list main master 2>/dev/null | tr -d '* ' | head -1 || true)
+          [ -n "$default_branch" ] || default_branch="main"
+          unmerged=$(git -C "$wt" log --oneline HEAD --not "$default_branch" -- 2>/dev/null | head -1 || true)
+          if [ -z "$unmerged" ]; then
+            wt_clean_landed=1
+          elif [ "$kind" = "scout" ]; then
+            if [ -f "$FM_HOME/data/$id/report.md" ] || [ -f "$FM_ROOT/data/$id/report.md" ]; then
+              wt_clean_landed=1
+            fi
+          fi
+        fi
+      fi
+    fi
+
+    if [ "$wt_clean_landed" -eq 1 ]; then
+      echo "PHANTOM RECORD: $id (endpoint $backend:${target:-$window} dead, worktree clean/landed)"
+      phantom_count=$((phantom_count + 1))
+      has_findings=1
+      finding_reasons+=("Phantom task record: $id")
+    fi
+  done
+fi
+
+if [ "$phantom_count" -eq 0 ]; then
+  echo "Phantom records: none detected (0)"
+else
+  echo "Phantom records found: $phantom_count"
+fi
+
+# ------------------------------------------------------------------------------
+# 3. Project capacity & idle workers
+# ------------------------------------------------------------------------------
+echo "=== 3. PROJECT CAPACITY & IDLE WORKERS ==="
+project_name="${FM_PROJECT_NAME:-$(basename "$FM_ROOT")}"
+
+if command -v fm_project_capacity_lookup >/dev/null 2>&1; then
+  if ! fm_project_capacity_lookup "$CONFIG" "$project_name"; then
+    echo "CAPACITY ERROR: $FM_PROJECT_CAPACITY_ERROR"
+    has_findings=1
+    finding_reasons+=("Capacity lookup error: $FM_PROJECT_CAPACITY_ERROR")
+  fi
+else
+  FM_PROJECT_CAPACITY=""
+fi
+
+# Count live workers from backend truth: herdr pane list counting working panes
+live_workers=0
+herdr_bin=$(command -v herdr 2>/dev/null || echo "/usr/local/bin/herdr")
+if [ -x "$herdr_bin" ] && timeout 5s "$herdr_bin" workspace list >/dev/null 2>&1; then
+  pane_json=$(timeout 8s "$herdr_bin" pane list 2>/dev/null || true)
+  if [ -n "$pane_json" ]; then
+    live_workers=$(printf '%s' "$pane_json" | jq -r '[.result.panes // .panes // [] | .[] | select(.agent_status == "working")] | length' 2>/dev/null || echo 0)
+  fi
+else
+  # Non-herdr fallback (e.g. tmux test environments)
+  if [ -d "$STATE" ]; then
+    for meta in "$STATE"/*.meta; do
+      [ -f "$meta" ] || continue
+      kind=$(fm_meta_get "$meta" kind 2>/dev/null || true)
+      [ "$kind" != "secondmate" ] || continue
+      window=$(fm_meta_get "$meta" window 2>/dev/null || true)
+      [ -n "$window" ] || continue
+      target=$(fm_backend_target_of_meta "$meta" 2>/dev/null || true)
+      backend=$(fm_backend_of_meta "$meta" 2>/dev/null || true)
+      [ -n "$backend" ] || backend="tmux"
+      id=$(basename "$meta" .meta)
+      if command -v fm_backend_target_exists >/dev/null 2>&1; then
+        if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
+          live_workers=$((live_workers + 1))
+        fi
+      fi
+    done
+  fi
+fi
+
+# Count in-flight task records (separate number from live agents)
+meta_records=0
+if [ -d "$STATE" ]; then
+  for meta in "$STATE"/*.meta; do
+    [ -f "$meta" ] || continue
+    kind=$(fm_meta_get "$meta" kind 2>/dev/null || true)
+    [ "$kind" != "secondmate" ] || continue
+    meta_records=$((meta_records + 1))
+  done
+fi
+echo "Task records: $meta_records meta record(s) in state"
+
+if [ -n "${FM_PROJECT_CAPACITY:-}" ]; then
+  total_cap="$FM_PROJECT_CAPACITY"
+  idle_cap=$((total_cap - live_workers))
+  [ "$idle_cap" -ge 0 ] || idle_cap=0
+  echo "Capacity: running/total = $live_workers/$total_cap (idle: $idle_cap)"
+  if [ "$live_workers" -lt "$total_cap" ]; then
+    echo "IDLE CAPACITY: $idle_cap slot(s) available ($live_workers running of $total_cap total declared)"
+  fi
+else
+  echo "Capacity: running/total = $live_workers/uncapped (no project-capacity declared for $project_name)"
+fi
+
+# ------------------------------------------------------------------------------
+# 4. Gate health
+# ------------------------------------------------------------------------------
+echo "=== 4. GATE HEALTH ==="
+if [ "${HERDR_CAP_CHECK_SKIP:-0}" = "1" ]; then
+  echo "Gate check: skipped by HERDR_CAP_CHECK_SKIP"
+else
+  herdr_bin=$(command -v herdr 2>/dev/null || echo "/usr/local/bin/herdr")
+  herdr_up=0
+  if [ -x "$herdr_bin" ] && timeout 5s "$herdr_bin" workspace list >/dev/null 2>&1; then
+    herdr_up=1
+  fi
+
+  cap_check_bin="${HERDR_CAP_CHECK_BIN:-/root/bin/herdr-subagent-cap-check}"
+  if [ -x "$cap_check_bin" ]; then
+    if [ "$herdr_up" -eq 1 ]; then
+      ws_arg="${HERDR_WORKSPACE_ID:-}"
+      if [ -z "$ws_arg" ]; then
+        ws_arg=$(timeout 5s "$herdr_bin" workspace list 2>/dev/null | jq -r '.result.workspaces[0].workspace_id // empty' 2>/dev/null || true)
+      fi
+      cap_rc=0
+      cap_out=$(timeout 8s "$cap_check_bin" ${ws_arg:+"$ws_arg"} 2>&1) || cap_rc=$?
+      cap_rc=${cap_rc:-0}
+      if [ "$cap_rc" -eq 3 ]; then
+        echo "BROKEN GATE: $cap_check_bin reported failure (exit 3: server unavailable) while herdr service is plainly up!"
+        echo "  Output: $cap_out"
+        has_findings=1
+        finding_reasons+=("Broken gate: herdr-subagent-cap-check exit 3 while herdr is up")
+      elif [ "$cap_rc" -ne 0 ] && [ "$cap_rc" -ne 64 ]; then
+        echo "BROKEN GATE: $cap_check_bin unexpected failure (exit $cap_rc) while herdr service is plainly up!"
+        echo "  Output: $cap_out"
+        has_findings=1
+        finding_reasons+=("Broken gate: herdr-subagent-cap-check exit $cap_rc while herdr is up")
+      else
+        echo "Gate OK: $cap_check_bin functional (exit $cap_rc)"
+      fi
+    else
+      echo "Gate: herdr service is not running; skipping herdr-subagent-cap-check"
+    fi
+  else
+    echo "Gate: $cap_check_bin not present; skipped"
+  fi
+fi
+
+# ------------------------------------------------------------------------------
+# Verdict Announcement
+# ------------------------------------------------------------------------------
+echo "================================================================================"
+if [ "$has_findings" -eq 0 ]; then
+  echo "LANE HYGIENE VERDICT: HEALTHY (0 findings)"
+  echo "All lane hygiene checks passed."
+  echo "================================================================================"
+  exit 0
+else
+  echo "LANE HYGIENE VERDICT: FINDINGS DETECTED (${#finding_reasons[@]} finding(s))"
+  for reason in "${finding_reasons[@]}"; do
+    echo " - $reason"
+  done
+  echo "================================================================================"
+  exit 1
+fi

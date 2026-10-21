@@ -171,6 +171,32 @@ test_pi_snippet_uses_effective_extension_path() {
   pass "pi supervision snippet renders the effective extension path"
 }
 
+test_docs_first_captain_question_rule_reaches_every_harness() {
+  local harness out count
+  for harness in pi pi-signed minimax-code claude codex opencode grok not-real; do
+    out=$("$RENDER" --harness "$harness")
+    assert_contains "$out" 'Before asking the Captain a design, architecture, or ownership question:' \
+      "$harness block is missing the docs-first captain-question rule"
+    assert_contains "$out" 'If a doc already answers it, do not ask. State the answer and name the doc that decided it.' \
+      "$harness block lost the do-not-ask-when-a-doc-answers clause"
+    assert_contains "$out" 'Ask only when the docs are genuinely silent.' \
+      "$harness block lost the ask-only-when-silent clause"
+    assert_contains "$out" 'names the docs consulted and why they were silent' \
+      "$harness block lost the checkable follow-up test"
+    count=$(printf '%s\n' "$out" | grep -cF 'Before asking the Captain a design, architecture, or ownership question:')
+    [ "$count" = "1" ] || fail "$harness block emitted the docs-first rule $count times instead of once"
+  done
+  pass "every harness block carries the docs-first captain-question rule exactly once"
+}
+
+test_docs_first_rule_is_absent_from_the_repair_line() {
+  local out
+  out=$("$RENDER" --harness pi --repair-line)
+  assert_not_contains "$out" 'Before asking the Captain' \
+    "repair line must stay a single watcher repair instruction"
+  pass "repair-line mode stays a single watcher instruction"
+}
+
 test_selected_harness_block_only
 test_unknown_fallback
 test_conditional_stanzas
@@ -180,3 +206,5 @@ test_pi_signed_preserves_identity_with_pi_supervision_protocol
 test_grok_is_background_notify
 test_grok_command_sources_effective_config
 test_pi_snippet_uses_effective_extension_path
+test_docs_first_captain_question_rule_reaches_every_harness
+test_docs_first_rule_is_absent_from_the_repair_line
