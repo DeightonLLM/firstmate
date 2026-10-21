@@ -207,6 +207,13 @@ def collect(repo, stale_days, now):
     residuals = []
     art_dirs = [pathlib.Path(repo) / "data" / "hd2-takeover",
                 pathlib.Path(repo) / "docs" / "hd2-residuals"]
+    # A lane's own report is an artifact too. data/<lane>/report.md is where every lane
+    # writes its verdict, so a report that ends with a VERDICT and no NEXT line is exactly
+    # the leftover the contract is meant to surface - it must not be invisible just because
+    # it lives under data/ instead of a takeover directory.
+    for report in sorted((pathlib.Path(repo) / "data").glob("*/report.md")):
+        art_dirs.append(report.parent)
+    seen_artifacts = set()
     for d in art_dirs:
         if not d.is_dir():
             continue
@@ -218,7 +225,11 @@ def collect(repo, stale_days, now):
             if not VERDICT_RE.search(text):
                 continue
             if not NEXT_RE.search(text):
-                residuals.append({"artifact": str(f.relative_to(repo)),
+                artifact = str(f.relative_to(repo))
+                if artifact in seen_artifacts:
+                    continue
+                seen_artifacts.add(artifact)
+                residuals.append({"artifact": artifact,
                                   "verdict": (re.findall(r"VERDICT\s*:\s*([^\n]{0,80})", text) or [""])[0].strip(),
                                   "next_line": None})
 
