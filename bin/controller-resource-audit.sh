@@ -10,8 +10,29 @@
 #
 #   Every six hours: host identity, disk, memory/swap, load, journal size, Docker
 #   summary, protected-service status, and the exact approved retention paths.
-#   At 75% root usage: report CAPACITY_WARN. At 80%: report
-#   CAPACITY_REVIEW_REQUIRED. At 85%: report CAPACITY_BLOCK_NEW_PLACEMENT.
+#
+#   Disk verdict ladder (root filesystem usage):
+#     >= 80%  CAPACITY_BLOCK_NEW_PLACEMENT  - the Captain's hard ceiling
+#     >= 75%  CAPACITY_REVIEW_REQUIRED       - review before placing anything new
+#     >= 70%  CAPACITY_EARLY_WARNING         - act while there is still headroom
+#     <  70%  CAPACITY_OK
+#
+#   Why the ceiling blocks at 80%, and why the early warning sits at 70%:
+#   the Captain ordered the root filesystem not to be allowed past 80% from here
+#   on in. That makes 80% the BLOCK boundary, not a review boundary: a review
+#   that only begins once the line has been reached has no room left to act in.
+#   So the review tier moves down to 75%, and the early warning tier sits at
+#   70% - a full 10 points of headroom between "tell the Captain now" and "the
+#   ceiling is reached". That window is what makes the known-safe reclaim
+#   targets usable: they can be reclaimed while there is still room, instead of
+#   being discovered at the moment the ceiling is hit. 70% is deliberately not
+#   lower than this: a warning that fires constantly is a warning that gets
+#   ignored, and an early warning nobody acts on is decoration.
+#
+#   CAPACITY_WARN was the old 75% tier and this ladder retires it. The old
+#   ladder was 75 -> CAPACITY_WARN, 80 -> CAPACITY_REVIEW_REQUIRED,
+#   85 -> CAPACITY_BLOCK_NEW_PLACEMENT, which put the block boundary a full 5
+#   points ABOVE the Captain's ceiling.
 #   On every run: overwrite resource-audit/latest.md and trim the event ledger;
 #   never accumulate a new full snapshot per cycle.
 #
@@ -25,6 +46,7 @@
 #                               [--retention-root DIR]
 #                               [--extra-candidate PATH]...
 #   controller-resource-audit.sh --print-verdict [--root-used-percent N]
+#   controller-resource-audit.sh verdict <percent>
 #   controller-resource-audit.sh --next-run ISO8601
 #   controller-resource-audit.sh --check-timer-unit PATH
 #   controller-resource-audit.sh --help
@@ -119,12 +141,12 @@ check_timer_unit() {  # <unit path>
 
 verdict_for_percent() {  # <integer 0-100>
   local pct=$1
-  if [ "$pct" -ge 85 ]; then
+  if [ "$pct" -ge 80 ]; then
     printf 'CAPACITY_BLOCK_NEW_PLACEMENT\n'
-  elif [ "$pct" -ge 80 ]; then
-    printf 'CAPACITY_REVIEW_REQUIRED\n'
   elif [ "$pct" -ge 75 ]; then
-    printf 'CAPACITY_WARN\n'
+    printf 'CAPACITY_REVIEW_REQUIRED\n'
+  elif [ "$pct" -ge 70 ]; then
+    printf 'CAPACITY_EARLY_WARNING\n'
   else
     printf 'CAPACITY_OK\n'
   fi
@@ -295,8 +317,8 @@ emit_report() {  # <percent> <verdict> <timestamp>
     printf '%s\n' "- root used: ${pct}%"
     printf '%s\n' "- verdict: $verdict"
     case "$verdict" in
-      CAPACITY_WARN)
-        printf '\n## Admitted by this verdict\n\nNo new service is placed without a fresh audit and headroom proof.\n' ;;
+      CAPACITY_EARLY_WARNING)
+        printf '\n## Admitted by this verdict\n\nThere is still headroom. Reclaim the known-safe targets now, while the disk is still below the ceiling.\n' ;;
       CAPACITY_REVIEW_REQUIRED)
         printf '\n## Admitted by this verdict\n\nDispatch preflight remains the admission gate; cleanup stays operator-authorized.\n' ;;
       CAPACITY_BLOCK_NEW_PLACEMENT)
@@ -379,6 +401,15 @@ while [ "$#" -gt 0 ]; do
       ;;
     --help|-h)
       usage
+      exit 0
+      ;;
+    verdict)
+      # The verdict subcommand is the guard's contract: capacity-guard calls
+      # "<audit> verdict <percent>" and must never have to know the thresholds
+      # itself. It answers with the threshold token and nothing else.
+      [ "$#" -ge 2 ] || die_usage "verdict needs a percent 0-100"
+      is_measurable_percent "$2" || die_usage "verdict needs a percent 0-100, got '$2'"
+      verdict_for_percent "$2"
       exit 0
       ;;
     *) die_usage "unknown argument '$1'" ;;
