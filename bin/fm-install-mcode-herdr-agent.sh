@@ -69,8 +69,13 @@ exec "$REPO_ROOT/bin/fm-herdr-agent-report.sh" "\$@"
 SHIM_EOF
 chmod 0755 "$SHIM"
 
-if ! mcode plugin add "$PLUGIN_NAME@local" >/dev/null 2>&1; then
-  printf 'Plugin package published to %s, but mcode plugin add failed.\n' "$MARKETPLACE_DIR" >&2
+# The local marketplace enumerates a bare package directory on its own, so the
+# package is already present once it is copied. `mcode plugin add` resolves
+# against the catalogue and does not see a bare local package, so it fails even
+# when the package is published correctly; `enable` is the operation that
+# actually turns the published package on.
+if ! mcode plugin enable "$PLUGIN_NAME@local" >/dev/null 2>&1; then
+  printf 'Plugin package published to %s, but mcode plugin enable failed.\n' "$MARKETPLACE_DIR" >&2
   printf 'Enable it with: mcode plugin enable %s@local\n' "$PLUGIN_NAME" >&2
   exit 1
 fi
