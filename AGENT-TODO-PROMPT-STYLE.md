@@ -31,7 +31,8 @@ Do not confuse Highspeed with reasoning effort.
 ## Lane keys and dispatch
 
 Use `<harness>-<model>-<host>-<task>` for lane keys, lowercase and without spaces.
-Use the documented model aliases from `docs/todo-prefix-canonical-format.md`, such as `m2.7h` and `m3.1`; record exact catalog identifiers in the dispatch evidence.
+Use the documented model aliases from `docs/todo-prefix-canonical-format.md`, such as `m3.1f` and `m3.1`; record exact catalog identifiers in the dispatch evidence.
+A retired alias such as `m2.7h` resolves for history only and is refused for a new lane key.
 Captain permits MCode MiniMax M2.7 Highspeed asynchronous workers directly, or a MCode M3.1 lead coordinating M2.7 workers and reviewing within the same run.
 Do not infer an exact catalog identifier, silently substitute a model, or invent a persistent second mate from a one-shot lead.
 Every worker receives this naming contract before work starts.

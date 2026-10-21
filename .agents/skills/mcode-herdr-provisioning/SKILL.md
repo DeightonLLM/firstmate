@@ -132,25 +132,29 @@ correctly-provisioned lane still fails to dispatch.
 | What | Format | Owner |
 |---|---|---|
 | Preflight lane label | `<domain>-<surface>-<model>-<taskslug>`, exactly four lowercase segments | `/root/bin/fm-dispatch-preflight` |
-| Spawn task id (lane key) | `<model>-<surface>-<task>` | `bin/fm-lane-naming-check.sh`, enforced by `bin/fm-spawn.sh` |
+| Spawn task id (lane key) | `<harness>-<model>-<host>-<task>` | `bin/fm-todo-prefix-check.sh`, enforced by `bin/fm-spawn.sh` through `bin/fm-lane-naming-check.sh` |
 | To-Do board row | far-left `[<harness>·<ModelAbbrev> <effort> @<Host>]` | `bin/fm-todo-prefix-check.sh` |
 
-Lane key segments: model aliases `m2.7h`, `m2.7`, `m3.1f`, `luna6`, `glm5.3f`, `gem38f`,
-`pi`; surface aliases `dubz`, `hd2`, `brandon`, `evps`, `firstmate`; task is lowercase
-alphanumeric with hyphens.
+Lane key segments: harness token `pi`, `codex`, `claude`, `opencode`, `mcode`, `grok`,
+`kimi`, `agy`, `minimax-code`; model aliases `m3.1f`, `m3.1`, `luna6`, `glm5.3f`,
+`gem38f`, `pi` (active) and `m2.7h`, `m2.7` (retired: they resolve for history and are
+refused for a new lane key); host segment is any hostname token, this fleet uses
+`brandon`, `hd2stack`, `controller`, `elevate`, and a lane in the main firstmate home
+runs on `controller`; task is lowercase alphanumeric with hyphens.
 
 To-Do prefix: the harness token must be one of `pi`, `codex`, `claude`, `opencode`,
 `mcode`, `grok`, `kimi`, `agy`, and the badge must sit at the far left of the row.
 
-Known drift, stated so it is not rediscovered: `bin/fm-todo-prefix-check.sh --lane-key`
-documents the lane key as `<harness>-<model>-<host>-<task>` (four segments, harness
-first), while `bin/fm-lane-naming-check.sh` accepts the three-segment
-`<model>-<surface>-<task>` form. `bin/fm-spawn.sh` gates the task id through the latter,
-so **the three-segment form is the one that dispatches**. Probe both before assuming:
+The lane key has one shape and one owner, so there is nothing to probe twice:
+`bin/fm-todo-prefix-check.sh` owns the naming vocabulary, and
+`bin/fm-lane-naming-check.sh` forwards every check to it without keeping a second copy.
+`bin/fm-spawn.sh` gates the task id through the latter, so **the canonical
+four-segment form is the one that dispatches**. The harness segment is not optional:
+without it a `mcode` lane and a `pi` lane running the same model are
+indistinguishable.
 
 ```sh
 bin/fm-lane-naming-check.sh "<candidate-lane-key>"
-bin/fm-todo-prefix-check.sh --lane-key "<candidate-lane-key>"
 ```
 
 ## Dispatch and supervision

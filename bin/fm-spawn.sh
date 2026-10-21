@@ -1010,14 +1010,14 @@ if [ -n "$SPAWN_PROJECT_CAPACITY" ]; then
 fi
 [ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
 # Lane naming enforcement: the task ID IS the lane key (AGENT-TODO-PROMPT-STYLE.md).
-# Validate it against the <model>-<surface>-<task> convention before any endpoint,
-# worktree, or state mutation. Secondmates use a different naming convention and
-# are exempt. Exit 5 = lane naming violation.
+# Validate it against the canonical <harness>-<model>-<host>-<task> convention
+# before any endpoint, worktree, or state mutation. Secondmates use a different
+# naming convention and are exempt. Exit 5 = lane naming violation.
 # Grandfather clause: if state/<id>.meta already exists, the task is an existing
 # recovery case and the naming rule does not apply (would strand unlanded work).
 if [ "$KIND" != secondmate ] && [ ! -f "$STATE/$ID.meta" ]; then
   if ! "$FM_ROOT/bin/fm-lane-naming-check.sh" "$ID" 2>&1; then
-    echo "error: lane key '$ID' violates the <model>-<surface>-<task> naming convention; fix the task ID before spawning" >&2
+    echo "error: lane key '$ID' violates the canonical <harness>-<model>-<host>-<task> naming convention; fix the task ID before spawning" >&2
     exit 5
   fi
 fi

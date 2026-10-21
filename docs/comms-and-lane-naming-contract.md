@@ -34,11 +34,14 @@ A notification is not delivery. A "delivered" report is not receipt. If you cann
 
 [`AGENT-TODO-PROMPT-STYLE.md`](../AGENT-TODO-PROMPT-STYLE.md) owns the naming format; the validator enforces only part of that contract and is not its definition.
 
+The format has one owner: `bin/fm-todo-prefix-check.sh` holds the model alias table, the harness and effort tokens, the lane-key shape and the registry rules. `bin/fm-lane-naming-check.sh` is an entry point that forwards every check to that owner, so the two cannot disagree.
+
 When given a registry file, `bin/fm-lane-naming-check.sh` requires each `lane_key` to match `<harness>-<model>-<host>-<task>`, with a recognized harness segment, and checks the model and host against the row's model and surface fields.
 The registry check also requires each `run_id` to be a UUID unique to one row; duplicate IDs are rejected, as verified by the negative control in `tests/fm-lane-naming-check.test.sh`.
 
-Known defect: direct single-key input still accepts a key without a harness segment, so a key rejected in the registry can pass when supplied directly to the checker.
-The existing test's passing assertion for `m2.7-hd2-build` exercises this legacy direct-input behavior; closing this gap is a separate change that needs its own test and the Captain's merge authorization.
+Closed defect: direct single-key input used to accept a key without a harness segment, so a key rejected in the registry could pass when supplied directly to the checker, and `bin/fm-spawn.sh` gated on that accepted form.
+The direct input path now enforces the same canonical four-segment rule as the registry path, so a key that is refused in the registry is refused directly too, and the spawn gate refuses a three-segment key with exit 5.
+The legacy direct-input behavior is gone, and the tests in `tests/fm-lane-naming-check.test.sh` and `tests/fm-lane-naming-spawn-integrity.test.sh` assert the closed behavior in both directions.
 
 ## 5. Model visibility and cost
 
