@@ -388,6 +388,14 @@ Two properties of the window are deliberate and worth stating plainly:
   of this lane's scope, but the protocol doc now describes a supervisor whose
   behaviour has one more documented mode (coalesced republications). A
   follow-up doc lane would be worth it.
+
+VERDICT: PASS
+
+*(Task 1's verdict, as recorded when task 1 was delivered. Task 2 below
+corrects a defect in the test suite that task 1 shipped: the isolation check
+task 1 reported as passing asserted the absence of supervisor artefacts in the
+home under test, so it passed only when that home was idle.)*
+
 ---
 
 # Task 2 — the live-home isolation check
