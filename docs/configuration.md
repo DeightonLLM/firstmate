@@ -290,6 +290,37 @@ Malformed JSON, an empty or malformed rule/default array, an unverified harness,
 While the file remains present, no crewmate or scout spawn may proceed without an explicit resolved harness; malformed configuration must be reported and corrected rather than selected around.
 Secondmate homes inherit this file from the primary, so a secondmate's own crewmates apply the same dispatch profile behavior.
 
+## Temporary dispatch directives (config/temporary-directives.json)
+
+A temporary directive is a dispatch instruction that carries its own expiry, so an instruction meant for the next few hours stops applying when its time is up instead of quietly becoming the standing rule.
+`bin/fm-temporary-directive.sh` owns the store, its shape and its expiry.
+The store is one local, gitignored file, `config/temporary-directives.json`, and an absent store means no directive is in force.
+
+```bash
+bin/fm-temporary-directive.sh set --id minimax-hold --until 6h \
+  --harness pi --model minimax/MiniMax-M3.1-Flash-Preview --effort medium \
+  --reason "MiniMax 5h window measured at 6% remaining"
+bin/fm-temporary-directive.sh status
+bin/fm-temporary-directive.sh clear --id minimax-hold
+```
+
+`--until` takes a duration (`90m`, `6h`, `2d`, `1w`) or an ISO-8601 instant, and a duration is resolved to an absolute instant when the directive is recorded, so the directive still expires on time across a restart.
+`--reason` is required, because a temporary directive with no reason is a mystery switch rather than a temporary directive.
+`--id` is a stable slug that names the directive, and setting a directive again replaces the one with the same id.
+A directive is live until its expiry instant, expired after it, and cleared once it was cleared.
+An expired directive stays visible in `list` and `status` until it is cleared, and it never applies again.
+When more than one directive is live, the most recently recorded one wins.
+
+`bin/fm-dispatch-resolve.sh` applies a live temporary directive over the standing dispatch rules, ignores an expired one and says so on the resolution output, and refuses a malformed store with an actionable error instead of resolving around it.
+With no live directive the standing dispatch rules resolve exactly as they did before this knob existed.
+A malformed store is preserved as it is: `set` and `clear` refuse to write over it, and the reason is reported.
+
+`bin/fm-temporary-directive.sh staleness` compares the standing dispatch directive's recorded justification, the `_mode` block of `config/crew-dispatch.json`, with a current `quota-axi --json --no-credential-refresh` reading, and reports a standing directive whose stated reason no longer holds, naming what it claimed, what is true now, and that it should be re-measured, updated or replaced.
+The check only compares a percentage that is attached to a named window, because checking an unnamed percentage would mean guessing which window it described.
+It never changes the standing directive: a human or the firstmate decides.
+The reading is read-only and never refreshes a credential.
+`status` reports the effective decision together with that check.
+
 ## Toolchain
 
 On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.
