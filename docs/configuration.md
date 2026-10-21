@@ -313,6 +313,20 @@ Never pass `controller` to `fm-spawn.sh`; it refuses it with "error: unknown har
 With `config/crew-dispatch.json` present, a crewmate or scout spawn without an explicit `--harness` is refused with "config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)".
 That refusal is the backstop, not an error to work around.
 
+### Dispatch profile spawn blocks, and the current default route
+
+A rule's `use` object may carry a `spawn` object that states the exact command for that rule, so that a second mate never has to reconstruct it from the fields and never guesses.
+
+`spawn.harness`, `spawn.model` and `spawn.effort` are the values to pass to `bin/fm-spawn.sh`.
+`spawn.command` is the literal command line for a reader, and it must agree with the other three.
+`spawn.note` is optional, and carries anything a reader needs to know that the command line does not say.
+A `spawn` object is documentation, not a second source of truth: `fm-spawn.sh` reads `harness`, `model` and `effort` from the profile itself, and never from `spawn`.
+
+Since 2026-10-21 the default route for every delegated lane is the `minimax-code` harness with the M3.1 Flash model `minimax/MiniMax-M3.1-Flash-Preview`, because that route's M3.1 Flash usage is free until 2026-10-25 while the `pi` route and every other provider are API calls that draw the account's quota.
+A lane uses one of those other providers only when it genuinely needs that provider, and only after a fresh `quota-axi` reading shows the headroom.
+When the free window ends, re-read the quota and the cost before changing the default; the free window is a reason to prefer one route, not an exemption from the quota gate.
+A dispatch profile that names a provider for a specific need, for example a web-connected lookup, keeps that rule and the quota reading that justifies it.
+
 ## Toolchain
 
 On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.
