@@ -17,6 +17,13 @@
 #     >= 70%  CAPACITY_EARLY_WARNING         - act while there is still headroom
 #     <  70%  CAPACITY_OK
 #
+#   The ladder itself is OWNED by bin/fm-capacity-gate.sh - the single shared
+#   owner of the disk-capacity ladder and of the admission decision it drives.
+#   This script is the read-only sampler and it DELEGATES its verdict to that
+#   owner, so the repo carries exactly one copy of the thresholds. The ladder
+#   is shown above as documentation of the contract, not as a second
+#   implementation: the values that decide are the owner's values.
+#
 #   Why the ceiling blocks at 80%, and why the early warning sits at 70%:
 #   the Captain ordered the root filesystem not to be allowed past 80% from here
 #   on in. That makes 80% the BLOCK boundary, not a review boundary: a review
@@ -58,6 +65,7 @@
 #   4  root usage could not be measured (CAPACITY_UNMEASURABLE)
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CADENCE_HOURS=6
 DEFAULT_REPORT_DIR=/root/resource-audit
 DEFAULT_LEDGER_MAX=50
@@ -138,18 +146,29 @@ check_timer_unit() {  # <unit path>
 }
 
 # --- threshold verdicts ------------------------------------------------------
+#
+# THE LADDER LIVES IN THE SHARED OWNER, NOT HERE.
+#
+# bin/fm-capacity-gate.sh is the single owner of the disk-capacity ladder and of
+# the admission decision it drives. This script delegates its verdict to that
+# owner, so the repo carries exactly ONE copy of the thresholds and no surface
+# can drift from another. A script that invents its own thresholds is how a
+# second gate gets written by accident.
+#
+# The standalone host twin at /root/bin/controller-resource-audit.sh is a
+# deployment of this file for the six-hourly systemd audit, and it must be
+# refreshed from the shared owner whenever the ladder changes.
+CAPACITY_GATE="${FM_CAPACITY_GATE:-}"
+if [ -z "$CAPACITY_GATE" ]; then
+  for cand in "$SCRIPT_DIR/fm-capacity-gate.sh" "/root/bin/fm-capacity-gate.sh"; do
+    if [ -x "$cand" ]; then CAPACITY_GATE="$cand"; break; fi
+  done
+fi
 
 verdict_for_percent() {  # <integer 0-100>
   local pct=$1
-  if [ "$pct" -ge 80 ]; then
-    printf 'CAPACITY_BLOCK_NEW_PLACEMENT\n'
-  elif [ "$pct" -ge 75 ]; then
-    printf 'CAPACITY_REVIEW_REQUIRED\n'
-  elif [ "$pct" -ge 70 ]; then
-    printf 'CAPACITY_EARLY_WARNING\n'
-  else
-    printf 'CAPACITY_OK\n'
-  fi
+  [ -n "$CAPACITY_GATE" ] && [ -x "$CAPACITY_GATE" ] || return 1
+  "$CAPACITY_GATE" verdict "$pct"
 }
 
 is_measurable_percent() {  # <string>
@@ -404,12 +423,15 @@ while [ "$#" -gt 0 ]; do
       exit 0
       ;;
     verdict)
-      # The verdict subcommand is the guard's contract: capacity-guard calls
-      # "<audit> verdict <percent>" and must never have to know the thresholds
-      # itself. It answers with the threshold token and nothing else.
+      # The verdict subcommand is the contract the guards call: capacity-gate
+      # and the installed capacity-guard both ask "<audit> verdict <percent>"
+      # and must never have to know the thresholds themselves. It answers with
+      # the threshold token and nothing else.
       [ "$#" -ge 2 ] || die_usage "verdict needs a percent 0-100"
       is_measurable_percent "$2" || die_usage "verdict needs a percent 0-100, got '$2'"
-      verdict_for_percent "$2"
+      if ! verdict_for_percent "$2"; then
+        die_usage "the ladder owner could not produce a verdict (shared owner: ${CAPACITY_GATE:-not found})"
+      fi
       exit 0
       ;;
     *) die_usage "unknown argument '$1'" ;;
@@ -441,7 +463,11 @@ if ! is_measurable_percent "$PCT"; then
   exit 4
 fi
 
-VERDICT=$(verdict_for_percent "$PCT")
+VERDICT=$(verdict_for_percent "$PCT") || {
+  printf 'CAPACITY_UNMEASURABLE: the ladder owner could not produce a verdict for %s%% (shared owner: %s)\n' \
+    "$PCT" "${CAPACITY_GATE:-not found}" >&2
+  exit 4
+}
 
 if [ "$PRINT_VERDICT" -eq 1 ]; then
   printf '%s\n' "$VERDICT"

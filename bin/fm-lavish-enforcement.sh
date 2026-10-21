@@ -258,6 +258,28 @@ collect_enforcements() {
   fi
   printf 'fm-jev-mem-guard\tbin/fm-jev-mem-guard.sh\tBlocks execution when host RSS memory or swap thrashing exceeds safety threshold\tbin/fm-jev-mem-guard.py\t%d\t%s\t%s\tExecute commands via fm-jev-mem-guard.sh wrapper\tExecute command directly without wrapper\n' \
     "$jm_active" "$jm_status" "$jm_details"
+
+  # 15. fm-capacity-gate
+  # The Captain's hard ceiling: the root filesystem must not go past 80% used.
+  # At the ceiling the gate RECLAIMS first (tiers 1-2) and refuses only if the
+  # disk is still over the ceiling afterwards. An unmeasurable disk fails
+  # closed. This is the single shared owner of the ladder and the one reader
+  # in the dispatch path is bin/fm-spawn.sh.
+  local cg_active=0 cg_status="inactive" cg_details=""
+  if [ -x "$SCRIPT_DIR/fm-capacity-gate.sh" ]; then
+    cg_active=1
+    cg_status="active"
+    cg_details="Active: 80% root-usage ceiling enforced by bin/fm-capacity-gate.sh; reclaim-then-refuse; unmeasurable disk fails closed"
+    if [ "${FM_CAPACITY_GATE_BYPASS:-0}" = "1" ] || [ "${FM_DISPATCH_GUARD_CAPACITY_BYPASS:-0}" = "1" ]; then
+      cg_active=0
+      cg_status="inactive"
+      cg_details="Bypassed via FM_CAPACITY_GATE_BYPASS=1 (logged as BYPASS_CAPACITY, never silent)"
+    fi
+  else
+    cg_details="Inactive: bin/fm-capacity-gate.sh not found, so the 80% ceiling is not enforced in the dispatch path"
+  fi
+  printf 'fm-capacity-gate\tbin/fm-capacity-gate.sh\tBlocks a fresh placement when root filesystem usage is at or above 80%%; reclaims first (tiers 1-2) and refuses only if still over; refuses an unmeasurable disk\tFM_CAPACITY_GATE_BYPASS, FM_CAPACITY_GATE_RECLAIM_TIMEOUT_S, FM_CAPACITY_GATE_LOCK\t%d\t%s\t%s\tEnsure FM_CAPACITY_GATE_BYPASS is unset and bin/fm-capacity-gate.sh is executable\tSet FM_CAPACITY_GATE_BYPASS=1 (logged, never silent)\n' \
+    "$cg_active" "$cg_status" "$cg_details"
 }
 
 # ------------------------------------------------------------------------------

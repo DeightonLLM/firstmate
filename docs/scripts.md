@@ -105,7 +105,72 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-public-followup-lib.sh` | Shared relay-activation gate, O(1) presence checks, and private transport paths for promised public replies |
 | `fm-public-followup.sh`  | Reconcile typed terminal work results into a public commitment and deliver its final reply once |
 | `fm-public-followup-emit.sh` | Report one typed terminal work result into the home that owes the public reply    |
-| `controller-resource-audit.sh` | Read-only Controller resource sampler on the documented six-hour cadence; overwrite `latest.md`, trim the event ledger, report 75/80/85 percent verdicts, classify off-allowlist candidates for operator approval |
+| `controller-resource-audit.sh` | Read-only Controller resource sampler on the documented six-hour cadence; overwrite `latest.md`, trim the event ledger, delegate its disk verdict to `fm-capacity-gate.sh`, classify off-allowlist candidates for operator approval |
+| `fm-capacity-gate.sh` | Single shared owner of the disk-capacity ladder and of the reclaim-then-refuse admission decision; consulted by `fm-spawn.sh` before every fresh placement |
+| `fm-capacity-reclaim.sh` | Tiered reclaimer: real-`rm` unlink of regenerable caches and build litter, the merged worktree pool via `treehouse prune`, age-gated transcripts on request, and an archive-class inventory that is reported and never deleted |
+
+## The disk-capacity ceiling
+
+The Captain's hard ceiling is that the root filesystem must not go past **80%** used.
+`bin/fm-capacity-gate.sh` is the **single shared owner** of that ladder and of the decision it
+drives. It owns the thresholds, so there is exactly one copy of them in the repo:
+
+| Root usage | Verdict |
+| ---------- | ------- |
+| `>= 80%`   | `CAPACITY_BLOCK_NEW_PLACEMENT` |
+| `>= 75%`   | `CAPACITY_REVIEW_REQUIRED` |
+| `>= 70%`   | `CAPACITY_EARLY_WARNING` |
+| `< 70%`    | `CAPACITY_OK` |
+
+`bin/controller-resource-audit.sh` is the read-only six-hourly sampler and **delegates** its
+`verdict` subcommand to the gate, so a second copy of the thresholds cannot drift. The gate is
+also the portable contract for any other surface that needs the ladder: `fm-capacity-gate.sh
+verdict <percent>` answers with the token and nothing else.
+
+**One ladder, one reader, no third gate.** `bin/fm-spawn.sh` is the reader: before any fresh
+placement it consults the gate, and it refuses on `CAPACITY_BLOCK_NEW_PLACEMENT`. The project's
+*declared* worker capacity is a different axis and stays where it is, in
+`bin/fm-project-capacity-lib.sh`; that library is never widened to mean disk.
+
+**Reclaim first, then refuse.** At or over the ceiling the gate does not simply refuse. It runs
+`bin/fm-capacity-reclaim.sh --apply` (tiers 1-2), re-measures the disk itself, and re-reads the
+verdict. A disk that came back under the ceiling is **admitted**, and the reclaim is logged. Only
+a disk that is *still* at or over the ceiling afterwards is refused, and the refusal says what the
+reclaim did, what the disk reads now, and what the operator can do.
+
+The reclaim is **bounded** (a wall-clock timeout) and **serialised** (an exclusive `flock` on a
+host-level lock file, with a portable `mkdir` fallback for surfaces without `flock`), so a
+dispatch can never hang on it and two concurrent spawns can never both reclaim. An **unmeasurable
+disk fails closed**: it is refused and the refusal says so.
+
+The bypass is narrow, documented, and logged - never silent:
+
+| Variable | Effect |
+| -------- | ------ |
+| `FM_CAPACITY_GATE_BYPASS=1` | Skip only the disk-capacity check; logged as `BYPASS_CAPACITY` and printed on stderr |
+| `FM_DISPATCH_GUARD_CAPACITY_BYPASS=1` | The same check under its originally briefed name |
+| `FM_CAPACITY_GATE_RECLAIM_TIMEOUT_S` | Wall-clock bound on the reclaim (default 90) |
+| `FM_CAPACITY_GATE_LOCK` | Lock file path (default `/var/lock/fm-capacity-gate.lock`, else `${TMPDIR}/fm-capacity-gate.lock`) |
+| `FM_CAPACITY_GATE_LOCK_WAIT_S` | How long to wait for the reclaim lock (default 30) |
+| `FM_CAPACITY_GATE_DF` | Test seam: a command whose output is parsed like `df -P /` |
+| `FM_CAPACITY_GATE_RECLAIMER` | Test seam: the reclaimer to run |
+
+`tests/fm-capacity-refuse.test.sh` asserts the whole rule by observed behaviour: a reclaim that
+frees nothing refuses, a reclaim that frees space allows, an unmeasurable disk refuses and is
+disclosed, the bypass is logged and skips only this rule, and the reclaim is bounded by its
+timeout.
+
+**The reclaimer is honest about bytes.** `rm` on this host is a recoverable-delete shim that moves
+its target into the trash, which on a single filesystem frees nothing - that is how a guard once
+reported `freedKB=340864` having freed nothing. The reclaimer resolves the **real** `rm` by
+absolute path (and rejects the shim even at those paths) and reports the **measured `df` before and
+after delta**, never a sum of what it believes it deleted. A negative delta is reported honestly as
+"gave back NOTHING" rather than clamped to zero.
+
+Tiers: **1** caches and build litter (always safe to apply) and **2** the worktree pool, delegated
+to `treehouse prune`, which refuses leased, dirty, in-use and unmerged slots. **3** age-gated agent
+transcripts stay opt-in (`--tier 3`). **4** archive-class material - cold but valuable - is
+**reported, never deleted**; `fm-capacity-reclaim.sh --inventory` prints that inventory alone.
 
 ## Controller resource cadence units
 
