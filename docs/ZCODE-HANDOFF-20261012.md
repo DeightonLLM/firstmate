@@ -48,7 +48,7 @@ Synced and at `4332670` on: Controller, HD2 (`root@100.71.95.76`), Brandon
    Never re-introduce "no status file = not working".
 2. **`minimax-code` was undispatchable** because `fm-harness.sh` registered it but
    `fm-spawn.sh` had no launch template. Fixed in `2583d79`. **Brandon's dispatch
-   profile now defaults to `minimax-code`/`MiniMax-M3.1-Flash-Preview` — Brandon's own
+   profile now defaults to `minimax-code`/`MiniMax-M3.1-Flash` — Brandon's own
    quota.** Do not route Brandon client work to Gemini; its per-minute rate limits are
    the fastest-emptying window observed (664 HTTP 429s in one 8-agent fan-out).
    Gemini is hard-reasoning-only now.
@@ -73,7 +73,7 @@ Synced and at `4332670` on: Controller, HD2 (`root@100.71.95.76`), Brandon
 
 1. **Quota-fallback routing** — attempted twice, lost twice (once to the reap-gate bug,
    once to the Gemini quota wall). Extend `bin/fm-dispatch-guard.sh` Rule 4 from
-   *refuse* to *fallback*: Gemini first for Hetz hard work, MiniMax M3.1 Flash Preview light-only,
+   *refuse* to *fallback*: Gemini first for Hetz hard work, MiniMax M3.1 Flash light-only,
    cross-host quota only once a model is genuinely empty. **Never weaken a threshold;
    never add a bypass.** Full brief survived at
    `data/quota-fallback-routing-20261012/brief.md` on HD2.
@@ -164,7 +164,7 @@ FM_HOME=<host-repo> bin/fm-reap-gate.sh --sweep
 herdr tab rename <tab_id> "<MODEL> · <HOST> · fm-<task-id>"
 
 # Spawn on Brandon's own quota (the default profile resolves this)
-bin/fm-spawn.sh <task-id> <repo> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview --backend herdr
+bin/fm-spawn.sh <task-id> <repo> --harness minimax-code --model minimax/MiniMax-M3.1-Flash --backend herdr
 ```
 
 ---

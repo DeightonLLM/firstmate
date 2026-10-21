@@ -38,7 +38,7 @@
 #     family = everything before the first '-' in the model id tail
 #     tier-marker = keyword mapping of the FIRST tier segment:
 #       'highspeed' -> 'h', 'flash' -> 'f', bare/unrecognised -> ''
-#     Example: minimax/MiniMax-M3.1-Flash-Preview   -> m3.1f
+#     Example: minimax/MiniMax-M3.1-Flash           -> m3.1f
 #              minimax/MiniMax-M3.1                 -> m3.1
 #   Other providers (openai-codex, etc.): no programmatic rule defined;
 #   their model ids (gpt-6-luna, gpt-6.1-sol) do not derive to any
@@ -217,18 +217,18 @@ derive_alias() {
   case "$model_id" in
     minimax/MiniMax-M*)
       # Normalise to lowercase for consistent pattern matching.
-      local lower_id="${model_id,,}"  # e.g. minimax/minimax-m3.1-flash-preview
+      local lower_id="${model_id,,}"  # e.g. minimax/minimax-m3.1-flash
       # Strip the provider prefix.
-      local rest="${lower_id#minimax/}"    # e.g. minimax-m3.1-flash-preview
-      # rest is "minimax-m3.1-flash-preview"; remove the leading "minimax-".
-      rest="${rest#minimax-}"              # e.g. m3.1-flash-preview
+      local rest="${lower_id#minimax/}"    # e.g. minimax-m3.1-flash
+      # rest is "minimax-m3.1-flash"; remove the leading "minimax-".
+      rest="${rest#minimax-}"              # e.g. m3.1-flash
       # Extract family: text before the first '-'.
       local family="${rest%%-*}"            # e.g. m3.1
       # Extract tier: text after the first '-', then take only the first
       # segment (before any second '-'), e.g. "highspeed" from "highspeed".
       local tier tier_marker=""
       tier="${rest#*-}"                   # e.g. highspeed (empty if bare)
-      tier="${tier%%-*}"                  # e.g. highspeed (strip trailing -Preview etc.)
+      tier="${tier%%-*}"                  # e.g. highspeed (strip any trailing segment etc.)
       if [ -n "$tier" ]; then
         # tier-marker: map the first tier segment keyword to its letter code.
         # Only the keywords that appear in crew-dispatch.json are mapped.

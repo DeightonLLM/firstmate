@@ -7,7 +7,7 @@
 
 ## Launch contract (every lane, no exceptions)
 1. `quota-dispatch-gate` passes (≥15% headroom; dubz 15-min load < cores).
-2. Pane in the WAR-ROOM grid, label `LANE-<L> · OBJECTIVE`, launched: `/usr/local/bin/mcode-launch --model minimax/MiniMax-M3.1-Flash-Preview`.
+2. Pane in the WAR-ROOM grid, label `LANE-<L> · OBJECTIVE`, launched: `/usr/local/bin/mcode-launch --model minimax/MiniMax-M3.1-Flash`.
 3. VERIFY mechanically: footer shows the expected MODEL id; prompt submitted (Loading/● marker; re-Enter if composer holds text).
 4. Register `state/lanes/<name>.lane` (pane=ssh:hd2stack:…, artifact=remote path, note=…) + LEDGER RUNNING row.
 5. Lane contract: To-Do ≥5 items before first action; non-interactive; AUTONOMY (never ask the coordinator mid-task — decide per standing orders, record rationale; true gates → `VERDICT: FAIL <blocker>` + STOP); BACKUP before mutation (`.bak-<tag>-<date>`); artifact + final `VERDICT: PASS|FAIL` line; then STOP.
