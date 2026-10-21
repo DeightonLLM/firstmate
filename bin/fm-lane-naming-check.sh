@@ -12,7 +12,7 @@
 #   The lane_key segments are cross-checked against the separate model and
 #   surface columns.
 #
-# Model aliases:  m2.7h (MiniMax M2.7 Highspeed), m2.7, m3.1f, luna6, glm5.3f, gem38f, pi
+# Model aliases:  m3.1f, m3.1, luna6, glm5.3f, gem38f, pi
 # Surface aliases: dubz, hd2, brandon, evps, firstmate
 #
 # Exit codes:
@@ -38,9 +38,8 @@
 #     family = everything before the first '-' in the model id tail
 #     tier-marker = keyword mapping of the FIRST tier segment:
 #       'highspeed' -> 'h', 'flash' -> 'f', bare/unrecognised -> ''
-#     Example: minimax/MiniMax-M2.7-highspeed       -> m2.7h
-#              minimax/MiniMax-M3.1-Flash-Preview   -> m3.1f
-#              minimax/MiniMax-M2.7                 -> m2.7
+#     Example: minimax/MiniMax-M3.1-Flash-Preview   -> m3.1f
+#              minimax/MiniMax-M3.1                 -> m3.1
 #   Other providers (openai-codex, etc.): no programmatic rule defined;
 #   their model ids (gpt-6-luna, gpt-6.1-sol) do not derive to any
 #   lane-key alias through the above rule.  Any alias claimed for them
@@ -51,11 +50,11 @@
 set -u
 
 # Canonical sets derived from AGENT-TODO-PROMPT-STYLE.md.
-# Model aliases:  m2.7h (MiniMax M2.7 Highspeed), m2.7, m3.1f, luna6, glm5.3f, gem38f, pi
+# Model aliases:  m3.1f, m3.1, luna6, glm5.3f, gem38f, pi
 # Surface aliases: dubz, hd2, brandon, evps, firstmate
 
 # Build anchored regex patterns (anchored so partial matches are not accepted).
-_model_pat='m2\.7h|m2\.7|m3\.1f|luna6|glm5\.3f|gem38f|pi'
+_model_pat='m3\.1f|m3\.1|luna6|glm5\.3f|gem38f|pi'
 _surface_pat='dubz|hd2|brandon|evps|firstmate'
 # Lane keys are <harness>-<model>-<host>-<task> per AGENT-TODO-PROMPT-STYLE.md
 # (Captain renewed 2026-10-18). The harness segment is NOT optional: without it a
@@ -64,7 +63,7 @@ _surface_pat='dubz|hd2|brandon|evps|firstmate'
 _harness_pat='pi|mcode|claude|codex|opencode|grok|kimi|agy|minimax-code'
 
 # Lane key: <model>-<surface>-<task>
-#   model: one of the canonical aliases (may contain '.' like m2.7)
+#   model: one of the canonical aliases (may contain '.' like m3.1)
 #   surface: one of the canonical aliases
 #   task: any lowercase alphanumeric with hyphens (may include '.')
 _lane_key_pat="^($_harness_pat)-($_model_pat)-($_surface_pat)-[a-z0-9.-]+$"
@@ -218,13 +217,13 @@ derive_alias() {
   case "$model_id" in
     minimax/MiniMax-M*)
       # Normalise to lowercase for consistent pattern matching.
-      local lower_id="${model_id,,}"  # e.g. minimax/minimax-m2.7-highspeed
+      local lower_id="${model_id,,}"  # e.g. minimax/minimax-m3.1-flash-preview
       # Strip the provider prefix.
-      local rest="${lower_id#minimax/}"    # e.g. minimax-m2.7-highspeed
-      # rest is "minimax-m2.7-highspeed"; remove the leading "minimax-".
-      rest="${rest#minimax-}"              # e.g. m2.7-highspeed
+      local rest="${lower_id#minimax/}"    # e.g. minimax-m3.1-flash-preview
+      # rest is "minimax-m3.1-flash-preview"; remove the leading "minimax-".
+      rest="${rest#minimax-}"              # e.g. m3.1-flash-preview
       # Extract family: text before the first '-'.
-      local family="${rest%%-*}"            # e.g. m2.7
+      local family="${rest%%-*}"            # e.g. m3.1
       # Extract tier: text after the first '-', then take only the first
       # segment (before any second '-'), e.g. "highspeed" from "highspeed".
       local tier tier_marker=""
@@ -239,7 +238,7 @@ derive_alias() {
           *)         tier_marker=""  ;;  # Unknown tier: no marker.
         esac
       fi
-      # Result: family + tier_marker, e.g. "m2.7" + "h" = "m2.7h"
+      # Result: family + tier_marker, e.g. "m3.1" + "f" = "m3.1f"
       printf '%s\n' "${family}${tier_marker}"
       ;;
     *)  # All other providers: no derivation rule defined.
@@ -278,7 +277,6 @@ check_alias_dispatch_binding() {
 
   # Build the set of aliases we derive from MiniMax dispatch models.
   local derived_aliases=""
-  local missing_alias_models=""
   while IFS= read -r model_id; do
     [ -n "$model_id" ] || continue
     local alias
@@ -286,11 +284,10 @@ check_alias_dispatch_binding() {
     if [ -n "$alias" ]; then
       # MiniMax model: verify it has an alias in the hardcoded set.
       if printf '%s\n' "$alias" | grep -qE "^($_model_pat)$"; then
-        derived_aliases="$derived_aliases$alias\n"
+        derived_aliases+="$alias"$'\n'
       else
         printf 'self-check: configured model %s derives to alias %s which is not in the hardcoded alias set.\n' \
           "$model_id" "$alias" >&2
-        missing_alias_models="$missing_alias_models$model_id\n"
         failed=1
       fi
     fi
@@ -307,9 +304,9 @@ EOF
   sorted_derived=$(printf '%s' "$derived_aliases" | grep -v '^$' | sort -u)
   if [ -n "$sorted_derived" ]; then
     local alias
-    for alias in m2.7 m3.1; do
-      # These aliases have no corresponding MiniMax model in the current config.
-      # m2.7: minimax/MiniMax-M2.7 was retired 2026-10-19.
+    for alias in m3.1f m3.1; do
+      # These are the MiniMax-family aliases in the canonical set, and a
+      # MiniMax model id in the dispatch config must derive to one of them.
       # m3.1: bare MiniMax-M3.1 is not in dispatch config.
       # Report as informational warning only (does not fail the check).
       if ! printf '%s\n' "$sorted_derived" | grep -qxF "$alias"; then
