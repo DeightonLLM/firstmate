@@ -533,8 +533,15 @@ backlog_refresh_reminder() {
     printf '%s\n' "Backlog: $ID just finished. Executing: tasks-axi ready"
     tasks-axi ready || printf '%s\n' "warning: tasks-axi ready command failed" >&2
   elif fm_backlog_backend_manual "$CONFIG" && [ -f "$backlog_path" ]; then
-    # Markdown backend: move task from In flight to Done, prune Done to done_keep,
-    # then append a done-wake record so the watcher triggers the next dispatch cycle.
+    # Markdown backend: close the task's OWN row, prune Done to done_keep, then
+    # append a done-wake record so the watcher triggers the next dispatch cycle.
+    # The row handling lives in bin/fm-backlog-mark-done.sh because the inline
+    # updater that used to live here deleted queued rows whenever "## In flight"
+    # was empty: it printed a synthetic "## Done" instead of the next real
+    # header, set its in_done flag, and then collected every remaining "- ["
+    # row in the file as a Done entry, deleting the ones whose line number fell
+    # outside the keep window. The helper closes only the row it was given,
+    # refuses an unmatched or ambiguous key, and archives what it prunes.
     note_content=""
     if [ "$MODE" = local-only ]; then
       note_content=" — local main"
@@ -542,51 +549,25 @@ backlog_refresh_reminder() {
       note_content=" — $PR_URL"
     fi
     done_keep=${FM_BACKLOG_DONE_KEEP:-10}
-    awk -v id="$ID" -v note="$note_content" -v keep="$done_keep" '
-      BEGIN { OFS="\n"; ORS="\n" }
-      /^## In flight/ { in_inflight=1; print; next }
-      in_inflight && /^## / && !/^## In flight/ {
-        in_inflight=0
-        # Print Done header if not yet seen
-        if (!in_done) { print "## Done"; in_done=1 }
-        next
-      }
-      in_inflight && /^- \[/ && index($0, "**" id "**") {
-        # Found the task in In flight: convert to Done format and collect it
-        gsub(/^## In flight/, "## Done")
-        sub(/ \[[xX]\]/, " [x]")
-        done_items[id] = $0 note
-        done_count++
-        next
-      }
-      in_inflight { print; next }
-      /^## Done/ {
-        in_done=1; print; next
-      }
-      in_done && /^## Queued/ { in_done=0; print; next }
-      in_done && /^- \[/ {
-        done_count++
-        done_items[NR] = $0
-        next
-      }
-      { print }
-      END {
-        if (done_count > keep) {
-          # Print only the most recent <keep> items
-          start = done_count - keep + 1
-          for (i in done_items) {
-            n = int(i)
-            if (n >= start) print done_items[n]
-          }
-        } else {
-          for (i in done_items) {
-            n = int(i)
-            print done_items[n]
-          }
-        }
-      }
-    ' "$backlog_path" > "$backlog_path.tmp" && mv "$backlog_path.tmp" "$backlog_path"
-    printf 'Backlog: $ID moved to Done in data/backlog.md (manual mode).\n'
+    backlog_close_status=0
+    bash "$SCRIPT_DIR/fm-backlog-mark-done.sh" "$backlog_path" "$ID" "$note_content" "$done_keep" \
+      || backlog_close_status=$?
+    case "$backlog_close_status" in
+      0)
+        ;;
+      3)
+        printf 'Backlog: no row for %s in %s; the backlog was left unchanged (manual mode).\n' \
+          "$ID" "$backlog_path"
+        ;;
+      4)
+        printf 'Backlog: %s matches more than one row in %s; the backlog was left unchanged (manual mode).\n' \
+          "$ID" "$backlog_path"
+        ;;
+      *)
+        printf 'warning: the backlog updater failed for %s (exit %s); %s was left unchanged\n' \
+          "$ID" "$backlog_close_status" "$backlog_path" >&2
+        ;;
+    esac
     # Trigger next-cycle dispatch: append a done-wake so the watcher sees completion
     fm_wake_append signal "$ID" "$backlog_path: task $ID completed" \
       || printf 'warning: fm_wake_append failed for $ID; next-cycle trigger may not fire\n' >&2
