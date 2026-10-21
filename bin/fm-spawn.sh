@@ -112,6 +112,8 @@
 #                  written by this script; outside the worktree to avoid pi's trust gate)
 #     __PITURNEND__ absolute path to .pi/extensions/fm-primary-turnend-guard.ts in a pi secondmate home
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
+#     __MCODEDIR__  absolute path to /tmp/fm-<task-id>/mcode (isolated runtime config
+#                   dir with permissionMode: bypassPermissions so mcode never parks on gates)
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
 # Kimi uses one surgically installed Firstmate region in $HOME/.kimi-code/config.toml,
@@ -178,6 +180,12 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-gate-refuse-lib.sh
 . "$SCRIPT_DIR/fm-gate-refuse-lib.sh"
+# shellcheck source=bin/fm-lease-lib.sh
+. "$SCRIPT_DIR/fm-lease-lib.sh"
+# shellcheck source=bin/fm-secondmate-registry-lib.sh
+. "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
+# shellcheck source=bin/fm-project-capacity-lib.sh
+. "$SCRIPT_DIR/fm-project-capacity-lib.sh"
 # shellcheck source=bin/fm-busy-lib.sh
 . "$SCRIPT_DIR/fm-busy-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
@@ -274,6 +282,8 @@ HERDR_PRESENTATION_ORDER_LOCK=
 HERDR_PRESENTATION_ORDER_LOCK_HELD=0
 SPAWN_TASK_LOCK=
 SPAWN_TASK_LOCK_HELD=0
+SPAWN_TREEHOUSE_PROJECT_LOCK=
+SPAWN_TREEHOUSE_PROJECT_LOCK_HELD=0
 CONFIG_INHERIT_LOCK=
 CONFIG_INHERIT_LOCK_HELD=0
 
@@ -345,6 +355,10 @@ spawn_abort_cleanup() {
   if [ "$SPAWN_TASK_LOCK_HELD" = 1 ]; then
     SPAWN_TASK_LOCK_HELD=0
     fm_lock_release "$SPAWN_TASK_LOCK" || true
+  fi
+  if [ "$SPAWN_TREEHOUSE_PROJECT_LOCK_HELD" = 1 ]; then
+    SPAWN_TREEHOUSE_PROJECT_LOCK_HELD=0
+    fm_lock_release "$SPAWN_TREEHOUSE_PROJECT_LOCK" || true
   fi
   if [ "$CONFIG_INHERIT_LOCK_HELD" = 1 ]; then
     CONFIG_INHERIT_LOCK_HELD=0
@@ -418,6 +432,9 @@ if [ "${#POS[@]}" -gt 0 ] && [ "${POS[0]}" != "$idpart" ] && case "$idpart" in *
 fi
 ID=${POS[0]}
 fm_task_id_creation_valid "$ID" || { echo "error: invalid task id" >&2; exit 2; }
+# Spawning a worker is a main-owned action. The supervision branch may report
+# queued work but cannot create a worker from its own pane.
+fm_lease_forbid_branch "new-task spawn (fm-spawn)"
 SPAWN_TASK_LOCK="$STATE/.spawn-$ID.lock"
 if ! fm_lock_try_acquire "$SPAWN_TASK_LOCK"; then
   echo "error: another spawn is already creating task $ID" >&2
@@ -505,11 +522,11 @@ launch_template() {
     agy) printf '%s' 'agy __MODELFLAG____EFFORTFLAG__--dangerously-skip-permissions --prompt-interactive "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     # minimax-code (MiniMax Code / mcode): unlike the others, mcode takes the brief
     # as a POSITIONAL prompt argument ("mcode [options] [prompt]"), not behind a
-    # flag. It accepts the shared -m/--model axis. It has NO autonomous-permission
-    # flag equivalent to claude's or agy's: permissions come from permissionMode in
-    # the user's own config.yaml, so none is added here. It exposes no effort axis,
-    # so __EFFORTFLAG__ is deliberately omitted rather than guessed.
-    minimax-code) printf '%s' 'mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    # flag. It accepts the shared -m/--model axis. It has no autonomous CLI flag,
+    # so permissions are structurally disabled by launching with a per-task config
+    # directory (__MCODEDIR__) where permissionMode is set to bypassPermissions.
+    # It exposes no effort axis, so __EFFORTFLAG__ is omitted.
+    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MCODEDIR__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -931,6 +948,46 @@ else
   PROJ_ABS="$(cd "$(resolve_project_dir_arg "$PROJ")" && pwd)"
   WT=""
   BRIEF="$DATA/$ID/brief.md"
+fi
+# Project capacity is declared in the root Firstmate home and admitted while
+# holding the same project lock used by Treehouse allocation and return. Keep
+# that lock through task-record publication so concurrent spawns cannot both
+# claim the final place.
+SPAWN_PROJECT_CAPACITY=
+SPAWN_PROJECT_CAPACITY_ANY=
+if [ "$KIND" != secondmate ]; then
+  SPAWN_CAPACITY_CONFIG=$(fm_project_capacity_config_dir "$FM_HOME" "$CONFIG") || {
+    echo "error: could not resolve the root Firstmate home that declares project capacity for $PROJ_ABS" >&2
+    exit 1
+  }
+  if ! fm_project_capacity_lookup "$SPAWN_CAPACITY_CONFIG" "$(basename "$PROJ_ABS")"; then
+    echo "error: spawn refused: the project capacity declaration is unreadable ($FM_PROJECT_CAPACITY_ERROR); fix it so the captain's worker limits are known (docs/configuration.md \"Project capacity\")" >&2
+    exit 1
+  fi
+  SPAWN_PROJECT_CAPACITY=$FM_PROJECT_CAPACITY
+  SPAWN_PROJECT_CAPACITY_ANY=$FM_PROJECT_CAPACITY_ANY
+fi
+if [ "$KIND" != secondmate ] &&
+  { [ "$BACKEND" != orca ] || [ -n "$SPAWN_PROJECT_CAPACITY_ANY" ]; }; then
+  SPAWN_TREEHOUSE_PROJECT_LOCK=$(fm_treehouse_project_lock_path "$PROJ_ABS") || {
+    echo "error: could not resolve the shared Treehouse project lock for $PROJ_ABS" >&2
+    exit 1
+  }
+  if ! fm_lock_try_acquire "$SPAWN_TREEHOUSE_PROJECT_LOCK"; then
+    echo "error: another spawn or cleanup holds the shared project lock for $PROJ_ABS; refusing to race its capacity admission" >&2
+    exit 1
+  fi
+  SPAWN_TREEHOUSE_PROJECT_LOCK_HELD=1
+fi
+if [ -n "$SPAWN_PROJECT_CAPACITY" ]; then
+  if ! fm_project_capacity_occupants "$SPAWN_TREEHOUSE_PROJECT_LOCK" "$PROJ_ABS" "$STATE" "$ID"; then
+    echo "error: spawn refused: project $(basename "$PROJ_ABS") declares a capacity of $SPAWN_PROJECT_CAPACITY, but this machine's task records cannot all be read to count it ($FM_PROJECT_CAPACITY_ERROR)" >&2
+    exit 1
+  fi
+  if [ "$FM_PROJECT_CAPACITY_OCCUPANTS" -ge "$SPAWN_PROJECT_CAPACITY" ]; then
+    echo "deferred: project $(basename "$PROJ_ABS") admits $SPAWN_PROJECT_CAPACITY worker(s) at once on this machine ($FM_PROJECT_CAPACITY_FILE) and $FM_PROJECT_CAPACITY_OCCUPANTS already hold a place ($FM_PROJECT_CAPACITY_OCCUPANT_IDS); task $ID was not launched and its backlog item stays queued - dispatch it again once one of them records its ready PR or is cleaned up" >&2
+    exit "$FM_PROJECT_CAPACITY_DEFER_EXIT"
+  fi
 fi
 [ -f "$BRIEF" ] || { echo "error: no brief at $BRIEF" >&2; exit 1; }
 # Lane naming enforcement: the task ID IS the lane key (AGENT-TODO-PROMPT-STYLE.md).
@@ -1554,6 +1611,33 @@ fi
 TASK_TMP="/tmp/fm-$ID"
 mkdir -p "$TASK_TMP/gotmp"
 
+# Per-task minimax-code runtime config dir with permissionMode=bypassPermissions
+# so unattended dispatched mcode lanes structurally cannot park on an interactive gate.
+if [ "$HARNESS" = minimax-code ]; then
+  MCODE_TASK_DIR="$TASK_TMP/mcode"
+  mkdir -p "$MCODE_TASK_DIR"
+  base_dir="${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}"
+  base_cfg="$base_dir/config.yaml"
+  if [ -f "$base_cfg" ]; then
+    if grep -qE '^[[:space:]]*permissionMode:' "$base_cfg"; then
+      sed -e 's/^[[:space:]]*permissionMode:.*/permissionMode: bypassPermissions/' "$base_cfg" > "$MCODE_TASK_DIR/config.yaml"
+    else
+      cp "$base_cfg" "$MCODE_TASK_DIR/config.yaml"
+      printf '\npermissionMode: bypassPermissions\n' >> "$MCODE_TASK_DIR/config.yaml"
+    fi
+  else
+    printf 'permissionMode: bypassPermissions\n' > "$MCODE_TASK_DIR/config.yaml"
+  fi
+  if [ -d "$base_dir" ]; then
+    for item in "$base_dir"/*; do
+      [ -e "$item" ] || continue
+      b=$(basename "$item")
+      [ "$b" = "config.yaml" ] && continue
+      ln -s "$item" "$MCODE_TASK_DIR/$b" 2>/dev/null || true
+    done
+  fi
+fi
+
 # Per-harness turn-end hook where enabled: a file that touches
 # state/<id>.turn-ended when the agent finishes a turn. Worktree-resident hooks
 # and token pointers stay out of git's view so they never block teardown's dirty
@@ -1997,6 +2081,10 @@ META_WINDOW=$T
     echo "projects=$SECONDMATE_PROJECTS"
   fi
 } > "$STATE/$ID.meta"
+if [ "$SPAWN_TREEHOUSE_PROJECT_LOCK_HELD" = 1 ]; then
+  SPAWN_TREEHOUSE_PROJECT_LOCK_HELD=0
+  fm_lock_release "$SPAWN_TREEHOUSE_PROJECT_LOCK" || true
+fi
 [ "$BACKEND" = orca ] && ORCA_ABORT_CLEANUP=0
 
 sq_brief=$(shell_quote "$BRIEF")
@@ -2015,6 +2103,8 @@ LAUNCH=${LAUNCH//__PIEXT__/$sq_piext}
 LAUNCH=${LAUNCH//__PITURNEND__/$sq_piturnend}
 LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
+sq_mcodedir=$(shell_quote "$TASK_TMP/mcode")
+LAUNCH=${LAUNCH//__MCODEDIR__/$sq_mcodedir}
 # Crewmate panes are created by a long-lived tmux/herdr daemon that does not
 # inherit firstmate's current environment, so a bare `claude` in the pane falls
 # back to the default ~/.claude store even when firstmate itself runs under a
@@ -2034,6 +2124,9 @@ fi
 # process (go build, go test, ...) inherit it. Sent before the launch command so
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
+if [ "$HARNESS" = minimax-code ]; then
+  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_mcodedir MCODE_CONFIG_DIR=$sq_mcodedir"
+fi
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
 sleep 0.3
@@ -2074,6 +2167,64 @@ if [ "$KIND" = secondmate ]; then
       echo "CONFIG_REREAD: secondmate $ID: cleanup failed; pre-relaunch generations were force-cleared where possible (destination=$PROJ_ABS source=$FM_HOME)" >&2
     fi
   fi
+fi
+
+# Agent liveness verification (honest spawn verification).
+# Assert the agent process is genuinely running in the pane it was given before
+# reporting success. A pane sitting at a bare shell prompt (observed state: dead)
+# or an unverifiable/missing endpoint is a typed nonzero failure.
+case "${OSTYPE:-}" in
+  msys*|mingw*|cygwin*) SPAWN_VERIFY_DEFAULT=45 ;;
+  *) SPAWN_VERIFY_DEFAULT=30 ;;
+esac
+SPAWN_VERIFY_TIMEOUT=${FM_SPAWN_VERIFY_TIMEOUT:-$SPAWN_VERIFY_DEFAULT}
+deadline=$(( $(date +%s) + SPAWN_VERIFY_TIMEOUT + 1 ))
+agent_state="unknown"
+
+while :; do
+  agent_state=$(fm_backend_agent_state "$BACKEND" "$T")
+  if [ "$agent_state" = alive ]; then
+    # Settle verification: confirm the agent survived launch and did not exit immediately
+    sleep 0.5
+    agent_state=$(fm_backend_agent_state "$BACKEND" "$T")
+    if [ "$agent_state" = alive ]; then
+      break
+    fi
+  fi
+  if [ "$agent_state" = unverified ]; then
+    break
+  fi
+  [ "$(date +%s)" -ge "$deadline" ] && break
+  sleep 0.2
+done
+
+if [ "$agent_state" != alive ]; then
+  # Retain explicit failure custody: record failure wake event in status log and retain
+  # metadata so resources are not orphaned and the failure is clearly attributed and auditable.
+  failure_detail="spawned agent not alive in window $META_WINDOW (observed state: ${agent_state:-unknown})"
+  case "$agent_state" in
+    dead)
+      failure_detail="spawned agent not alive in window $META_WINDOW (observed state: dead)"
+      ;;
+    unverified)
+      failure_detail="spawned agent liveness cannot be verified in window $META_WINDOW (observed state: unverified)"
+      ;;
+    missing)
+      failure_detail="spawned agent endpoint missing in window $META_WINDOW (observed state: missing)"
+      ;;
+    ambiguous)
+      failure_detail="spawned agent process ambiguous in window $META_WINDOW (observed state: ambiguous)"
+      ;;
+    unreadable)
+      failure_detail="spawned agent endpoint unreadable in window $META_WINDOW (observed state: unreadable)"
+      ;;
+    *)
+      failure_detail="spawned agent readiness timed out in window $META_WINDOW (observed state: ${agent_state:-unknown})"
+      ;;
+  esac
+  printf 'failed: %s\n' "$failure_detail" >> "$STATE/$ID.status"
+  echo "error: $failure_detail; inspect window $META_WINDOW" >&2
+  exit 1
 fi
 
 echo "spawned $ID harness=$HARNESS kind=$KIND mode=$MODE yolo=$YOLO window=$META_WINDOW worktree=$WT"

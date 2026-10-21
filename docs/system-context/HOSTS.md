@@ -12,7 +12,7 @@ machine-readable mirror.
 ## Tier definitions (from `GLOSSARY.md`)
 
 - `HD2_IN_HOUSE` — HD2/Contabo infrastructure (controller, HD2stack, HD2.ai).
-- `BRANDON_LEGACY_VPS` — AminoVPS / Elevate legacy VPS.
+- `BRANDON_LEGACY_VPS` — Elevatesci VPS / Elevate legacy VPS.
 - `BRANDON_HUB` — Brandon hub host.
 - `KVM1_HOSTINGER` — KVM1 Hostinger node (`srv797124`, alias `srv797124-hd2`).
 - `HETZNER_COMPUTE` — Hetzner compute plane.
@@ -83,13 +83,13 @@ machine-readable mirror.
 | Freshness days | 30 | n/a |
 | Notes | Distinct from HD2Stack `vmi3238503`; the operator alias and canonical hostname both refer to this node only | `AGENTS.md` Hostinger note |
 
-## `srv1137994-aminolifesciences` — Brandon legacy VPS (AminoVPS)
+## `srv1137994-elevatesci` — Brandon legacy VPS (Elevatesci VPS)
 
 | Field | Value | Source |
 |---|---|---|
 | Tier | `BRANDON_LEGACY_VPS` | `BR-INV-001/report.md` §Host 1 |
 | Provider | Hostinger (KVM8 per PRD v3 §7.1) | `BR-INV-001/report.md` §Host 1 |
-| Canonical hostname | `srv1137994-aminolifesciences`; aliases: `animovps` (deprecated), `elevatesVPS` (current operator alias) | `BR-INV-001/report.md` §Host 1; operator ruling 2026-09-29 |
+| Canonical hostname | `srv1137994-elevatesci`; aliases: `animovps` (deprecated), `elevatesVPS` (current operator alias) | `BR-INV-001/report.md` §Host 1; operator ruling 2026-09-29 |
 | Tailscale IP | `100.69.211.43` | `BR-INV-001/report.md` §Host 1 |
 | Public IP | UNKNOWN as the host's current public interface address — the `staging.core-distro.com` A record was observed as `45.90.220.156` on 2026-09-23; do not treat that historical DNS value as a current host-interface check | `CORE-DNS-BEFORE-20260923.md`; `BR-INV-001/report.md` §Host 1 |
 | Staging DNS | `staging.core-distro.com` A `45.90.220.156` observed 2026-09-23; operator reports it is this host, but that mapping has not been independently re-probed for this update | `/root/agent-work/evidence/CORE-DNS-BEFORE-20260923.md`; operator report 2026-10-14 |

@@ -22,4 +22,4 @@ OS: UPGRADE-PASS (apt-get -y upgrade, non-interactive), apt-get check clean. Reb
 
 ## Host naming (documented per operator)
 
-**elevatesVPS serves ElevateSci.com** — "elevates" is the odd legacy name (old alias: `animovps`, deprecated; both resolve to 100.69.211.43, same host/key). Antigravity IDE remote connection should be renamed `aminovps` → `elevatesVPS` in the IDE UI (server-side ssh config answers both names).
+**elevatesVPS serves ElevateSci.com** — "elevates" is the odd legacy name (old alias: `animovps`, deprecated; both resolve to 100.69.211.43, same host/key). Antigravity IDE remote connection should be renamed `elevatesci-vps` → `elevatesVPS` in the IDE UI (server-side ssh config answers both names).

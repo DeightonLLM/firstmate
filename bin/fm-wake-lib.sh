@@ -409,7 +409,7 @@ fm_wake_clean_field() {
 fm_wake_append() {
   local kind=$1 key=$2 payload=$3 clean_key clean_payload epoch seq seq_file status
   case "$kind" in
-    signal|stale|check|heartbeat) ;;
+    signal|stale|gate|check|heartbeat) ;;
     *) printf 'fm_wake_append: invalid wake kind: %s\n' "$kind" >&2; return 2 ;;
   esac
 
@@ -441,7 +441,7 @@ fm_wake_append() {
 fm_wake_queued_keys() {
   local kind=$1
   case "$kind" in
-    signal|stale|check|heartbeat) ;;
+    signal|stale|gate|check|heartbeat) ;;
     *) printf 'fm_wake_queued_keys: invalid wake kind: %s\n' "$kind" >&2; return 2 ;;
   esac
   fm_lock_acquire_wait "$FM_WAKE_QUEUE_LOCK"
@@ -650,4 +650,116 @@ EOF
     printf '%s\n' "$annotation_marker"
   fi
   return 0
+}
+
+# Resolve the machine-local root Firstmate home for a home in the local
+# secondmate tree. A remote parent ends the walk: it is the root of this
+# machine's local tree, whose descendants are the only homes visible here.
+fm_firstmate_root_home() {
+  local home=${1:-$FM_HOME} marker parent seen="|" depth=0
+  home=$(CDPATH='' cd -- "$home" 2>/dev/null && pwd -P) || return 1
+  while [ -e "$home/.fm-secondmate-parent" ] || [ -L "$home/.fm-secondmate-parent" ]; do
+    marker="$home/.fm-secondmate-parent"
+    if ! command -v fm_secondmate_parent_record_parse >/dev/null 2>&1; then
+      # shellcheck source=bin/fm-secondmate-parent-lib.sh
+      . "$FM_WAKE_LIB_DIR/fm-secondmate-parent-lib.sh"
+    fi
+    fm_secondmate_parent_record_parse "$marker" || return 1
+    case "$FM_SECONDMATE_PARENT_ROUTE" in
+      local) ;;
+      remote) break ;;
+      *) return 1 ;;
+    esac
+    parent=$(CDPATH='' cd -- "$FM_SECONDMATE_PARENT_HOME" 2>/dev/null && pwd -P) || return 1
+    case "$seen" in *"|$parent|"*) return 1 ;; esac
+    seen="$seen$home|"
+    home=$parent
+    depth=$((depth + 1))
+    [ "$depth" -le 64 ] || return 1
+  done
+  printf '%s\n' "$home"
+}
+
+# Enumerate every local Firstmate state directory that shares machine-local
+# resources with the current home. Remote homes are naturally excluded because
+# a remote parent ends the root walk and only local registry paths are followed.
+FM_LOCAL_FIRSTMATE_STATES=()
+FM_LOCAL_FIRSTMATE_ERROR=
+fm_local_firstmate_state_dirs() {  # <first-state>
+  local first=$1 root home reg line child known existing i=0
+  local -a homes
+  FM_LOCAL_FIRSTMATE_STATES=("$first")
+  FM_LOCAL_FIRSTMATE_ERROR=
+  root=$(fm_firstmate_root_home "$FM_HOME") || {
+    FM_LOCAL_FIRSTMATE_ERROR="cannot resolve the root Firstmate home"
+    return 1
+  }
+  if ! command -v secondmate_registry_parse_line >/dev/null 2>&1; then
+    # shellcheck source=bin/fm-secondmate-registry-lib.sh
+    . "$FM_WAKE_LIB_DIR/fm-secondmate-registry-lib.sh"
+  fi
+  homes=("$root")
+  while [ "$i" -lt "${#homes[@]}" ]; do
+    home=${homes[$i]}
+    i=$((i + 1))
+    known=0
+    for existing in "${FM_LOCAL_FIRSTMATE_STATES[@]}"; do
+      if [ "$existing" = "$home/state" ] || [ "$existing" -ef "$home/state" ]; then
+        known=1
+      fi
+    done
+    [ "$known" = 1 ] || FM_LOCAL_FIRSTMATE_STATES+=("$home/state")
+    reg="$home/data/secondmates.md"
+    [ ! -e "$reg" ] && [ ! -L "$reg" ] && continue
+    [ -f "$reg" ] && [ ! -L "$reg" ] || {
+      FM_LOCAL_FIRSTMATE_ERROR="local Firstmate registry is unsafe at $reg"
+      return 1
+    }
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        "- "*)
+          secondmate_registry_parse_line "$line" || {
+            FM_LOCAL_FIRSTMATE_ERROR="malformed local Firstmate registry entry in $reg"
+            return 1
+          }
+          child=$([ -d "$SECONDMATE_REGISTRY_HOME" ] &&
+            CDPATH='' cd -- "$SECONDMATE_REGISTRY_HOME" 2>/dev/null && pwd -P) || {
+            # This sourced-library diagnostic is read by fm-spawn.sh.
+            # shellcheck disable=SC2034
+            FM_LOCAL_FIRSTMATE_ERROR="registered local Firstmate home is unavailable: $SECONDMATE_REGISTRY_HOME"
+            return 1
+          }
+          known=0
+          for existing in "${homes[@]}"; do
+            [ "$existing" != "$child" ] || known=1
+          done
+          [ "$known" = 1 ] || homes+=("$child")
+          ;;
+      esac
+    done < "$reg"
+  done
+}
+
+# Return the shared lock path for one project identity. Clones with the same
+# origin share a lock; a local-only project falls back to its own worktree root.
+fm_treehouse_project_lock_path() {  # <project-dir>
+  local project=$1 root origin identity hash top
+  [ -d "$project" ] || return 1
+  root=$(fm_firstmate_root_home "$FM_HOME") || return 1
+  origin=$(git -C "$project" remote get-url origin 2>/dev/null || true)
+  if [ -n "$origin" ]; then
+    case "$origin" in
+      /*) [ ! -d "$origin" ] || origin=$(CDPATH='' cd -- "$origin" 2>/dev/null && pwd -P) || return 1 ;;
+      *://*|*:* ) ;;
+      *) [ ! -d "$project/$origin" ] || origin=$(CDPATH='' cd -- "$project/$origin" 2>/dev/null && pwd -P) || return 1 ;;
+    esac
+    identity=$origin
+  else
+    top=$(git -C "$project" rev-parse --show-toplevel 2>/dev/null) || return 1
+    top=$(CDPATH='' cd -- "$top" 2>/dev/null && pwd -P) || return 1
+    identity=$top
+  fi
+  hash=$(printf '%s' "$identity" | git hash-object --stdin 2>/dev/null) || return 1
+  [ -d "$root/state" ] || return 1
+  printf '%s/.treehouse-project-%s.lock\n' "$root/state" "$hash"
 }
