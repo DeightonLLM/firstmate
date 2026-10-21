@@ -300,20 +300,25 @@ EOF
 
   # Report orphaned aliases: hardcoded aliases with no corresponding MiniMax model.
   # Sort and deduplicate for stable output.
+  #
+  # This report is NOT gated on there being any derived alias. An orphan is
+  # precisely an alias with NO configured model behind it, so the case where
+  # NO MiniMax model is configured at all is the case where EVERY MiniMax alias
+  # is orphaned and the report matters most. Gating it on a non-empty derived
+  # set silently suppressed the report exactly when it was needed.
   local sorted_derived
   sorted_derived=$(printf '%s' "$derived_aliases" | grep -v '^$' | sort -u)
-  if [ -n "$sorted_derived" ]; then
-    local alias
-    for alias in m3.1f m3.1; do
-      # These are the MiniMax-family aliases in the canonical set, and a
-      # MiniMax model id in the dispatch config must derive to one of them.
-      # m3.1: bare MiniMax-M3.1 is not in dispatch config.
-      # Report as informational warning only (does not fail the check).
-      if ! printf '%s\n' "$sorted_derived" | grep -qxF "$alias"; then
-        printf 'self-check: orphaned alias %s has no corresponding MiniMax model in dispatch config.\n' "$alias"
-      fi
-    done
-  fi
+  local alias
+  for alias in m3.1f m3.1; do
+    # These are the MiniMax-family aliases in the canonical set, and a
+    # MiniMax model id in the dispatch config must derive to one of them.
+    # m3.1: bare MiniMax-M3.1 is not in dispatch config.
+    # Report as informational warning only (does not fail the check).
+    if ! printf %s\n "$sorted_derived" | grep -qxF "$alias"; then
+      printf "self-check: orphaned alias %s has no corresponding MiniMax model in dispatch config.\n" "$alias"
+    fi
+  done
+
 
   if [ "$failed" -eq 1 ]; then
     return 2

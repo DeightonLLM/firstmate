@@ -112,7 +112,7 @@ assert_meta_profile() {
 
 test_no_profile_keeps_claude_profile_defaults() {
   local rec id out status expected launch
-  id=profile-off-z1
+  id=luna6-hd2-profile-off-z1
   rec=$(make_spawn_case profile-off claude "$id")
   read_case_record "$rec"
 
@@ -130,7 +130,7 @@ test_no_profile_keeps_claude_profile_defaults() {
 
 test_relative_home_overrides_launch_with_absolute_cross_process_paths() {
   local rec id out status launch home_real
-  id=profile-relative-paths-z1b
+  id=luna6-hd2-profile-relative-paths-z1b
   rec=$(make_spawn_case profile-relative-paths pi "$id")
   read_case_record "$rec"
   home_real=$(cd "$HOME_DIR" && pwd -P)
@@ -159,8 +159,8 @@ test_relative_home_overrides_launch_with_absolute_cross_process_paths() {
 
 test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
   local rec relative_id absolute_id out status launch home_real linked_home
-  relative_id=profile-relative-home-defaults-z1c
-  absolute_id=profile-absolute-home-defaults-z1d
+  relative_id=luna6-hd2-profile-relative-home-defaults-z1c
+  absolute_id=luna6-hd2-profile-absolute-home-defaults-z1d
   rec=$(make_spawn_case profile-home-defaults pi "$relative_id" "$absolute_id")
   read_case_record "$rec"
   home_real=$(cd "$HOME_DIR" && pwd -P)
@@ -208,7 +208,7 @@ test_home_defaults_preserve_absolute_or_resolve_relative_paths() {
 
 test_absolute_override_spelling_is_preserved_in_launch_paths() {
   local rec id out status launch linked_home
-  id=profile-absolute-paths-z1c
+  id=luna6-hd2-profile-absolute-paths-z1c
   rec=$(make_spawn_case profile-absolute-paths pi "$id")
   read_case_record "$rec"
   linked_home="$CASE_DIR/home-link"
@@ -236,7 +236,7 @@ test_absolute_override_spelling_is_preserved_in_launch_paths() {
 
 test_unresolvable_relative_overrides_fail_loudly() {
   local rec id out status
-  id=profile-unresolvable-paths-z1d
+  id=luna6-hd2-profile-unresolvable-paths-z1d
   rec=$(make_spawn_case profile-unresolvable-paths pi "$id")
   read_case_record "$rec"
 
@@ -277,7 +277,7 @@ test_unresolvable_relative_overrides_fail_loudly() {
 
 test_active_dispatch_profile_requires_explicit_harness_for_ship() {
   local rec id out status
-  id=profile-required-ship-z11
+  id=luna6-hd2-profile-required-ship-z11
   rec=$(make_spawn_case profile-required-ship claude "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
@@ -293,7 +293,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_ship() {
 
 test_active_dispatch_profile_requires_explicit_harness_for_scout() {
   local rec id out status
-  id=profile-required-scout-z12
+  id=luna6-hd2-profile-required-scout-z12
   rec=$(make_spawn_case profile-required-scout claude "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
@@ -309,7 +309,7 @@ test_active_dispatch_profile_requires_explicit_harness_for_scout() {
 
 test_active_dispatch_profile_allows_explicit_harness() {
   local rec id out status launch
-  id=profile-explicit-z13
+  id=luna6-hd2-profile-explicit-z13
   rec=$(make_spawn_case profile-explicit claude "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
@@ -328,7 +328,7 @@ test_active_dispatch_profile_allows_explicit_harness() {
 
 test_active_dispatch_profile_allows_positional_harness() {
   local rec id out status
-  id=profile-positional-z14
+  id=luna6-hd2-profile-positional-z14
   rec=$(make_spawn_case profile-positional claude "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
@@ -344,7 +344,7 @@ test_active_dispatch_profile_allows_positional_harness() {
 
 test_active_dispatch_profile_allows_raw_launch_command() {
   local rec id out status launch
-  id=profile-raw-z15
+  id=luna6-hd2-profile-raw-z15
   rec=$(make_spawn_case profile-raw claude "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"
@@ -362,7 +362,7 @@ test_active_dispatch_profile_allows_raw_launch_command() {
 
 test_claude_threads_model_and_effort() {
   local rec id out status launch
-  id=profile-claude-z2
+  id=luna6-hd2-profile-claude-z2
   rec=$(make_spawn_case profile-claude claude "$id")
   read_case_record "$rec"
 
@@ -378,7 +378,7 @@ test_claude_threads_model_and_effort() {
 
 test_codex_threads_model_and_effort() {
   local rec id out status launch
-  id=profile-codex-z3
+  id=luna6-hd2-profile-codex-z3
   rec=$(make_spawn_case profile-codex codex "$id")
   read_case_record "$rec"
 
@@ -394,7 +394,7 @@ test_codex_threads_model_and_effort() {
 
 test_codex_omits_invalid_max_effort() {
   local rec id out status launch
-  id=profile-codex-max-z4
+  id=luna6-hd2-profile-codex-max-z4
   rec=$(make_spawn_case profile-codex-max codex "$id")
   read_case_record "$rec"
 
@@ -411,7 +411,7 @@ test_codex_omits_invalid_max_effort() {
 
 test_grok_threads_model_and_reasoning_effort() {
   local rec id out status launch
-  id=profile-grok-z5
+  id=luna6-hd2-profile-grok-z5
   rec=$(make_spawn_case profile-grok grok "$id")
   read_case_record "$rec"
 
@@ -428,7 +428,7 @@ test_grok_threads_model_and_reasoning_effort() {
 
 test_grok_omits_invalid_max_reasoning_effort() {
   local rec id out status launch
-  id=profile-grok-max-z6
+  id=luna6-hd2-profile-grok-max-z6
   rec=$(make_spawn_case profile-grok-max grok "$id")
   read_case_record "$rec"
 
@@ -446,7 +446,7 @@ test_grok_omits_invalid_max_reasoning_effort() {
 
 test_grok_omits_invalid_xhigh_reasoning_effort() {
   local rec id out status launch
-  id=profile-grok-xhigh-z6b
+  id=luna6-hd2-profile-grok-xhigh-z6b
   rec=$(make_spawn_case profile-grok-xhigh grok "$id")
   read_case_record "$rec"
 
@@ -465,7 +465,7 @@ test_grok_omits_invalid_xhigh_reasoning_effort() {
 
 test_opencode_threads_model_and_ignores_effort_axis() {
   local rec id out status launch
-  id=profile-opencode-z7
+  id=luna6-hd2-profile-opencode-z7
   rec=$(make_spawn_case profile-opencode opencode "$id")
   read_case_record "$rec"
 
@@ -484,7 +484,7 @@ test_opencode_threads_model_and_ignores_effort_axis() {
 
 test_pi_threads_model_and_max_effort() {
   local rec id out status launch
-  id=profile-pi-z8
+  id=luna6-hd2-profile-pi-z8
   rec=$(make_spawn_case profile-pi pi "$id")
   read_case_record "$rec"
 
@@ -505,7 +505,7 @@ test_pi_threads_model_and_max_effort() {
 
 test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
   local rec id out status launch
-  id=profile-pi-signed-z8b
+  id=luna6-hd2-profile-pi-signed-z8b
   rec=$(make_spawn_case profile-pi-signed pi-signed "$id")
   read_case_record "$rec"
 
@@ -538,7 +538,7 @@ test_pi_signed_threads_shared_pi_profile_and_preserves_identity() {
 
 test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata() {
   local rec id out status
-  id=profile-pi-signed-missing-z8c
+  id=luna6-hd2-profile-pi-signed-missing-z8c
   rec=$(make_spawn_case profile-pi-signed-missing pi-signed "$id")
   read_case_record "$rec"
   rm -f "$FAKEBIN_DIR/pi-signed"
@@ -561,7 +561,7 @@ test_pi_signed_missing_binary_refuses_before_endpoint_or_metadata() {
 
 test_pi_signed_persistent_secondmate_uses_pi_extensions_and_identity() {
   local rec id sm out status launch
-  id=profile-pi-signed-secondmate-z8d
+  id=luna6-hd2-profile-pi-signed-secondmate-z8d
   rec=$(make_spawn_case profile-pi-signed-secondmate codex "$id")
   read_case_record "$rec"
   printf '%s\n' pi-signed > "$HOME_DIR/config/secondmate-harness"
@@ -602,7 +602,7 @@ test_batch_forwards_shared_profile_flags() {
 
 test_claude_forwards_firstmate_config_dir_when_set() {
   local rec id out status launch
-  id=profile-claude-cfgdir-z17
+  id=luna6-hd2-profile-claude-cfgdir-z17
   rec=$(make_spawn_case profile-claude-cfgdir claude "$id")
   read_case_record "$rec"
 
@@ -618,7 +618,7 @@ test_claude_forwards_firstmate_config_dir_when_set() {
 
 test_claude_omits_config_dir_prefix_when_unset() {
   local rec id out status launch
-  id=profile-claude-nocfgdir-z18
+  id=luna6-hd2-profile-claude-nocfgdir-z18
   rec=$(make_spawn_case profile-claude-nocfgdir claude "$id")
   read_case_record "$rec"
 
@@ -635,7 +635,7 @@ test_claude_omits_config_dir_prefix_when_unset() {
 
 test_non_claude_harness_ignores_config_dir() {
   local rec id out status launch
-  id=profile-codex-nocfgdir-z19
+  id=luna6-hd2-profile-codex-nocfgdir-z19
   rec=$(make_spawn_case profile-codex-nocfgdir codex "$id")
   read_case_record "$rec"
 
@@ -651,7 +651,7 @@ test_non_claude_harness_ignores_config_dir() {
 
 test_active_dispatch_profile_does_not_block_secondmate_launch() {
   local rec id sm out status
-  id=profile-secondmate-z16
+  id=luna6-hd2-profile-secondmate-z16
   rec=$(make_spawn_case profile-secondmate codex "$id")
   read_case_record "$rec"
   enable_dispatch_profile "$HOME_DIR"

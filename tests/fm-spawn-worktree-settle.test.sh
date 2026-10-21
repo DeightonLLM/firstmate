@@ -55,6 +55,21 @@ exit 0
 SH
   chmod +x "$fakebin/tmux"
   fm_fake_exit0 "$fakebin" treehouse
+  # A hermetic quota-axi stub (the gate's documented test seam,
+  # FM_QUOTA_AXI_BIN). fm-spawn.sh runs the quota gate before it spawns, so a
+  # live quota cache that is stale or unauthenticated would refuse the spawn
+  # for a reason that has nothing to do with the pane-settling behaviour under
+  # test. The stub reports one fresh provider with known semantics and healthy
+  # headroom, so the gate passes and the spawn reaches the settle loop.
+  cat > "$fakebin/quota-axi" <<'SH'
+#!/usr/bin/env bash
+set -u
+[ "${1:-}" = "--json" ] || exit 1
+cat <<'JSON'
+{"providers":[{"provider":"codex","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":80,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]}]}
+JSON
+SH
+  chmod +x "$fakebin/quota-axi"
   printf '%s\n' "$fakebin"
 }
 
@@ -96,8 +111,9 @@ run_settle_spawn() {
     FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
     FM_FAKE_PANE_PATH="$WT_DIR" FM_FAKE_PANE_STALE="$STALE_DIR" \
     FM_FAKE_PANE_STALE_READS="$STALE_READS" FM_FAKE_PANE_COUNTFILE="$COUNTFILE" \
+    FM_QUOTA_AXI_BIN="$FAKEBIN_DIR/quota-axi" \
     PATH="$FAKEBIN_DIR:$PATH" \
-    "$SPAWN" "$id" "$PROJ_DIR" 2>&1
+    "$SPAWN" "$id" "$PROJ_DIR" codex --model gpt-6-luna 2>&1
 }
 
 # A single stale first read (the exact incident) must not be accepted: the
@@ -105,7 +121,7 @@ run_settle_spawn() {
 # real settled worktree instead.
 test_single_stale_first_read_is_not_accepted() {
   local rec id out status
-  id=settle-single-stale-z1
+  id=luna6-hd2-settle-single-stale-z1
   rec=$(make_settle_case settle-single "$id" 1)
   read_settle_record "$rec"
 
@@ -125,7 +141,7 @@ test_single_stale_first_read_is_not_accepted() {
 # extra full cycle on top of that.
 test_already_settled_pane_costs_one_confirm_sleep() {
   local rec id out status start end elapsed
-  id=settle-already-settled-z2
+  id=luna6-hd2-settle-already-settled-z2
   rec=$(make_settle_case settle-already-settled "$id" 0)
   read_settle_record "$rec"
 
