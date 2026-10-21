@@ -17,8 +17,13 @@ mkdir -p "$PRIMARY/bin" "$STATE"
 printf '# fixture\n' > "$PRIMARY/AGENTS.md"
 git -C "$PRIMARY" init -q
 
-BRIEF_ONLY_ROUTE='first classify the work under the AGENTS.md intake contract, then use bin/fm-brief.sh followed by bin/fm-spawn.sh for dispatched work'
-SCOUT_ROUTE='first classify the work under the AGENTS.md intake contract: work already classified as a scout goes to bin/fm-scout.sh "<question>" [project], while authorized ship work and its bounded research go to bin/fm-brief.sh then bin/fm-spawn.sh'
+# The deny message names the fleet routes the way the fleet actually invokes
+# them: every entry point is called with an explicit `bash`, because
+# fm-spawn.sh requires Bash and Bad-substitution errors under POSIX sh. These
+# constants therefore carry the `bash ` prefix too - they assert the SHIPPED
+# route text, not an older spelling of it.
+BRIEF_ONLY_ROUTE='first classify the work under the AGENTS.md intake contract, then use bash bin/fm-brief.sh followed by bash bin/fm-spawn.sh for dispatched work'
+SCOUT_ROUTE='first classify the work under the AGENTS.md intake contract: work already classified as a scout goes to bash bin/fm-scout.sh "<question>" [project], while authorized ship work and its bounded research go to bash bin/fm-brief.sh then bash bin/fm-spawn.sh'
 
 # Every delegation, scheduling, worktree, and task-tracking tool Claude Code
 # 2.1.217 offered a primary session in the observed baseline.
