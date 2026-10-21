@@ -1,0 +1,136 @@
+# Token usage surface contract — how every surface reports its tokens
+
+Owner: this file.
+It is the single shared truth between a surface that publishes its token usage and the Controller that collects it.
+
+Context.
+The Captain asked, on 2026-10-21, for "all tokens used aggregated" and for "every token, every account, every surface".
+The band the live board renders could not answer that, and the reason was structural rather than arithmetic: the usage ledger only ever read the Controller's own traces, and it presented itself as one surface while carrying another surface's rows inside it.
+One account therefore stood in for two accounts, the Gemini provider had no usage source at all, and two surfaces were simply absent from the picture.
+
+This file defines how a surface reports its own token usage, and what the Controller does with those reports.
+The band document itself is owned by [`next-board-token-and-chat-contract.md`](next-board-token-and-chat-contract.md) (Contract A).
+The fleet roster of surfaces is [`system-context/token-usage-surfaces.json`](system-context/token-usage-surfaces.json).
+
+## 1. The rules that bind a publisher and the collector
+
+1. **null != zero.** An unknown value stays `null` and is labelled.
+   It is never summed, rendered or reported as `0`.
+   A day with no measurement is *unmeasured*, not zero.
+2. **One source per field.** Usage comes from the usage sources; quota comes from `quota-axi`.
+   Neither re-reduces the other's counters.
+3. **A surface reports only its own usage.** A publisher never publishes another surface's rows.
+4. **A seed never moves.** An operator-reported number is dated to the day it was reported for and lands on no other day.
+   It is labelled as reported, never as an instrumented measurement.
+5. **Fail open, never fail silently.** A surface that cannot report yields unknown coverage plus the reason.
+   The other surfaces' data is still emitted.
+6. **Deterministic output.** Same inputs produce byte-identical JSON: sorted keys, sorted rows, no invented timestamps inside the data.
+
+## 2. The collection mechanism: push
+
+The Controller cannot read another surface's disk, and it must not reach into another surface's home.
+So each surface publishes a usage document and the Controller collects it.
+This is the same durable-file pattern the fleet already uses for cross-surface facts (`BRANDON-COMPUTE-COMMS/`), with one difference: the payload is machine-readable JSON, not prose.
+
+The publishing half is [`bin/fm-token-usage-publish.py`](../bin/fm-token-usage-publish.py).
+The collecting half is [`bin/fm-token-collect.py`](../bin/fm-token-collect.py), which reads the Controller's own ledger plus every published document it finds.
+
+### 2.1 Where a surface puts the document
+
+* A surface with a filesystem the Controller can read writes the document into the Controller's collection directory: `data/next-board-publish/surface-usage/<surface>.json`.
+* A surface without one writes the document into its own comms outbox and the Controller is sent the collection request over the sanctioned comms route (`docs/COMMS-CONTRACT.md`).
+  The file is the delivery; the notification is not.
+
+A surface that cannot publish leaves nothing behind.
+That absence is not a failure to be hidden: the collector records the surface as unknown coverage with the reason it reported nothing.
+
+### 2.2 How a surface publishes
+
+```sh
+python3 bin/fm-token-usage-publish.py \
+  --surface hd2stack \
+  --host vmi3238503 \
+  --label "HD2Stack" \
+  --ledger data/tracker-tokens-20261019/ledger/usage.json \
+  --out data/next-board-publish/surface-usage/hd2stack.json
+```
+
+`--rows` takes a file in the same day-and-row shape for a surface that has no tracker ledger of its own.
+`--now` pins the clock so the output is byte-identical for identical inputs.
+Without `--out` the document is printed to stdout.
+
+The publisher computes each day's total from the rows it publishes.
+It never reuses the source ledger's day total, because that total covers every surface the source held rows for, and reusing it would publish another surface's number as this surface's.
+
+### 2.3 The document: `firstmate-surface-usage/v1`
+
+```json
+{
+  "schema": "firstmate-surface-usage/v1",
+  "surface": "hd2stack",
+  "host": "vmi3238503",
+  "label": "HD2Stack",
+  "timezone": "Europe/London",
+  "generated_at": "2026-10-21T12:00:00Z",
+  "accounts": [
+    {"id": "codex-local-unmapped", "label": "codex local (unmapped)",
+     "provider": "codex", "identity_status": "unknown_local_subset"}
+  ],
+  "days": [
+    {
+      "date": "2026-10-19",
+      "total_tokens": 239478662,
+      "total_status": "measured",
+      "expected_providers": ["codex", "glm"],
+      "accounts": [
+        {"account_id": "codex-local-unmapped", "provider": "codex",
+         "surface": "hd2stack", "source_id": "vmi3196300:pi:codex",
+         "source_kind": "local_metadata", "coverage": "local_metadata",
+         "total_tokens": 230603813, "observed_at": "2026-10-19T22:49:20+01:00"}
+      ]
+    }
+  ],
+  "seeds": [
+    {"account_id": "minimax-account-1", "provider": "minimax", "date": "2026-10-19",
+     "source_id": "captain-20261019-minimax-1", "total_tokens": 281720000,
+     "observed_at": "2026-10-19T07:32:35+01:00",
+     "note": "operator-reported; dated; never re-applied as a future day"}
+  ]
+}
+```
+
+Field rules:
+
+* `days[]` holds one entry per day the surface declared, including the days it carried no rows for.
+  Such a day has `total_tokens: null` and `total_status: "unknown"`.
+* `days[].accounts[]` holds the surface's own rows, with the provenance each row needs to be audited: which account, which provider, which source, whether the source was an instrument (`local_metadata`) or a person (`operator_reported`), and when it was observed.
+* `total_status` is `"measured"` when the day's rows cover the expected providers and every reading is instrumented, `"partial"` when they do not, and `"unknown"` when there is no reading at all.
+* `seeds[]` carries operator-reported numbers, each dated to the day it was reported for.
+
+## 3. What the collector guarantees
+
+* **One cell, one origin.** The same reading can reach the Controller twice: once in the Controller's own ledger and once in a surface's published document, under different source ids.
+  Summing both would count one day's usage twice, so one account-day carries one origin: the surface's own published document wins, and the shadowed reading is reported in `ledger.conflicts` rather than dropped in silence.
+* **Surface-qualified accounts.** Every account key is `<surface>|<account>`, so two surfaces holding the same local account name stay two accounts.
+  This is the fix for the Captain's "we only see one codex, we have two".
+* **Coverage from the totals.** The coverage slots and the totals are computed from the same rows, so the board's coverage line and its number cannot disagree.
+* **Expected readings are declared, not guessed.** The roster names every coding surface and the providers each is expected to report.
+  A surface that reported nothing is carried as unknown with the reason, so an absent surface is visible instead of quietly missing from the total.
+
+## 4. What is still unknown, and why
+
+Two kinds of unknown are carried, and they are different facts:
+
+* **A surface that reported nothing.** Its reason is the absence of a usage source for that surface.
+* **A provider no surface can measure.** Gemini/Antigravity has no local usage metadata surface anywhere in the fleet, so `quota-axi` reports its windows and nothing reports its token counts.
+  The roster's `provider_notes` carries that standing reason, so the board says why rather than only that the number is missing.
+
+Quota is a different field and stays where it belongs: `quota-axi` reports the Gemini windows, and the usage half of the band reports that Gemini's token counts are unknown.
+
+## 5. Adding a surface
+
+Adding a surface is a deliberate operator action, exactly like adding one to the fleet roster.
+Update [`system-context/token-usage-surfaces.json`](system-context/token-usage-surfaces.json) with the surface, its host, its aliases and the providers it is expected to report, and update the surface roster in `docs/SURFACE-TOPOLOGY.md` in the same change.
+
+A surface id and an alias are the same thing to the collector: a source that reports `vmi3196300`, `crisp-r` or `controller` is attributed to the same surface.
+That is why the Captain's own session name is an alias of the Controller surface and never a surface of its own: a second id for one host would double-count every row.

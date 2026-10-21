@@ -44,6 +44,23 @@ SPEC.loader.exec_module(COLLECT)
 
 NOW = COLLECT.parse_instant("2026-10-21T05:00:00Z")
 
+# The roster the fixture is measured against. The ledger's own surface expects codex
+# and glm; the roster is what turns "no reading" into a named coverage slot.
+ROSTER = {
+    "schema": "firstmate-token-surfaces/v1",
+    "surfaces": [
+        {
+            "surface": "controller",
+            "label": "Controller (Crisp-R)",
+            "host": "vmi3196300",
+            "aliases": ["crisp-r", "vmi3196300"],
+            "expected_providers": ["codex", "glm"],
+        },
+    ],
+    "provider_labels": {"codex": "Codex", "glm": "GLM"},
+    "provider_notes": {},
+}
+
 # A quota payload that reports the SAME window id twice for one provider, which is
 # what happens when a provider has two accounts on the same plan.
 QUOTA_FIXTURE = {
@@ -193,9 +210,9 @@ LEDGER_FIXTURE = {
             "expected_providers": ["codex", "glm"],
             "missing_sources": [],
             "accounts": [
-                {"account_id": "codex-local-unmapped", "source_id": "s1", "total_tokens": 100},
-                {"account_id": "codex-local-unmapped", "source_id": "s2", "total_tokens": 50},
-                {"account_id": "glm-local-unmapped", "source_id": "s3", "total_tokens": 150},
+                {"account_id": "codex-local-unmapped", "provider": "codex", "source_id": "s1", "total_tokens": 100},
+                {"account_id": "codex-local-unmapped", "provider": "codex", "source_id": "s2", "total_tokens": 50},
+                {"account_id": "glm-local-unmapped", "provider": "glm", "source_id": "s3", "total_tokens": 150},
             ],
         },
         {
@@ -213,7 +230,7 @@ LEDGER_FIXTURE = {
             "expected_providers": ["codex", "glm"],
             "missing_sources": ["glm"],
             "accounts": [
-                {"account_id": "codex-local-unmapped", "source_id": "s4", "total_tokens": 70},
+                {"account_id": "codex-local-unmapped", "provider": "codex", "source_id": "s4", "total_tokens": 70},
             ],
         },
     ],
@@ -227,6 +244,8 @@ def build(**kwargs):
         "ledger_payload": LEDGER_FIXTURE,
         "now": NOW,
         "ledger_path_display": "data/tracker-tokens-20261019/ledger/usage.json",
+        "roster": ROSTER,
+        "surface_docs": [],
         "quota_error": None,
         "ledger_error": None,
     }
@@ -264,7 +283,10 @@ class UnknownStaysUnknown(unittest.TestCase):
         row = day_row(document, "2026-10-20")
         self.assertEqual(row["accounts"], {})
         self.assertEqual(row["accounts_known"], 0)
-        self.assertEqual(row["accounts_unknown"], 2)
+        # Two expected surface/provider readings, neither of which happened.
+        self.assertEqual(row["coverage_slots_unknown"], 2)
+        self.assertEqual(row["coverage_slots_measured"], 0)
+        self.assertEqual(row["coverage_slots_expected"], 2)
 
     def test_partial_day_keeps_its_own_status(self):
         document = build()
@@ -325,8 +347,18 @@ class WeeklyIsAFloor(unittest.TestCase):
 
     def test_a_complete_week_is_not_a_floor(self):
         days = [
-            {"date": "2026-10-%02d" % day, "total_tokens": 10, "total_status": "measured",
-             "expected_providers": [], "accounts": []}
+            {
+                "date": "2026-10-%02d" % day,
+                "total_tokens": 10,
+                "total_status": "measured",
+                "expected_providers": ["codex", "glm"],
+                "accounts": [
+                    {"account_id": "codex-local-unmapped", "provider": "codex",
+                     "source_id": "s-codex", "total_tokens": 4},
+                    {"account_id": "glm-local-unmapped", "provider": "glm",
+                     "source_id": "s-glm", "total_tokens": 6},
+                ],
+            }
             for day in range(15, 22)
         ]
         document = build(ledger_payload={
@@ -353,13 +385,15 @@ class WeeklyIsAFloor(unittest.TestCase):
         document = build()
         weekly = document["weekly"]
         self.assertEqual(sum(weekly["per_account"].values()), weekly["total_tokens"])
-        self.assertEqual(weekly["per_account"]["codex-local-unmapped"], 220)
-        self.assertEqual(weekly["per_account_known_days"]["codex-local-unmapped"], 2)
+        # The account key carries its surface, so a reading is never attributed to
+        # the wrong surface.
+        self.assertEqual(weekly["per_account"]["controller|codex-local-unmapped"], 220)
+        self.assertEqual(weekly["per_account_known_days"]["controller|codex-local-unmapped"], 2)
 
     def test_several_rows_for_one_account_are_summed_into_one_cell(self):
         document = build()
         row = day_row(document, "2026-10-19")
-        self.assertEqual(row["accounts"]["codex-local-unmapped"], 150)
+        self.assertEqual(row["accounts"]["controller|codex-local-unmapped"], 150)
         self.assertEqual(row["accounts_known"], 2)
 
 
@@ -444,7 +478,7 @@ class OneSourceFailingDoesNotSinkTheOther(unittest.TestCase):
     def test_both_sources_missing_still_produces_a_document(self):
         document = build(quota_payload=None, ledger_payload=None,
                          quota_error="quota down", ledger_error="ledger down")
-        self.assertEqual(document["schema"], "firstmate-token-band/v1")
+        self.assertEqual(document["schema"], "firstmate-token-band/v2")
         self.assertEqual(len(document["errors"]), 2)
 
     def test_a_provider_without_windows_is_kept_with_its_state(self):
@@ -460,9 +494,10 @@ class OneSourceFailingDoesNotSinkTheOther(unittest.TestCase):
         document = build()
         self.assertEqual(
             sorted(document.keys()),
-            ["daily", "errors", "generated_at", "ledger", "quota", "rollover", "schema", "weekly"],
+            ["coverage", "daily", "errors", "generated_at", "ledger", "quota", "rollover",
+             "schema", "weekly"],
         )
-        self.assertEqual(document["schema"], "firstmate-token-band/v1")
+        self.assertEqual(document["schema"], "firstmate-token-band/v2")
         self.assertEqual(
             document["quota"]["source_command"],
             ["quota-axi", "--json", "--full", "--no-credential-refresh"],
@@ -481,12 +516,18 @@ class OneSourceFailingDoesNotSinkTheOther(unittest.TestCase):
             sorted(document["weekly"].keys()),
             [
                 "days_expected", "days_known", "days_unknown", "end_date", "is_floor",
-                "per_account", "per_account_known_days", "start_date", "status", "total_tokens",
+                "per_account", "per_account_known_days", "per_surface", "start_date", "status",
+                "total_measured_tokens", "total_reported_tokens", "total_tokens",
             ],
         )
         self.assertEqual(
             sorted(document["daily"][0].keys()),
-            ["accounts", "accounts_known", "accounts_unknown", "date", "total_status", "total_tokens"],
+            [
+                "accounts", "accounts_known", "accounts_unknown", "coverage_slots_expected",
+                "coverage_slots_measured", "coverage_slots_unknown", "date", "rows",
+                "source_total_status", "surfaces", "total_measured_tokens", "total_reported_tokens",
+                "total_status", "total_tokens",
+            ],
         )
 
 
@@ -514,7 +555,7 @@ class CommandLineBehaviour(unittest.TestCase):
             ])
             self.assertEqual(result.returncode, 0, result.stderr)
             document = json.loads(out.read_text(encoding="utf-8"))
-            self.assertEqual(document["schema"], "firstmate-token-band/v1")
+            self.assertEqual(document["schema"], "firstmate-token-band/v2")
             self.assertEqual(document["generated_at"], "2026-10-21T05:00:00Z")
             self.assertEqual(document["weekly"]["total_tokens"], 370)
             self.assertTrue(document["weekly"]["is_floor"])

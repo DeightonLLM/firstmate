@@ -12,6 +12,16 @@ chat path that works like the other board's Lavish ticket system - a message the
 Captain writes reaches the agent as a wake, and the agent's reply lands back on
 the board.
 
+Contract A was extended to **v2** on 2026-10-21.
+The Captain asked for "all tokens used aggregated" across every surface and every
+account, and v1 could not answer that: it described ONE ledger with ONE surface and
+ONE account per provider, while the ledger it read actually carried rows from more
+than one surface.
+v2 makes the surface and the account explicit, gives every row its provenance, and
+computes the coverage from the same rows that produce the total.
+The cross-surface collection mechanism is owned by
+[`token-usage-surface-contract.md`](token-usage-surface-contract.md).
+
 ## 1. Rules that bind every producer and renderer
 
 1. **null != zero.** An unknown value stays `null` and is labelled. It is never
@@ -21,6 +31,8 @@ the board.
 3. **No credential refresh, no network** beyond the named read-only commands.
 4. **Fail open, never fail silently.** A missing source produces an explicit
    `ok: false` plus an error string, and the rest of the band still renders.
+   A surface that reported nothing produces unknown coverage plus a reason, and is
+   never dropped.
 5. **Deterministic output.** Same inputs -> byte-identical JSON (sorted keys,
    sorted rows). No timestamps invented inside the data (only `generated_at`).
 
@@ -30,7 +42,7 @@ Produced by `bin/fm-token-collect.py`; rendered by the publisher.
 
 ```json
 {
-  "schema": "firstmate-token-band/v1",
+  "schema": "firstmate-token-band/v2",
   "generated_at": "2026-10-21T05:00:00Z",
   "errors": [],
   "quota": {
@@ -70,23 +82,61 @@ Produced by `bin/fm-token-collect.py`; rendered by the publisher.
   },
   "ledger": {
     "ok": true,
+    "error": null,
     "path": "data/tracker-tokens-20261019/ledger/usage.json",
-    "contract_version": 1,
+    "contract_version": 2,
     "timezone": "Europe/London",
     "surface": "vmi3196300",
     "generated_at": "2026-10-20T09:35:50+01:00",
+    "roster_path": "docs/system-context/token-usage-surfaces.json",
     "accounts": [
-      {"id": "codex-local-unmapped", "label": "codex local (unmapped)", "provider": "codex", "identity_status": "unknown_local_subset"}
-    ]
+      {"id": "controller|codex-local-unmapped", "account_id": "codex-local-unmapped",
+       "surface": "controller", "provider": "codex",
+       "label": "Controller (Crisp-R) \u00b7 codex local (unmapped)",
+       "identity_status": "unknown_local_subset", "status": "measured", "reason": null}
+    ],
+    "surfaces": [
+      {"surface": "controller", "label": "Controller (Crisp-R)", "host": "vmi3196300",
+       "aliases": ["crisp-r", "vmi3196300"], "role": "captain_surface", "status": "reported",
+       "reason": null, "source_kind": "owner_ledger",
+       "source_path": "data/tracker-tokens-20261019/ledger/usage.json",
+       "observed_at": "2026-10-20T09:35:50+01:00", "days_reported": ["2026-10-19"],
+       "expected_providers": ["agy", "codex", "glm", "minimax"],
+       "accounts": ["codex-local-unmapped"]}
+    ],
+    "sources": [
+      {"surface": "controller", "source_kind": "owner_ledger",
+       "path": "data/tracker-tokens-20261019/ledger/usage.json", "status": "ok",
+       "reason": null, "observed_at": "2026-10-20T09:35:50+01:00"}
+    ],
+    "conflicts": []
   },
   "daily": [
     {
       "date": "2026-10-13",
       "total_tokens": 158656541,
-      "total_status": "measured",
-      "accounts": {"codex-local-unmapped": 91313643, "glm-local-unmapped": 52021917},
+      "total_status": "partial",
+      "total_measured_tokens": 158656541,
+      "total_reported_tokens": 0,
+      "source_total_status": "measured",
+      "accounts": {"controller|codex-local-unmapped": 91313643, "controller|glm-local-unmapped": 52021917},
       "accounts_known": 2,
-      "accounts_unknown": 0
+      "accounts_unknown": 0,
+      "coverage_slots_expected": 16,
+      "coverage_slots_measured": 2,
+      "coverage_slots_unknown": 14,
+      "rows": [
+        {"date": "2026-10-13", "surface": "controller", "surface_host": "vmi3196300",
+         "account_id": "codex-local-unmapped", "provider": "codex",
+         "source_id": "vmi3238503:pi:codex", "source_kind": "local_metadata",
+         "measurement": "measured", "coverage": "local_metadata",
+         "total_tokens": 91313643, "observed_at": "2026-10-19T07:52:02+01:00",
+         "counted": true, "reason": null}
+      ],
+      "surfaces": {
+        "controller": {"total_tokens": 158656541, "accounts_known": 2,
+                       "accounts_unknown": 14, "measured": true}
+      }
     }
   ],
   "weekly": {
@@ -96,10 +146,37 @@ Produced by `bin/fm-token-collect.py`; rendered by the publisher.
     "days_known": 5,
     "days_unknown": 2,
     "total_tokens": 655333299,
+    "total_measured_tokens": 367773299,
+    "total_reported_tokens": 287560000,
     "status": "partial",
     "is_floor": true,
-    "per_account": {"codex-local-unmapped": 230674066},
-    "per_account_known_days": {"codex-local-unmapped": 4}
+    "per_account": {"controller|codex-local-unmapped": 230674066},
+    "per_account_known_days": {"controller|codex-local-unmapped": 4},
+    "per_surface": {
+      "controller": {"total_tokens": 230674066, "days_known": 4, "days_partial": 0,
+                     "accounts_known": 4, "accounts_unknown": 3}
+    }
+  },
+  "coverage": {
+    "surfaces": [
+      {"surface": "controller", "label": "Controller (Crisp-R)", "host": "vmi3196300",
+       "aliases": ["crisp-r", "vmi3196300"], "role": "captain_surface", "status": "reported",
+       "reason": null, "source_kind": "owner_ledger",
+       "source_path": "data/tracker-tokens-20261019/ledger/usage.json",
+       "observed_at": "2026-10-20T09:35:50+01:00",
+       "days_reported": ["2026-10-19"],
+       "providers": [
+         {"provider": "codex", "label": "Codex", "status": "measured", "reason": null,
+          "expected": true, "accounts": ["codex-local-unmapped"]},
+         {"provider": "agy", "label": "Antigravity (Gemini)", "status": "unknown",
+          "reason": "no local usage metadata surface exposes Gemini/Antigravity token counts",
+          "expected": true, "accounts": []}
+       ]}
+    ],
+    "unknown": [
+      {"surface": "controller", "provider": "agy",
+       "reason": "no local usage metadata surface exposes Gemini/Antigravity token counts"}
+    ]
   },
   "rollover": [
     {
@@ -141,27 +218,68 @@ Produced by `bin/fm-token-collect.py`; rendered by the publisher.
   their real state (`auth_required`, `not_set_up: true`, etc). They are never
   dropped silently.
 
-### 2.2 Rules for `daily` and `weekly`
+### 2.2 Rules for `ledger`
 
-* `daily` is one row per ledger day, ascending by date, from
-  `data/tracker-tokens-20261019/ledger/usage.json` (`days[]`).
-* A ledger day whose `total_tokens` is `null` stays `null` with
-  `total_status: "unknown"`. A day with a partial total keeps
-  `total_status: "partial"`.
-* `accounts` maps each ledger account id to that day's total for that account.
-  A day can hold SEVERAL rows for one account (different `source_id`s); they are
-  summed into that account's day cell. An account with no reading for that day is
-  simply absent from the map - absent is not zero.
+* `ledger.path` is the Controller's own usage ledger; `ledger.surface` is the
+  surface that ledger DECLARES. The declared surface is provenance, not truth: a
+  ledger may carry rows from more than one surface, and each row is attributed to
+  the surface its own `surface` field names.
+* `ledger.accounts` is the fleet's account registry. Its `id` is the cell key
+  `<surface>|<account>`, which is the key every other map in the band uses. Two
+  surfaces holding the same local account name therefore stay two accounts.
+* `ledger.surfaces` names every surface the roster knows, plus any surface an
+  unrostered source reported under. `status` is `reported` when the surface
+  reported something and `no_source` when it did not; `reason` says why, and it
+  is never `0` and never empty for a surface that did not report.
+* `ledger.sources` names every document that fed the band, with the path it came
+  from and when it was observed.
+* `ledger.conflicts` carries the readings that arrived twice and disagreed, and
+  the ones that were shadowed because the same account-day came from two
+  origins. A conflict is reported, never averaged away.
+
+### 2.3 Rules for `daily` and `weekly`
+
+* `daily` is one row per day, ascending by date, from every usage source.
+  A day a source declared but carried no rows for is still a row: it is
+  unmeasured, with `total_tokens: null` and `total_status: "unknown"`.
+* A day's `total_tokens` is the sum of that day's KNOWN account cells, and
+  `total_measured_tokens` plus `total_reported_tokens` add up to it. A cell whose
+  reading is `null` is unknown: it contributes nothing and it is never a zero.
+* `total_status` is `measured` when every expected coverage slot for that day
+  was measured and every reading was instrumented, `partial` when some expected
+  slot is unmeasured, some cell is unknown, or the day mixes instrumented and
+  operator-reported numbers, and `unknown` when the day has no known cell at all.
+* `accounts` maps each cell key to that day's total for that cell. A day can
+  hold SEVERAL rows for one cell (different `source_id`s); they are summed into
+  that cell. A cell with no reading is simply absent from the map - absent is
+  not zero.
+* `rows` carries every reading for the day with its full provenance: the surface,
+  the account identity, the source, the measurement kind, and whether the row was
+  counted into the day's total.
+* `coverage_slots_*` counts the (surface, provider) pairs the roster expects for
+  that day, and how many of them were measured. The slots and the totals come
+  from the same rows, so they cannot disagree.
 * `weekly` covers the 7 calendar days ending today (ledger timezone). It sums
-  only days with a known total. When any day in the window is unknown or
-  missing, `total_tokens` is a FLOOR: `is_floor: true` and
+  only days with a known total. When any day in the window is unknown,
+  missing or partial, `total_tokens` is a FLOOR: `is_floor: true` and
   `status: "partial"` (or `"unknown"` when nothing in the window is known). The
   renderer must say "at least N" whenever `is_floor` is true.
-* `per_account` is the same floor logic per account, with
+* `per_account` is the same floor logic per cell, with
   `per_account_known_days` saying how many of the 7 days actually carried that
-  account.
+  cell. `per_surface` is the same rollup per surface.
 
-### 2.3 Rules for `rollover`
+### 2.4 Rules for `coverage`
+
+* `coverage.surfaces` is the fleet's reporting state: one entry per surface with
+  its providers, and per provider whether it was measured or is unknown.
+* An unknown provider carries the reason it is unknown: the surface reported
+  nothing at all, the surface reported usage on other providers only, or no local
+  usage surface exposes that provider's token counts.
+* `coverage.unknown` is the flat list of the unknown (surface, provider) pairs.
+  It is the answer to "which accounts are covered and which are unknown", and it
+  is derived from the same rows that produce the totals.
+
+### 2.5 Rules for `rollover`
 
 * One row per quota window, sorted by `resets_at` ascending.
 * `restores_percent` is `100` - a rollover returns that window to full.

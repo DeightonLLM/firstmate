@@ -1252,10 +1252,71 @@ def render_rollover(band):
     return "".join(blocks)
 
 
+def render_surfaces(band):
+    """The surface table: what each surface reported, and what is still unknown.
+
+    This is the Captain's question answered per surface: every coding surface is
+    listed, and one that reported nothing carries the reason it reported nothing.
+    A surface with no reading is never drawn as a zero.
+    """
+    ledger = band.get("ledger") if isinstance(band.get("ledger"), dict) else {}
+    surfaces = [s for s in (ledger.get("surfaces") or []) if isinstance(s, dict)]
+    if not surfaces:
+        return '<p class="empty">the band names no surfaces</p>'
+    blocks = ['<table><thead><tr><th>surface</th><th>status</th><th>accounts</th>'
+              '<th>days</th><th>source</th><th>why</th></tr></thead><tbody>']
+    for surface in surfaces:
+        name = str(surface.get("surface") or "?")
+        label = str(surface.get("label") or name)
+        reported = str(surface.get("status") or "") == "reported"
+        accounts = surface.get("accounts") or []
+        days = surface.get("days_reported") or []
+        status_text = "reporting" if reported else "no reading"
+        status_class = "ok" if reported else "warn"
+        source = surface.get("source_path") or surface.get("source_kind") or "-"
+        reason = surface.get("reason") or "-"
+        blocks.append('<tr><td class="mono" title="%s">%s</td>'
+                      '<td><span class="pill %s">%s</span></td>'
+                      '<td class="mono">%d</td><td class="mono">%d</td>'
+                      '<td class="mono">%s</td><td>%s</td></tr>' % (
+                          esc(name), esc(label), esc(status_class), esc(status_text),
+                          len(accounts), len(days), esc(source), esc(reason)))
+    blocks.append("</tbody></table>")
+    return "".join(blocks)
+
+
+def render_coverage(band):
+    """The coverage table: which surface/provider readings exist, and which do not."""
+    coverage = band.get("coverage") if isinstance(band.get("coverage"), dict) else {}
+    surfaces = [s for s in (coverage.get("surfaces") or []) if isinstance(s, dict)]
+    rows = []
+    for surface in surfaces:
+        for provider in surface.get("providers") or []:
+            if not isinstance(provider, dict):
+                continue
+            rows.append((surface, provider))
+    if not rows:
+        return '<p class="empty">the band carries no coverage slots</p>'
+    blocks = ['<table><thead><tr><th>surface</th><th>provider</th><th>coverage</th>'
+              '<th>accounts seen</th><th>why</th></tr></thead><tbody>']
+    for surface, provider in rows:
+        measured = str(provider.get("status") or "") == "measured"
+        blocks.append('<tr><td class="mono">%s</td><td class="mono">%s</td>'
+                      '<td><span class="pill %s">%s</span></td><td class="mono">%s</td>'
+                      '<td>%s</td></tr>' % (
+                          esc(surface.get("surface")), esc(provider.get("provider")),
+                          "ok" if measured else "warn",
+                          "measured" if measured else "unknown",
+                          esc(", ".join(provider.get("accounts") or []) or "-"),
+                          esc(provider.get("reason") or "-")))
+    blocks.append("</tbody></table>")
+    return "".join(blocks)
+
+
 def render_token_band(state):
-    """The token band: headline, daily heat map, quota windows, rollover timeline."""
+    """The token band: headline, daily heat map, surfaces, coverage, quota windows, rollover."""
     blocks = ['<section class="card wide" id="tokens">']
-    blocks.append("<h2>Token band — every account, every day</h2>")
+    blocks.append("<h2>Token band — every account, every surface, every day</h2>")
     band = state.get("band")
     if band is None:
         blocks.append('<p class="empty">%s</p>' % esc(state.get("detail") or "no band document"))
@@ -1296,8 +1357,21 @@ def render_token_band(state):
             headline = "at least %s tokens" % fmt_int(total)
         else:
             headline = "%s tokens" % fmt_int(total)
+        ledger = band.get("ledger") if isinstance(band.get("ledger"), dict) else {}
+        surfaces = ledger.get("surfaces") or []
+        reporting = sum(1 for surface in surfaces
+                        if isinstance(surface, dict) and surface.get("status") == "reported")
+        surface_text = "%d of %d surface(s) reporting" % (reporting, len(surfaces))
         blocks.append('<p class="headline"><strong>%s</strong> &nbsp;·&nbsp; %d account(s) '
-                      '&nbsp;·&nbsp; %s</p>' % (esc(headline), account_count, esc(day_text)))
+                      '&nbsp;·&nbsp; %s &nbsp;·&nbsp; %s</p>' % (
+                          esc(headline), account_count, esc(day_text), esc(surface_text)))
+        reported_total = weekly.get("total_reported_tokens")
+        if reported_total:
+            blocks.append('<p class="note">%s of that total is operator-reported, not instrumented, '
+                          'and is dated to the day it was reported for. The instrumented part is %s '
+                          'tokens.</p>' % (
+                              esc(fmt_int(reported_total)),
+                              esc(fmt_int(weekly.get("total_measured_tokens")))))
         if weekly.get("is_floor"):
             unknown = weekly.get("days_unknown")
             blocks.append('<p class="note">The weekly total is a FLOOR, not a whole week: %s day(s) in '
@@ -1309,8 +1383,13 @@ def render_token_band(state):
         blocks.append('<p class="note">The band carries no weekly block, so there is no weekly total '
                       'to report.</p>')
 
-    blocks.append("<h2 style='margin-top:16px'>DAILY — every account, every day</h2>")
+    blocks.append("<h2 style='margin-top:16px'>DAILY — every account, every surface, every day</h2>")
     blocks.append(render_heat_map(band))
+    blocks.append("<h2 style='margin-top:16px'>SURFACES — what each coding surface reported</h2>")
+    blocks.append(render_surfaces(band))
+    coverage_html = render_coverage(band)
+    blocks.append(fold("COVERAGE — which surface/provider readings exist, and which are unknown",
+                       coverage_html, open_=True))
     # The weekly total is the headline and stays open. The window list and the
     # rollover detail are the same information at row level, so they fold.
     windows_html = render_quota_windows(band)
