@@ -12,19 +12,18 @@
 # Model alias table (ONE place in this script; alias=exact catalog identifier:family):
 #   m3.1f   -> minimax/MiniMax-M3.1-Flash   (family minimax)
 #   m3.1    -> minimax/MiniMax-M3.1                 (family minimax)
-#   m2.7h   -> minimax/MiniMax-M2.7-highspeed       (family minimax)
-#   m2.7    -> minimax/MiniMax-M2.7                 (family minimax)
 #   luna6   -> openai-codex/gpt-6-luna              (family other)
 #   glm5.3f -> zai/glm-5.3-flash                    (family other)
 #   gem38f  -> agy/gemini-3.8-flash-medium          (family other)
-#   pi      -> minimax/MiniMax-M3.1-Flash   (family other; legacy alias for the Pi session default model)
+#   pi      -> minimax/MiniMax-M3.1-Flash   (family other; legacy alias for the Pi session
+#                        default model - the same id as m3.1f, so one model id always
+#                        derives one alias)
 #
 # Alternate spellings accepted for those aliases (spelling:canonical alias).
 # HD2 writes its abbreviations as G38F and M31, and our own contract writes
 # m27-highspeed; the exact catalog identifier still lives only in the table
 # above, so these entries never carry a second copy of that knowledge.
-#   m31 -> m3.1        m31f -> m3.1f      m27 -> m2.7
-#   m27h -> m2.7h     m27highspeed -> m2.7h           g38f -> gem38f
+#   m31 -> m3.1        m31f -> m3.1f      g38f -> gem38f
 #
 # Harness tokens: pi codex claude opencode mcode grok kimi agy
 # Effort tokens: unknown, the bare codes l m h xh x, and low medium high xhigh max
@@ -68,9 +67,9 @@ EXPECTED_LANE_KEY='<harness>-<model>-<host>-<task>'
 # The derivation family says whether the alias can be derived from a MiniMax
 # model id by the documented rule, which is what the --self-check binding and
 # the orphan report use.
-_MODEL_ALIAS_TABLE='m3.1f=minimax/MiniMax-M3.1-Flash:minimax m3.1=minimax/MiniMax-M3.1:minimax m2.7h=minimax/MiniMax-M2.7-highspeed:minimax m2.7=minimax/MiniMax-M2.7:minimax luna6=openai-codex/gpt-6-luna:other glm5.3f=zai/glm-5.3-flash:other gem38f=agy/gemini-3.8-flash-medium:other pi=minimax/MiniMax-M3.1-Flash:other'
+_MODEL_ALIAS_TABLE='m3.1f=minimax/MiniMax-M3.1-Flash:minimax m3.1=minimax/MiniMax-M3.1:minimax luna6=openai-codex/gpt-6-luna:other glm5.3f=zai/glm-5.3-flash:other gem38f=agy/gemini-3.8-flash-medium:other pi=minimax/MiniMax-M3.1-Flash:other'
 
-_ALIAS_SPELLINGS='m31:m3.1 m31f:m3.1f m27:m2.7 m27h:m2.7h m27highspeed:m2.7h g38f:gem38f'
+_ALIAS_SPELLINGS='m31:m3.1 m31f:m3.1f g38f:gem38f'
 
 _HARNESS_TOKENS='pi codex claude opencode mcode grok kimi agy'
 _EFFORT_TOKENS='unknown low medium high xhigh max l m h xh x'
