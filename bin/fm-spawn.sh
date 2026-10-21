@@ -1564,10 +1564,22 @@ if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   # the file it was told to change; a detached worktree gives it nowhere to
   # commit. Both failures present as a blocked lane, not as a dispatch bug, so
   # the fix belongs here rather than in the brief.
-  WT_BASE="$(git -C "$PROJ_ABS" rev-parse HEAD 2>/dev/null || true)"
-  WT_BRANCH="lane/$ID"
-  if [ -n "$WT_BASE" ]; then
-    spawn_send_text_line "$WT_TARGET" "treehouse get --base $WT_BASE -b $WT_BRANCH"
+  #
+  # The base is a LOCAL-ONLY branch, not a name and not a commit: treehouse
+  # resolves --base against the REMOTE-tracking branch first (a plain `main`
+  # resolves to origin/main even when the local main is far ahead), and it
+  # rejects a bare commit hash as "no such branch". A name that exists only
+  # locally can only resolve locally, so the lane is cut from exactly the
+  # commit the coordinator dispatched on.
+  local wt_base="" wt_branch="lane/$ID"
+  if wt_base=$(git -C "$PROJ_ABS" rev-parse --verify HEAD 2>/dev/null) &&
+     git -C "$PROJ_ABS" branch -f "spawn-base/$ID" "$wt_base" 2>/dev/null; then
+    wt_base="spawn-base/$ID"
+  else
+    wt_base=""
+  fi
+  if [ -n "$wt_base" ]; then
+    spawn_send_text_line "$WT_TARGET" "treehouse get --base $wt_base -b $wt_branch"
   else
     spawn_send_text_line "$WT_TARGET" 'treehouse get'
   fi

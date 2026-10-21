@@ -138,23 +138,28 @@ reap_single_task() {
     fi
   fi
 
-  # Check crew state: must have status evidence, endpoint must be dead/missing,
-  # and crew must not be working/parked.
-  # 1. Absent status file => REFUSE (absence of evidence is not evidence of absence).
-  if [ ! -f "$log" ]; then
-    log_decision "REFUSE" "$id" "no status evidence; cannot prove the crew is idle"
-    return 0
-  fi
-
-  # 2. Check live endpoint state via backend reconciler.
-  # Only an endpoint positively reported dead/missing is reapable. Fail closed on alive/ambiguous/unverified/unreadable.
-  local endpoint_target
+  # Check crew state: the endpoint must be dead/missing, and the crew must not
+  # be working/parked.
+  #
+  # ORDER MATTERS. The endpoint state is checked FIRST, and it is what proves
+  # the crew is not running. The status file used to be checked before it, and a
+  # lane that finished without ever appending a status line was therefore
+  # IMMORTAL: it refused forever, holding a pane, a worktree slot and CPU for
+  # as long as the fleet existed. That is what made every capacity figure
+  # wrong, and it is why finished agents piled up.
+  #
+  # Fail-closed is preserved where it matters: an alive, ambiguous or
+  # unverifiable endpoint is never reaped, a lane that says it is working is
+  # never reaped, and the landed-work test below still refuses to discard
+  # unlanded work.
+  local endpoint_target endpoint_dead=0
   endpoint_target=$(fm_backend_target_of_meta "$meta")
   if [ -n "$backend" ] && [ -n "$endpoint_target" ]; then
     local agent_state
     agent_state=$(fm_backend_agent_state "$backend" "$endpoint_target")
     case "$agent_state" in
       dead|missing)
+        endpoint_dead=1
         ;;
       alive)
         log_decision "REFUSE" "$id" "endpoint is alive ($agent_state)"
@@ -167,6 +172,14 @@ reap_single_task() {
     esac
   elif [ -n "$backend" ] || [ -n "$endpoint_target" ]; then
     log_decision "REFUSE" "$id" "endpoint metadata incomplete (backend=${backend:-none} target=${endpoint_target:-none})"
+    return 0
+  fi
+
+  # Status evidence. A missing status file only disqualifies while the crew
+  # might still be running: a lane with no status file whose endpoint is
+  # provably dead is reapable, and the landed-work test still protects its work.
+  if [ ! -f "$log" ] && [ "$endpoint_dead" -ne 1 ]; then
+    log_decision "REFUSE" "$id" "no status evidence; cannot prove the crew is idle"
     return 0
   fi
 
