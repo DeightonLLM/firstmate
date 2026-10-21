@@ -33,7 +33,7 @@ cheap read-only probe.
 3. **The lane can report phase changes.** Its status transport is one it actually has.
 4. **The lane is named in every format at once,** and each format is the one its own
    checker expects.
-5. **The lane is supervised.** The watcher is armed and the pane reports an agent state.
+5. **The lane is supervised.** The current session's supervision protocol is healthy and the pane reports an agent state.
 
 A lane that fails gate 1 or gate 2 still *runs*, and still looks alive in the pane, while
 being unable to read its brief or report progress. That is the failure this skill exists
@@ -42,11 +42,14 @@ to prevent.
 ## Gate 1 - the lean-ctx tool jail
 
 `allow_paths` in `/root/.config/lean-ctx/config.toml` must be **one real TOML array of
-strings**. When it is instead a single quoted string that happens to contain a JSON array,
-the tool jail collapses onto the lane's worktree: the lane cannot read its own home, its
-brief, or the fleet state, and it cannot write its status file.
+strings**. A single quoted string that happens to contain a JSON array is not a list of
+paths. The reported consequence (the jail collapsing onto the lane's worktree and blocking
+home, brief, fleet-state, and status access) is historical incident evidence; this checker
+confirmed the malformed backup text but did not recreate that runtime effect.
 
-Broken (this is what shipped on 2026-10-20 and it took a lane down):
+The following malformed form is preserved in the pre-jailfix backup dated
+2026-10-20. The original incident is recorded by the author; this checker did not
+reproduce its historical lane failure:
 
 ```toml
 allow_paths = [
@@ -78,11 +81,12 @@ line with no nested brackets or embedded quotes.
 
 ## Gate 2 - the herdr state hook and the stdlib shadow
 
-herdr manages `/root/.codex/herdr-agent-state.sh` and runs an embedded
-`python3 - <<'PY'`. A script read from stdin puts the **current working directory** on
+The current `/root/.codex/herdr-agent-state.sh` contains an embedded
+`python3 - <<'PY'`. A script read from stdin can put the **current working directory** on
 `sys.path`, so a lane whose cwd contains `bisect.py`, `random.py`, `json.py` or
-`socket.py` shadows a stdlib module and the hook dies. On 2026-10-20 this reproduced as
-rc=1 with `KeyError: 'TRACKER_PAGE'` raised from `/tmp/bisect.py`.
+`socket.py` can shadow a stdlib module. The reported 2026-10-20 reproduction (rc=1,
+`KeyError: 'TRACKER_PAGE'` from `/tmp/bisect.py`) is historical evidence from the
+original author and was not independently recreated by this checker.
 
 herdr owns its own hook file and expects custom hooks beside it, so do not edit it.
 Install a wrapper instead, keep it executable, and point the host's hook registration at
@@ -160,17 +164,15 @@ FM_DISPATCH_GUARD_LOAD_BYPASS=1 bin/fm-spawn.sh <lane-key> <project-dir> \
 The bypass flag is only for a host whose load is already saturated; it bypasses the
 placement guard, never a missing dependency or an authentication failure.
 
-mcode lanes are visible and supervised, never headless. There is no `mcode exec` path
-for real task work.
+The visible-pane and no-headless-mcode-work statements are the recorded Firstmate
+adapter contract, not independently exercised here. Do not treat the dispatch example
+above as verified: running it would spawn a worker, outside this read-only verification.
 
-Arm supervision as a **tracked background task**, every turn:
-
-```sh
-bash bin/fm-watch-arm.sh
-```
-
-The watcher exits on a wake and must be re-armed. A lane that is running but unwatched
-is not supervised work.
+Use the Firstmate session's emitted supervision protocol for its primary harness.
+Do not manually run `bin/fm-watch-arm.sh` or start a second watcher: the Pi extension
+owns arming and re-arming, and manual arming is reserved for a notification that the
+cycle is missing, failed, or unhealthy. Watcher lifecycle is surface- and
+harness-dependent; follow that surface's current session instructions.
 
 ## Verification checklist
 
@@ -178,8 +180,8 @@ is not supervised work.
 grep -A 8 '^allow_paths' /root/.config/lean-ctx/config.toml   # gate 1: one path per line
 test -x /root/.codex/hooks-herdr-agent-state.sh && echo ok        # gate 2: wrapper executable
 grep -n 'hooks-herdr-agent-state' /root/.codex/hooks.json        # gate 2: registered
-herdr pane list --workspace <ws>                                 # gate 5: agent_status
-tail -5 state/<id>.status                                        # gate 3: lane reports itself
+herdr pane list --workspace <known-ws>                           # gate 5: inspect pane state
+tail -5 state/<known-id>.status                                  # gate 3: inspect lane reports
 ```
 
 ## Durable sources

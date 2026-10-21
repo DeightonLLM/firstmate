@@ -6,8 +6,10 @@ things that silently broke it, and the exact commands and probes that prove each
 fixed. Read it before installing mcode on a new surface; it is not a tutorial, it is a
 list of traps that each cost a lane.
 
-Provenance: every failure below was observed live on `vmi3196300` (Controller,
-100.117.47.27) on 2026-10-20 and 2026-10-21, not reconstructed.
+Provenance: this lane independently checked the current files and read the dated
+backup on 2026-10-21. The historical failure dates, traceback, and end-to-end
+reproduction below are recorded by the original author; this lane did not recreate
+them. Treat those historical observations as unverified here.
 
 ## Why the recipe exists
 
@@ -22,8 +24,10 @@ Every trap below produces that same shape.
 ## Trap 1 - the lean-ctx tool jail collapses onto the worktree
 
 `allow_paths` in `/root/.config/lean-ctx/config.toml` must be one real TOML array of
-strings. A single quoted string containing a JSON array parses as TOML but is not a list
-of paths, and the tool jail then resolves against the lane's own worktree.
+strings. A single quoted string containing a JSON array is not a list of paths. The
+reported consequence (the jail resolving against the lane's worktree) is historical
+incident evidence; this checker confirmed the malformed backup text but did not
+recreate the runtime effect.
 
 What shipped, and what broke every lane on 2026-10-20:
 
@@ -248,18 +252,18 @@ already saturated. It never bypasses a missing dependency, an authentication fai
 unsupported backend or a version refusal - those are blockers, and the correct response
 is to report them, not to retry on another backend.
 
-mcode lanes are visible and supervised. There is no headless mcode path for real task
-work: `mcode exec` is not a way to run a crewmate.
+The visible-pane and no-headless-mcode-work statements are the recorded Firstmate
+adapter contract, not independently exercised by this checker. Do not treat the dispatch
+example above as verified: running it would spawn a worker, which was outside this
+read-only verification.
 
 ## Supervision
 
-```sh
-bash bin/fm-watch-arm.sh
-```
-
-Arm it as a **tracked background task**. The watcher exits on a wake and must be
-re-armed each turn. A lane that is running and unwatched is unsupervised work, and the
-failure mode is exactly the quiet one this document is about.
+Use the Firstmate session's emitted supervision protocol for its primary harness.
+Do not manually run `bin/fm-watch-arm.sh` or start a second watcher: the Pi extension
+owns arming and re-arming, and manual arming is reserved for a notification that the
+cycle is missing, failed, or unhealthy. The specific watcher lifecycle is surface- and
+harness-dependent; verify it using that surface's current session instructions.
 
 `herdr` pane state is the second supervision signal:
 
@@ -274,10 +278,10 @@ go back to Trap 2.
 ## Verification checklist
 
 ```sh
-# gate 1 - the jail
+# gate 1 - the jail (read-only)
 grep -A 8 '^allow_paths' /root/.config/lean-ctx/config.toml
 
-# gate 2 - the hook
+# gate 2 - the hook (read-only)
 test -x /root/.codex/hooks-herdr-agent-state.sh && echo wrapper-ok
 grep -n 'hooks-herdr-agent-state' /root/.codex/hooks.json
 
@@ -288,10 +292,14 @@ grep -n 'FM_HARNESS_LEAN_CTX_REPLACE' bin/fm-brief.sh
 bin/fm-lane-naming-check.sh "<lane-key>"
 bin/fm-todo-prefix-check.sh --stdin <<< '[mcode·M31F m @Cont] a row'
 
-# gate 5 - supervision
+# gate 5 - inspect a real, known workspace and task (read-only)
 herdr pane list --workspace <ws>
 tail -5 state/<id>.status
 ```
+
+Do not run the install/repair, dispatch, or watcher-start examples during verification;
+they mutate host configuration or start work. The current host's historical failure
+reproductions were not re-run by this checker.
 
 ## Owners
 
