@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Detect the agent harness this process tree runs on.
-# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|agy|unknown
+# Usage: fm-harness.sh                  print own harness: claude|codex|opencode|pi|pi-signed|grok|kimi|agy|minimax-code|unknown
 #        fm-harness.sh crew             print the effective CREWMATE harness
 #                                        (config/crew-harness; "default" resolves to own)
 #        fm-harness.sh secondmate       print the harness the PRIMARY uses to launch
@@ -28,7 +28,7 @@ set -u
 # Canonical list of verified harnesses. bin/fm-harness.sh is Firstmate's single
 # source of truth for verified agent harness adapters. Every other component
 # (fm-bootstrap.sh, fm-spawn.sh, etc.) defers to this definition.
-VERIFIED_HARNESSES=(claude codex opencode pi pi-signed grok kimi agy)
+VERIFIED_HARNESSES=(claude codex opencode pi pi-signed grok kimi agy minimax-code)
 
 is_verified() {
   local h="${1:-}" v

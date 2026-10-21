@@ -208,7 +208,7 @@ The `warehouse` and `warehouse-preflight` pointers stay fail-closed: `FM_BASELIN
 
 ## Harness support
 
-claude, codex, opencode, pi, pi-signed, grok, and kimi are empirically verified for crewmate and secondmate launches; [README requirements](../README.md#requirements) own the set supported for the primary session.
+claude, codex, opencode, pi, pi-signed, grok, kimi, agy, and minimax-code are empirically verified for crewmate and secondmate launches; [`bin/fm-harness.sh`](../bin/fm-harness.sh) owns that list as the single source of truth, and [README requirements](../README.md#requirements) own the set supported for the primary session.
 New harnesses get verified through a supervised trial task before joining the set.
 The verified adapter knowledge - each harness's busy-state source, interrupt and exit commands, skill-invocation syntax, and per-harness quirks - lives in [`.agents/skills/harness-adapters/SKILL.md`](../.agents/skills/harness-adapters/SKILL.md).
 Launch mechanics, including the verified command templates, live in [`bin/fm-spawn.sh`](../bin/fm-spawn.sh).
@@ -289,6 +289,29 @@ Valid files stay silent by default; with `FM_BOOTSTRAP_VERBOSE_FACTS=1`, bootstr
 Malformed JSON, an empty or malformed rule/default array, an unverified harness, or an effort value unsupported by that harness is reported as `CREW_DISPATCH: invalid config/crew-dispatch.json - ...`; missing `jq` is reported through the normal `MISSING: jq` install-consent flow.
 While the file remains present, no crewmate or scout spawn may proceed without an explicit resolved harness; malformed configuration must be reported and corrected rather than selected around.
 Secondmate homes inherit this file from the primary, so a secondmate's own crewmates apply the same dispatch profile behavior.
+
+### Dispatch rule field semantics
+
+This subsection owns the per-field meaning of a dispatch rule, because a second mate that has to spawn its own crews must be able to tell the spawn route from the fields that are not one.
+`when` is the natural-language condition that firstmate matches the task against, and firstmate reads it, never a script.
+`use` holds the profile object or profile array that the matched rule selects.
+`why` is optional rationale that helps firstmate choose between rules.
+`harness` is the adapter name and is the spawn route, passed to `fm-spawn.sh` as `--harness`.
+`model` is the optional model slug, passed to `fm-spawn.sh` as `--model`.
+`effort` is the optional reasoning-effort value, passed to `fm-spawn.sh` as `--effort`.
+A profile therefore selects exactly this command: `bin/fm-spawn.sh <task-id> --harness <harness> --model <model> [--effort <effort>]`.
+
+`agent` is the name of a PI SUBAGENT profile used by the PRIMARY's own in-session delegation.
+It is not an `fm-spawn.sh` route, no `fm-spawn.sh` consumer reads it, and a second mate must ignore it.
+A profile that also names `agent` still spawns through its `harness`, `model`, and `effort` fields.
+
+`harness: "controller"` is not a harness name.
+It means the reviewing firstmate reviews the deliverable DIRECTLY and NOTHING is spawned.
+Never pass `controller` to `fm-spawn.sh`; it refuses it with "error: unknown harness 'controller'".
+
+`fm-spawn.sh` refuses to guess.
+With `config/crew-dispatch.json` present, a crewmate or scout spawn without an explicit `--harness` is refused with "config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)".
+That refusal is the backstop, not an error to work around.
 
 ## Toolchain
 
