@@ -244,6 +244,128 @@ test_the_republication_log_does_not_grow_on_every_scan() {
   pass "the republication log does not grow on every scan"
 }
 
+# The tracked implementation runs as a REGISTERED watcher check whose bytes
+# never change.
+#
+# WHY THIS CASE EXISTS: bin/fm-check-register.sh records the sha256 of
+# state/<id>.check.sh in state/<id>.check-trust. The moment the check file's
+# bytes move, that binding no longer matches, and the migration sweep
+# (bin/fm-pr-check-migrate.sh) classifies the check as an ambiguous legacy
+# poll, quarantines it and DISARMS it. So the tracked implementation lives in
+# bin/ and the registered check is a thin wrapper whose bytes are written once
+# and never touched: the implementation can then change freely without the
+# binding ever breaking.
+CHECK_HOME="$TMP_ROOT/checkhome"
+CHECK_STATE="$CHECK_HOME/state"
+CHECK_ID="controller-inbox-backstop"
+
+# write_registered_check: install the wrapper and register it.
+write_registered_check() {
+  mkdir -p "$CHECK_STATE"
+  cp "$BACKSTOP" "$CHECK_HOME/tracked-backstop.sh"
+  chmod 0755 "$CHECK_HOME/tracked-backstop.sh"
+  cat > "$CHECK_STATE/$CHECK_ID.check.sh" <<WRAPPER
+#!/usr/bin/env bash
+exec "$CHECK_HOME/tracked-backstop.sh" "\$@"
+WRAPPER
+  chmod 0700 "$CHECK_STATE/$CHECK_ID.check.sh"
+}
+
+register_check() {
+  FM_HOME="$CHECK_HOME" FM_STATE_OVERRIDE="$CHECK_STATE" \
+    bash "$ROOT/bin/fm-check-register.sh" "$CHECK_ID" > "$TMP_ROOT/register.out" 2>&1
+  printf '%s' "$?"
+}
+
+run_sweep() {
+  FM_HOME="$CHECK_HOME" FM_STATE_OVERRIDE="$CHECK_STATE" \
+    bash "$ROOT/bin/fm-pr-check-migrate.sh" --checks-safe > "$TMP_ROOT/sweep.out" 2>&1
+  printf '%s' "$?"
+}
+
+quarantine_entries() {
+  find "$CHECK_STATE/.pr-check-quarantine" -maxdepth 1 -type f \
+    -name "$CHECK_ID.check.*" 2>/dev/null | wc -l | tr -d '[:space:]'
+}
+
+quarantined_check_path() {
+  find "$CHECK_STATE/.pr-check-quarantine" -maxdepth 1 -type f \
+    -name "$CHECK_ID.check.*" 2>/dev/null | head -1
+}
+
+test_the_tracked_backstop_runs_as_a_registered_check() {
+  local rc out
+  write_registered_check
+  rc=$(register_check)
+  expect_code 0 "$rc" "the check must register"
+  assert_present "$CHECK_STATE/$CHECK_ID.check-trust" "the trust binding must exist"
+
+  rc=$(run_sweep)
+  expect_code 0 "$rc" "the sweep must succeed"
+  assert_present "$CHECK_STATE/$CHECK_ID.check.sh" \
+    "a registered check must survive the migration sweep"
+  assert_equals "0" "$(quarantine_entries)" \
+    "a registered check must not be quarantined"
+
+  # The registered check runs the tracked implementation.
+  out=$(FM_HOME="$CHECK_HOME" FM_STATE_OVERRIDE="$CHECK_STATE" \
+    bash "$CHECK_STATE/$CHECK_ID.check.sh" --report 2>/dev/null)
+  assert_contains "$out" "unhandled:" "the registered check must run the tracked backstop"
+  pass "the tracked backstop runs as a registered check whose bytes never change"
+}
+
+test_the_tracked_implementation_may_change_without_disarming_the_check() {
+  local rc out
+  # The tracked implementation moves. The registered check file does not, so the
+  # trust binding still matches and the check stays armed.
+  { printf '#!/usr/bin/env bash\n'
+    printf 'printf "tracked-implementation-marker: v2\\n"\n'
+    tail -n +2 "$CHECK_HOME/tracked-backstop.sh"
+  } > "$CHECK_HOME/tracked-backstop.v2"
+  mv -f "$CHECK_HOME/tracked-backstop.v2" "$CHECK_HOME/tracked-backstop.sh"
+  chmod 0755 "$CHECK_HOME/tracked-backstop.sh"
+
+  rc=$(run_sweep)
+  expect_code 0 "$rc" "the sweep must succeed"
+  assert_present "$CHECK_STATE/$CHECK_ID.check.sh" \
+    "a change to the tracked implementation must not disarm the registered check"
+  assert_equals "0" "$(quarantine_entries)" \
+    "a change to the tracked implementation must not quarantine the check"
+
+  out=$(FM_HOME="$CHECK_HOME" FM_STATE_OVERRIDE="$CHECK_STATE" \
+    bash "$CHECK_STATE/$CHECK_ID.check.sh" --report 2>/dev/null)
+  assert_contains "$out" "tracked-implementation-marker: v2" \
+    "the registered check must run the current tracked bytes"
+  pass "the tracked implementation may change without disarming the registered check"
+}
+
+# The negative control: when the CHECK FILE's bytes move, the binding breaks
+# and the sweep quarantines and disarms the check. Re-registering restores it.
+test_a_changed_check_file_is_quarantined_and_re_registration_restores_it() {
+  local rc restored
+  printf '\n# the check file moved\n' >> "$CHECK_STATE/$CHECK_ID.check.sh"
+  rc=$(run_sweep)
+  expect_code 0 "$rc" "the sweep must succeed"
+  assert_absent "$CHECK_STATE/$CHECK_ID.check.sh" \
+    "a check file whose bytes changed must be quarantined and disarmed"
+  [ "$(quarantine_entries)" -ge 1 ] || fail "the sweep must record the quarantined check"
+
+  # Restore the check from quarantine and register it again.
+  restored=$(quarantined_check_path)
+  [ -n "$restored" ] || fail "the quarantined check must be recoverable"
+  cp "$restored" "$CHECK_STATE/$CHECK_ID.check.sh"
+  chmod 0700 "$CHECK_STATE/$CHECK_ID.check.sh"
+  rc=$(register_check)
+  expect_code 0 "$rc" "the check must re-register"
+  assert_present "$CHECK_STATE/$CHECK_ID.check-trust" "the trust binding must be rewritten"
+
+  rc=$(run_sweep)
+  expect_code 0 "$rc" "the sweep must succeed"
+  assert_present "$CHECK_STATE/$CHECK_ID.check.sh" \
+    "a re-registered check must be armed again"
+  pass "a changed check file is quarantined and re-registration restores it"
+}
+
 test_a_new_message_is_reported_unhandled
 test_an_acknowledged_message_is_handled
 test_the_acknowledgement_carries_name_hash_and_time
@@ -252,3 +374,6 @@ test_a_different_new_message_is_still_unhandled
 test_the_stale_threshold_is_not_weakened
 test_an_acknowledgement_of_changed_bytes_is_refused
 test_the_republication_log_does_not_grow_on_every_scan
+test_the_tracked_backstop_runs_as_a_registered_check
+test_the_tracked_implementation_may_change_without_disarming_the_check
+test_a_changed_check_file_is_quarantined_and_re_registration_restores_it
