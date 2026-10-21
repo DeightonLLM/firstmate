@@ -52,6 +52,17 @@ trap cleanup EXIT
 # fail on a busy host for no reason at all. A pre-existing artefact is
 # legitimate; only a NEW name is pollution.
 #
+# ATTRIBUTION: on a production host a live supervisor is writing into this very
+# directory WHILE the suite runs, so a new name is not automatically the
+# suite's doing. The lock the supervisor holds says who owns the home: the lock
+# is a directory carrying the holder's pid, and a live pid means a supervisor is
+# running. Artefacts a live supervisor owns are attributed to it and are not
+# pollution; anything else that appears IS. With no supervisor live - a CI box, a
+# dev box - nothing is attributed and the check keeps its full teeth.
+#
+# The owned names are the supervisor's own, and they are asserted against the
+# supervisor's source below so the two cannot drift apart silently.
+#
 # The "before" snapshot is taken HERE, before any case runs, so the comparison
 # measures the whole suite and is not vacuous. The snapshot lives under the
 # suite's own temp root, never in the home it is measuring.
@@ -72,8 +83,49 @@ snapshot_home_artefacts() {  # <out-file>
   return 0
 }
 
+# supervisor_owns_artefact <name> - true for a name a running supervisor owns.
+# The lock and its owner sidecar belong to the shared lock library, so the
+# whole .watch-supervise.lock* family is the lock's.
+supervisor_owns_artefact() {
+  case "$1" in
+    .watch-supervise.log) return 0 ;;
+    .watch-supervise.lock|.watch-supervise.lock.*) return 0 ;;
+    .watch-supervise-output.*) return 0 ;;
+  esac
+  return 1
+}
+
+# live_supervisor_pid - the pid of a supervisor holding this home's lock, or
+# empty when no supervisor is running.
+live_supervisor_pid() {
+  local lockdir="$ROOT/state/.watch-supervise.lock" pid=''
+  [ -d "$lockdir" ] || return 0
+  IFS= read -r pid 2>/dev/null <"$lockdir/pid" || true
+  case "$pid" in ''|*[!0-9]*) return 0 ;; esac
+  [ -d "/proc/$pid" ] || return 0
+  printf '%s\n' "$pid"
+}
+
+# supervisor_log_size - the byte size of this home's supervisor log, or 0 when
+# there is no log. The log grows on every supervisor exit path, so a size that
+# moved during the run is proof that a supervisor was active during it.
+supervisor_log_size() {
+  local f="$ROOT/state/.watch-supervise.log" size=0
+  [ -f "$f" ] || { printf '0\n'; return 0; }
+  size=$(wc -c < "$f" 2>/dev/null | tr -d ' ')
+  printf '%s\n' "${size:-0}"
+}
+
+# The owned-artefact list above must not drift from the supervisor's own source.
+for lit in '.watch-supervise.log' '.watch-supervise.lock' '.watch-supervise-output.'; do
+  grep -qF -- "$lit" "$SUPERVISE" \
+    || fatal "the supervisor's source no longer contains '$lit' - update supervisor_owns_artefact() in this suite"
+done
+
 snapshot_home_artefacts "$HOME_ARTEFACTS_BEFORE" \
   || fatal "could not snapshot the home's supervisor artefacts"
+SUPERVISOR_PID_BEFORE=$(live_supervisor_pid)
+SUPERVISOR_LOG_BEFORE=$(supervisor_log_size)
 
 # A portable bounded runner: timeout, gtimeout, or perl's alarm.
 run_bounded() {  # <seconds> <cmd...>
@@ -868,16 +920,54 @@ done
 # not pollution. A pre-existing artefact is legitimate; only a NEW name is
 # pollution, and a new name is what would overwrite a live supervisor's state
 # or make a later run believe a supervisor is running when it is not.
+#
+# A new name is not automatically the SUITE's doing: on a production host the
+# standing supervisor is writing into this same directory while the suite
+# runs, and its lock says who owns the home. Artefacts a live supervisor owns
+# are attributed to it; anything else that appears is pollution and is named.
 # ============================================================================
 snapshot_home_artefacts "$HOME_ARTEFACTS_AFTER"
-added=$(awk 'FILENAME == ARGV[1] { seen[$0] = 1; next } !($0 in seen)' \
-  "$HOME_ARTEFACTS_BEFORE" "$HOME_ARTEFACTS_AFTER")
-if [ -z "$added" ]; then
-  ok "the suite added no supervisor artefact to the home's state directory"
+added_file="$TMP/home-artefacts.added"
+pollution_file="$TMP/home-artefacts.pollution"
+awk 'FILENAME == ARGV[1] { seen[$0] = 1; next } !($0 in seen)' \
+  "$HOME_ARTEFACTS_BEFORE" "$HOME_ARTEFACTS_AFTER" > "$added_file"
+
+supervisor_pid=$(live_supervisor_pid)
+supervisor_log_after=$(supervisor_log_size)
+# A supervisor counts as having been active during the run if it held the lock
+# at either end of it, or if its log grew while the suite ran. That covers a
+# supervisor that was up throughout, one that started mid-run, and one that
+# exited mid-run - without which a transient artefact of the supervisor's own
+# would be blamed on the suite.
+supervisor_active=0
+if [ -n "$SUPERVISOR_PID_BEFORE" ] || [ -n "$supervisor_pid" ]; then
+  supervisor_active=1
+elif [ "$supervisor_log_after" -gt "$SUPERVISOR_LOG_BEFORE" ]; then
+  supervisor_active=1
+fi
+
+: > "$pollution_file"
+attributed=0
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  if [ "$supervisor_active" -eq 1 ] && supervisor_owns_artefact "$name"; then
+    attributed=$((attributed + 1))
+    continue
+  fi
+  printf '%s\n' "$name" >> "$pollution_file"
+done < "$added_file"
+
+pollution_count=$(wc -l < "$pollution_file" | tr -d ' ')
+pollution_count=${pollution_count:-0}
+if [ "$pollution_count" -eq 0 ]; then
+  if [ "$attributed" -gt 0 ]; then
+    ok "the suite added no artefact of its own to the home's state directory ($attributed supervisor-owned artefact(s) appeared and were attributed to the supervisor active during the run)"
+  else
+    ok "the suite added no artefact of its own to the home's state directory"
+  fi
 else
-  added_count=$(printf '%s\n' "$added" | grep -c .)
-  bad "the suite added $added_count supervisor artefact(s) to the home's state directory"
-  printf '%s\n' "$added" | sed 's/^/       /'
+  bad "the suite added $pollution_count artefact(s) of its own to the home's state directory"
+  sed 's/^/       /' "$pollution_file"
 fi
 
 say ""
