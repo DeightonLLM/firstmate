@@ -17,17 +17,17 @@ Inputs (all read-only, all optional - missing inputs degrade, they never crash):
   <repo>/ops/lane-ledger.tsv                      the machine lane ledger (lanes)
 
 The lane ledger and the claims board live in the Core repo's ops directory, which
-each host installs under its own path, so both are resolved by a fixed search
-order and the first hit wins (see resolve_ledger and collect):
+each host installs under its own path, so both are resolved from ONE fixed search
+order and the first hit wins (see ops_dir_candidates):
   <repo>/ops                    the repo's own ops directory
   /root/agent-work/ops           HD2Stack
   /root/ops                      Controller
   /home/hd2admin/ops             Hetzner (the installed Core ops directory)
   /home/hd2admin/agent-work/core-distro-saas-clean/ops
                                  Hetzner (the Core clone, the git-tracked source)
-Both inputs are resolved from the same directory on purpose: a ledger from one
-copy checked against a claims board from another reports a disagreement that is
-not there. The Hetzner entries sit where the Core repo's own drift checker
+Both inputs come out of the same directory on purpose: a ledger from one copy
+checked against a claims board from another reports a disagreement that is not
+there. The Hetzner entries sit where the Core repo's own drift checker
 (ops/bin/fm-todo-sync.sh) puts them: that checker searches /home/hd2admin/ops
 before its own directory, so on the Hetzner host the board and the checker read
 one input. A missing input stays a violation: it never becomes a silent pass.
@@ -84,6 +84,23 @@ HETZ_CORE_CLONE_OPS_DIR = pathlib.Path(
     "/home/hd2admin/agent-work/core-distro-saas-clean/ops")
 
 
+def ops_dir_candidates(repo):
+    """The Core ops directories, in the one fixed order every host agrees on.
+
+    The lane ledger and the claims board are both resolved from this one list,
+    so the two always come out of the same directory. A ledger from one copy
+    checked against a claims board from another reports a disagreement that is
+    not there, and a list that could drift apart is how that happens.
+    """
+    return [
+        pathlib.Path(repo) / "ops",
+        pathlib.Path("/root/agent-work/ops"),
+        pathlib.Path("/root/ops"),
+        HETZ_OPS_DIR,
+        HETZ_CORE_CLONE_OPS_DIR,
+    ]
+
+
 def read_json(path):
     try:
         with open(path, encoding="utf-8") as fh:
@@ -131,24 +148,18 @@ def resolve_ledger(repo, explicit=None):
     see that the ledger is missing, because a missing ledger must never silently
     become a missing to-do list.
 
-    The search order, first hit wins:
-      1. <repo>/ops/lane-ledger.tsv                       the repo's own ops dir
-      2. /root/agent-work/ops/lane-ledger.tsv             HD2Stack
-      3. /root/ops/lane-ledger.tsv                        Controller
-      4. /home/hd2admin/ops/lane-ledger.tsv               Hetzner (installed)
-      5. /home/hd2admin/agent-work/core-distro-saas-clean/ops/lane-ledger.tsv
+    The search order is the ops directory list, first hit wins:
+      1. <repo>/ops                                    the repo's own ops dir
+      2. /root/agent-work/ops                          HD2Stack
+      3. /root/ops                                     Controller
+      4. /home/hd2admin/ops                            Hetzner (installed)
+      5. /home/hd2admin/agent-work/core-distro-saas-clean/ops
          the Hetzner host's Core clone (the git-tracked source)
     """
     if explicit:
         candidates = [pathlib.Path(explicit)]
     else:
-        candidates = [
-            pathlib.Path(repo) / "ops" / "lane-ledger.tsv",
-            pathlib.Path("/root/agent-work/ops/lane-ledger.tsv"),
-            pathlib.Path("/root/ops/lane-ledger.tsv"),
-            HETZ_OPS_DIR / "lane-ledger.tsv",
-            HETZ_CORE_CLONE_OPS_DIR / "lane-ledger.tsv",
-        ]
+        candidates = [d / "lane-ledger.tsv" for d in ops_dir_candidates(repo)]
     for candidate in candidates:
         try:
             if candidate.is_file():
@@ -444,13 +455,11 @@ def collect(repo, stale_days, now, ledger_path=None):
         for row in rows:
             ledger.append(row + [str(lp)])
 
-    # claims board: who holds what right now. The search order is the ledger's
-    # order, so the board and the claims board come out of the same directory.
+    # claims board: who holds what right now. It is resolved from the same ops
+    # directory list as the lane ledger, in the same order, so the two inputs
+    # always come out of the same directory.
     claims = []
-    for cp in [pathlib.Path(repo) / "ops" / "LANE-CLAIMS.md",
-               pathlib.Path("/root/agent-work/ops/LANE-CLAIMS.md"),
-               HETZ_OPS_DIR / "LANE-CLAIMS.md",
-               HETZ_CORE_CLONE_OPS_DIR / "LANE-CLAIMS.md"]:
+    for cp in [d / "LANE-CLAIMS.md" for d in ops_dir_candidates(repo)]:
         if cp.is_file():
             try:
                 for line in cp.read_text(encoding="utf-8").splitlines():

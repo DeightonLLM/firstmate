@@ -16,6 +16,24 @@
 #         /home/hd2admin/ops/bin/fm-todo-sync.sh
 #         /root/agent-work/ops/bin/fm-todo-sync.sh
 #         <repo>/ops/bin/fm-todo-sync.sh
+#   * The to-do board is located in this order:
+#         /root/agent-work/next-signpost/NEXT-BOARD.md
+#         $REPO/data/tracker/NEXT-BOARD.md
+#         $FM_ROOT/data/tracker/NEXT-BOARD.md
+#         /root/agent-work/deightonllm-firstmate/data/tracker/NEXT-BOARD.md
+#         /root/ops/NEXT-BOARD.md
+#         /home/hd2admin/ops/NEXT-BOARD.md
+#   * The machine lane ledger is located in this order:
+#         $REPO/ops/lane-ledger.tsv
+#         /root/agent-work/ops/lane-ledger.tsv
+#         /root/ops/lane-ledger.tsv
+#         /home/hd2admin/ops/lane-ledger.tsv
+#         /home/hd2admin/agent-work/core-distro-saas-clean/ops/lane-ledger.tsv
+#     The ledger and the claims board live in the Core repo's ops directory,
+#     which each host installs under its own path. The ledger and the claims
+#     board are read from the same directory, because a ledger from one copy
+#     checked against a claims board from another reports a disagreement that
+#     is not there.
 #   * The checker is expected to exit 0 when there is no drift and non-zero when
 #     there is, with a human-readable reason on stdout or stderr. Any non-zero
 #     is drift.
@@ -109,7 +127,9 @@ resolve_board() {
   for candidate in "/root/agent-work/next-signpost/NEXT-BOARD.md" \
                    "$REPO/data/tracker/NEXT-BOARD.md" \
                    "$FM_ROOT/data/tracker/NEXT-BOARD.md" \
-                   "/root/agent-work/deightonllm-firstmate/data/tracker/NEXT-BOARD.md"; do
+                   "/root/agent-work/deightonllm-firstmate/data/tracker/NEXT-BOARD.md" \
+                   "/root/ops/NEXT-BOARD.md" \
+                   "/home/hd2admin/ops/NEXT-BOARD.md"; do
     if [ -f "$candidate" ]; then
       printf '%s\n' "$candidate"
       return 0
@@ -131,7 +151,9 @@ resolve_ledger() {
   local candidate
   for candidate in "$REPO/ops/lane-ledger.tsv" \
                    "/root/agent-work/ops/lane-ledger.tsv" \
-                   "/root/ops/lane-ledger.tsv"; do
+                   "/root/ops/lane-ledger.tsv" \
+                   "/home/hd2admin/ops/lane-ledger.tsv" \
+                   "/home/hd2admin/agent-work/core-distro-saas-clean/ops/lane-ledger.tsv"; do
     if [ -f "$candidate" ]; then
       printf '%s\n' "$candidate"
       return 0
