@@ -1,0 +1,13 @@
+# .worktreeinclude - ignored/untracked files treehouse seeds into a new worktree.
+#
+# These inputs live in gitignored data/, so a fresh crew worktree starts blind
+# to them: the token ledger and the real ticket queue are invisible to the lane
+# that was told to read them. Patterns are gitignore-style, anchored to the main
+# checkout root.
+#
+# These are COPIES for the lane's own reading and testing. The live publisher
+# reads the originals in the main checkout, so a lane that edits its copy
+# cannot change the live board.
+data/tracker-tokens-20261019/ledger/usage.json
+data/campaign-dashboard-20261015/board.md
+data/tracker/tickets.jsonl

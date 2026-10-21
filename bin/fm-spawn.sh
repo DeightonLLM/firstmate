@@ -1554,7 +1554,23 @@ kimi_spawn_fail() {  # <detail>
 }
 
 if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
-  spawn_send_text_line "$WT_TARGET" 'treehouse get'
+  # Cut the crew's worktree from the code the coordinator is actually building
+  # on, and hand it a named branch so its commit is landable.
+  #
+  # A bare `treehouse get` takes the pool's inferred base - the repository
+  # default branch as the pool last warmed it - which can be many commits behind
+  # the local main, and hands the worktree over in DETACHED HEAD. A lane that
+  # starts on stale code cannot see the contract it was told to read, or even
+  # the file it was told to change; a detached worktree gives it nowhere to
+  # commit. Both failures present as a blocked lane, not as a dispatch bug, so
+  # the fix belongs here rather than in the brief.
+  WT_BASE="$(git -C "$PROJ_ABS" rev-parse HEAD 2>/dev/null || true)"
+  WT_BRANCH="lane/$ID"
+  if [ -n "$WT_BASE" ]; then
+    spawn_send_text_line "$WT_TARGET" "treehouse get --base $WT_BASE -b $WT_BRANCH"
+  else
+    spawn_send_text_line "$WT_TARGET" 'treehouse get'
+  fi
 
   # Wait for the treehouse subshell: the pane's cwd moves from the project to the worktree.
   # Target the stable window id, not the name: if the name is ever lost (e.g. an
