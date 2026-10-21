@@ -14,7 +14,7 @@
 # Exit codes:
 #   0  pass (measured and healthy, or unmeasured-but-live with disclosure)
 #   3  refuse - measured exhaustion evidence (percent floor or runway floor)
-#   4  refuse - cannot measure: quota-axi missing, failed, or no provider block
+#   4  refuse - cannot measure: quota-axi missing/failed/no provider block, or unbound harness
 #
 # Overrides for tests only:
 #   FM_QUOTA_AXI_BIN - absolute path to the quota-axi binary (or a stub).
@@ -25,6 +25,31 @@
 # account, and never edits provider state. It reads and refuses or passes.
 set -u
 
+# Captain ruling 2026-10-21, question "quota-provider-binding", answer
+# "leave-refused", provider "": the claude, grok, kimi and opencode harnesses
+# are NOT to be bound to any provider. They have no provider account binding
+# on this fleet, so quota-axi cannot measure their spend surface, and an
+# unmeasurable spend surface is not a verified-eligible surface (captain ruling
+# 2026-10-13, header above). The gate therefore refuses them BY NAME with
+# exit 4 - deliberately and visibly - instead of letting them fall through to
+# the generic "no provider mapping" refusal, and instead of letting a model
+# prefix route them onto a bound provider's quota.
+LEAVE_REFUSED_HARNESSES="claude grok kimi opencode"
+
+leave_refused_reason() {
+  # leave_refused_reason <harness> - print the refusal reason when the harness
+  # is deliberately unbound on this fleet and return 0; otherwise print
+  # nothing and return 1.
+  local harness=${1:-} candidate
+  for candidate in $LEAVE_REFUSED_HARNESSES; do
+    if [ "$harness" = "$candidate" ]; then
+      printf '%s' 'deliberately unbound on this fleet (Captain ruling 2026-10-21, quota-provider-binding=leave-refused): no provider account binding exists for this harness, so quota-axi cannot measure its spend surface, and an unmeasurable spend surface is not a verified-eligible surface'
+      return 0
+    fi
+  done
+  return 1
+}
+
 die() { printf 'error: %s\n' "$1" >&2; exit "${2:-4}"; }
 
 usage() {
@@ -34,6 +59,12 @@ usage() {
 
 provider_for() {
   local harness=${1:-} model=${2:-}
+  if leave_refused_reason "$harness" >/dev/null; then
+    # Deliberately unbound: there is no provider mapping for this harness and
+    # none may be inferred from a model prefix - it would be measured against
+    # a provider this harness does not even spend on.
+    echo ""; return
+  fi
   case "$harness" in
     minimax-code|minimax) echo minimax; return ;;
     agy|agy-*) echo agy; return ;;
@@ -85,6 +116,14 @@ cmd_check() {
     esac
   done
   [ -n "$harness" ] || die "check requires --harness"
+
+  # Named refusal for the harnesses the captain left unbound. This runs
+  # BEFORE provider_for(), so it cannot be side-stepped by naming a model
+  # that maps to a bound provider (e.g. --harness opencode --model gpt-6-*).
+  local refusal
+  if refusal=$(leave_refused_reason "$harness"); then
+    die "quota gate: REFUSE harness=$harness - $refusal" 4
+  fi
 
   local provider
   provider=$(provider_for "$harness" "$model")
