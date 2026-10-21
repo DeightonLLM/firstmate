@@ -16,6 +16,14 @@ SPAWN="$ROOT/bin/fm-spawn.sh"
 TMP_ROOT=$(fm_test_tmproot fm-spawn-batch)
 export FM_BACKEND=tmux
 
+# The dispatch rules live in the captain-private config/ of whatever home the
+# script finds, and an empty FM_CONFIG_OVERRIDE falls back to that home rather
+# than to nothing. Point the override at an EMPTY directory so this test owns
+# its environment: with the rules file present, fm-spawn refuses a batch with
+# no explicit harness, which is a different behaviour from the one under test.
+EMPTY_CONFIG="$TMP_ROOT/empty-config"
+mkdir -p "$EMPTY_CONFIG"
+
 # Clear ambient firstmate overrides so the behavior test owns its environment.
 run_spawn() {
   FM_ROOT_OVERRIDE='' \
@@ -23,21 +31,24 @@ run_spawn() {
     FM_STATE_OVERRIDE='' \
     FM_DATA_OVERRIDE='' \
     FM_PROJECTS_OVERRIDE='' \
-    FM_CONFIG_OVERRIDE='' \
+    FM_CONFIG_OVERRIDE="$EMPTY_CONFIG" \
     FM_SPAWN_NO_GUARD=1 \
     "$SPAWN" "$@" 2>&1
 }
 
+# Every fixture key is a valid four-segment lane key (<harness>-<model>-<host>-<task>),
+# because the spawn path now refuses a key whose harness segment is unknown before it
+# ever reaches the missing-brief check this test is about.
 # Every pair in a batch is dispatched even though the first one fails; the loop
 # must not stop early. This is the load-bearing batch guarantee, kept explicit.
 test_batch_dispatches_every_pair() {
   local out status
-  out=$(run_spawn nope-batch-a-z1=projects/none-a nope-batch-b-z2=projects/none-b)
+  out=$(run_spawn mcode-m3.1f-brandon-nope-batch-a-z1=projects/none-a mcode-m3.1f-brandon-nope-batch-b-z2=projects/none-b)
   status=$?
   [ "$status" -ne 0 ] || fail "batch with missing briefs should exit non-zero"
-  printf '%s\n' "$out" | grep -F 'batch: FAILED to spawn nope-batch-a-z1 (projects/none-a)' >/dev/null \
+  printf '%s\n' "$out" | grep -F 'batch: FAILED to spawn mcode-m3.1f-brandon-nope-batch-a-z1 (projects/none-a)' >/dev/null \
     || fail "first pair was not dispatched/reported"
-  printf '%s\n' "$out" | grep -F 'batch: FAILED to spawn nope-batch-b-z2 (projects/none-b)' >/dev/null \
+  printf '%s\n' "$out" | grep -F 'batch: FAILED to spawn mcode-m3.1f-brandon-nope-batch-b-z2 (projects/none-b)' >/dev/null \
     || fail "second pair was not dispatched/reported (loop stopped early?)"
   pass "batch dispatch re-execs and reports every id=repo pair"
 }
@@ -61,8 +72,8 @@ test_batch_mode_boundaries() {
       no)  printf '%s\n' "$out" | grep -F 'batch:' >/dev/null && fail "$label: wrongly entered batch dispatch" ;;
     esac
   done <<'ROWS'
-single id=repo pair routes through batch|yes|batch: FAILED to spawn nope-batch-solo-z3 (projects/none-solo)|nope-batch-solo-z3=projects/none-solo
-non-pair arg in batch is rejected|yes|batch dispatch expects every argument as id=repo; got 'bogus-no-equals'|nope-batch-mix-z5=projects/none-mix bogus-no-equals
+single id=repo pair routes through batch|yes|batch: FAILED to spawn mcode-m3.1f-brandon-nope-batch-solo-z3 (projects/none-solo)|mcode-m3.1f-brandon-nope-batch-solo-z3=projects/none-solo
+non-pair arg in batch is rejected|yes|batch dispatch expects every argument as id=repo; got 'bogus-no-equals'|mcode-m3.1f-brandon-nope-batch-mix-z5=projects/none-mix bogus-no-equals
 plain '<id> <repo>' is single-task|no||nope-single-z4 projects/none-single
 id part containing '/' is not a pair|no||weird/id-z6=projects/none projects/none
 ROWS
