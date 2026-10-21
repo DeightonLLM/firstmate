@@ -178,7 +178,7 @@ EOF
 
 test_kimi_launch_then_send_is_verified() {
   local id rec out rc launch pointer brief_real meta task_tmp
-  id="kimi-success-z1-$$"
+  id="luna6-hd2-kimi-success-z1-$$"
   task_tmp="/tmp/fm-$id"
   KIMI_RUNTIME_TASK_TMP=$task_tmp
   rm -rf "$task_tmp"
@@ -356,7 +356,7 @@ test_kimi_hook_install_refuses_without_jq() {
 
 test_kimi_hook_is_silent_and_requires_registered_workspace_token() {
   local id rec out rc hook target token no_token snapshot_before snapshot_after fakebin
-  id=kimi-hook-auth-z6
+  id=luna6-hd2-kimi-hook-auth-z6
   rec=$(make_spawn_case hook-auth "$id")
   read_spawn_record "$rec"
   out=$(run_spawn "$CASE_DIR" "$HOME_DIR" "$PROJ_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id")
@@ -401,7 +401,7 @@ test_kimi_hook_is_silent_and_requires_registered_workspace_token() {
 
 test_kimi_spawn_refuses_unsafe_global_config_before_pane_creation() {
   local id rec out rc
-  id=kimi-config-refuse-z7
+  id=luna6-hd2-kimi-config-refuse-z7
   rec=$(make_spawn_case config-refuse "$id")
   read_spawn_record "$rec"
   printf '[malformed\n' > "$HOME_DIR/.kimi-code/config.toml"
@@ -417,7 +417,7 @@ test_kimi_spawn_refuses_unsafe_global_config_before_pane_creation() {
 
 test_kimi_teardown_removes_pointer_and_registry_token() {
   local id rec out rc token
-  id=kimi-teardown-z8
+  id=luna6-hd2-kimi-teardown-z8
   rec=$(make_spawn_case teardown "$id")
   read_spawn_record "$rec"
   out=$(run_spawn "$CASE_DIR" "$HOME_DIR" "$PROJ_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id")
@@ -438,7 +438,7 @@ test_kimi_teardown_removes_pointer_and_registry_token() {
 
 test_kimi_falls_back_to_expanded_home_binary() {
   local id rec out rc launch fallback
-  id=kimi-fallback-z4
+  id=luna6-hd2-kimi-fallback-z4
   rec=$(make_spawn_case fallback "$id")
   read_spawn_record "$rec"
   rm "$FAKEBIN_DIR/kimi"
@@ -456,7 +456,7 @@ test_kimi_falls_back_to_expanded_home_binary() {
 
 test_kimi_missing_binary_refuses_before_pane_creation() {
   local id rec out rc fallback
-  id=kimi-missing-z5
+  id=luna6-hd2-kimi-missing-z5
   rec=$(make_spawn_case missing "$id")
   read_spawn_record "$rec"
   rm "$FAKEBIN_DIR/kimi"
@@ -474,7 +474,7 @@ test_kimi_missing_binary_refuses_before_pane_creation() {
 
 test_kimi_unconfirmed_delivery_fails_loudly() {
   local id rec out rc
-  id=kimi-drop-z2
+  id=luna6-hd2-kimi-drop-z2
   rec=$(make_spawn_case drop "$id")
   read_spawn_record "$rec"
   rc=0
@@ -490,7 +490,7 @@ test_kimi_unconfirmed_delivery_fails_loudly() {
 
 test_kimi_readiness_gate_precedes_pointer() {
   local id rec out rc
-  id=kimi-not-ready-z3
+  id=luna6-hd2-kimi-not-ready-z3
   rec=$(make_spawn_case not-ready "$id")
   read_spawn_record "$rec"
   rc=0
