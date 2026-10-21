@@ -418,10 +418,32 @@ the reporter on `PATH` so the hook can call it by name.
 `herdr agent list` as `agent: mcode` and `agent_status: working`, the same shape as the Pi panes,
 and `herdr pane list` reported the same pane with `agent_status: working`.
 
-**Open:** MCode's local marketplace does not enumerate a bare package directory, so
-`mcode plugin add mcode-herdr-agent@local` does not resolve the package and the hook does not fire
-on its own yet.
-Until that is closed, an MCode pane's state is reported by calling the reporter directly.
+**Closed on 2026-10-21:** MCode's local marketplace DOES enumerate a bare package directory.
+The package never loaded for two separate reasons, both now fixed:
+
+1. The package shipped a root `plugin.json` (the portable Agent Plugins manifest). MCode reads
+   that manifest first when it is present, and it resolves to a plugin with **no hooks** - the
+   native `.minimax-plugin/plugin.json` that declares the hooks was never consulted. The package
+   now ships only the native manifest.
+2. The native manifest did not satisfy MCode's schema: `author` must be a string, `icon` is
+   required, `skills` must be present as an array, and `hooks` must be an array of `.json` paths.
+   A package with no executable capability is refused outright, so a hook-only package must
+   actually produce hook handlers.
+
+MCode also runs plugin hooks with a **filtered environment** (a fixed allowlist: PATH, HOME,
+LANG, TERM, SHELL, USER, TMPDIR, TEMP, TMP and the Windows equivalents). `HERDR_ENV`,
+`HERDR_PANE_ID` and `HERDR_BIN_PATH` are not on it, so the reporter has to recover the pane
+identity from the MCode process that spawned the hook. `bin/fm-herdr-agent-report.sh` now does
+that by walking up the process tree when the variables are missing.
+
+`bin/fm-spawn.sh` builds the per-task runtime dir with a **physical** `plugins/` directory
+(`copy_mcode_plugins_dir`), because MCode refuses a symlinked plugin root with
+`PLUGIN_ROOT_SYMLINK: Plugin root must be a physical directory` and that refusal takes the whole
+local marketplace down for that runtime.
+
+Verified on 2026-10-21 on the controller: a spawned lane's pane reports `agent_status: working`
+while it works and `agent_status: done` when it stops, `herdr agent list` shows it as
+`agent: mcode`, and `fm_backend_busy_state herdr <pane>` returns `busy` and then `idle`.
 
 ## Long instructions belong in a file, not in a send
 

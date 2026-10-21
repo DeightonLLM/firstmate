@@ -5,13 +5,12 @@
   "displayName": "Firstmate MCode Herdr Agent",
   "version": "1.0.0",
   "description": "Reports the MCode session's agent lifecycle state to Herdr so Herdr shows the pane's running and stopped light and lists the pane under herdr agent list.",
-  "author": {
-    "name": "Firstmate"
-  },
+  "author": "Firstmate",
+  "icon": "icon.png",
   "category": "Code",
   "exampleQueries": [],
   "apps": [],
   "mcpServers": [],
   "skills": [],
-  "hooks": "hooks/hooks.json"
+  "hooks": ["hooks/hooks.json"]
 }

@@ -1660,22 +1660,57 @@ fi
 TASK_TMP="/tmp/fm-$ID"
 mkdir -p "$TASK_TMP/gotmp"
 
-# Per-task minimax-code runtime config dir with permissionMode=bypassPermissions
-# so unattended dispatched mcode lanes structurally cannot park on an interactive gate.
-if [ "$HARNESS" = minimax-code ]; then
-  MCODE_TASK_DIR="$TASK_TMP/mcode"
-  mkdir -p "$MCODE_TASK_DIR"
-  base_dir="${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}"
+# copy_mcode_plugins_dir: materialize a PHYSICAL plugins directory for a
+# per-task mcode runtime dir.
+#
+# MCode refuses a symlinked plugin root outright: the local marketplace scan
+# aborts with "PLUGIN_ROOT_SYMLINK: Plugin root must be a physical directory",
+# which takes the whole local marketplace down for that runtime, not just one
+# package. The same class of refusal that killed every lane at launch when v2
+# was symlinked. So the plugin tree is COPIED, matching how the installer
+# publishes it (bin/fm-install-mcode-herdr-agent.sh copies the package too).
+#
+# Only real package directories are copied. A symlinked entry inside the
+# marketplace directory is skipped rather than followed, so a self-referential
+# link cannot turn into a recursive copy.
+copy_mcode_plugins_dir() {  # <src-plugins-dir> <dst-plugins-dir>
+  local src=$1 dst=$2 pkg name
+  [ -d "$src" ] || return 0
+  mkdir -p "$dst" 2>/dev/null || return 0
+  for pkg in "$src"/*; do
+    [ -e "$pkg" ] || continue
+    [ -d "$pkg" ] || continue
+    [ -L "$pkg" ] && continue
+    name=$(basename "$pkg")
+    rm -rf "${dst:?}/$name" 2>/dev/null || true
+    cp -R "$pkg" "$dst/$name" 2>/dev/null || true
+  done
+  return 0
+}
+
+# setup_mcode_task_dir: build the per-task minimax-code runtime dir.
+#
+# Two things live in the per-task dir:
+#   config.yaml - the per-task config, with permissionMode=bypassPermissions so
+#                 an unattended dispatched lane structurally cannot park on an
+#                 interactive gate.
+#   plugins/    - a PHYSICAL copy of the local marketplace (see
+#                 copy_mcode_plugins_dir for why it must not be a symlink).
+# Everything else in the runtime data dir is mirrored as a symlink, except v2
+# and config.yaml, which are excluded for their own reasons.
+setup_mcode_task_dir() {  # <task-dir> <base-runtime-data-dir>
+  local task_dir=$1 base_dir=$2 item b base_cfg
+  mkdir -p "$task_dir"
   base_cfg="$base_dir/config.yaml"
   if [ -f "$base_cfg" ]; then
     if grep -qE '^[[:space:]]*permissionMode:' "$base_cfg"; then
-      sed -e 's/^[[:space:]]*permissionMode:.*/permissionMode: bypassPermissions/' "$base_cfg" > "$MCODE_TASK_DIR/config.yaml"
+      sed -e 's/^[[:space:]]*permissionMode:.*/permissionMode: bypassPermissions/' "$base_cfg" > "$task_dir/config.yaml"
     else
-      cp "$base_cfg" "$MCODE_TASK_DIR/config.yaml"
-      printf '\npermissionMode: bypassPermissions\n' >> "$MCODE_TASK_DIR/config.yaml"
+      cp "$base_cfg" "$task_dir/config.yaml"
+      printf '\npermissionMode: bypassPermissions\n' >> "$task_dir/config.yaml"
     fi
   else
-    printf 'permissionMode: bypassPermissions\n' > "$MCODE_TASK_DIR/config.yaml"
+    printf 'permissionMode: bypassPermissions\n' > "$task_dir/config.yaml"
   fi
   if [ -d "$base_dir" ]; then
     for item in "$base_dir"/*; do
@@ -1688,9 +1723,26 @@ if [ "$HARNESS" = minimax-code ]; then
       # minimax-code lane at launch with an empty prompt box. Leaving v2 out
       # lets the lane's mcode create its own real directory there.
       [ "$b" = "v2" ] && continue
-      ln -s "$item" "$MCODE_TASK_DIR/$b" 2>/dev/null || true
+      # plugins is the local marketplace root, and mcode refuses a symlinked
+      # plugin root ("PLUGIN_ROOT_SYMLINK: Plugin root must be a physical
+      # directory"). A symlinked marketplace takes the whole local plugin scan
+      # down, so the lane loses every local plugin - including the herdr agent
+      # reporter that lets the pane publish its own agent state. Copy the
+      # packages into a real directory instead of linking them.
+      if [ "$b" = "plugins" ]; then
+        copy_mcode_plugins_dir "$item" "$task_dir/plugins"
+        continue
+      fi
+      ln -s "$item" "$task_dir/$b" 2>/dev/null || true
     done
   fi
+}
+
+# Per-task minimax-code runtime config dir with permissionMode=bypassPermissions
+# so unattended dispatched mcode lanes structurally cannot park on an interactive gate.
+if [ "$HARNESS" = minimax-code ]; then
+  MCODE_TASK_DIR="$TASK_TMP/mcode"
+  setup_mcode_task_dir "$MCODE_TASK_DIR" "${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}"
 fi
 
 # Per-harness turn-end hook where enabled: a file that touches

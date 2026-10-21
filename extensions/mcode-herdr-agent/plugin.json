@@ -1,9 +1,0 @@
-{
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "mcode-herdr-agent",
-  "version": "1.0.0",
-  "description": "Reports the MCode session's agent lifecycle state to Herdr so Herdr shows the pane's running and stopped light and lists the pane under herdr agent list.",
-  "author": {
-    "name": "Firstmate"
-  }
-}

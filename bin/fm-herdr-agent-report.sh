@@ -15,6 +15,15 @@
 #   HERDR_PANE_ID   the pane to report for
 #   HERDR_BIN_PATH  the herdr binary to call
 #
+# MCode runs plugin hooks with a filtered environment: only PATH, HOME, LANG,
+# TERM, SHELL, USER, TMPDIR, TEMP, TMP and the Windows equivalents reach the
+# hook process. HERDR_ENV, HERDR_PANE_ID and HERDR_BIN_PATH are NOT on that
+# allowlist, so a hook invoked by MCode would find no pane and exit without
+# reporting. The pane identity still exists in the environment of the MCode
+# process that spawned the hook, so this script recovers it by walking up the
+# process tree when the variables are missing. When the variables are already
+# present the direct call path is unchanged.
+#
 # The hook payload arrives on stdin and is optional.
 # Every failure path exits 0: a slow or broken Herdr must never delay or
 # break an agent turn.
@@ -28,6 +37,44 @@ case "$VERB" in
   session-start | release) ;;
   *) exit 0 ;;
 esac
+
+# Recover the pane identity from the nearest ancestor process that carries it.
+# Only used when the variables are absent, so a direct call keeps its own
+# values. Best effort: any failure leaves the variables unset and the script
+# exits without reporting, which is the safe direction.
+herdr_env_from_ancestor() {
+  local pid=$1 depth=0 line
+  while [ "$pid" -gt 1 ] && [ "$depth" -lt 8 ]; do
+    if [ -r "/proc/$pid/environ" ]; then
+      while IFS= read -r line; do
+        case "$line" in
+          HERDR_ENV=*)
+            HERDR_ENV="${line#HERDR_ENV=}"
+            ;;
+          HERDR_PANE_ID=*)
+            HERDR_PANE_ID="${line#HERDR_PANE_ID=}"
+            ;;
+          HERDR_BIN_PATH=*)
+            HERDR_BIN_PATH="${line#HERDR_BIN_PATH=}"
+            ;;
+        esac
+      done < <(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null || true)
+      if [ "${HERDR_ENV:-}" = "1" ] && [ -n "${HERDR_PANE_ID:-}" ]; then
+        return 0
+      fi
+    fi
+    pid="$(awk '{print $4}' "/proc/$pid/stat" 2>/dev/null || true)"
+    case "$pid" in
+      '' | *[!0-9]*) return 1 ;;
+    esac
+    depth=$((depth + 1))
+  done
+  return 1
+}
+
+if [ "${HERDR_ENV:-}" != "1" ] || [ -z "${HERDR_PANE_ID:-}" ]; then
+  herdr_env_from_ancestor "$PPID" || true
+fi
 
 [ "${HERDR_ENV:-}" = "1" ] || exit 0
 [ -n "${HERDR_PANE_ID:-}" ] || exit 0
