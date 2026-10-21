@@ -19,13 +19,21 @@ date". One owner, no per-surface improvisation.
 
 **Harnesses** (the Captain's list, 2026-10-14): `codex`, `pi`, `zcode`, `mcode`.
 
-**Surfaces** (canonical names from `data/IDENTITY.md`):
+**Surfaces** (canonical names from [`docs/agent-policy/SURFACE-IDENTITY.md`](../../../docs/agent-policy/SURFACE-IDENTITY.md),
+which is the single authority for machine identity — read it before naming any host):
 
 | Surface | Host | How to reach |
 |---|---|---|
 | Controller | `vmi3196300` | local |
 | HD2 | `vmi3238503` via `hd2stack` | herdr machine `d8b3aabca5b8c4dcaa54d4bba29f9396` (NO `host` prefix) |
-| KVM1 | `elevatesVPS` `100.69.211.43` | `ssh elevatesVPS` — client PRODUCTION host |
+| Hetz | `brandon-compute` `100.106.6.22` | `ssh brandon-compute` (account `hd2admin`) |
+| KVM1 | HD2 main WordPress site | an HD2 surface — it holds **no client files** and is not a separate sweep target |
+
+**Excluded host — HARD GATE.** `srv1137994` / `elevatesci-vps` (legacy `animovps`, `elevatesVPS`,
+Tailscale `100.69.211.43`) is **not** a sweep surface. `docs/agent-policy/SURFACE-IDENTITY.md`
+standing rule 1 puts it behind a hard gate: do not touch it, probe it, resolve it, dispatch to it,
+or route work to it. Never name it as KVM1, and never infer a host from a domain, a DNS record, a
+PTR, or a legacy alias (standing rules 3 and 6).
 
 ## Mode: SWEEP by default, UPDATE only on exact authority
 
@@ -35,8 +43,11 @@ Run it whenever asked. It never installs anything.
 **UPDATE** mutates a live surface. It requires the Captain's explicit go **for that specific surface**.
 Never inherit a go given for the Controller into eVPS or HD2, or the reverse.
 
-- eVPS/KVM1 serves `elevatesci.com` and `staging.core-distro.com`. Updating anything there is a
-  production mutation. Report first; do not act on a general "update the harnesses".
+- KVM1 is an HD2 surface holding no client files. It is not a production mutation target in its
+  own right; treat any KVM1 change as an HD2 change under the HD2 rule below.
+- The `srv1137994` / `elevatesci-vps` host is behind the hard gate above and is excluded from
+  every sweep, including read-only probing. If a sweep is asked for that host, stop and report the
+  exact need instead of resolving it by inference.
 - HD2 is our own surface but carries live worker lanes. Back up before mutating and preserve every lane.
 
 ## Steps
@@ -62,13 +73,17 @@ Never inherit a go given for the Controller into eVPS or HD2, or the reverse.
 - If a harness's update mechanism is unknown, stop and report it — do not improvise an install path.
 - Report a stale or unreachable surface plainly; never paper over a cell you could not read.
 
-## Known findings, 2026-10-14 baseline
+## Known findings, 2026-10-14 baseline — SUPERSEDED, re-measure, do not reuse
+
+The table below was measured on 2026-10-14, **before** the 2026-10-15 KVM1 identity correction in
+`docs/agent-policy/SURFACE-IDENTITY.md` and before the 2026-10-20 KVM8 cutover. Its "KVM1" row was
+taken against a host that is now behind the hard gate above. It is retained as a dated record of
+what was observed, not as a current fact: take no cell from it as current, and do not act on the
+"KVM1 is the stalest surface" conclusion. Re-measure every cell in step 1 and report a cell you
+could not read as a finding.
 
 | Surface | mcode | herdr | treehouse |
 |---|---|---|---|
 | Controller | 0.6.10 | 0.9.1 | v3.1.2 (v3.1.3 published) |
 | HD2 | not on PATH | reachable | not readable |
-| KVM1 | 0.5.8 | 0.7.6 | absent |
-
-KVM1 is the stalest surface. HD2 versions were not readable this shift — resolve the read path before
-claiming anything about HD2's versions.
+| KVM1 (mis-identified host, excluded) | 0.5.8 | 0.7.6 | absent |

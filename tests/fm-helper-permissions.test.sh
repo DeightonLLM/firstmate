@@ -22,9 +22,15 @@ TMP_LAB=$(fm_test_tmproot helper-perm-test)
 mkdir -p "$TMP_LAB"
 
 # --- Test 1: Drift detection when tracked definition differs from live -------
+# The lean-ctx profile is not installed on every host (the plain profile was
+# superseded on 2026-10-17 in favour of lean-ctx-contabo), so this case is
+# hermetic: it drives the check with a mock live lean-ctx config built from the
+# tracked definition. The assertion is unchanged - the check must still fail
+# closed and name the lean-ctx allowlist mismatch.
 test_drift_detected_on_stale_or_mutated_definition() {
   local mutated_def="$TMP_LAB/mutated-tracked.json"
-  python3 - "$TRACKED" "$mutated_def" <<'PY'
+  local mock_lc="$TMP_LAB/mock-lc.toml"
+  python3 - "$TRACKED" "$mutated_def" "$mock_lc" <<'PY'
 import json, sys
 with open(sys.argv[1]) as f:
     d = json.load(f)
@@ -33,10 +39,18 @@ if "git" in d.get("lean_ctx", {}).get("shell_allowlist_extra", []):
     d["lean_ctx"]["shell_allowlist_extra"].remove("git")
 with open(sys.argv[2], "w") as f:
     json.dump(d, f, indent=2)
+# Build the mock LIVE lean-ctx config from the unmutated tracked definition.
+with open(sys.argv[1]) as f:
+    live = json.load(f)
+entries = live.get("lean_ctx", {}).get("shell_allowlist_extra", [])
+with open(sys.argv[3], "w") as f:
+    f.write("shell_allowlist_extra = [\n")
+    f.write(",\n".join('    "%s"' % e for e in entries))
+    f.write(",\n]\n")
 PY
 
   local out rc=0
-  out=$("$CHECK" --tracked "$mutated_def" 2>&1) || rc=$?
+  out=$("$CHECK" --tracked "$mutated_def" --lean-ctx "$mock_lc" 2>&1) || rc=$?
   [ "$rc" -eq 1 ] || fail "expected drift check to fail (exit 1), got $rc: $out"
   assert_contains "$out" "DRIFT: lean-ctx shell_allowlist_extra mismatch" \
     "drift check failed to report lean-ctx allowlist mismatch"
@@ -121,10 +135,63 @@ test_canonical_live_host_matches() {
   pass "canonical live host containment matches tracked definition"
 }
 
+# --- Test 5: Exact refusal - a secret root admitted for WRITE fails closed ---
+# The narrow route never widens access to reach a green suite. A blanket write
+# to a prohibited secret root, in the tracked definition OR in the live store,
+# is refused with the exact offending path named.
+test_secret_write_root_is_refused() {
+  local hazard_def="$TMP_LAB/hazard-write-tracked.json"
+  python3 - "$TRACKED" "$hazard_def" <<'PY'
+import json, sys
+with open(sys.argv[1]) as f:
+    d = json.load(f)
+d["minimax"]["write_roots"].append("/root/.secrets/**")
+with open(sys.argv[2], "w") as f:
+    json.dump(d, f, indent=2)
+PY
+
+  local out rc=0
+  out=$("$CHECK" --tracked "$hazard_def" 2>&1) || rc=$?
+  [ "$rc" -eq 1 ] || fail "expected secret write root to fail closed, got $rc: $out"
+  assert_contains "$out" "SAFETY HAZARD: tracked rules admit forbidden secret root for write" \
+    "refusal did not name the tracked secret write root"
+  pass "safety guard refuses a tracked secret root admitted for write"
+}
+
+# --- Test 6: Exact refusal - a LIVE secret write root fails closed ---------
+# The live store is the other half of the narrow route: an untracked blanket
+# secret write in the live permission store is refused, not absorbed into the
+# tracked definition.
+test_live_secret_write_root_is_refused() {
+  local live_mm="$TMP_LAB/live-hazard-minimax.json"
+  python3 - "$TRACKED" "$live_mm" <<'PY'
+import json, sys
+with open(sys.argv[1]) as f:
+    d = json.load(f)
+allow = []
+for root in d.get("minimax", {}).get("read_roots", []):
+    allow.append({"tool_name": "bash", "matcher": {"kind": "path", "pattern": root, "actions": ["read"]}})
+for root in d.get("minimax", {}).get("write_roots", []):
+    allow.append({"tool_name": "bash", "matcher": {"kind": "path", "pattern": root, "actions": ["write"]}})
+allow.append({"tool_name": "bash", "matcher": {"kind": "path", "pattern": "/root/.secrets/**", "actions": ["write"]}})
+with open(sys.argv[2], "w") as f:
+    json.dump({"version": 2, "allow": allow}, f, indent=2)
+PY
+
+  local out rc=0
+  out=$("$CHECK" --tracked "$TRACKED" --minimax "$live_mm" 2>&1) || rc=$?
+  [ "$rc" -eq 1 ] || fail "expected live secret write root to fail closed, got $rc: $out"
+  assert_contains "$out" "SAFETY HAZARD: live rules admit forbidden secret root for write" \
+    "refusal did not name the live secret write root"
+  pass "safety guard refuses a live secret root admitted for write"
+}
+
 # Execute tests
 test_drift_detected_on_stale_or_mutated_definition
 test_minimax_read_root_mutation_fails
 test_safety_check_blocks_secret_read_roots
 test_canonical_live_host_matches
+test_secret_write_root_is_refused
+test_live_secret_write_root_is_refused
 
-printf '1..4\n'
+printf '1..6\n'

@@ -99,6 +99,18 @@ Test cleanup must use the guarded path in [`docs/cmux-backend.md`](cmux-backend.
 
 `config/dispatch-max-lanes` sets the home-local maximum for all working or unknown worker lanes; `config/dispatch-max-provider-lanes` sets the corresponding per-provider maximum. Both files contain a positive decimal integer, and the per-provider ceiling defaults to the global ceiling when absent or invalid. `FM_DISPATCH_GUARD_MAX_LANES` and `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` override their respective files. Provider identity is read from the provider prefix in each task's recorded `model=` when present, otherwise from its recorded `harness=`; unknown or unreadable lane state occupies both applicable ceilings.
 
+The ceiling is enforced by `bin/fm-dispatch-guard.sh` (`fm_dispatch_guard_lane_cap`), which `bin/fm-spawn.sh` calls before it spawns. The Herdr subagent cap (`MAX_SUBAGENT_PANES` / `MAX_TOTAL_PANES`, `cap.sh`) is a separate, pane-level ceiling on top of it.
+
+**`config/parallel-dispatch-cap` is retired and is not implemented.** It was a legacy file that
+existed only in the retired `/home/hd2admin/kun-agent-workspace` home
+(`data/hd2-takeover/report-ticket-0001-0008-surface-roster-and-fast-tier.md` §2.2 retires that home
+as non-authoritative). It was never present in this repository, and no reader for it ever existed
+here — `tests/fm-spawn-batch.test.sh` covers batch argument routing, not a task-count cap. Adding a
+third, separately-configured concurrency gate to `bin/fm-spawn.sh` would let two ceilings disagree
+about the same host, so the file is retired rather than implemented. The live ceiling is
+`config/dispatch-max-lanes` and the per-provider ceiling is `config/dispatch-max-provider-lanes`.
+
+
 ## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
 
 The `/afk` sub-supervisor injects escalation digests into firstmate's own pane independently of where new task endpoints are spawned.

@@ -60,6 +60,30 @@ Under repository policy and containment rules, the following paths **must never*
 - `/root/.pi/sessions/**`: Pi raw conversation transcripts.
 - `/root/.bash_history`: Interactive shell history containing potential credentials.
 
+The same list is refused for **write** roots, not only read roots. A blanket write to a
+secret root is never admissible: the drift check fails closed on it and names the exact
+offending rule, whether it is in the tracked definition or in the live permission store.
+
+The one documented exception is `/root/.ssh/**`, which is admitted for **read** so
+`known_hosts` and SSH config can be inspected. The private-key paths themselves
+(`/root/.ssh/id_rsa`, `/root/.ssh/id_ed25519`) are refused for both read and write, and a
+write to `/root/.ssh/**` is refused like any other secret root.
+
+### Per-profile presence (`required`)
+
+`docs/helper-permissions.json` declares `required: true|false` per live profile:
+
+| Profile | `required` | Why |
+|---|---|---|
+| `lean_ctx` (`/root/.config/lean-ctx/config.toml`) | `false` | The plain profile was superseded on 2026-10-17 in favour of `lean-ctx-contabo`; on a host where it is not installed the check declares it `UNAVAILABLE` instead of failing closed |
+| `lean_ctx_contabo` (`/root/.config/lean-ctx-contabo/config.toml`) | `true` | The active lean-ctx profile on the Contabo environment |
+| `minimax` (`/root/.minimax/permission.json`) | `true` | The live tool permission store |
+
+`required: false` never means "ignored". The profile's rules stay documented in the
+tracked definition, the safety invariant still runs over the tracked definition, and a
+`required: true` profile that goes missing is still a hard `MISSING` drift.
+
+
 ---
 
 ## 4. Shell Allowlist Categories & Rationale

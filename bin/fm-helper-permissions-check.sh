@@ -121,8 +121,24 @@ def log(msg):
         print(msg)
 
 # 1. Check lean-ctx config
+#
+# A tracked live file that is absent is a hard MISSING drift when the tracked
+# definition declares it required on this host (the default). A profile the
+# tracked definition declares NOT required - the plain lean-ctx profile, which
+# was superseded on 2026-10-17 in favour of lean-ctx-contabo - is declared
+# unavailable instead of being dropped or mislabeled. Declaring it unavailable
+# is never a silent pass: the safety invariant in step 4 still runs over the
+# tracked definition, and the profile's rules stay documented.
+def profile_required(section):
+    return bool(tracked.get(section, {}).get("required", True))
+
+
+# 1. Check lean-ctx config
 if not lean_ctx_path.exists():
-    drifts.append(f"MISSING: lean-ctx config not found at {lean_ctx_path}")
+    if profile_required("lean_ctx"):
+        drifts.append(f"MISSING: lean-ctx config not found at {lean_ctx_path}")
+    else:
+        log(f"UNAVAILABLE: lean-ctx config not installed on this host ({lean_ctx_path})")
 else:
     try:
         with open(lean_ctx_path, "rb") as f:
@@ -145,7 +161,10 @@ else:
 
 # 2. Check lean-ctx-contabo config
 if not contabo_path.exists():
-    drifts.append(f"MISSING: lean-ctx-contabo config not found at {contabo_path}")
+    if profile_required("lean_ctx_contabo"):
+        drifts.append(f"MISSING: lean-ctx-contabo config not found at {contabo_path}")
+    else:
+        log(f"UNAVAILABLE: lean-ctx-contabo config not installed on this host ({contabo_path})")
 else:
     try:
         with open(contabo_path, "rb") as f:
@@ -174,8 +193,16 @@ else:
         drifts.append(f"ERROR: failed parsing {contabo_path}: {e}")
 
 # 3. Check minimax permission.json
+#
+# live_read_roots / live_write_roots are hoisted so the safety invariant in
+# step 4 can inspect the live roots even when the file is absent.
+live_read_roots = []
+live_write_roots = []
 if not minimax_path.exists():
-    drifts.append(f"MISSING: minimax permission file not found at {minimax_path}")
+    if profile_required("minimax"):
+        drifts.append(f"MISSING: minimax permission file not found at {minimax_path}")
+    else:
+        log(f"UNAVAILABLE: minimax permission file not installed on this host ({minimax_path})")
 else:
     try:
         with open(minimax_path, "r", encoding="utf-8") as f:
@@ -223,16 +250,72 @@ else:
     except Exception as e:
         drifts.append(f"ERROR: failed parsing {minimax_path}: {e}")
 
-# 4. Safety invariant check: assert no secret paths admitted in tracked read_roots or allowlists
+# 4. Safety invariant check: assert no secret paths admitted in tracked read_roots or allowlists.
+#
+# The prohibited secret roots apply to write_roots exactly as they do to
+# read_roots: a blanket write to a secret root is never admissible. This is
+# the narrow route's refusal edge - it names the exact offending rule instead
+# of widening the tracked definition to match an unsafe live store.
 secret_patterns = ["/root/.ssh", "/root/.secrets", "/root/secret-quarantine", "/root/.codex/auth.json", "/root/.bash_history"]
 tracked_all_reads = tracked.get("minimax", {}).get("read_roots", [])
+tracked_all_writes = tracked.get("minimax", {}).get("write_roots", [])
+
+
+def secret_root_of(pattern):
+    """Return the prohibited secret root a path pattern sits under, or None.
+
+    /root/.ssh is the one documented exception: the tracked rules admit
+    /root/.ssh/** for READ so known_hosts and ssh config can be inspected, and
+    only the private-key paths themselves are refused. A WRITE to /root/.ssh is
+    never admissible and is refused below like any other secret root.
+    """
+    for sec in secret_patterns:
+        if sec == "/root/.ssh":
+            continue
+        if pattern == sec or pattern == f"{sec}/**" or pattern.startswith(f"{sec}/"):
+            return sec
+    return None
+
+
+PRIVATE_KEY_PATHS = ("/root/.ssh/id_rsa", "/root/.ssh/id_ed25519")
+
 for sec in secret_patterns:
     if sec == "/root/.ssh":
         # /root/.ssh/** is present for known_hosts / config reading, but private keys must not be explicit
         if "/root/.ssh/id_rsa" in tracked_all_reads or "/root/.ssh/id_ed25519" in tracked_all_reads:
             drifts.append(f"SAFETY HAZARD: tracked rules admit private key path: {sec}")
+        if "/root/.ssh/id_rsa" in tracked_all_writes or "/root/.ssh/id_ed25519" in tracked_all_writes:
+            drifts.append(f"SAFETY HAZARD: tracked rules admit private key write path: {sec}")
     elif sec in tracked_all_reads or f"{sec}/**" in tracked_all_reads:
         drifts.append(f"SAFETY HAZARD: tracked rules admit forbidden secret root: {sec}")
+
+for pattern in tracked_all_writes:
+    if pattern in PRIVATE_KEY_PATHS:
+        drifts.append(f"SAFETY HAZARD: tracked rules admit private key write path: {pattern}")
+        continue
+    sec = secret_root_of(pattern)
+    if sec:
+        drifts.append(f"SAFETY HAZARD: tracked rules admit forbidden secret root for write: {pattern} (under {sec})")
+    elif pattern == "/root/.ssh/**" or pattern.startswith("/root/.ssh/"):
+        drifts.append(f"SAFETY HAZARD: tracked rules admit forbidden secret root for write: {pattern} (under /root/.ssh)")
+
+for pattern in live_write_roots:
+    if pattern in PRIVATE_KEY_PATHS:
+        drifts.append(f"SAFETY HAZARD: live rules admit private key write path: {pattern}")
+        continue
+    sec = secret_root_of(pattern)
+    if sec:
+        drifts.append(f"SAFETY HAZARD: live rules admit forbidden secret root for write: {pattern} (under {sec})")
+    elif pattern == "/root/.ssh/**" or pattern.startswith("/root/.ssh/"):
+        drifts.append(f"SAFETY HAZARD: live rules admit forbidden secret root for write: {pattern} (under /root/.ssh)")
+
+for pattern in live_read_roots:
+    if pattern in PRIVATE_KEY_PATHS:
+        drifts.append(f"SAFETY HAZARD: live rules admit private key path: {pattern}")
+        continue
+    sec = secret_root_of(pattern)
+    if sec:
+        drifts.append(f"SAFETY HAZARD: live rules admit forbidden secret root for read: {pattern} (under {sec})")
 
 if drifts:
     print("FAILED: helper permission rules drift detected:", file=sys.stderr)
