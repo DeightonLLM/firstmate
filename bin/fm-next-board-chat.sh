@@ -207,21 +207,27 @@ json_bool() {  # <true|false>
 
 # The published board. One canonical path per home; the realpath is what
 # Lavish keys the session on, so the path is never rewritten.
+#
+# The board belongs to the HOME. It is never taken from another home's
+# checkout: the checkout root (FM_ROOT) can belong to a different home than
+# FM_HOME, and a session keyed on that board would talk to the wrong home's
+# surface. A home with no board of its own gets no board, not a neighbour's.
 resolve_artifact() {
-  local candidate
   if [ -n "${NEXT_BOARD_ARTIFACT:-}" ]; then
     printf '%s\n' "$NEXT_BOARD_ARTIFACT"
     return 0
   fi
-  for candidate in \
-    "$FM_HOME/data/next-board-publish/index.html" \
-    "$FM_ROOT/data/next-board-publish/index.html" \
-    "$SELF_DIR/index.html"; do
-    if [ -f "$candidate" ]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
+  # The installed runtime copy sits beside the board it serves, so the board
+  # next to this script counts - but only when that script lives inside the
+  # home that is asking.
+  if [ -f "$SELF_DIR/index.html" ]; then
+    case "$SELF_DIR" in
+      "$FM_HOME"|"$FM_HOME"/*)
+        printf '%s\n' "$SELF_DIR/index.html"
+        return 0
+        ;;
+    esac
+  fi
   printf '%s\n' "$FM_HOME/data/next-board-publish/index.html"
 }
 
