@@ -2,7 +2,8 @@ projects/
 state/
 data/
 .no-mistakes/
-.lavish/
+.lavish/*
+!.lavish/CAPTAIN-BOARD.html
 .fm-secondmate-home
 .DS_Store
 __pycache__/
