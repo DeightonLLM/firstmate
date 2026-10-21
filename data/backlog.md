@@ -2,6 +2,31 @@
 
 ## In flight
 
+- [ ] m3.1f-firstmate-safetynetliveregistry - The safety net reports an empty fleet while lanes are running, because its live-lane registry is a legacy format nothing writes (repo: firstmate) (kind: ship) (since 2026-10-21)
+  MEASURED 2026-10-21 by the firstmate, from the supervisor's own escalation log: in the window `2026-10-21T21:57:36` -> `23:14:39` (77 minutes) the standing arm escalated 13 times, and one of them was `safetynet.status: blocked: SAFETYNET 20261021-2100 - issues: no-live-lanes` - while Lane D and Lane E were both demonstrably running. The false alarm has been continuous since at least 17:30, one per 30-minute cron run.
+  ROOT CAUSE: `/root/bin/factory-safetynet.sh` (cron `/etc/cron.d/fm-safetynet`, every 30 min) counts live lanes from `state/lanes/*.lane` - a registry whose files carry `pane=` and `artifact=` keys. A lane counts only if it has a pane key, its artifact does not already carry a `VERDICT:` (retired lanes are excluded), and its pane is in the current herdr layout.
+  THE REGISTRY IS LEGACY AND EMPTY OF LIVE WORK: `state/lanes/` holds exactly ONE file, `dubz-a-gem` (2026-10-05), plus `state/lanes/archived/`. Nothing in the repo writes it - the only references to `state/lanes` are readers (`bin/lane-todo-dash.sh`) and test fixtures. The modern fleet records `state/<id>.meta`, which the safety net never reads. So it counts zero lanes while two run, and escalates that as `blocked`.
+  DELIVERS: one source of truth for "a lane is live", read by both the safety net and the board; the registry maintained by the spawn/teardown path rather than by hand; a retired lane excluded for the right reason (the lane is gone) rather than because its artifact happens to carry a verdict; a regression test proving a live lane is counted and a retired one is not; and the `no-live-lanes` alarm silent while a lane is running.
+  NOT TO CHANGE: the safety net's other checks (backups, quota trip-wire), its cron cadence, or its `blocked:` status vocabulary.
+  EVIDENCE: fleet report section 23.3 in `data/m3.1f-firstmate-boardland/report-fleet-cycle-20261021.md`.
+  BOUNDARY NOTE: the reader lives at `/root/bin/factory-safetynet.sh`, OUTSIDE this repo. The fix belongs in fleet code in this repo plus a one-line change to the host script; the Captain's call on the host-script boundary should be taken before that line is written.
+
+- [ ] m3.1f-firstmate-fmsendfalseunconfirmed - `fm-send.sh` reports "delivery unconfirmed" for a message that WAS delivered, so a busy live lane looks unreachable (repo: firstmate) (kind: ship) (since 2026-10-21)
+  MEASURED 2026-10-21 by the firstmate while steering Lane D. `FM_HOME=<home> bin/fm-send.sh fm-mcode-m3.1f-controller-supervisebatch "<encoded brief>"` printed `error: text not submitted to default:wE5:p2 (delivery unconfirmed; verdict=pending; tried meta=.../mcode-m3.1f-controller-supervisebatch.meta; backend=from-meta)` and exited 0.
+  THE MESSAGE LANDED. The pane read the brief and began executing it within seconds: `herdr pane read wE5:p2` showed `Read (/root/agent-work/deightonllm-firstmate/data/mcode-m3.1f-controller-supervisebatch/brief-02-isolation-fix.md)` followed by the lane working the brief to completion. The verdict was a FALSE NEGATIVE.
+  WHY IT MATTERS: the send's own header says the verdict exists so "a successful send to the wrong endpoint is worse than a loud failure". A FALSE failure is the same class of harm: an operator or script that trusts it re-sends a message that already landed, or concludes a lane is unreachable when it is merely busy - which is the same blind spot the herdr busy-detection defect has, and the two fix the same missing evidence.
+  DELIVERS: a verdict that distinguishes "the text was not delivered" from "the delivery could not be CONFIRMED", or a positive confirmation on the herdr backend that actually observes the submit; a regression test that sends to a live pane and asserts the verdict matches what the pane received; and the fail-closed default preserved when delivery genuinely fails.
+  NOT TO CHANGE: the refusal to resolve an ambiguous target, the `FM_HOME` requirement, or the text-once-then-Enter discipline.
+  EVIDENCE: fleet report section 23.4.
+
+- [ ] m3.1f-firstmate-supervisehandbackwatcher - The supervisor's hand-back tears down the watcher it owns, so supervision is OFF until the primary re-arms (repo: firstmate) (kind: ship) (since 2026-10-21)
+  MEASURED 2026-10-21 by the firstmate immediately after one hand-back: NO `fm-watch` process existed, `state/.last-watcher-beat` was 606s stale, and `state/.watch.lock` was absent. `bin/fm-send.sh` independently printed `WATCHER DOWN - SUPERVISION IS OFF / 5 task(s) in flight, but no watcher has a fresh beacon (last beat: 606s ago, grace 300s)`.
+  MECHANISM: `bin/fm-watch-supervise.sh` runs `bin/fm-watch-arm.sh` in the FOREGROUND and the arm owns the watcher as its own tracked child; the script's own header says a process-group teardown takes the arm and the watcher down together. On a captain-relevant wake the supervisor prints the escalation and exits 0, which tears down the arm - and the watcher with it.
+  THE HAND-BACK ITSELF IS BY DESIGN and the protocol documents it (step 5: drain, handle, then start the next supervisor as a new tracked background task). The defect is the GAP: between the hand-back and the primary's re-arm there is no watcher, and with five tasks in flight that gap is real. This is the residual shape of the re-arm ritual the Captain called out.
+  DELIVERS: supervision that stays up across a hand-back, or a re-arm that needs no model turn; the choice stated and its cost measured rather than asserted; the escalation still costing exactly one model turn; and the wake queue still never mutated by the supervisor.
+  DEPENDS ON: the coalescing lane, which makes hand-backs rare; and the herdr busy-detection lane, which lets the watcher absorb a lane's own stale instead of escalating it.
+  EVIDENCE: fleet report section 23.1.
+
 
 
 - [ ] m3.1f-firstmate-supervisebatch - Coalesce a peer's republished machine artefacts so one peer costs one model turn, not one turn per republication (repo: firstmate) (kind: ship) (since 2026-10-21)
