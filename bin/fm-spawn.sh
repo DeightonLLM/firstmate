@@ -1571,7 +1571,8 @@ if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   # rejects a bare commit hash as "no such branch". A name that exists only
   # locally can only resolve locally, so the lane is cut from exactly the
   # commit the coordinator dispatched on.
-  local wt_base="" wt_branch="lane/$ID"
+  wt_base=""
+  wt_branch="lane/$ID"
   if wt_base=$(git -C "$PROJ_ABS" rev-parse --verify HEAD 2>/dev/null) &&
      git -C "$PROJ_ABS" branch -f "spawn-base/$ID" "$wt_base" 2>/dev/null; then
     wt_base="spawn-base/$ID"
