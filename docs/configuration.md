@@ -313,6 +313,35 @@ Never pass `controller` to `fm-spawn.sh`; it refuses it with "error: unknown har
 With `config/crew-dispatch.json` present, a crewmate or scout spawn without an explicit `--harness` is refused with "config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)".
 That refusal is the backstop, not an error to work around.
 
+### Dispatch profile spawn blocks
+
+A rule's `use` object may carry a `spawn` object that states the exact command for that rule, so that a second mate never has to reconstruct it from the fields and never guesses.
+
+`spawn.harness`, `spawn.model` and `spawn.effort` are the values to pass to `bin/fm-spawn.sh`.
+`spawn.command` is the literal command line for a reader, and it must agree with the other three.
+`spawn.note` is optional, and carries anything a reader needs to know that the command line does not say.
+A `spawn` object is documentation, not a second source of truth: `fm-spawn.sh` reads `harness`, `model` and `effort` from the profile itself, and never from `spawn`.
+
+A profile that names a harness with no single authoritative provider family in the quota table carries an explicit `provider` field, and a profile without one is rejected by the resolver.
+[`docs/examples/crew-dispatch.json`](examples/crew-dispatch.json) is the general worked example of the multi-provider shape, and [`docs/examples/crew-dispatch-single-route.json`](examples/crew-dispatch-single-route.json) is a worked example of a single-route profile with an explicit provider, where the route is chosen for a reason that expires.
+
+### Which route a dispatch profile names, and who decides it
+
+The CURRENT route lives in `config/crew-dispatch.json`, which is LOCAL and gitignored, and nowhere else.
+A tracked document states the RULE for choosing a route, never the route that happens to be chosen right now.
+
+That separation matters because a route is often chosen for a reason that expires: a free tier, a quota window, a promotion, a price change.
+A dated sentence in a permanent document reads six weeks later as a standing fact, and a standing fact is not revisited.
+So a routing decision whose reason has an end date is an operational configuration, it lives in `config/`, and it is changed when the reason changes.
+
+The rule for choosing a route:
+
+1. A route that is free, discounted, or inside a quota window is preferred, and the reason and its end date are recorded in the config that holds the route.
+2. A lane uses a paid provider only when it genuinely needs that provider, and only after a fresh `quota-axi` reading shows the headroom.
+3. When a window ends, re-read the quota and the cost before changing the route; a free window is a reason to prefer one route, not an exemption from the quota gate.
+4. A dispatch profile that names a provider for a specific need, for example a web-connected lookup, keeps that rule and the quota reading that justifies it.
+5. A tracked doc may reference the config and state this rule, and may record a dated decision as a dated record, but a dated record must carry the condition that retires it, so a later reader can tell a window from a policy.
+
 ## Toolchain
 
 On session start the first mate detects what its required toolchain is missing or too old and lists each problem with either an exact install command or manual instructions.

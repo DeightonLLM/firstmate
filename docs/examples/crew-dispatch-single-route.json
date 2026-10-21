@@ -1,0 +1,50 @@
+{
+  "_mode": {
+    "active": "M3.1F-workers-mcode-controller-review",
+    "parallelism": "The primary keeps 4-6 lanes in flight; lanes are independent, with disjoint write boundaries.",
+    "contract": "All delegated implementation and analysis work runs on the minimax-code harness with the M3.1 Flash route while that route is free. Other providers are API calls that draw account quota, so they are used only on a fresh quota-axi reading.",
+    "spawn_contract": "The fields of a rule, and which of them is the spawn route. (1) 'harness' plus 'model', plus an optional 'effort', are the bin/fm-spawn.sh flags: bin/fm-spawn.sh <task-id> --harness <harness> --model <model> [--effort <effort>]. The 'spawn' block inside each rule states those exact flags and is documentation, not a second source of truth. (2) 'agent' is the name of a Pi SUBAGENT profile used by the PRIMARY's own in-session delegation; no bin/fm-spawn.sh consumer reads it and a second mate must ignore it. (3) 'harness': 'controller' is not a harness name: it means the reviewing firstmate reviews the deliverable directly and spawns nothing, and it must never be passed to bin/fm-spawn.sh. (4) bin/fm-spawn.sh refuses to guess: with this file present a crewmate or scout spawn without an explicit --harness is refused, and that refusal is the backstop, not an error to work around."
+  },
+  "rules": [
+    {
+      "when": "Any delegated implementation, investigation, capture, or analysis work.",
+      "use": {
+        "harness": "minimax-code",
+        "model": "minimax/MiniMax-M3.1-Flash-Preview",
+        "provider": "minimax",
+        "spawn": {
+          "harness": "minimax-code",
+          "model": "minimax/MiniMax-M3.1-Flash-Preview",
+          "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview"
+        }
+      },
+      "why": "The M3.1 Flash route on the minimax-code harness is free until 2026-10-25, and it is the same model family the primary itself runs on."
+    },
+    {
+      "when": "A dispatch that would use a provider other than minimax-code, and every intake that picks a profile.",
+      "use": {
+        "harness": "minimax-code",
+        "model": "minimax/MiniMax-M3.1-Flash-Preview",
+        "provider": "minimax",
+        "spawn": {
+          "harness": "minimax-code",
+          "model": "minimax/MiniMax-M3.1-Flash-Preview",
+          "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview"
+        }
+      },
+      "why": "Every other provider is an API call that draws the account's quota, so the primary consults quota-axi at every intake and only leaves the free route when a lane genuinely needs another provider and the reading shows headroom."
+    }
+  ],
+  "default": [
+    {
+      "harness": "minimax-code",
+      "model": "minimax/MiniMax-M3.1-Flash-Preview",
+      "provider": "minimax",
+      "spawn": {
+        "harness": "minimax-code",
+        "model": "minimax/MiniMax-M3.1-Flash-Preview",
+        "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview"
+      }
+    }
+  ]
+}

@@ -642,6 +642,45 @@ test_handled_refuses_placeholder_review() {
   pass "a placeholder review file is refused as non-substantive"
 }
 
+test_scan_triggers_guarded_notification() {
+  local home reports out fakebin log
+  read -r home reports <<<"$(make_env scan_notify)"
+  fakebin="$TMP_ROOT/scan_notify/fakebin"
+  mkdir -p "$fakebin" "$TMP_ROOT/scan_notify/logs"
+  log="$TMP_ROOT/scan_notify/logs/prompts.log"
+  cat > "$fakebin/herdr" <<SH
+#!/usr/bin/env bash
+set -u
+case "\${1:-}" in
+  agent)
+    case "\${2:-}" in
+      list)
+        cat <<EOF
+{"id":"cli:agent:list","result":{"agents":[{"name":"controller","pane_id":"w0:p1","agent_status":"idle","interactive_ready":true}]},"type":"agent_list"}
+EOF
+        exit 0
+        ;;
+      prompt)
+        printf '%s\t%s\n' "\${3:-}" "\${4:-}" >> "$log"
+        exit 0
+        ;;
+    esac
+    ;;
+esac
+exit 0
+SH
+  chmod +x "$fakebin/herdr"
+
+  write_report "$reports/reply-1.md" "From Hetz: audit is complete and clean."
+
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
+    "$INGEST" scan hetz-inbox "$reports" 2>&1)
+  assert_contains "$out" "ingested: 1" "scan should ingest reply"
+  assert_present "$log" "prompt log should be written on immediate guarded notification"
+  assert_grep "reply-1.md" "$log" "prompt text must mention arrived reply"
+  pass "scan triggers immediate guarded notification upon receiving new reply"
+}
+
 test_receive_publishes_wake_and_receipt
 test_untrusted_reply_is_enveloped
 test_rescan_is_deduplicated
@@ -663,3 +702,4 @@ test_handled_requires_substantive_review_evidence
 test_handled_refuses_placeholder_review
 test_handled_accepts_substantive_review_evidence
 test_already_handled_reply_is_reported_on_resync
+test_scan_triggers_guarded_notification
