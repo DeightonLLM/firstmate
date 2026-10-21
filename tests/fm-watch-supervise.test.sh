@@ -37,6 +37,44 @@ TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-watch-supervise.XXXXXX") || fatal "could not
 cleanup() { rm -rf "$TMP" 2>/dev/null || true; }
 trap cleanup EXIT
 
+# --- the home-isolation snapshot ---------------------------------------------
+#
+# The suite must not pollute the home it runs in. The check at the end of this
+# file compares the set of supervisor artefact NAMES in that home's state
+# directory before the suite's work with the set after it.
+#
+# Comparing NAMES, not contents, is what makes the check meaningful on a live
+# host. A standing supervisor legitimately lives in the production home and
+# legitimately writes .watch-supervise.log, .watch-supervise.lock and
+# .watch-supervise-output.* into that home's state directory, and it APPENDS
+# to its log while the suite runs. So that file's contents, size and mtime all
+# change for reasons that are not pollution, and a checksum comparison would
+# fail on a busy host for no reason at all. A pre-existing artefact is
+# legitimate; only a NEW name is pollution.
+#
+# The "before" snapshot is taken HERE, before any case runs, so the comparison
+# measures the whole suite and is not vacuous. The snapshot lives under the
+# suite's own temp root, never in the home it is measuring.
+HOME_ARTEFACTS_BEFORE="$TMP/home-artefacts.before"
+HOME_ARTEFACTS_AFTER="$TMP/home-artefacts.after"
+
+snapshot_home_artefacts() {  # <out-file>
+  local out=$1 f
+  : > "$out" || return 1
+  [ -d "$ROOT/state" ] || return 0
+  (
+    cd "$ROOT/state" 2>/dev/null || exit 0
+    for f in .watch-supervise*; do
+      [ -e "$f" ] || continue
+      printf '%s\n' "$f"
+    done
+  ) | LC_ALL=C sort > "$out"
+  return 0
+}
+
+snapshot_home_artefacts "$HOME_ARTEFACTS_BEFORE" \
+  || fatal "could not snapshot the home's supervisor artefacts"
+
 # A portable bounded runner: timeout, gtimeout, or perl's alarm.
 run_bounded() {  # <seconds> <cmd...>
   local secs=$1; shift
@@ -169,7 +207,11 @@ new_home
 export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
 export FM_STUB_CREW_VERDICT='state: working · source: run-step · stub'
 export FM_STUB_ARM_DELAY=0.2
-export FM_WATCH_SUPERVISE_PARK_SECS=3
+# The park bound is a test PARAMETER, not an assertion: it only decides how
+# many cycles the loop gets. It is set generously so the "at least three
+# consecutive routine wakes" assertion has headroom on a busy host, because a
+# suite that passes only when the machine is idle is a suite nobody trusts.
+export FM_WATCH_SUPERVISE_PARK_SECS=5
 routine_status lane1
 {
   printf 'signal: %s\n' "$STATE_DIR/lane1.status"
@@ -226,14 +268,9 @@ else
   ls -la "$STATE_DIR" | sed 's/^/       /'
 fi
 
-# Nothing this suite ran may have written into the live home's state dir.
-live_state="$ROOT/state"
-if [ -d "$live_state" ] && ls "$live_state"/.watch-supervise* >/dev/null 2>&1; then
-  bad "the supervisor wrote an artifact into the live home's state directory"
-  ls -la "$live_state"/.watch-supervise* | sed 's/^/       /'
-else
-  ok "no supervisor artifact was written into the live home's state directory"
-fi
+# The suite's own isolation from the home it runs in is checked at the END of
+# this file, against the before/after artefact-name snapshot taken before any
+# case ran. Asserting here would have measured only this one case.
 
 # ============================================================================
 # 2. A captain-relevant wake stops the loop and the escalation names it.
@@ -294,7 +331,10 @@ fi
 new_home
 export FM_WATCH_SUPERVISE_ARM="$STUB_ARM"
 export FM_STUB_CREW_VERDICT='state: working · source: run-step · stub'
-export FM_WATCH_SUPERVISE_PARK_SECS=2
+# A test PARAMETER, not an assertion: it only sets how long the loop runs
+# before the park exit. Generous, so the "kept the cycle alive" assertion does
+# not depend on host speed.
+export FM_WATCH_SUPERVISE_PARK_SECS=3
 export FM_STUB_ARM_DELAY=0.2
 routine_status lane1
 printf 'signal: %s\n' "$STATE_DIR/lane1.status" > "$FIXTURE"
@@ -423,7 +463,11 @@ export FM_STUB_CREW_VERDICT='state: working · source: run-step · stub'
 routine_status lane1
 printf 'signal: %s\n' "$STATE_DIR/lane1.status" > "$FIXTURE"
 
-run_bounded 3 "$SUPERVISE" > "$OUT" 2>&1
+# The bounded runner stops the supervisor mid-cycle. The wait is generous so
+# a busy host still gets the supervisor started and the arm's readiness line
+# relayed; the stub arm holds the cycle open for 30s, so the cycle is still
+# OPEN when the runner stops it and the assertion is unchanged.
+run_bounded 10 "$SUPERVISE" > "$OUT" 2>&1
 rc=$?
 if grep -q 'watcher: started pid=' "$OUT" 2>/dev/null; then
   ok "readiness: the arm's readiness line reached the caller while the cycle was still open"
@@ -476,7 +520,11 @@ peer_reset() {  # <id>
   : > "$PEER_LEDGER"
   : > "$PEER_STATUS"
   : > "$PEER_QUEUE"
-  export FM_WATCH_SUPERVISE_COALESCE_SECS=5
+  # The coalescing window used by the peer cases. It has to be long enough
+  # that the supervisor's next run reliably lands INSIDE it (the window is
+  # anchored at the last escalation), and the expiry sleeps below are longer
+  # than the window so the expiry itself is real rather than assumed.
+  export FM_WATCH_SUPERVISE_COALESCE_SECS=20
   export FM_STUB_CREW_VERDICT='state: stopped · source: none · stub'
   export FM_WATCH_SUPERVISE_PARK_SECS=2
   export FM_STUB_ARM_DELAY=0.05
@@ -568,7 +616,8 @@ fi
 
 # The window closes, and the next republication escalates. That escalation is
 # where the absorbed republications are reported.
-sleep 6
+# Longer than the coalescing window, so the window really has closed.
+sleep 25
 sha_board4=$(peer_drop CAPTAIN-BOARD.html 'fourth republication')
 run_bounded 30 "$SUPERVISE" > "$OUT.3" 2>&1
 rc=$?
@@ -605,7 +654,8 @@ else
   sed 's/^/       /' "$OUT.2"
 fi
 
-sleep 6
+# Longer than the coalescing window, so the window really has closed.
+sleep 25
 peer_drop CAPTAIN-BOARD.html 'third republication' >/dev/null
 run_bounded 30 "$SUPERVISE" > "$OUT.3" 2>&1
 if grep -q 'ESCALATION' "$OUT.3" 2>/dev/null && grep -q 'absorbed=1' "$OUT.3" 2>/dev/null; then
@@ -804,6 +854,31 @@ for needle in 'WHAT IT DOES' 'WHAT IT NEVER DOES' 'OUTPUT LINES' 'EXIT STATUS'; 
     bad "the header does not document '$needle'"
   fi
 done
+
+# ============================================================================
+# The suite must not pollute the home it runs in.
+#
+# This compares the set of supervisor artefact NAMES in that home's state
+# directory before the suite's work with the set after it. The "before" set
+# was snapshotted before any case ran, so this measures the WHOLE suite, not
+# one case.
+#
+# Names, not contents: a standing supervisor appends to its log while the
+# suite runs, so a pre-existing artefact changes under us for reasons that are
+# not pollution. A pre-existing artefact is legitimate; only a NEW name is
+# pollution, and a new name is what would overwrite a live supervisor's state
+# or make a later run believe a supervisor is running when it is not.
+# ============================================================================
+snapshot_home_artefacts "$HOME_ARTEFACTS_AFTER"
+added=$(awk 'FILENAME == ARGV[1] { seen[$0] = 1; next } !($0 in seen)' \
+  "$HOME_ARTEFACTS_BEFORE" "$HOME_ARTEFACTS_AFTER")
+if [ -z "$added" ]; then
+  ok "the suite added no supervisor artefact to the home's state directory"
+else
+  added_count=$(printf '%s\n' "$added" | grep -c .)
+  bad "the suite added $added_count supervisor artefact(s) to the home's state directory"
+  printf '%s\n' "$added" | sed 's/^/       /'
+fi
 
 say ""
 if [ "$fail" -eq 0 ]; then

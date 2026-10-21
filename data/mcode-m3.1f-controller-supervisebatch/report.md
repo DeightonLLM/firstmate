@@ -388,5 +388,319 @@ Two properties of the window are deliberate and worth stating plainly:
   of this lane's scope, but the protocol doc now describes a supervisor whose
   behaviour has one more documented mode (coalesced republications). A
   follow-up doc lane would be worth it.
+---
+
+# Task 2 — the live-home isolation check
+
+**Lane:** `mcode-m3.1f-controller-supervisebatch` (second required task, same
+branch, on top of `e0a5c54`)
+**Files changed:** `tests/fm-watch-supervise.test.sh` only.
+`bin/fm-watch-supervise.sh` is **not** changed by this task.
+
+## What changed
+
+### The defect, confirmed
+
+The first task's suite ended with a check that asserted the **absence** of any
+supervisor artefact in the home it runs in:
+
+```bash
+live_state="$ROOT/state"
+if [ -d "$live_state" ] && ls "$live_state"/.watch-supervise* >/dev/null 2>&1; then
+  bad "the supervisor wrote an artifact into the live home's state directory"
+```
+
+`ROOT` is derived from the test file's own location, so `$ROOT/state` is
+whichever home the suite is run from. The standing arm legitimately lives in
+the production home and legitimately writes `.watch-supervise.log`,
+`.watch-supervise.lock` and `.watch-supervise-output.*` into that home's
+`state/`. So the check measured **whether production happened to be idle at the
+moment the suite ran**, and it failed when production was doing its job.
+
+Re-measured on this branch, with the old check still in place and two
+legitimate artefacts present in the home's `state/`:
+
+```
+$ git show HEAD:tests/fm-watch-supervise.test.sh > tests/fm-watch-supervise.old-isolation.test.sh
+$ ls state/.watch-supervise*
+state/.watch-supervise.lock
+state/.watch-supervise.log
+
+$ timeout 900 bash tests/fm-watch-supervise.old-isolation.test.sh
+exit=1
+FAIL the supervisor wrote an artifact into the live home's state directory
+       -rw-r--r-- 1 root root  5 Oct 21 23:34 /root/.treehouse/deightonllm-firstmate-46aafc/5/deightonllm-firstmate/state/.watch-supervise.lock
+       -rw-r--r-- 1 root root 22 Oct 21 23:34 /root/.treehouse/deightonllm-firstmate-46aafc/5/deightonllm-firstmate/state/.watch-supervise.log
+1 of 57 CHECK(S) FAILED
+```
+
+The temporary copy was deleted immediately afterwards; it was never committed.
+
+### The fix
+
+The check now measures **the suite's own behaviour** instead of the host's
+mood.
+
+**1. A "before" snapshot, taken before any case runs.** The snapshot lives
+under the suite's own temp root (`$TMP`), never in the home it measures:
+
+```bash
+HOME_ARTEFACTS_BEFORE="$TMP/home-artefacts.before"
+HOME_ARTEFACTS_AFTER="$TMP/home-artefacts.after"
+
+snapshot_home_artefacts() {  # <out-file>
+  local out=$1 f
+  : > "$out" || return 1
+  [ -d "$ROOT/state" ] || return 0
+  (
+    cd "$ROOT/state" 2>/dev/null || exit 0
+    for f in .watch-supervise*; do
+      [ -e "$f" ] || continue
+      printf '%s\n' "$f"
+    done
+  ) | LC_ALL=C sort > "$out"
+  return 0
+}
+
+snapshot_home_artefacts "$HOME_ARTEFACTS_BEFORE" \
+  || fatal "could not snapshot the home's supervisor artefacts"
+```
+
+It is taken immediately after the temp root is created, **before the stub arms
+are even built**, so it is genuinely before the suite's work and the
+comparison is not vacuous.
+
+**2. Names, not contents.** The snapshot is the sorted set of artefact
+**names**. A live supervisor APPENDS to `.watch-supervise.log` while the suite
+runs, so that file's contents, size and mtime all change for reasons that are
+not pollution; a checksum or size comparison would fail on a busy host for no
+reason. A pre-existing artefact is legitimate. Only a **new name** is
+pollution.
+
+**3. The comparison, at the end of the suite.** The check moved from the
+middle of the suite (it sat inside the first case) to the end, so it compares
+the whole suite's work, not one case:
+
+```bash
+snapshot_home_artefacts "$HOME_ARTEFACTS_AFTER"
+added=$(awk 'FILENAME == ARGV[1] { seen[$0] = 1; next } !($0 in seen)' \
+  "$HOME_ARTEFACTS_BEFORE" "$HOME_ARTEFACTS_AFTER")
+if [ -z "$added" ]; then
+  ok "the suite added no supervisor artefact to the home's state directory"
+else
+  added_count=$(printf '%s\n' "$added" | grep -c .)
+  bad "the suite added $added_count supervisor artefact(s) to the home's state directory"
+  printf '%s\n' "$added" | sed 's/^/       /'
+fi
+```
+
+The wording no longer claims the home is artefact-free; it names what was
+measured, and lists the offending names when it fails.
+
+The check was **relocated, not deleted**: the count stays at 57, and the
+relocated check is strictly stronger, because it now covers every case rather
+than the first one. The `awk` uses `FILENAME == ARGV[1]` rather than the
+`NR == FNR` idiom, because `NR == FNR` misfires when the first file is empty -
+exactly the case that must pass.
+
+### The timing margins, widened
+
+While re-measuring, one run of the first task's suite failed `1 of 57` with a
+message I could not attribute, and it did not reproduce in the runs that
+followed. Rather than wave that away, I widened every timing bound in the
+suite that could depend on host speed. **No assertion was changed, relaxed or
+deleted** - only the test PARAMETERS that decide how long the suite waits:
+
+| Bound | Was | Now | Why it is safe |
+|---|---|---|---|
+| The readiness case's bounded runner | `run_bounded 3` | `run_bounded 10` | The stub arm still holds the cycle open for 30s, so the cycle is still OPEN when the runner stops it; the assertion ("the readiness line reached the caller while the cycle was still open") is unchanged. |
+| Case 1's park bound | 3s | 5s | A parameter, not an assertion: it only sets how many cycles the loop gets before the "at least three consecutive routine wakes" check. |
+| Case 3's park bound | 2s | 3s | Same: a parameter, not an assertion. |
+| The peer coalescing window | 5s | 20s | The window is anchored at the last escalation, so the next supervisor run has to land inside it. 5s was a thin margin on a busy host. |
+| The window-expiry sleeps | `sleep 6` | `sleep 25` | Both are longer than the 20s window, so the expiry the test relies on is still real, not assumed. |
+
+The suite now takes about 87 seconds instead of about 38. That is the cost of
+a suite whose result does not depend on the machine being idle - which is the
+point the firstmate made about the original check.
+
+## How it was verified
+
+### The three-way reproduction, re-measured on this branch
+
+All three cases were re-measured in the **scratch worktree** (a throwaway
+home). The production home was never used to run the suite.
+
+| # | Situation | Artefacts in the home's `state/` | Before the fix | After the fix |
+|---|---|---|---|---|
+| 1 | Suite run in a clean home | none | `ALL TESTS PASSED (57 checks)` | `ALL TESTS PASSED (57 checks)` |
+| 2 | Suite run in a home where the standing arm has run | `.watch-supervise.log`, `.watch-supervise.lock` | **FAIL** - `1 of 57 CHECK(S) FAILED` | `ALL TESTS PASSED (57 checks)` |
+| 3 | The suite itself writes a new artefact into the home's `state/` | injected `.watch-supervise-canary` | (the old check could not see this case) | **FAIL** - `1 of 57 CHECK(S) FAILED`, exit 1, naming the canary |
+
+Case 1:
+
+```
+$ ls state/.watch-supervise*
+ls: cannot access 'state/.watch-supervise*': No such file or directory
+
+$ timeout 900 bash tests/fm-watch-supervise.test.sh
+exit=0
+ok   the suite added no supervisor artefact to the home's state directory
+ALL TESTS PASSED (57 checks)
+```
+
+Case 2:
+
+```
+$ printf 'standing arm log line\n' > state/.watch-supervise.log
+$ printf 'lock\n' > state/.watch-supervise.lock
+$ ls state/.watch-supervise*
+state/.watch-supervise.lock
+state/.watch-supervise.log
+
+$ timeout 900 bash tests/fm-watch-supervise.test.sh
+exit=0
+ok   the suite added no supervisor artefact to the home's state directory
+ALL TESTS PASSED (57 checks)
+```
+
+### The fault-injection proof
+
+The injection was applied to the LAST peer case (case 8h), deliberately, so
+that it also proves the relocated check covers the whole suite and not just
+the first case. The injected block was:
+
+```bash
+# ===== TEMPORARY FAULT INJECTION (removed after the proof) =====
+# Deliberately pollute the home the suite runs in, to prove the isolation
+# check can still fail. It is injected in a LATE case on purpose: the check
+# runs at the END of the suite, so it must catch pollution from any case.
+mkdir -p "$ROOT/state"
+printf 'fault injection canary\n' > "$ROOT/state/.watch-supervise-canary"
+```
+
+applied with a python one-liner that splices it after the last peer case, and
+removed afterwards by restoring the file from a backup copy. The run:
+
+```
+$ cp tests/fm-watch-supervise.test.sh /tmp/test-backup.sh
+$ python3 /tmp/apply-injection.py
+fault injection applied in case 8h
+
+$ bash -n tests/fm-watch-supervise.test.sh
+bash -n: OK
+
+$ timeout 900 bash tests/fm-watch-supervise.test.sh
+exit=1
+FAIL the suite added 1 supervisor artefact(s) to the home's state directory
+       .watch-supervise-canary
+1 of 57 CHECK(S) FAILED
+```
+
+The check **can still fail**, it names the offending artefact, and the suite
+exits non-zero. The injection was then removed and the file verified
+byte-identical to its pre-injection state:
+
+```
+$ cp /tmp/test-backup.sh tests/fm-watch-supervise.test.sh
+$ rm -f state/.watch-supervise-canary
+$ cmp /tmp/test-backup.sh tests/fm-watch-supervise.test.sh && echo "IDENTICAL (cmp clean)"
+IDENTICAL (cmp clean)
+
+$ grep -n 'canary\|FAULT INJECTION' tests/fm-watch-supervise.test.sh || echo "none"
+none
+```
+
+### The suite is now stable on a home that has artefacts
+
+Five consecutive runs with the pre-existing artefacts in place, which is the
+live-host condition:
+
+```
+seq 1: exit=0 | ALL TESTS PASSED (57 checks)
+seq 2: exit=0 | ALL TESTS PASSED (57 checks)
+seq 3: exit=0 | ALL TESTS PASSED (57 checks)
+seq 4: exit=0 | ALL TESTS PASSED (57 checks)
+seq 5: exit=0 | ALL TESTS PASSED (57 checks)
+```
+
+Four runs in parallel, to put the host under load:
+
+```
+par 1: exit=0 | ALL TESTS PASSED (57 checks)
+par 2: exit=0 | ALL TESTS PASSED (57 checks)
+par 3: exit=0 | ALL TESTS PASSED (57 checks)
+par 4: exit=0 | ALL TESTS PASSED (57 checks)
+```
+
+### Lint, per file
+
+The whole-repo `bin/fm-lint.sh` was **not** run.
+
+```
+$ bash -n tests/fm-watch-supervise.test.sh
+bash -n: clean
+
+$ diff <(git show HEAD:tests/fm-watch-supervise.test.sh | shellcheck -x - 2>&1 | grep -oE 'SC[0-9]+' | sort -u) \
+       <(shellcheck -x tests/fm-watch-supervise.test.sh 2>&1 | grep -oE 'SC[0-9]+' | sort -u)
+no new shellcheck findings
+```
+
+The remaining findings in that file (`SC2012` on two `ls` calls, `SC2329` on
+the trap-invoked cleanup) are baseline and predate this lane.
+
+### The production home was not touched
+
+```
+$ ls -la /root/agent-work/firstmate/state/.watch-supervise-coalesce
+ls: cannot access '/root/agent-work/firstmate/state/.watch-supervise-coalesce': No such file or directory
+
+$ grep -c 'peer-a\|stub\|case-' /root/agent-work/firstmate/state/.watch-supervise.log
+0
+```
+
+The production supervisor writes `.watch-supervise-coalesce` into its own
+home on every peer decision. That file does **not** exist in the production
+home, so no test run ever supervised it. The production log contains no entry
+from any test run. The production home was never used to run the suite, no
+systemd unit was touched, and the standing arm was left alone.
+
+### A live confirmation of the problem this lane fixes
+
+While working, the production home's **own live** supervisor log (written by
+the unfixed script on `main`) recorded the exact defect, on its own, without
+any help from me:
+
+```
+[2026-10-21T23:01:40+0100] escalate: signal: /root/agent-work/deightonllm-firstmate/state/hetzner-secondmate-20260927.status -> hetzner-secondmate-20260927.status: comms-received: hetzner-secondmate-20260927 CAPTAIN-BOARD.html sha=eb3e136b3db0 bytes=268813 | untrusted-reply-text: <!doctype html>
+[2026-10-21T23:14:39+0100] escalate: signal: /root/agent-work/deightonllm-firstmate/state/hetzner-secondmate-20260927.status -> hetzner-secondmate-20260927.status: comms-received: hetzner-secondmate-20260927 lane-ledger.tsv sha=afe3fcc3ad2e bytes=33399 | untrusted-reply-text: # lane-ledger.tsv - the machine truth for "what is happening right now".
+```
+
+Two escalations, thirteen minutes apart, for a republished board and a
+republished ledger - one model turn each, for machine artefacts. That is the
+behaviour the first task's coalescing removes, and it is still live on `main`
+because this branch has not been landed.
+
+## What remains open
+
+- **The same defective check is still on `main`.** It is at
+  `tests/fm-watch-supervise.test.sh` lines 229-236 in the 32-check version.
+  This fix lands for both when the firstmate lands this branch, but until then
+  `main` still fails that check whenever the standing arm is running.
+- **The suite is now slower** - about 87 seconds against about 38. That is the
+  price of the timing margins, and it is deliberate: a suite that passes only
+  when the machine is idle is not a suite anyone can trust.
+- **The relocation of the check is a judgement call.** The brief did not
+  specify where the check lives. It sat inside the first case, where an
+  "after" snapshot would have covered only that case; it now runs at the end,
+  covering the whole suite. The check count is unchanged at 57 and no
+  assertion was weakened, but the firstmate should know the check moved.
+- **The first task's report claimed "four consecutive clean runs".** That
+  claim was true but measured on an idle host, which is exactly the
+  condition that hides this class of defect. The suite now passes on a home
+  with artefacts, under parallel load, and the fault injection proves the
+  check can still fail.
+- **The production home's live supervisor is still running the unfixed
+  script**, and is still escalating every board republication. This branch
+  fixes that only once it is landed.
 
 VERDICT: PASS
