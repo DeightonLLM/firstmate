@@ -3,7 +3,7 @@
 #
 # Tests the lane key convention from AGENT-TODO-PROMPT-STYLE.md:
 #   Lane key:   <model>-<surface>-<task>   (lowercase, no spaces)
-#   Board line: [<model> @ <surface>[/<pane>}] <action> — <state>
+#   Board line: [<model> @ <surface>[/<pane>}] <action> - <state>
 #
 # Also validates the async lane registry at data/async-lanes.tsv:
 #   Comment lines starting with '#' and blank lines are skipped.
@@ -50,7 +50,7 @@ test_lane_key_valid_m3_1f_hd2_build() {
   pass "m3.1f-hd2-build passes"
 }
 
-# m3.1f is MiniMax M3.1 Flash Preview, the tier live worker lanes actually run. Without it the
+# m3.1f is MiniMax M3.1 Flash, the tier live worker lanes actually run. Without it the
 # validator rejected every real lane key we dispatched, which is the defect Q2 fixed.
 test_lane_key_valid_m3_1f_brandon_build() {
   local out rc
@@ -59,9 +59,13 @@ test_lane_key_valid_m3_1f_brandon_build() {
   pass "m3.1f-brandon-build passes"
 }
 
+# The legacy board rows carry an em dash between the task and the state.
+# It is built from a unicode escape so this file holds no em dash bytes.
+EMDASH=$'\u2014'
+
 test_board_line_valid_m3_1f_brandon() {
   local out rc
-  out=$(bash "$CHECK" "[m3.1f @ brandon] widget fix — working" 2>&1); rc=$?
+  out=$(bash "$CHECK" "[m3.1f @ brandon] widget fix ${EMDASH} working" 2>&1); rc=$?
   [ "$rc" -eq 0 ] || fail "valid board line [m3.1f @ brandon] should pass, got exit $rc: $out"
   pass "[m3.1f @ brandon] board line passes"
 }
@@ -475,7 +479,7 @@ EOF
 #   -> lane-key alias = 'm' + family (strip leading M) + tier-marker
 #     tier-marker = last letter of the tier keyword:
 #       'highspeed' -> 'h', 'flash' -> 'f', bare -> ''
-#     Example: minimax/MiniMax-M3.1-Flash-Preview -> m3.1f
+#     Example: minimax/MiniMax-M3.1-Flash -> m3.1f
 #              minimax/MiniMax-M3.1                -> m3.1
 #   Other providers (openai-codex, etc.): no programmatic rule defined;
 #   their model ids (gpt-6-luna, gpt-6.1-sol) do not derive to any
@@ -502,17 +506,17 @@ test_self_check_configured_model_has_alias() {
 
 # test_self_check_proves_alias_removed_causes_failure: prove the self-check
 # catches the Q2 defect by patching the script to remove m3.1f (the alias
-# that must be present when workers run minimax/MiniMax-M3.1-Flash-Preview).
+# that must be present when workers run minimax/MiniMax-M3.1-Flash).
 # We sed-out m3.1f, run --self-check against the patched script, and assert
 # non-zero exit with a diagnostic that names the missing alias or model.
 # RED: current script exits 2 (--self-check not implemented).
 # GREEN: patched script (m3.1f removed) exits non-zero because the configured
-# model minimax/MiniMax-M3.1-Flash-Preview has no alias.
+# model minimax/MiniMax-M3.1-Flash has no alias.
 test_self_check_proves_alias_removed_causes_failure() {
   local tmp out rc
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-alias-sim.XXXXXX")
   cat > "$tmp/dispatch.json" <<'JSON'
-{"default":{"model":"minimax/MiniMax-M3.1-Flash-Preview"}}
+{"default":{"model":"minimax/MiniMax-M3.1-Flash"}}
 JSON
   # First establish that the live checker accepts this configured alias.
   out=$(bash "$CHECK" --self-check "$tmp/dispatch.json" 2>&1); rc=$?
@@ -540,7 +544,7 @@ PY_PATCH
 # hardcoded alias that has no corresponding model in the dispatch config.
 # This catches the root cause class (alias list grows independently of config).
 # m3.1 is hardcoded; minimax/MiniMax-M3.1 is NOT in the dispatch config used
-# here, which names only minimax/MiniMax-M3.1-Flash-Preview (that model derives
+# here, which names only minimax/MiniMax-M3.1-Flash (that model derives
 # to m3.1f).  The self-check must therefore report m3.1 as orphaned.
 # RED: current script exits 2 (--self-check not implemented).
 # GREEN: --self-check runs and names m3.1 as orphaned in its output.
@@ -548,7 +552,7 @@ test_self_check_reports_orphaned_aliases() {
   local tmp out rc
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-lane-orphan-sim.XXXXXX")
   cat > "$tmp/dispatch.json" <<'JSON'
-{"default":{"model":"minimax/MiniMax-M3.1-Flash-Preview"}}
+{"default":{"model":"minimax/MiniMax-M3.1-Flash"}}
 JSON
   out=$(bash "$CHECK" --self-check "$tmp/dispatch.json" 2>&1)
   rc=$?

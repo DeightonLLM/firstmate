@@ -165,9 +165,32 @@ test_self_check_missing_alias_exits_two() {
 test_self_check_all_models_aliased_passes() {
   local file="$TMP_ROOT/dispatch-ok.json" out rc
   printf '{"default":{"model":"minimax/MiniMax-M3.1"}}\n' > "$file"
-  printf '{"rules":[{"use":{"model":"minimax/MiniMax-M3.1-Flash-Preview"}}]}\n' >> "$file"
+  printf '{"rules":[{"use":{"model":"minimax/MiniMax-M3.1-Flash"}}]}\n' >> "$file"
   out=$(bash "$CHECK" --self-check "$file" 2>&1); rc=$?
   expect_exit 0 "$rc" 'a dispatch config whose models all have aliases must pass' || return 1
+  return 0
+}
+
+test_alias_table_binds_live_catalog_identifiers() {
+  # The alias table is the one place that names the exact catalog identifier
+  # behind each alias. The retired M3.1 Flash Preview identifier must not
+  # survive anywhere in it, and m3.1f and pi must both name the live id.
+  # The retired identifier is assembled from parts so this file names it in
+  # no greppable form.
+  local out retired
+  retired='MiniMax-M3.1-Flash''-Preview'
+  out=$(bash "$CHECK" --alias-table 2>&1)
+  expect_exit 0 "$?" '--alias-table must exit 0' || return 1
+  expect_contains "$out" 'm3.1f	minimax/MiniMax-M3.1-Flash' \
+    'the m3.1f alias must name the live catalog identifier' || return 1
+  expect_contains "$out" 'pi	minimax/MiniMax-M3.1-Flash' \
+    'the pi alias must name the live catalog identifier' || return 1
+  case "$out" in
+    *"$retired"*)
+      t_fail 'the retired M3.1 Flash Preview identifier must not appear in the alias table'
+      return 1
+      ;;
+  esac
   return 0
 }
 
@@ -262,6 +285,7 @@ for _case in \
   test_registry_model_disagreement_rejected \
   test_self_check_missing_alias_exits_two \
   test_self_check_all_models_aliased_passes \
+  test_alias_table_binds_live_catalog_identifiers \
   test_registry_valid_rows_pass \
   test_invalid_input_exits_one \
   test_unknown_model_alias_rejected \

@@ -52,10 +52,10 @@ stub; run_gate codex gpt-6-luna
 
 # 5. boundary: exactly at the 10% floor refuses, 11% passes
 mk minimax fresh known model:general 10 through_reset null
-stub; run_gate minimax-code MiniMax-M3.1-Flash-Preview
+stub; run_gate minimax-code minimax/MiniMax-M3.1-Flash
 [ "$RC" -eq 3 ] && pass "exactly 10% refuses (<= floor)" || fail "10% is <= floor and must refuse (rc=$RC out=$OUT)"
 mk minimax fresh known model:general 11 through_reset null
-stub; run_gate minimax-code MiniMax-M3.1-Flash-Preview
+stub; run_gate minimax-code minimax/MiniMax-M3.1-Flash
 [ "$RC" -eq 0 ] && pass "11% passes" || fail "11% should pass (rc=$RC out=$OUT)"
 
 # 6. unmeasured semantics discloses and passes (AGENTS.md section 4)
@@ -91,7 +91,7 @@ stub; run_gate agy gemini-3.8-flash-medium
 
 # 12. provider mapping
 mp() { [ "$(bash -c "source $GATE 2>/dev/null; provider_for '$1' '$2'")" = "$3" ] && pass "map $1/$2 -> $3" || fail "map $1/$2 should be $3"; }
-mp minimax-code MiniMax-M3.1-Flash-Preview minimax
+mp minimax-code minimax/MiniMax-M3.1-Flash minimax
 mp agy gemini-3.8-flash-medium agy
 mp codex gpt-6-luna codex
 mp pi minimax/MiniMax-M2.7 minimax

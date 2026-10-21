@@ -10,12 +10,12 @@
 # contract. This script is its machine checker.
 #
 # Model alias table (ONE place in this script; alias=exact catalog identifier:family):
-#   m3.1f   -> minimax/MiniMax-M3.1-Flash-Preview   (family minimax)
+#   m3.1f   -> minimax/MiniMax-M3.1-Flash           (family minimax)
 #   m3.1    -> minimax/MiniMax-M3.1                 (family minimax)
 #   luna6   -> openai-codex/gpt-6-luna              (family other)
 #   glm5.3f -> zai/glm-5.3-flash                    (family other)
 #   gem38f  -> agy/gemini-3.8-flash-medium          (family other)
-#   pi      -> minimax/MiniMax-M3.1-Flash-Preview   (family other; legacy alias for the Pi session default model)
+#   pi      -> minimax/MiniMax-M3.1-Flash           (family other; legacy alias for the Pi session default model)
 #
 # Alternate spellings accepted for those aliases (spelling:canonical alias).
 # HD2 writes its abbreviations as G38F and M31; the exact catalog identifier
@@ -45,6 +45,7 @@
 #   fm-todo-prefix-check.sh --lane-key "<lane-key>"
 #   fm-todo-prefix-check.sh --registry <path.tsv>
 #   fm-todo-prefix-check.sh --self-check <dispatch-config.json>
+#   fm-todo-prefix-check.sh --alias-table
 #   fm-todo-prefix-check.sh --help
 #
 # --self-check mode binds the hardcoded alias table to a dispatch config: it
@@ -55,6 +56,10 @@
 # bin/fm-lane-naming-check.sh --self-check so the two checks cannot contradict.
 #
 # This check never edits or fixes its input; it only validates and reports.
+#
+# --alias-table mode prints the alias table as "<alias><TAB><exact catalog
+# identifier>" lines so the exact catalog identifier behind each alias is
+# readable from outside this script. It is read-only and always exits 0.
 set -uo pipefail
 
 EXPECTED_PREFIX='[<harness>·<ModelAbbrev> <effort> @<Host>]'
@@ -65,7 +70,7 @@ EXPECTED_LANE_KEY='<harness>-<model>-<host>-<task>'
 # The derivation family says whether the alias can be derived from a MiniMax
 # model id by the documented rule, which is what the --self-check binding and
 # the orphan report use.
-_MODEL_ALIAS_TABLE='m3.1f=minimax/MiniMax-M3.1-Flash-Preview:minimax m3.1=minimax/MiniMax-M3.1:minimax luna6=openai-codex/gpt-6-luna:other glm5.3f=zai/glm-5.3-flash:other gem38f=agy/gemini-3.8-flash-medium:other pi=minimax/MiniMax-M3.1-Flash-Preview:other'
+_MODEL_ALIAS_TABLE='m3.1f=minimax/MiniMax-M3.1-Flash:minimax m3.1=minimax/MiniMax-M3.1:minimax luna6=openai-codex/gpt-6-luna:other glm5.3f=zai/glm-5.3-flash:other gem38f=agy/gemini-3.8-flash-medium:other pi=minimax/MiniMax-M3.1-Flash:other'
 
 _ALIAS_SPELLINGS='m31:m3.1 m31f:m3.1f g38f:gem38f'
 
@@ -79,7 +84,7 @@ _LANE_HOST_PATTERN='^[a-z0-9][a-z0-9.-]*$'
 _LANE_TASK_PATTERN='^[a-z0-9][a-z0-9.-]*$'
 
 usage() {
-  printf 'Usage: %s "<board row>" | --stdin | --lane-key <key> | --registry <path> | --self-check <path> | --help\n' "$(basename "$0")"
+  printf 'Usage: %s "<board row>" | --stdin | --lane-key <key> | --registry <path> | --self-check <path> | --alias-table | --help\n' "$(basename "$0")"
   printf '\n'
   printf 'Board row prefix:  %s\n' "$EXPECTED_PREFIX"
   printf 'Lane key:          %s\n' "$EXPECTED_LANE_KEY"
@@ -132,6 +137,22 @@ canonical_alias() {
     fi
   done
   return 1
+}
+
+# alias_table_rows: print the alias table as "<alias><TAB><exact catalog identifier>"
+# lines, one per entry, in table order.
+# The exact catalog identifier never contains a colon, so the trailing
+# ":<family>" field is stripped from the end of the entry.
+alias_table_rows() {
+  local entry alias rest identifier
+  local -a entries
+  read -r -a entries <<< "$_MODEL_ALIAS_TABLE"
+  for entry in "${entries[@]}"; do
+    alias=${entry%%=*}
+    rest=${entry#*=}
+    identifier=${rest%:*}
+    printf '%s\t%s\n' "$alias" "$identifier"
+  done
 }
 
 # alias_known <alias>: true when the alias is in the canonical alias table.
@@ -397,7 +418,7 @@ check_registry() {
 # Rule (one canonical statement, mirroring bin/fm-lane-naming-check.sh):
 #   minimax/MiniMax-M<family>[-<tier>]  ->  family + tier-marker
 #   tier-marker: 'highspeed' -> 'h', 'flash' -> 'f', bare or unrecognised -> ''
-#   Examples: minimax/MiniMax-M3.1-Flash-Preview -> m3.1f
+#   Examples: minimax/MiniMax-M3.1-Flash -> m3.1f
 #             minimax/MiniMax-M3.1 -> m3.1
 #   Other providers have no derivation rule and yield an empty alias.
 derive_alias() {
@@ -520,6 +541,10 @@ case "${1:-}" in
     [ $# -ge 2 ] || { usage >&2; exit 2; }
     check_registry "$2"
     exit $?
+    ;;
+  --alias-table)
+    alias_table_rows
+    exit 0
     ;;
   --self-check)
     [ $# -ge 2 ] || { usage >&2; exit 2; }

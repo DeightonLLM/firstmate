@@ -65,7 +65,7 @@ BACKLOG
   cat > "$dir/state/fx-inflight.meta" <<'META'
 window=firstmate:fx-inflight
 harness=pi
-model=minimax/MiniMax-M3.1-Flash-Preview
+model=minimax/MiniMax-M3.1-Flash
 effort=high
 META
   cat > "$dir/data/async-lanes.tsv" <<'LANES'

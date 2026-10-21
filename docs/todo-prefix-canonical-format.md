@@ -43,12 +43,12 @@ The alias table lives in exactly one place, `bin/fm-todo-prefix-check.sh`, and m
 
 | Alias | Exact catalog identifier |
 |---|---|
-| `m3.1f` | `minimax/MiniMax-M3.1-Flash-Preview` |
+| `m3.1f` | `minimax/MiniMax-M3.1-Flash` |
 | `m3.1` | `minimax/MiniMax-M3.1` |
 | `luna6` | `openai-codex/gpt-6-luna` |
 | `glm5.3f` | `zai/glm-5.3-flash` |
 | `gem38f` | `agy/gemini-3.8-flash-medium` |
-| `pi` | `minimax/MiniMax-M3.1-Flash-Preview`, the Pi session default model, kept as a legacy alias |
+| `pi` | `minimax/MiniMax-M3.1-Flash`, the Pi session default model, kept as a legacy alias |
 
 Alternate spellings resolve to the same canonical alias: `m31`, `m31f`, `g38f`.
 The cross-surface tracker writes its own abbreviations as `G38F` and `M31`, so the checker accepts those spellings in a board prefix.
@@ -90,6 +90,7 @@ Each of these is rejected by the checker with a message naming the expected cano
     bin/fm-todo-prefix-check.sh --lane-key "<lane-key>"
     bin/fm-todo-prefix-check.sh --registry <path.tsv>
     bin/fm-todo-prefix-check.sh --self-check <dispatch-config.json>
+    bin/fm-todo-prefix-check.sh --alias-table
     bin/fm-todo-prefix-check.sh --help
 
 Exit codes:
@@ -97,6 +98,10 @@ Exit codes:
 - `0` every checked input is valid.
 - `1` one or more inputs are invalid, and the offending input is named on stderr.
 - `2` a usage error, or a fatal `--self-check` alias gap.
+
+`--alias-table` prints the alias table as `<alias><TAB><exact catalog identifier>` lines, one per alias in table order.
+It is read-only and always exits 0.
+It exists so the exact catalog identifier behind each alias is readable from outside the script that owns the table.
 
 The checker never edits or fixes its input.
 It only validates and reports.
@@ -123,8 +128,8 @@ The derivation rule, one canonical statement:
 
     minimax/MiniMax-M<family>[-<tier>]  ->  family + tier-marker
     tier-marker: 'highspeed' -> 'h', 'flash' -> 'f', bare or unrecognised -> ''
-    minimax/MiniMax-M3.1-Flash-Preview  -> m3.1f
-    minimax/MiniMax-M3.1                -> m3.1
+    minimax/MiniMax-M3.1-Flash  -> m3.1f
+    minimax/MiniMax-M3.1        -> m3.1
 
 Other providers have no derivation rule and are out of scope for this binding.
 

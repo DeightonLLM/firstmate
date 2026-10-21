@@ -10,12 +10,12 @@
       "when": "Any delegated implementation, investigation, capture, or analysis work.",
       "use": {
         "harness": "minimax-code",
-        "model": "minimax/MiniMax-M3.1-Flash-Preview",
+        "model": "minimax/MiniMax-M3.1-Flash",
         "provider": "minimax",
         "spawn": {
           "harness": "minimax-code",
-          "model": "minimax/MiniMax-M3.1-Flash-Preview",
-          "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview"
+          "model": "minimax/MiniMax-M3.1-Flash",
+          "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash"
         }
       },
       "why": "The M3.1 Flash route on the minimax-code harness is free until 2026-10-25, and it is the same model family the primary itself runs on."
@@ -24,12 +24,12 @@
       "when": "A dispatch that would use a provider other than minimax-code, and every intake that picks a profile.",
       "use": {
         "harness": "minimax-code",
-        "model": "minimax/MiniMax-M3.1-Flash-Preview",
+        "model": "minimax/MiniMax-M3.1-Flash",
         "provider": "minimax",
         "spawn": {
           "harness": "minimax-code",
-          "model": "minimax/MiniMax-M3.1-Flash-Preview",
-          "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview"
+          "model": "minimax/MiniMax-M3.1-Flash",
+          "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash"
         }
       },
       "why": "Every other provider is an API call that draws the account's quota, so the primary consults quota-axi at every intake and only leaves the free route when a lane genuinely needs another provider and the reading shows headroom."
@@ -38,12 +38,12 @@
   "default": [
     {
       "harness": "minimax-code",
-      "model": "minimax/MiniMax-M3.1-Flash-Preview",
+      "model": "minimax/MiniMax-M3.1-Flash",
       "provider": "minimax",
       "spawn": {
         "harness": "minimax-code",
-        "model": "minimax/MiniMax-M3.1-Flash-Preview",
-        "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview"
+        "model": "minimax/MiniMax-M3.1-Flash",
+        "command": "bin/fm-spawn.sh <task-id> --harness minimax-code --model minimax/MiniMax-M3.1-Flash"
       }
     }
   ]
