@@ -138,20 +138,46 @@ reap_single_task() {
     fi
   fi
 
-  # Check crew state: the endpoint must be dead/missing, and the crew must not
-  # be working/parked.
+  # Check crew state: the crew must not be working/parked, and it must be
+  # provably finished.
   #
-  # ORDER MATTERS. The endpoint state is checked FIRST, and it is what proves
-  # the crew is not running. The status file used to be checked before it, and a
-  # lane that finished without ever appending a status line was therefore
-  # IMMORTAL: it refused forever, holding a pane, a worktree slot and CPU for
-  # as long as the fleet existed. That is what made every capacity figure
-  # wrong, and it is why finished agents piled up.
+  # ORDER MATTERS, twice over.
   #
-  # Fail-closed is preserved where it matters: an alive, ambiguous or
-  # unverifiable endpoint is never reaped, a lane that says it is working is
-  # never reaped, and the landed-work test below still refuses to discard
-  # unlanded work.
+  # First: the owning reconciler (bin/fm-crew-state.sh) is asked BEFORE the
+  # pane, because it is the only authority on current state. The endpoint used
+  # to be checked first and alone, which made a FINISHED lane immortal: a crew
+  # that finished leaves its pane sitting at a prompt, so the pane reads
+  # "alive" forever. Such a lane held a pane, a worktree slot and CPU for as
+  # long as the fleet existed, and that is what made every capacity figure
+  # wrong. A lane whose own state is terminal is finished, pane or no pane.
+  #
+  # Second: a terminal reconciler state outranks a live pane, but it does not
+  # outrank everything. A crew that says it is working is never reaped, an
+  # alive, ambiguous or unverifiable endpoint still refuses a lane with no
+  # terminal state of its own, and the landed-work test below still refuses to
+  # discard unlanded work. The age threshold above has already held the lane
+  # quiet for its grace period.
+  local crew_state_raw="" crew_state=""
+  local crew_state_bin="${FM_CREW_STATE_BIN:-$SCRIPT_DIR/fm-crew-state.sh}"
+  if [ -x "$crew_state_bin" ]; then
+    crew_state_raw=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$state" \
+      FM_DATA_OVERRIDE="${FM_DATA_OVERRIDE:-$FM_HOME/data}" \
+      FM_CONFIG_OVERRIDE="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}" \
+      "$crew_state_bin" "$id" 2>/dev/null || true)
+    case "$crew_state_raw" in
+      state:\ *)
+        crew_state=${crew_state_raw#state: }
+        crew_state=${crew_state%% *}
+        ;;
+    esac
+  fi
+  if [ "$crew_state" = "working" ]; then
+    log_decision "REFUSE" "$id" "crew is currently working (reconciler: $crew_state_raw)"
+    return 0
+  fi
+
+  # Endpoint state. A dead or missing endpoint proves idleness. An alive
+  # endpoint is a refusal only while the crew's own state is not terminal.
   local endpoint_target endpoint_dead=0
   endpoint_target=$(fm_backend_target_of_meta "$meta")
   if [ -n "$backend" ] && [ -n "$endpoint_target" ]; then
@@ -162,12 +188,16 @@ reap_single_task() {
         endpoint_dead=1
         ;;
       alive)
-        log_decision "REFUSE" "$id" "endpoint is alive ($agent_state)"
-        return 0
+        if [ "$crew_state" != "done" ]; then
+          log_decision "REFUSE" "$id" "endpoint is alive ($agent_state)"
+          return 0
+        fi
         ;;
       ambiguous|unverified|unreadable|*)
-        log_decision "REFUSE" "$id" "endpoint state is not definitively dead ($agent_state)"
-        return 0
+        if [ "$crew_state" != "done" ]; then
+          log_decision "REFUSE" "$id" "endpoint state is not definitively dead ($agent_state)"
+          return 0
+        fi
         ;;
     esac
   elif [ -n "$backend" ] || [ -n "$endpoint_target" ]; then
@@ -177,32 +207,11 @@ reap_single_task() {
 
   # Status evidence. A missing status file only disqualifies while the crew
   # might still be running: a lane with no status file whose endpoint is
-  # provably dead is reapable, and the landed-work test still protects its work.
-  if [ ! -f "$log" ] && [ "$endpoint_dead" -ne 1 ]; then
+  # provably dead is reapable, a lane whose own state is terminal is reapable,
+  # and the landed-work test still protects its work.
+  if [ ! -f "$log" ] && [ "$endpoint_dead" -ne 1 ] && [ "$crew_state" != "done" ]; then
     log_decision "REFUSE" "$id" "no status evidence; cannot prove the crew is idle"
     return 0
-  fi
-
-  # 3. Use the owning reconciler (bin/fm-crew-state.sh) to verify current state is not working.
-  local crew_state_bin="${FM_CREW_STATE_BIN:-$SCRIPT_DIR/fm-crew-state.sh}"
-  if [ -x "$crew_state_bin" ]; then
-    local crew_state_raw crew_state_val
-    crew_state_raw=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$state" \
-      FM_DATA_OVERRIDE="${FM_DATA_OVERRIDE:-$FM_HOME/data}" \
-      FM_CONFIG_OVERRIDE="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}" \
-      "$crew_state_bin" "$id" 2>/dev/null || true)
-    if [ -n "$crew_state_raw" ]; then
-      case "$crew_state_raw" in
-        state:\ *)
-          crew_state_val=${crew_state_raw#state: }
-          crew_state_val=${crew_state_val%% *}
-          if [ "$crew_state_val" = "working" ]; then
-            log_decision "REFUSE" "$id" "crew is currently working (reconciler: $crew_state_raw)"
-            return 0
-          fi
-          ;;
-      esac
-    fi
   fi
 
   # 4. Status log sanity check: last status line verb must not be working

@@ -123,6 +123,43 @@ log_last_line() {
   [ -f "$LOG" ] || return 1
   grep -v '^[[:space:]]*$' "$LOG" 2>/dev/null | tail -1
 }
+# The last line of a status log is not always the last STATE the crew declared.
+# A crew that finishes and then appends an annotation - a note about an amended
+# commit, a correction to its own report - must not be masked as unknown: an
+# unknown state is an unreapable lane, and a finished lane that can never be
+# reaped holds its pane, its worktree slot and its RAM for as long as the
+# fleet exists, which is exactly what makes a capacity reading a fiction.
+#
+# So walk back over trailing annotation lines (a single-word verb and a colon)
+# and take the most recent line that actually carries a state. A line that is
+# not annotation-shaped is returned as it is, so free-text prose still maps to
+# unknown exactly as it did before.
+log_last_state_line() {
+  [ -f "$LOG" ] || return 1
+  local line verb
+  # Newest first: the first state-bearing line found is the one that counts.
+  while IFS= read -r line; do
+    verb=$(status_line_verb "$line")
+    case "$verb" in
+      working|needs-decision|blocked|done|failed|resolved|captain-held)
+        printf '%s\n' "$line"
+        return 0
+        ;;
+    esac
+    if status_is_paused "$line"; then
+      printf '%s\n' "$line"
+      return 0
+    fi
+    case "$line" in
+      [a-z][a-z0-9-]*:*) continue ;;
+      *)
+        printf '%s\n' "$line"
+        return 0
+        ;;
+    esac
+  done < <(grep -v '^[[:space:]]*$' "$LOG" 2>/dev/null | tail -20 | sed '1!G;h;$!d')
+  return 1
+}
 # Map a status-log verb onto a canonical state for the fallback path. `paused` is
 # the deliberate-external-wait verb (fm-classify-lib.sh's FM_CLASSIFY_PAUSED_VERB):
 # a crew with no active run and an idle pane that declared a known external wait
@@ -144,7 +181,10 @@ map_log_state() {  # <line>
 }
 
 LOG_LINE=$(log_last_line || true)
-LOG_VERB=$(status_line_verb "$LOG_LINE")
+# The state-bearing line is not always the last line: a trailing annotation
+# must not hide the state the crew actually declared.
+LOG_STATE_LINE=$(log_last_state_line || true)
+LOG_STATE_VERB=$(status_line_verb "$LOG_STATE_LINE")
 
 # pane_readable is consulted ONLY in the no-run fallback below. The run-step path
 # stays authoritative regardless of pane liveness - judge by the run-step, not the
@@ -271,8 +311,8 @@ nm_gate_findings_count() {
   printf '%s' "$rest"
 }
 log_reports_ci_ready() {
-  [ "$LOG_VERB" = "done" ] || return 1
-  case "$(status_line_note "$LOG_LINE")" in
+  [ "$LOG_STATE_VERB" = "done" ] || return 1
+  case "$(status_line_note "$LOG_STATE_LINE")" in
     *PR*"checks green"*|*"checks green"*PR*) return 0 ;;
     *) return 1 ;;
   esac
@@ -566,7 +606,7 @@ if [ "$HAVE_RUN" = 1 ]; then
   # Reconcile the status log. A needs-decision/blocked log line that the run-step
   # has moved past (anything but a genuinely parked run) is deterministically
   # stale: the gate resolved and the run resumed or finished.
-  case "$LOG_VERB" in
+  case "$LOG_STATE_VERB" in
     needs-decision|blocked)
       if [ "$RUN_STATE" != parked ]; then
         if [ "$RUN_STATE" = working ]; then
@@ -624,10 +664,10 @@ fi
 # `unknown` with the resolution note as `doing`. map_log_state is the single owner of
 # the verb->state mapping (including the configurable paused verb), so reusing its
 # `unknown` verdict as the "not a state" test needs no second verb list here.
-if [ -n "$LOG_VERB" ]; then
-  LOG_STATE=$(map_log_state "$LOG_LINE")
+if [ -n "$LOG_STATE_VERB" ]; then
+  LOG_STATE=$(map_log_state "$LOG_STATE_LINE")
   if [ "$LOG_STATE" != unknown ]; then
-    emit "$LOG_STATE" status-log "$(status_line_note "$LOG_LINE")"
+    emit "$LOG_STATE" status-log "$(status_line_note "$LOG_STATE_LINE")"
   fi
 fi
 
