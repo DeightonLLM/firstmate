@@ -1663,6 +1663,12 @@ if [ "$HARNESS" = minimax-code ]; then
       [ -e "$item" ] || continue
       b=$(basename "$item")
       [ "$b" = "config.yaml" ] && continue
+      # v2 is the runtime's versioned data directory and must NOT be mirrored as
+      # a symlink: mcode refuses a migration-lock path that is itself a symlink
+      # ("Unsafe migration lock symlink path: .../v2"), which killed every
+      # minimax-code lane at launch with an empty prompt box. Leaving v2 out
+      # lets the lane's mcode create its own real directory there.
+      [ "$b" = "v2" ] && continue
       ln -s "$item" "$MCODE_TASK_DIR/$b" 2>/dev/null || true
     done
   fi
