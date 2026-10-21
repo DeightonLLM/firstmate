@@ -21,6 +21,7 @@ Run:
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import pathlib
 import re
@@ -34,6 +35,11 @@ COLLECTOR_PATH = REPO_ROOT / "bin" / "fm-quota-board-snapshot.py"
 BINDER_PATH = REPO_ROOT / "bin" / "fm-quota-board-bind.py"
 BOARD_PATH = REPO_ROOT / "unified-board.html"
 SNAPSHOT_PATH = REPO_ROOT / "data" / "hd2-takeover" / "quota-board-snapshot.json"
+# The Captain's board as it was BEFORE the band was inserted. The fixture is
+# the verbatim copy taken from commit 8b9ddb7; the sha256 below is the record
+# of it, and the board minus the band must still hash to exactly that.
+CAPTAIN_BOARD_SHA256 = "57578a214ce162fb5a816d66c60ad431585cd4038ab18414eeced36541404356"
+CAPTAIN_BOARD_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "captain-board-baseline.html"
 
 SPEC = importlib.util.spec_from_file_location("fm_quota_board_snapshot", COLLECTOR_PATH)
 COLLECTOR = importlib.util.module_from_spec(SPEC)
@@ -524,16 +530,21 @@ class BoardTest(unittest.TestCase):
     def test_no_existing_board_markup_was_removed(self):
         # The Captain's board, as it was before this lane (sha256 recorded).
         baseline = pathlib.Path(
-            pathlib.os.environ.get(
-                "FM_QUOTA_BOARD_BASELINE", "/root/agent-work/deightonllm-firstmate/unified-board.html"
-            )
+            pathlib.os.environ.get("FM_QUOTA_BOARD_BASELINE", str(CAPTAIN_BOARD_FIXTURE))
         )
+        if not baseline.is_file():
+            baseline = pathlib.Path("/root/agent-work/deightonllm-firstmate/unified-board.html")
         if baseline.is_file():
             self.assertEqual(
                 self.stripped,
                 baseline.read_text(encoding="utf-8"),
                 "the board minus the band must equal the board as it was",
             )
+        self.assertEqual(
+            hashlib.sha256(self.stripped.encode("utf-8")).hexdigest(),
+            CAPTAIN_BOARD_SHA256,
+            "the board minus the band must stay byte-identical to the Captain's original board",
+        )
         for marker, expected in (
             ("<tr", 33),
             ('class="pill', 92),
@@ -662,6 +673,223 @@ class BindTest(unittest.TestCase):
         payload = BINDER.escaped_payload({"schema": "x", "evil": "</script><script>alert(1)</script>"})
         self.assertNotIn("</script", payload)
         self.assertIn("\\u003c", payload)
+
+
+class WindowTest(unittest.TestCase):
+    """The two measured windows: the previous completed day and the weekly aggregate.
+
+    These are the numbers the Captain asked for, so they are pinned here on a
+    synthetic series where every figure is known by hand.
+    """
+
+    @staticmethod
+    def _row(account_id, provider, tokens, source_id="host-a:pi"):
+        return {
+            "account_id": account_id,
+            "provider": provider,
+            "total_tokens": tokens,
+            "coverage": "local_metadata",
+            "source_id": source_id,
+            "source_kind": "local_metadata",
+            "surface": "host-a",
+        }
+
+    @staticmethod
+    def _day(date, rows, unmapped=None, total="auto"):
+        known = sum(row["total_tokens"] for row in rows if row["total_tokens"] is not None)
+        return {
+            "date": date,
+            "total_tokens": known if total == "auto" else total,
+            "status": "known" if known else "unknown",
+            "coverage": "partial",
+            "source": "measured",
+            "timezone": "Europe/London",
+            "missing_sources": [],
+            "surfaces_reporting": ["host-a"],
+            "surfaces_with_ledger": ["host-a"],
+            "rows": rows,
+            "unmapped": unmapped or [],
+        }
+
+    def setUp(self):
+        self.series = [
+            # 100 attributable to an account + 30 provider detail = 130
+            self._day(
+                "2026-10-14",
+                [
+                    self._row("minimax-account-1", "minimax", 100),
+                    self._row("codex-local-unmapped", "codex", 30),
+                ],
+            ),
+            # a day with no measurement at all: unknown, never zero
+            self._day("2026-10-15", [], total=None),
+            # 50 attributable + 20 provider detail = 70, and a superseded local
+            # subset of 999 that must be in NO total
+            self._day(
+                "2026-10-16",
+                [
+                    self._row("minimax-account-1", "minimax", 50),
+                    self._row("codex-local-unmapped", "codex", 20),
+                ],
+                unmapped=[self._row("minimax-local-unmapped", "minimax", 999, "host-b:pi:minimax")],
+            ),
+        ]
+        self.window = COLLECTOR.build_window(
+            self.series,
+            COLLECTOR.BOARD_ACCOUNTS,
+            {},
+            ["2026-10-14", "2026-10-15", "2026-10-16"],
+        )
+
+    def _account(self, account_id):
+        for entry in self.window["account_split"]:
+            if entry["account_id"] == account_id:
+                return entry
+        raise AssertionError("no account %s in the window split" % account_id)
+
+    def test_the_week_total_is_the_sum_of_the_day_totals_in_the_window(self):
+        self.assertEqual(self.window["attributable_total_tokens"], 150)
+        self.assertEqual(self.window["unattributed_total_tokens"], 50)
+        self.assertEqual(self.window["grand_total_tokens"], 200)
+        day_total = sum(
+            day["total_tokens"] for day in self.series if day["total_tokens"] is not None
+        )
+        self.assertEqual(self.window["grand_total_tokens"], day_total)
+
+    def test_the_grand_total_is_attributable_plus_provider_detail_and_nothing_else(self):
+        self.assertEqual(
+            self.window["grand_total_tokens"],
+            self.window["attributable_total_tokens"] + self.window["unattributed_total_tokens"],
+        )
+
+    def test_the_superseded_subset_is_in_no_total(self):
+        excluded = self.window["excluded"]
+        self.assertEqual(len(excluded), 1)
+        self.assertEqual(excluded[0]["bucket"], "superseded_local_subset")
+        self.assertEqual(excluded[0]["total_tokens"], 999)
+        self.assertEqual(self.window["grand_total_tokens"], 200)
+        self.assertNotIn(999, [self.window["attributable_total_tokens"], self.window["unattributed_total_tokens"]])
+
+    def test_provider_detail_is_never_added_into_an_account(self):
+        self.assertEqual(self._account("minimax-account-1")["value"], 150)
+        self.assertEqual(self._account("codex-home")["value"], None)
+        self.assertEqual(self._account("openai-codex")["value"], None)
+        # the account total never carries the provider-level rows
+        for entry in self.window["account_split"]:
+            if entry["value"] is not None:
+                self.assertNotEqual(entry["value"], 50)
+
+    def test_an_unmeasured_account_stays_unknown_not_zero(self):
+        for account_id in ("codex-home", "openai-codex", "agy-gemini", "agy-claude-gpt"):
+            entry = self._account(account_id)
+            self.assertIsNone(entry["value"], "%s must stay unknown" % account_id)
+            self.assertEqual(entry["status"], "unknown")
+            self.assertTrue(entry["reason"], "%s must carry a reason" % account_id)
+
+    def test_a_day_with_no_measurement_is_counted_not_dropped(self):
+        self.assertEqual(self.window["days"], 3)
+        self.assertEqual(self.window["days_known"], 2)
+        self.assertEqual(self.window["days_unknown"], 1)
+        self.assertEqual(self.window["unknown_days"], ["2026-10-15"])
+        self.assertEqual(self.window["coverage"], "partial")
+
+    def test_the_window_account_coverage_counts_the_measured_accounts(self):
+        self.assertEqual(self.window["accounts_known"], 1)
+        self.assertEqual(self.window["accounts_total"], 7)
+        self.assertEqual(self.window["accounts_unknown"], 6)
+        self.assertEqual(self.window["attributable_coverage"], "partial")
+
+    def test_the_calendar_window_is_seven_days_ending_on_the_given_day(self):
+        self.assertEqual(
+            COLLECTOR.calendar_window("2026-10-20", 7),
+            [
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-17",
+                "2026-10-18",
+                "2026-10-19",
+                "2026-10-20",
+            ],
+        )
+
+    def test_the_previous_completed_day_is_the_day_before_today(self):
+        self.assertEqual(COLLECTOR.previous_completed_day("2026-10-21"), "2026-10-20")
+        self.assertEqual(COLLECTOR.previous_completed_day("2026-10-01"), "2026-09-30")
+
+    def test_the_previous_day_window_is_the_single_previous_day(self):
+        window = COLLECTOR.build_window(
+            self.series, COLLECTOR.BOARD_ACCOUNTS, {}, ["2026-10-14"]
+        )
+        self.assertEqual(window["days"], 1)
+        self.assertEqual(window["attributable_total_tokens"], 100)
+        self.assertEqual(window["unattributed_total_tokens"], 30)
+        self.assertEqual(window["grand_total_tokens"], 130)
+
+
+class BandPresentationTest(unittest.TestCase):
+    """The band shows every required figure, and it can say the snapshot is stale."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = board_text()
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.snapshot, cls.snapshot_path = build_fixture_snapshot(cls._tmp.name)
+
+    def test_the_band_carries_both_window_cards_and_both_tables(self):
+        for marker in (
+            'id="qb-prev-value"',
+            'id="qb-prev-break"',
+            'id="qb-week-value"',
+            'id="qb-week-break"',
+            'id="qb-account-table"',
+            'id="qb-detail-table"',
+            'id="qb-fresh-state"',
+            'id="qb-stale-banner"',
+        ):
+            self.assertIn(marker, self.html, "the band must carry %s" % marker)
+
+    def test_the_snapshot_publishes_both_windows_and_the_stale_bounds(self):
+        windows = self.snapshot["aggregate"]["windows"]
+        self.assertIn("previous_day", windows)
+        self.assertIn("week", windows)
+        self.assertEqual(windows["week"]["days"], 7)
+        freshness = self.snapshot["freshness"]
+        self.assertEqual(freshness["snapshot_stale_after_seconds"], self.snapshot["stale_after_seconds"])
+        self.assertGreater(freshness["token_stale_after_seconds"], 0)
+        self.assertEqual(freshness["previous_completed_day"], windows["previous_day"]["end"])
+        self.assertEqual(freshness["week_start"], windows["week"]["start"])
+        self.assertEqual(freshness["week_end"], windows["week"]["end"])
+        self.assertFalse(freshness["refresh"]["tokens_refreshable"])
+        self.assertTrue(freshness["refresh"]["quota_refreshable"])
+        self.assertTrue(freshness["refresh"]["tokens_note"])
+
+    def test_a_window_with_no_measurement_is_unknown_not_zero(self):
+        # the fixture ledger days sit outside the measured windows
+        windows = self.snapshot["aggregate"]["windows"]
+        self.assertIsNone(windows["week"]["grand_total_tokens"])
+        self.assertEqual(windows["week"]["status"], "unknown")
+        self.assertIsNone(windows["previous_day"]["grand_total_tokens"])
+
+    def test_every_account_carries_its_own_day_and_week_figures(self):
+        for entry in self.snapshot["aggregate"]["account_split"]:
+            self.assertIn("previous_day", entry)
+            self.assertIn("week", entry)
+            self.assertIn("value", entry["previous_day"])
+            self.assertIn("value", entry["week"])
+        for account in self.snapshot["accounts"]:
+            self.assertIn("previous_day", account["tokens"])
+            self.assertIn("week", account["tokens"])
+
+    def test_the_band_wires_the_published_stale_bound_to_a_visible_state(self):
+        band = self.html[
+            self.html.index("<!-- HD2_QUOTA_BAND_BEGIN -->") : self.html.index("<!-- HD2_QUOTA_BAND_END -->")
+        ]
+        self.assertIn("snapshot_stale_after_seconds", band)
+        self.assertIn("token_stale_after_seconds", band)
+        self.assertIn("data-freshness", band)
+        self.assertIn("qb-stale-banner", band)
+        self.assertIn("STALE", band)
 
 
 if __name__ == "__main__":

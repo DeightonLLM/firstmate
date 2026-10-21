@@ -45,8 +45,8 @@ mkdir -p "$EVIDENCE_DIR"
 # touches no band code: it only scrolls to a tile, dispatches a hover, measures
 # the panel and writes a machine-readable verdict into the DOM.
 write_harness() {
-  local target="$1" account="$2"
-  python3 - "$BOARD" "$target" "$account" <<'PY'
+  local target="$1" account="$2" source="${3:-$BOARD}"
+  python3 - "$source" "$target" "$account" <<'PY'
 import pathlib, sys
 board, target, account = sys.argv[1], sys.argv[2], sys.argv[3]
 html = pathlib.Path(board).read_text(encoding='utf-8')
@@ -58,7 +58,9 @@ harness = """
     setTimeout(function () {
       var out = { band: false, tiles: 0, accounts: [], legendItems: 0, consoleErrors: '',
                   popoverVisible: false, popoverHasDays: false, popoverOverflow: false,
-                  emptyState: false, aggValue: '', popWidth: 0, popHeight: 0, dayRows: 0 };
+                  emptyState: false, aggValue: '', popWidth: 0, popHeight: 0, dayRows: 0,
+                  prevValue: '', weekValue: '', accountRows: 0, detailRows: 0,
+                  freshness: '', freshState: '', staleBanner: false, weekRows: 0 };
       function finish() {
         var result = document.createElement('div');
         result.id = 'qb-gate-result';
@@ -73,6 +75,14 @@ harness = """
         result.setAttribute('data-agg-value', out.aggValue);
         result.setAttribute('data-band', out.band ? 'true' : 'false');
         result.setAttribute('data-day-rows', out.dayRows);
+        result.setAttribute('data-prev-value', out.prevValue);
+        result.setAttribute('data-week-value', out.weekValue);
+        result.setAttribute('data-account-rows', out.accountRows);
+        result.setAttribute('data-detail-rows', out.detailRows);
+        result.setAttribute('data-freshness', out.freshness);
+        result.setAttribute('data-fresh-state', out.freshState);
+        result.setAttribute('data-stale-banner', out.staleBanner ? 'true' : 'false');
+        result.setAttribute('data-week-rows', out.weekRows);
         result.textContent = JSON.stringify(out);
         document.body.appendChild(result);
       }
@@ -89,6 +99,18 @@ harness = """
         out.aggValue = agg ? (agg.textContent || '').trim() : '';
         var empty = document.getElementById('qb-empty');
         out.emptyState = !!empty && empty.offsetParent !== null;
+        var prev = document.getElementById('qb-prev-value');
+        out.prevValue = prev ? (prev.textContent || '').trim() : '';
+        var week = document.getElementById('qb-week-value');
+        out.weekValue = week ? (week.textContent || '').trim() : '';
+        out.accountRows = document.querySelectorAll('#qb-account-body tr').length;
+        out.detailRows = document.querySelectorAll('#qb-detail-body tr').length;
+        var bandNode = document.getElementById('quota-band');
+        out.freshness = bandNode ? (bandNode.getAttribute('data-freshness') || '') : '';
+        var freshState = document.getElementById('qb-fresh-state');
+        out.freshState = freshState ? (freshState.textContent || '').trim() : '';
+        var banner = document.getElementById('qb-stale-banner');
+        out.staleBanner = !!banner && !banner.hidden && (banner.textContent || '').trim() !== '';
         for (var j = 0; j < tiles.length; j += 1) {
           if (tiles[j].getAttribute('data-account') === '__ACCOUNT__') { target = tiles[j]; }
         }
@@ -116,6 +138,7 @@ harness = """
             out.popoverVisible = true;
             out.popoverHasDays = (pop.textContent || '').indexOf('Previous days') >= 0;
             out.dayRows = pop.querySelectorAll('.qb-day').length;
+            out.weekRows = pop.querySelectorAll('.qb-week-day').length;
             var rect = pop.getBoundingClientRect();
             out.popWidth = Math.round(rect.width);
             out.popHeight = Math.round(rect.height);
@@ -123,6 +146,11 @@ harness = """
               || rect.right > window.innerWidth + 1 || rect.bottom > window.innerHeight + 1;
           }
           finish();
+          /* Headless Chromium captures a blank frame when the page is left
+             scrolled, so the observer scrolls back to the top once the
+             measurements are taken. The popover is position:fixed, so it
+             follows and is still in the captured frame. */
+          window.scrollTo(0, 0);
         }, 150);
       }, 150);
     }, 250);
@@ -195,12 +223,22 @@ case "$LEGEND" in
   *) [ "$LEGEND" -ge 8 ] && ok "the legend is present ($LEGEND items)" || no "the legend is present (got $LEGEND)" ;;
 esac
 [ "$(attr "$DOM" data-console-errors)" = "0" ] && ok "zero console errors" || no "zero console errors (got $(attr "$DOM" data-console-errors))"
+[ -n "$(attr "$DOM" data-prev-value)" ] && ok "the previous completed day is shown" || no "the previous completed day is shown"
+[ -n "$(attr "$DOM" data-week-value)" ] && ok "the weekly aggregate is shown" || no "the weekly aggregate is shown"
+[ "$(attr "$DOM" data-account-rows)" = "7" ] && ok "every account has a row in the token table" || no "every account has a row in the token table (got $(attr "$DOM" data-account-rows))"
+[ "$(attr "$DOM" data-detail-rows)" -ge 1 ] 2>/dev/null && ok "the provider detail has its own rows" || no "the provider detail has its own rows"
+case "$(attr "$DOM" data-freshness)" in
+  fresh|stale) ok "the band publishes its freshness state ($(attr "$DOM" data-freshness))" ;;
+  *) no "the band publishes its freshness state (got $(attr "$DOM" data-freshness))" ;;
+esac
+[ -n "$(attr "$DOM" data-fresh-state)" ] && ok "the snapshot age is visible" || no "the snapshot age is visible"
 [ "$(attr "$DOM" data-popover-visible)" = "true" ] && ok "hover opens the panel" || no "hover opens the panel"
 [ "$(attr "$DOM" data-popover-has-days)" = "true" ] && ok "the panel shows the previous days" || no "the panel shows the previous days"
 [ "$(attr "$DOM" data-day-rows)" -ge 2 ] 2>/dev/null && ok "the panel lists a per-day series" || no "the panel lists a per-day series"
+[ "$(attr "$DOM" data-week-rows)" -ge 1 ] 2>/dev/null && ok "the panel lists the weekly series" || no "the panel lists the weekly series"
 [ "$(attr "$DOM" data-popover-overflow)" = "false" ] && ok "the panel does not overflow the viewport" || no "the panel does not overflow the viewport"
 
-screenshot "$WORK/harness-wide.html" "$EVIDENCE_DIR/quota-band-hover-20261021.png" 1600 1200
+screenshot "$WORK/harness-wide.html" "$EVIDENCE_DIR/quota-band-hover-20261021.png" 1600 2600
 [ -s "$EVIDENCE_DIR/quota-band-hover-20261021.png" ] && ok "hover screenshot saved" || no "hover screenshot saved"
 
 # ------------------------------------------------------ case 2: narrow ----
@@ -211,7 +249,7 @@ DOM_N="$WORK/dom-narrow.html"
 [ "$(attr "$DOM_N" data-console-errors)" = "0" ] && ok "zero console errors on a narrow screen" || no "zero console errors on a narrow screen"
 [ "$(attr "$DOM_N" data-popover-visible)" = "true" ] && ok "hover opens the panel on a narrow screen" || no "hover opens the panel on a narrow screen"
 [ "$(attr "$DOM_N" data-popover-overflow)" = "false" ] && ok "the panel does not overflow a narrow viewport" || no "the panel does not overflow a narrow viewport"
-screenshot "$WORK/harness-narrow.html" "$EVIDENCE_DIR/quota-band-hover-narrow-20261021.png" 420 900
+screenshot "$WORK/harness-narrow.html" "$EVIDENCE_DIR/quota-band-hover-narrow-20261021.png" 420 1700
 [ -s "$EVIDENCE_DIR/quota-band-hover-narrow-20261021.png" ] && ok "narrow screenshot saved" || no "narrow screenshot saved"
 
 # --------------------------------------------- case 3: no snapshot --------
@@ -254,8 +292,45 @@ screenshot "$WORK/harness-nosnap.html" "$EVIDENCE_DIR/quota-band-nosnapshot-2026
 
 # -------------------------------------------------- case 4: plain shot ----
 printf 'case: plain board screenshot\n'
-screenshot "$BOARD" "$EVIDENCE_DIR/quota-band-20261021.png" 1600 1200
+screenshot "$BOARD" "$EVIDENCE_DIR/quota-band-20261021.png" 1600 2800
 [ -s "$EVIDENCE_DIR/quota-band-20261021.png" ] && ok "board screenshot saved" || no "board screenshot saved"
+
+# --------------------------------------------- case 5: aged snapshot -----
+# A snapshot that has aged past its own published bound must SAY SO. The
+# figures stay on the page (they are the last measured ones), but the band
+# must not present them as fresh.
+printf 'case: an aged snapshot is marked stale\n'
+python3 - "$BOARD" "$WORK/board-stale.html" <<'PY'
+import datetime, json, pathlib, re, sys
+board, target = sys.argv[1], sys.argv[2]
+html = pathlib.Path(board).read_text(encoding='utf-8')
+match = re.search(
+    r'(<script id="quota-board-snapshot" type="application/json">)(.*?)(</script>)', html, flags=re.S
+)
+if not match:
+    print('stale case: FAIL no snapshot block in the board', file=sys.stderr)
+    raise SystemExit(2)
+document = json.loads(match.group(2))
+old = (
+    datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=3)
+).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+document['generated_at'] = old
+freshness = document.setdefault('freshness', {})
+freshness['snapshot_generated_at'] = old
+text = json.dumps(document, separators=(',', ':'), ensure_ascii=False, sort_keys=True)
+text = text.replace('&', '\\u0026').replace('<', '\\u003c').replace('>', '\\u003e')
+html = html[: match.start(2)] + text + html[match.end(2) :]
+pathlib.Path(target).write_text(html, encoding='utf-8')
+PY
+write_harness "$WORK/harness-stale.html" codex-home "$WORK/board-stale.html"
+render "$WORK/harness-stale.html" 1600 1200 > "$WORK/dom-stale.html"
+DOM_ST="$WORK/dom-stale.html"
+[ "$(attr "$DOM_ST" data-freshness)" = "stale" ] && ok "an aged snapshot marks the band stale" || no "an aged snapshot marks the band stale (got $(attr "$DOM_ST" data-freshness))"
+[ "$(attr "$DOM_ST" data-stale-banner)" = "true" ] && ok "the stale banner is visible, not silent" || no "the stale banner is visible, not silent"
+[ "$(attr "$DOM_ST" data-console-errors)" = "0" ] && ok "zero console errors on the stale board" || no "zero console errors on the stale board"
+[ -n "$(attr "$DOM_ST" data-agg-value)" ] && ok "the stale board still shows the measured figure" || no "the stale board still shows the measured figure"
+screenshot "$WORK/harness-stale.html" "$EVIDENCE_DIR/quota-band-stale-20261021.png" 1600 2600
+[ -s "$EVIDENCE_DIR/quota-band-stale-20261021.png" ] && ok "stale screenshot saved" || no "stale screenshot saved"
 
 printf 'gate: %s pass=%s fail=%s\n' "$([ "$FAIL" -eq 0 ] && echo PASS || echo FAIL)" "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
