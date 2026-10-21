@@ -186,3 +186,25 @@ These four cost real time this session. Each is general to any firstmate operato
   "buys 30 minutes". A primary that did not write one for 16 hours was escalated three times inside a
   77-minute window — each escalation a model turn whose content was "you have been quiet". Write the
   heartbeat line during long turns; it costs no model turn and it removes a self-inflicted escalation.
+
+- **A before/after comparison of a shared directory charges a concurrent writer's writes to
+  you.** Comparing the artefact set before and after a run was right about WHAT it measured
+  and wrong about WHO to blame: on a production host the standing supervisor writes into the
+  same state directory while the suite runs, so its new files were reported as the suite's
+  pollution. The suite passed in the lane's environment and failed in production. Attribute
+  by ownership instead: the lock says who owns the home — here a directory carrying the
+  holder's pid — and a supervisor counts as active during the run if it held the lock at
+  either end OR its log grew. Keep the check's teeth by asserting the owned names against
+  the owner's own source, so the list cannot drift silently, and by proving the check still
+  FAILS when pollution is injected from outside. A check that only passes when the machine
+  is quiet is not a check.
+- **A green lane is not a verified lane, and a verified lane is not a landed lane.** Lane D's
+  suite reported 57 of 57 green, and that number was true and worthless: it was true only
+  because the production host was idle. The firstmate's own re-run on the merged tree
+  found the failure the lane could not see. Re-run the lane's suites on the MERGED tree,
+  in the environment the code will actually meet, and treat a failure there as a finding
+  about the lane rather than about the host — until it is measured both ways.
+- **Prove a suite fails against the code it claims to fix.** A new suite that passes on the
+  fixed tree proves nothing unless it also fails on the pre-fix tree. Checking out the
+  parent commit's version of the changed file and running the new suite against it is
+  cheap, and it is the difference between "the test passes" and "the test has teeth".
