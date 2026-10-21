@@ -52,6 +52,7 @@ usage: fm-next-board-publish.py --repo PATH [--out DIR] [--serve-root DIR] [--no
                                 [--band PATH]
 """
 import argparse
+import ast
 import datetime as dt
 import html
 import json
@@ -104,6 +105,9 @@ SESSION_REL = "state/next-board-session.json"
 FEEDBACK_REL = "state/next-board-feedback"
 # A band older than this is reported as stale rather than shown as current.
 BAND_STALE_SECONDS = 3600
+# The collector that writes the band is installed beside it in the runtime
+# directory, and it is the one that says which schema the band carries.
+COLLECTOR_NAME = "fm-token-collect.py"
 # How many conversation entries the chat card shows, newest first.
 TALK_ENTRIES_SHOWN = 12
 # The Captain's own words for a ticket's acceptance. When a ticket states one, the
@@ -691,20 +695,15 @@ def render_queue(queue, tracker_rows, known_items=None):
                  '<th>Done looks like</th><th>Owner</th></tr></thead><tbody>'
                  + "".join(rows) + "</tbody></table>")
         heading = ("%s — %d ticket(s)" % (priority, len(tickets)))
-        if priority == "P0":
-            blocks.append('<div style="margin-top:14px">')
-            blocks.append('<h2 style="font-size:.9rem;color:var(--text-2);text-transform:uppercase;'
-                          'letter-spacing:.07em">%s</h2>' % heading)
-            blocks.append(table)
-            blocks.append("</div>")
-        else:
-            blocks.append(fold(heading, table))
+        # Every priority folds: the queue's counts stay open, the rows are one click
+        # away. The page opens on the signposts, not on a wall of ticket rows.
+        blocks.append(fold(heading, table))
     if not queue:
         blocks.append('<p class="empty">No tickets found in the queue file.</p>')
     blocks.append('<p class="note">Source of truth: <code>%s</code> — the board file '
                   '<code>ticket-intake</code> owns. This table is read from it on every '
-                  'publish; it is never a transcribed copy. P1 and P2 are folded — open them '
-                  'to read the full list.</p>' % esc(QUEUE_BOARD_REL))
+                  'publish; it is never a transcribed copy. Every priority is folded — '
+                  'open one to read the full list.</p>' % esc(QUEUE_BOARD_REL))
     blocks.append("</section>")
     return "".join(blocks)
 
@@ -729,16 +728,14 @@ def render_next(board_json):
                   '<span>%s &nbsp;%d</span>' % (esc(k), v)
                   for k, v in sorted(counts.items())) + "</div>"]
 
-    # How many rows stay open on the page. The signposts (NOW, the Captain's own
-    # questions, BLOCKED) stay open because they are what the page is for. The
-    # long tail (contract gaps, closed work, residual artifacts) folds behind a count,
-    # and every count is shown so nothing is silently dropped.
-    OPEN_NOW = 8
-    OPEN_CAPTAIN = 6
+    # Every long list folds behind a count. The signposts themselves - NOW, the
+    # Captain's own questions, BLOCKED - used to stay open, and that is what made
+    # the page a wall of rows. They now fold too: the counts above the fold stay
+    # open, so the page still says what is waiting and how much of it, and every
+    # row is one click away. Nothing is silently dropped.
 
     now = bucket("OPEN-WORKABLE")
-    blocks.append("<h2 style='margin-top:16px'>NOW — a lane can start this today "
-                  "<span class='muted'>(%d item(s))</span></h2>" % len(now))
+    now_body = ""
     if now:
         def now_row(item):
             return ('<tr><td class="mono">%s</td><td class="mono">%s</td><td>%s</td>'
@@ -748,50 +745,42 @@ def render_next(board_json):
                         esc(item.get("owner"))))
 
         ordered = sorted(now, key=prio_key)
-        blocks.append('<table><thead><tr><th>prio</th><th>item</th><th>done looks like</th>'
-                      '<th>owner</th></tr></thead><tbody>'
-                      + "".join(now_row(i) for i in ordered[:OPEN_NOW]) + "</tbody></table>")
-        if len(ordered) > OPEN_NOW:
-            rest = ('<table><thead><tr><th>prio</th><th>item</th><th>done looks like</th>'
+        now_body = ('<table><thead><tr><th>prio</th><th>item</th><th>done looks like</th>'
                     '<th>owner</th></tr></thead><tbody>'
-                    + "".join(now_row(i) for i in ordered[OPEN_NOW:]) + "</tbody></table>")
-            blocks.append(fold("…and %d more workable item(s)" % (len(ordered) - OPEN_NOW),
-                               rest))
+                    + "".join(now_row(i) for i in ordered) + "</tbody></table>")
     else:
-        blocks.append('<p class="empty">none</p>')
+        now_body = '<p class="empty">none</p>'
+    blocks.append(fold("NOW — a lane can start this today (%d item(s))" % len(now), now_body))
 
     captain = [i for i in items
                if i.get("state") == "NEEDS-CAPTAIN-DECISION" or i.get("captain_question")]
     captain.sort(key=prio_key)
-    blocks.append("<h2 style='margin-top:16px'>ONLY YOU CAN UNBLOCK — one question each "
-                  "<span class='muted'>(%d question(s))</span></h2>" % len(captain))
+    captain_body = ""
     if captain:
         def question_line(item):
             question = item.get("captain_question") or item.get("next_action") or item.get("title")
             return '<li><code>%s</code> — %s</li>' % (esc(item.get("slug")),
                                                       esc(truncate(question, 200)))
 
-        blocks.append("<ul>" + "".join(question_line(i) for i in captain[:OPEN_CAPTAIN])
-                      + "</ul>")
-        if len(captain) > OPEN_CAPTAIN:
-            rest = "<ul>" + "".join(question_line(i) for i in captain[OPEN_CAPTAIN:]) + "</ul>"
-            blocks.append(fold("…and %d more question(s) waiting on you"
-                               % (len(captain) - OPEN_CAPTAIN), rest))
+        captain_body = "<ul>" + "".join(question_line(i) for i in captain) + "</ul>"
     else:
-        blocks.append('<p class="empty">none</p>')
+        captain_body = '<p class="empty">none</p>'
+    blocks.append(fold("ONLY YOU CAN UNBLOCK — one question each (%d question(s))" % len(captain),
+                       captain_body))
 
     blocked = bucket("BLOCKED")
-    blocks.append("<h2 style='margin-top:16px'>BLOCKED — blocker and recovery condition "
-                  "<span class='muted'>(%d item(s))</span></h2>" % len(blocked))
+    blocked_body = ""
     if blocked:
-        blocks.append("<ul>")
+        blocked_body = "<ul>"
         for item in sorted(blocked, key=prio_key):
-            blocks.append('<li><code>%s</code> (%s) — %s</li>' % (
+            blocked_body += '<li><code>%s</code> (%s) — %s</li>' % (
                 esc(item.get("slug")), esc(item.get("priority")),
-                esc(truncate(item.get("next_action") or item.get("title") or "", 200))))
-        blocks.append("</ul>")
+                esc(truncate(item.get("next_action") or item.get("title") or "", 200)))
+        blocked_body += "</ul>"
     else:
-        blocks.append('<p class="empty">none</p>')
+        blocked_body = '<p class="empty">none</p>'
+    blocks.append(fold("BLOCKED — blocker and recovery condition (%d item(s))" % len(blocked),
+                       blocked_body))
 
     gaps = bucket("CONTRACT-GAP")
     gap_body = ""
@@ -972,6 +961,62 @@ def resolve_band_path(repo, out, explicit=None):
     return default_out / "token-band.json"
 
 
+def collector_declared_schema(path):
+    """The schema the collector at `path` declares, read without running it.
+
+    The band's `schema` is the identity of the collector that produced it, so the
+    publisher has to know what the installed collector writes. The value is read
+    out of the collector's own source and never copied here: a second copy of the
+    string in this file is exactly how this defect comes back. The file is parsed
+    rather than executed, so a broken collector can never run anything here.
+    """
+    try:
+        source = pathlib.Path(path).read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(source)
+    except (OSError, SyntaxError, ValueError):
+        return None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "SCHEMA":
+                value = node.value
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    return value.value
+    return None
+
+
+def check_band_producer(state, band):
+    """Compare the band's schema with the schema the installed collector declares.
+
+    The collector that writes the band is installed beside it in the runtime
+    directory, so that is where the comparison is made. A band carrying a
+    different schema was produced by a superseded collector: it is never reported
+    as a healthy band, whatever its age says. The board keeps publishing - a
+    mismatched band is a defect to show, not a reason to stop the timer.
+    """
+    collector = pathlib.Path(state["path"]).parent / COLLECTOR_NAME
+    if not collector.is_file():
+        # Nothing to compare against: the band is the only thing here.
+        return state
+    expected = collector_declared_schema(collector)
+    actual = band.get("schema")
+    if expected is None:
+        state["state"] = "unverified"
+        state["detail"] = ("the installed collector %s could not be read, so the band's producer "
+                           "could not be confirmed" % collector)
+        state["problems"].append(state["detail"])
+        return state
+    if actual == expected:
+        return state
+    state["state"] = "mismatch"
+    state["detail"] = ("the band carries schema %s but the installed collector writes %s - the band on "
+                       "disk was produced by a superseded collector" % (
+                           actual or "none", expected))
+    state["problems"].append(state["detail"])
+    return state
+
+
 def read_token_band(path):
     """Read the band. Never raises: a bad band is a state the board can report."""
     path = pathlib.Path(path)
@@ -1024,6 +1069,9 @@ def read_token_band(path):
             band.get("generated_at"), age / 60.0, BAND_STALE_SECONDS // 60)
     else:
         state["state"] = "ok"
+    # The producer check comes last: a band from a superseded collector is never
+    # reported as healthy, whatever the age says about it.
+    check_band_producer(state, band)
     return state
 
 
@@ -1252,6 +1300,40 @@ def render_rollover(band):
     return "".join(blocks)
 
 
+def render_surfaces_summary(band):
+    """The surface table in its compact form: which surface reported, and how much.
+
+    One row per surface, four columns. It is the part of the surface table the
+    Captain reads at a glance - what reported, and how much - and it stays open.
+    The full table, with the source and the reason a surface reported nothing,
+    folds behind it. Nothing is dropped: the reasons are one click away.
+    """
+    ledger = band.get("ledger") if isinstance(band.get("ledger"), dict) else {}
+    surfaces = [s for s in (ledger.get("surfaces") or []) if isinstance(s, dict)]
+    if not surfaces:
+        return '<p class="empty">the band names no surfaces</p>'
+    reporting = sum(1 for surface in surfaces if str(surface.get("status") or "") == "reported")
+    blocks = ['<div class="counts"><span>surfaces &nbsp;%d</span>'
+              '<span>reporting &nbsp;%d</span><span>no reading &nbsp;%d</span></div>' % (
+                  len(surfaces), reporting, len(surfaces) - reporting),
+              '<table><thead><tr><th>surface</th><th>status</th><th>accounts</th>'
+              '<th>days</th></tr></thead><tbody>']
+    for surface in surfaces:
+        name = str(surface.get("surface") or "?")
+        label = str(surface.get("label") or name)
+        reported = str(surface.get("status") or "") == "reported"
+        accounts = surface.get("accounts") or []
+        days = surface.get("days_reported") or []
+        blocks.append('<tr><td class="mono" title="%s">%s</td>'
+                      '<td><span class="pill %s">%s</span></td>'
+                      '<td class="mono">%d</td><td class="mono">%d</td></tr>' % (
+                          esc(name), esc(label), "ok" if reported else "warn",
+                          "reporting" if reported else "no reading",
+                          len(accounts), len(days)))
+    blocks.append("</tbody></table>")
+    return "".join(blocks)
+
+
 def render_surfaces(band):
     """The surface table: what each surface reported, and what is still unknown.
 
@@ -1383,13 +1465,27 @@ def render_token_band(state):
         blocks.append('<p class="note">The band carries no weekly block, so there is no weekly total '
                       'to report.</p>')
 
-    blocks.append("<h2 style='margin-top:16px'>DAILY — every account, every surface, every day</h2>")
-    blocks.append(render_heat_map(band))
+    # The long lists fold. Every row is still in the page - one click away - but the
+    # page opens on the signposts: what to do next, what the tokens are, what is
+    # waiting on the Captain. The summary always carries the count, so a folded
+    # block never hides that something is behind it.
+    daily_html = render_heat_map(band)
+    blocks.append(fold("DAILY — every account, every surface, every day "
+                       "(%d account(s) × %d day(s))" % (len(band_account_ids(band)),
+                                                        len(band_day_columns(band))),
+                       daily_html))
+    # The surface table keeps a compact summary open - which surface reported, and
+    # how much - and folds the full table, which carries the source and the reason
+    # a surface reported nothing.
+    surfaces_summary = render_surfaces_summary(band)
+    surfaces_full = render_surfaces(band)
     blocks.append("<h2 style='margin-top:16px'>SURFACES — what each coding surface reported</h2>")
-    blocks.append(render_surfaces(band))
+    blocks.append(surfaces_summary)
+    blocks.append(fold("SURFACES — the full surface table (%d surface(s))"
+                       % data_rows(surfaces_full), surfaces_full))
     coverage_html = render_coverage(band)
-    blocks.append(fold("COVERAGE — which surface/provider readings exist, and which are unknown",
-                       coverage_html, open_=True))
+    blocks.append(fold("COVERAGE — which surface/provider readings exist, and which are unknown "
+                       "(%d slot(s))" % data_rows(coverage_html), coverage_html))
     # The weekly total is the headline and stays open. The window list and the
     # rollover detail are the same information at row level, so they fold.
     windows_html = render_quota_windows(band)
@@ -1722,9 +1818,12 @@ def render_page(now, delivery, queue, tracker_rows, board_json, board_age,
     <h1>Fleet live board</h1>
     <small>Generated <code>%s</code> &nbsp;%s &nbsp;·&nbsp; rebuilt on a timer from the
     live queue, not a snapshot</small>
+    <small><strong>LIVE FLEET BOARD</strong> &nbsp;·&nbsp; this address serves the live
+    board. It replaced the Fleet ticket dashboard preview, which is no longer served
+    here. &nbsp;·&nbsp; Canonical address: the tracker root <code>/</code>.</small>
   </div>
   <div class="bar">
-    <a class="btn" href="../">← Fleet ticket dashboard</a>
+    <a class="btn" href="./">Refresh</a>
     <a class="btn" href="next-board.json">next-board.json</a>
     <a class="btn" href="NEXT-BOARD.md">NEXT-BOARD.md</a>
   </div>
