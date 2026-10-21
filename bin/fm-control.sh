@@ -317,7 +317,8 @@ ID=$RAW_ID
 # live lease (contract: bin/fm-lease-lib.sh; no-op in homes without leases).
 # shellcheck source=bin/fm-lease-lib.sh
 . "$SCRIPT_DIR/fm-lease-lib.sh"
-fm_lease_guard "$ID" "lifecycle control (fm-control)"
+fm_lease_guard "$ID" "lifecycle control (fm-control)" \
+  || die "could not take the lease guard lock for $ID (holder pid ${FM_LOCK_HELD_PID:-unknown})"
 CONTROL_LOCK="$STATE/.control-$ID.lock"
 trap control_cleanup EXIT
 fm_lock_try_acquire "$CONTROL_LOCK" \
@@ -587,7 +588,7 @@ clear_retired_meta_busy_gen() {  # <gen>
     . "$SCRIPT_DIR/fm-backlog-transition-lib.sh"
   fi
   lock=$(fm_meta_lock_path "$meta") || return 1
-  fm_lock_acquire_wait "$lock"
+  fm_lock_acquire_wait "$lock" || return 1
   current=$(fm_meta_get "$meta" busy_gen)
   if [ "$current" != "$gen" ]; then
     fm_lock_release "$lock"
