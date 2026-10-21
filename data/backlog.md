@@ -1,3 +1,6 @@
+# Backlog
+
+## In flight
 - [ ] m3.1f-firstmate-diskceiling - The Captain's 80% disk ceiling is not enforced: the audit blocks at 85%, and nothing reads the verdict to gate placement; wire the real ceiling and put the warning on the live board (repo: deightonllm-firstmate) (kind: ship) (since 2026-10-21)
   # Disk ceiling - handed to the residual-queue secondmate, 2026-10-21
 
