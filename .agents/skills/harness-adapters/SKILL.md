@@ -453,3 +453,40 @@ actually delivers the `Stop` event to this hook in the interactive TUI. Establis
 requires launching an agy agent, which the implementing task forbade. Treat agy's turn-end
 signal as schema-verified and logic-verified but NOT live-verified; confirm it on the
 first real dispatch before relying on it for supervision.
+
+## minimax-code (VERIFIED 2026-10-20, mcode lanes running live on the Controller)
+
+mcode is the standalone `mcode` CLI, the `minimax-code` adapter. It is the fastest lane
+worker on the fleet and the easiest one to break quietly: a lane that cannot read its
+home, cannot write its status, and cannot register agent state still paints a pane and
+still answers prompts. Full recipe and evidence:
+[`docs/MCODE-HERDR-PROVISIONING.md`](../../docs/MCODE-HERDR-PROVISIONING.md).
+
+| Fact | Value |
+|---|---|
+| Busy state | CREDITS a real semantic source: an mcode pane reports its own agent state (`idle` / `working` / `blocked`) to herdr, so `herdr pane list --workspace <ws>` is the authoritative liveness read. A pane with `agent_status: unknown` means the session hook or the status path is broken, not that the lane is idle. |
+| Status transport | Native append: `echo "<state>: <one short line>" >> state/<id>.status`. mcode is NOT in the lean-ctx replace-mode set - `bin/fm-brief.sh` carries `FM_HARNESS_LEAN_CTX_REPLACE="codex"`, and that set deliberately excludes every other verified harness. Never tell an mcode lane to use `ctx_shell`. |
+| Headless | FORBIDDEN for real task work. mcode lanes are visible, supervised and checkpointed; there is no `mcode exec` path for a crewmate. |
+| Launch | `bin/fm-spawn.sh <lane-key> <project-dir> --harness minimax-code --model minimax/MiniMax-M3.1-Flash-Preview --backend herdr [--scout]` |
+| Model | `minimax/MiniMax-M3.1-Flash-Preview` is the routed M3.1 Flash model. Lane-key alias `m3.1f`. Never route GLM, and never route M3.1 through Pi. |
+| Label formats | THREE different ones: preflight label `<domain>-<surface>-<model>-<taskslug>`, spawn task id (lane key) `<model>-<surface>-<task>`, To-Do row prefix `[<harness>·<ModelAbbrev> <effort> @<Host>]`. Mixing them is the common dispatch failure. |
+| Supervision | `bash bin/fm-watch-arm.sh` as a tracked background task, re-armed every turn. |
+
+### Two host prerequisites that are not repo state
+
+mcode lanes on a surface depend on two host-level repairs that no repo file carries, so
+they must be re-applied on every new surface:
+
+1. **The lean-ctx tool jail.** `allow_paths` in `/root/.config/lean-ctx/config.toml` must
+   be one real TOML array of strings. A single quoted string containing a JSON array
+   collapses the jail onto the lane's worktree, and the lane can then read neither its
+   brief nor the fleet state.
+2. **The herdr state hook.** `/root/.codex/herdr-agent-state.sh` runs an embedded
+   `python3 - <<'PY'` from the lane's cwd, so a stray `bisect.py` in that cwd shadows a
+   stdlib module and the hook dies with rc=1. herdr owns that file and expects custom
+   hooks beside it, so the fix is the executable wrapper
+   `/root/.codex/hooks-herdr-agent-state.sh` (`cd /` plus `PYTHONSAFEPATH=1`), registered
+   in `/root/.codex/hooks.json`.
+
+Load the `mcode-herdr-provisioning` skill before installing mcode on a new surface or
+when an mcode lane is stuck, silent, or reports no agent state.

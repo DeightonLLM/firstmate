@@ -184,6 +184,9 @@ The generic effort fallback and its precedence are owned by `harness-adapters`: 
 Do not add model-specific versions of that policy.
 
 `secondmate-provisioning` owns secondmate harness pins and inherited local material, while `harness-adapters` owns the harness consequences.
+Load `mcode-herdr-provisioning` before installing or configuring mcode (`minimax-code`) on any surface, and whenever an mcode lane is stuck, silent, or reports no agent state.
+A lane that cannot read its home, cannot write its status, and cannot register its own agent state still looks alive in its pane, so the failure is invisible without those checks.
+`docs/MCODE-HERDR-PROVISIONING.md` is the long form of that recipe.
 Dispatch only on a backend that `fm-spawn` validates as spawn-capable; pass an explicit per-spawn `--backend` only under that exact task's own authority, never as later-task precedent (selection contract: [`docs/configuration.md`](docs/configuration.md) "Runtime backend").
 A missing dependency, authentication failure, unsupported backend, or version refusal is a blocker; never silently retry on another backend.
 
@@ -543,6 +546,7 @@ These skills are not captain-invocable; load them only at their precise triggers
 - `ask-user-authority` - load before deciding any ask-user finding, regardless of the project's `yolo` posture.
 - `quota-array-dispatch` - load before choosing among a matched crew-dispatch profile array from current quota-axi output.
 - `harness-adapters` - load before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter.
+- `mcode-herdr-provisioning` - load before installing or configuring mcode (`minimax-code`) on a surface, and whenever an mcode lane is stuck, silent, or reports no agent state. Covers the lean-ctx tool jail, the herdr state-hook stdlib shadow, the status transport mcode actually has, the three label formats, dispatch, and the supervision arm.
 - `firstmate-orca` - load before switching to Orca, spawning or supervising Orca-backed work, smoke-testing Orca backend behavior, debugging Orca task state, or reconciling Orca-backed task metadata.
 - `project-management` - load before adding, creating, removing, or initializing a project.
   Cloning or registering a project is add intake and uses the same trigger.

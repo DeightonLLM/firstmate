@@ -49,6 +49,13 @@ Keep custom charter text focused on the persistent responsibility, available pro
 The scaffolded charter, later copied to `data/charter.md`, owns the standard lifecycle and escalation wording.
 Preserve the generated charter sections unless the domain genuinely needs a hard rule.
 
+## Provisioning a new surface
+
+Before a surface runs mcode (`minimax-code`) lanes, load the `mcode-herdr-provisioning` skill.
+Two of that recipe's items are host state, not repo state, so they must be re-applied on every new surface: the lean-ctx `allow_paths` jail must be a real TOML array, and the herdr state hook needs the `cd /` plus `PYTHONSAFEPATH=1` wrapper so a stray stdlib-shadowing file in a lane's working directory cannot crash the session hook.
+A surface where those are wrong produces lanes that run, paint a pane, answer prompts, and accomplish nothing, because they can neither read their brief nor write their status.
+`docs/MCODE-HERDR-PROVISIONING.md` is the long form.
+
 Provision the persistent home and registry entry after the charter is filled:
 
 ```sh
