@@ -207,7 +207,18 @@
       "/root/.pi/sessions/**",
       "/root/.bash_history"
     ],
-    "prohibited_write_roots_note": "The prohibited secret roots apply to write_roots as well as read_roots. A blanket write to a secret root is never admissible; the drift check fails closed on it."
+    "prohibited_write_roots_note": "The prohibited secret roots apply to write_roots as well as read_roots. A blanket write to a secret root is never admissible; the drift check fails closed on it.",
+    "deny_rules": [
+      {
+        "tool_name": "bash",
+        "matcher": {
+          "kind": "command",
+          "pattern": "herdr:*"
+        },
+        "why": "An agent must never call the herdr CLI directly. Splitting the coordinator pane stacks worker panes on the operator's visible screen, and raw send-text/send-keys into a pane bypasses the sanctioned send path. This is the documented rule in docs/audits-20260928/AGENTSEC.md 3.5, and it also closes the HIGH gap 5.1 (the Pi hook only intercepted 'herdr pane split', never send-text/send-keys). Use the wrapper scripts instead: bin/fm-spawn.sh creates a worker pane and bin/fm-herdr-agent-report.sh reports the agent state."
+      }
+    ],
+    "deny_rules_note": "The mcode permission matcher treats a command pattern as a prefix on the FIRST command token, so 'herdr:*' refuses every direct herdr invocation from an agent turn. Script-file invocations such as 'bash bin/fm-herdr-agent-report.sh' are NOT affected, because their first token is 'bash'. This was proven in a live mcode run: 'herdr pane list' was refused by the rule and 'bash bin/fm-herdr-agent-report.sh working' ran normally."
   },
   "pi": {
     "rules_path": "/root/.pi/rules/lean-ctx.md",
