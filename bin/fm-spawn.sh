@@ -662,6 +662,25 @@ if ! "$FM_ROOT/bin/fm-dispatch-guard.sh" "$HARNESS" "$GUARD_MODEL"; then
   exit 64
 fi
 
+# Capacity gate (captain ruling 2026-10-21: the root filesystem must not go
+# past 80%). Runs HERE - after the dispatch guard and still BEFORE any
+# worktree, endpoint, backend, or state mutation - so a refused placement
+# leaves absolutely nothing behind.
+#
+# This is the ONE reader of the disk-capacity ladder. The ladder and the
+# reclaim-then-refuse decision are owned by bin/fm-capacity-gate.sh, the single
+# shared owner: the gate RECLAIMS first (caches, build litter, and the merged
+# worktree pool) and refuses only if the disk is STILL at or over the ceiling
+# after the reclaim. An unmeasurable disk is refused, disclosed.
+#
+# The project's DECLARED worker capacity is a different axis and stays where it
+# is, in bin/fm-project-capacity-lib.sh.
+#
+# See bin/fm-capacity-gate.sh for the contract and its narrow, logged bypass.
+if ! "$FM_ROOT/bin/fm-capacity-gate.sh" check; then
+  exit 64
+fi
+
 secondmate_registry_value() {
   secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
 }

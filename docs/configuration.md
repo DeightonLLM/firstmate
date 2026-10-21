@@ -99,6 +99,16 @@ Test cleanup must use the guarded path in [`docs/cmux-backend.md`](cmux-backend.
 
 `config/dispatch-max-lanes` sets the home-local maximum for all working or unknown worker lanes; `config/dispatch-max-provider-lanes` sets the corresponding per-provider maximum. Both files contain a positive decimal integer, and the per-provider ceiling defaults to the global ceiling when absent or invalid. `FM_DISPATCH_GUARD_MAX_LANES` and `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` override their respective files. Provider identity is read from the provider prefix in each task's recorded `model=` when present, otherwise from its recorded `harness=`; unknown or unreadable lane state occupies both applicable ceilings.
 
+## Disk capacity ceiling (bin/fm-capacity-gate.sh)
+
+The root filesystem must not go past **80%** used. `bin/fm-capacity-gate.sh` is the **single shared owner** of that ladder and of the admission decision it drives, so the repo carries exactly one copy of the thresholds: `>= 80%` is `CAPACITY_BLOCK_NEW_PLACEMENT`, `>= 75%` is `CAPACITY_REVIEW_REQUIRED`, `>= 70%` is `CAPACITY_EARLY_WARNING`, and below that is `CAPACITY_OK`.
+
+`bin/controller-resource-audit.sh` is the read-only six-hourly sampler and delegates its `verdict` subcommand to the gate; `bin/fm-spawn.sh` is the reader, consulting the gate before every fresh placement and refusing on `CAPACITY_BLOCK_NEW_PLACEMENT`. Any other surface that needs the ladder — for example a read-only placement audit on another host — calls `fm-capacity-gate.sh verdict <percent>` instead of copying the thresholds into its own script. The project's *declared* worker capacity is a different axis and stays in `bin/fm-project-capacity-lib.sh`, which is never widened to mean disk.
+
+At or over the ceiling the gate **reclaims first, then refuses**: it runs `bin/fm-capacity-reclaim.sh --apply` (tiers 1-2), re-measures the disk itself, and re-reads the verdict. A disk that came back under the ceiling is admitted and the reclaim is logged; only a disk still at or over the ceiling afterwards is refused, and the refusal states what the reclaim did, what the disk reads now, and what the operator can do. The reclaim is bounded by a wall-clock timeout and serialised by an exclusive host-level lock, so a dispatch can never hang on it and two concurrent spawns can never both reclaim. A disk that cannot be measured **fails closed**: it is refused and the refusal says so.
+
+`FM_CAPACITY_GATE_BYPASS=1` (or the originally briefed `FM_DISPATCH_GUARD_CAPACITY_BYPASS=1`) skips only this check, is logged as `BYPASS_CAPACITY`, and is printed on stderr — never a silent path. `FM_CAPACITY_GATE_RECLAIM_TIMEOUT_S` (default 90), `FM_CAPACITY_GATE_LOCK`, `FM_CAPACITY_GATE_LOCK_WAIT_S` (default 30), `FM_CAPACITY_GATE_DF` and `FM_CAPACITY_GATE_RECLAIMER` tune the bound, the lock, and the two test seams. See [docs/scripts.md](scripts.md) "The disk-capacity ceiling" for the tier contract of the reclaimer.
+
 ## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
 
 The `/afk` sub-supervisor injects escalation digests into firstmate's own pane independently of where new task endpoints are spawned.
@@ -520,6 +530,12 @@ FM_DATA_OVERRIDE=        # alternate data dir, mainly for tests
 FM_PROJECTS_OVERRIDE=    # alternate projects dir, mainly for tests
 FM_CONFIG_OVERRIDE=      # alternate config dir, mainly for tests
 FM_PROC_ROOT_OVERRIDE=   # alternate /proc root for the Linux process-identity read in fm-wake-lib.sh, mainly for tests
+FM_CAPACITY_GATE_BYPASS= # skip ONLY the disk-capacity ceiling check in bin/fm-capacity-gate.sh (logged as BYPASS_CAPACITY, printed on stderr); FM_DISPATCH_GUARD_CAPACITY_BYPASS is the same check under its originally briefed name
+FM_CAPACITY_GATE_RECLAIM_TIMEOUT_S=90   # wall-clock bound on the reclaim that runs at the ceiling; the reclaim is stopped rather than allowed to wedge the dispatch path
+FM_CAPACITY_GATE_LOCK=   # lock file that serialises the reclaim; default /var/lock/fm-capacity-gate.lock, else ${TMPDIR}/fm-capacity-gate.lock
+FM_CAPACITY_GATE_LOCK_WAIT_S=30   # seconds to wait for the reclaim lock before deciding on the disk as it reads
+FM_CAPACITY_GATE_DF=    # test seam: a command whose output is parsed like `df -P /`
+FM_CAPACITY_GATE_RECLAIMER= # test seam: the reclaimer bin/fm-capacity-gate.sh runs
 FM_BACKEND=             # optional runtime backend override for new spawns; tmux/herdr/zellij/orca/cmux support ship/scout spawns, codex-app is not accepted
 HERDR_SESSION=default  # herdr-only: named session for normal backend ops; not enough for destructive cleanup (docs/herdr-backend.md)
 FM_BACKEND_HERDR_COMPOSER_LINES=20  # herdr-only: tail lines scanned by composer-state guard/fallback paths; idle-baseline submit confirmation uses agent-state
