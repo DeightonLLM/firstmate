@@ -125,7 +125,7 @@ test_legacy_owner_host_row_rejected() {
 }
 
 test_legacy_model_surface_row_rejected() {
-  run_check "[m2.7h @ brandon] widget fix ${EMDASH} working"
+  run_check "[m3.1f @ brandon] widget fix ${EMDASH} working"
   expect_exit 1 "$RUN_RC" 'the legacy [model @ surface] row must be rejected' || return 1
   expect_contains "$RUN_OUT" '[<harness>·<ModelAbbrev> <effort> @<Host>]' \
     'the rejection must name the expected canonical shape' || return 1
@@ -145,11 +145,11 @@ test_registry_model_disagreement_rejected() {
   local file="$TMP_ROOT/registry-disagree.tsv" out rc
   printf '# run_id\tlane_key\tmodel\tsurface\ttask\tstate\toutput\n' > "$file"
   printf 'abc123de-f123-4567-8901-abcdef123456\tpi-luna6-brandon-theme\tluna6\tbrandon\ttheme\trunning\tout.md\n' >> "$file"
-  printf 'abc123de-f234-5678-9012-bcdef1234567\tpi-m2.7-brandon-review\tgem38f\tbrandon\treview\trunning\tout.md\n' >> "$file"
+  printf 'abc123de-f234-5678-9012-bcdef1234567\tpi-m3.1f-brandon-review\tgem38f\tbrandon\treview\trunning\tout.md\n' >> "$file"
   out=$(bash "$CHECK" --registry "$file" 2>&1); rc=$?
   expect_exit 1 "$rc" 'a registry row whose lane_key disagrees with its model column must be rejected' || return 1
   expect_contains "$out" 'disagrees' 'the rejection must explain the disagreement' || return 1
-  expect_contains "$out" 'm2.7' 'the rejection must name the disagreeing model' || return 1
+  expect_contains "$out" 'm3.1f' 'the rejection must name the disagreeing model' || return 1
   return 0
 }
 
@@ -164,7 +164,7 @@ test_self_check_missing_alias_exits_two() {
 
 test_self_check_all_models_aliased_passes() {
   local file="$TMP_ROOT/dispatch-ok.json" out rc
-  printf '{"default":{"model":"minimax/MiniMax-M2.7-highspeed"}}\n' > "$file"
+  printf '{"default":{"model":"minimax/MiniMax-M3.1"}}\n' > "$file"
   printf '{"rules":[{"use":{"model":"minimax/MiniMax-M3.1-Flash-Preview"}}]}\n' >> "$file"
   out=$(bash "$CHECK" --self-check "$file" 2>&1); rc=$?
   expect_exit 0 "$rc" 'a dispatch config whose models all have aliases must pass' || return 1

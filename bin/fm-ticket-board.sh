@@ -156,16 +156,13 @@ EFFORT_CODES = {"low": "l", "medium": "m", "high": "h", "xhigh": "xh", "max": "x
 MODEL_ALIAS_TABLE = {
     "m3.1f": "minimax/MiniMax-M3.1-Flash-Preview",
     "m3.1": "minimax/MiniMax-M3.1",
-    "m2.7h": "minimax/MiniMax-M2.7-highspeed",
-    "m2.7": "minimax/MiniMax-M2.7",
     "luna6": "openai-codex/gpt-6-luna",
     "glm5.3f": "zai/glm-5.3-flash",
     "gem38f": "agy/gemini-3.8-flash-medium",
     "pi": "minimax/MiniMax-M3.1-Flash-Preview",
 }
 ALIAS_SPELLINGS = {
-    "m31": "m3.1", "m31f": "m3.1f", "m27": "m2.7",
-    "m27h": "m2.7h", "m27highspeed": "m2.7h", "g38f": "gem38f",
+    "m31": "m3.1", "m31f": "m3.1f", "g38f": "gem38f",
 }
 TERMINAL_LANE_TOKENS = (
     "complete", "completed", "done", "stopped", "failed", "failure", "timeout",

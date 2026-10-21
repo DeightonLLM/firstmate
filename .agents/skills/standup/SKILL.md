@@ -51,7 +51,7 @@ Compile all findings into a concise, readable Standup Board adhering to the left
 
 | Agent / Lane | Host | Current Task / Coordinates | Status | Blockers | Drift Guard |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `[M2.7 m @ Hetz]` Second Mate | Hetzner | Ticket 0027 Worktree Audit | IDLE | None | PASS (Clean) |
+| `[M3.1F m @ Hetz]` Second Mate | Hetzner | Ticket 0027 Worktree Audit | IDLE | None | PASS (Clean) |
 | `[Pi M3.1 @ HD2]` Second Mate | HD2Stack | Herdr Pane wK:p18 | IDLE | None | PASS (Clean) |
 | `[GLM 5.3 @ HD2]` Reviewer | HD2Stack | Review Gate | IDLE | None | PASS (Clean) |
 

@@ -16,7 +16,7 @@ End each subject with the concrete state and dependency, such as `waiting on HD2
 Examples:
 
 - `[pi·luna6 m @brandon] Reconcile ticket evidence - waiting on HD2`
-- `[mcode·m2.7h m @brandon] Implement scoped fixture - queued, depends on access`
+- `[mcode·m3.1f m @brandon] Implement scoped fixture - queued, depends on access`
 - `[mcode·m3.1 m @brandon] Reconcile worker results - running`
 
 The canonical format, its model alias table and the machine checker live in `docs/todo-prefix-canonical-format.md` and `bin/fm-todo-prefix-check.sh`.
@@ -31,8 +31,8 @@ Do not confuse Highspeed with reasoning effort.
 ## Lane keys and dispatch
 
 Use `<harness>-<model>-<host>-<task>` for lane keys, lowercase and without spaces.
-Use the documented model aliases from `docs/todo-prefix-canonical-format.md`, such as `m2.7h` and `m3.1`; record exact catalog identifiers in the dispatch evidence.
-Captain permits MCode MiniMax M2.7 Highspeed asynchronous workers directly, or a MCode M3.1 lead coordinating M2.7 workers and reviewing within the same run.
+Use the documented model aliases from `docs/todo-prefix-canonical-format.md`, such as `m3.1f` and `m3.1`; record exact catalog identifiers in the dispatch evidence.
+Captain permits MCode MiniMax M3.1 Flash Preview asynchronous workers directly, or a MCode M3.1 lead coordinating M3.1 Flash Preview workers and reviewing within the same run.
 Do not infer an exact catalog identifier, silently substitute a model, or invent a persistent second mate from a one-shot lead.
 Every worker receives this naming contract before work starts.
 The coordinator checks visible labels before counting the worker as started and corrects missing harness/model/host fields before accepting a deliverable.
