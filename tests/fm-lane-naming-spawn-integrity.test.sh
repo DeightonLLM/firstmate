@@ -7,12 +7,22 @@
 # an invalid lane key is currently ACCEPTED (RED), then the fix turns it GREEN.
 #
 # Valid lane key examples:
-#   m2.7-hd2-build   gem38f-dubz-comms   luna6-brandon-audit
+#   m3.1f-hd2-build   gem38f-dubz-comms   luna6-brandon-audit
 #
 # Invalid lane key examples (will be used in RED test then rejected in GREEN):
 #   HD2-BUILD        (uppercase)
 #   m2.7-hd2         (missing task segment)
 #   m2.7hd2build     (no hyphens - not three segments)
+#
+# Every spawn below runs with FM_DISPATCH_GUARD_BYPASS=1.  The dispatch guard
+# is a DIFFERENT gate from the lane-naming gate this suite measures: it
+# refuses on host load saturation, live-lane count and provider quota, none of
+# which is a lane-naming fact.  Without the bypass the suite aborts on a
+# saturated host before it ever reaches the naming gate, so the naming
+# assertions would be measured only when the machine happened to be idle.
+# The bypass is the same one tests/fm-spawn-liveness-verification.test.sh uses
+# for its spawn calls; the Sol ban is evaluated before any bypass and stays
+# in force.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -63,6 +73,7 @@ BRIEF
         FM_CONFIG_OVERRIDE="$tmp/config" \
         FM_PROJECTS_OVERRIDE="$tmp/projects" \
         FM_SPAWN_NO_GUARD=1 \
+        FM_DISPATCH_GUARD_BYPASS=1 \
         "$SPAWN" invalid-lane-key firstmate "sh -c 'echo spawned'" 2>&1); rc=$?
 
   rm -rf "$tmp"
@@ -116,6 +127,7 @@ BRIEF
         FM_CONFIG_OVERRIDE="$tmp/config" \
         FM_PROJECTS_OVERRIDE="$tmp/projects" \
         FM_SPAWN_NO_GUARD=1 \
+        FM_DISPATCH_GUARD_BYPASS=1 \
         "$SPAWN" "HD2-BUILD" firstmate "sh -c 'echo ok'" 2>&1); rc=$?
   rm -rf "$tmp"
 
@@ -152,6 +164,7 @@ BRIEF
         FM_CONFIG_OVERRIDE="$tmp/config" \
         FM_PROJECTS_OVERRIDE="$tmp/projects" \
         FM_SPAWN_NO_GUARD=1 \
+        FM_DISPATCH_GUARD_BYPASS=1 \
         "$SPAWN" "m2.7-hd2" firstmate "sh -c 'echo ok'" 2>&1); rc=$?
   rm -rf "$tmp"
 
@@ -173,8 +186,8 @@ test_valid_lane_key_accepted_at_spawn() {
   git -C "$tmp/projects/firstmate" add README.md
   git -C "$tmp/projects/firstmate" commit -qm init
 
-  mkdir -p "$tmp/data/m2.7-hd2-build"
-  cat > "$tmp/data/m2.7-hd2-build/brief.md" <<'BRIEF'
+  mkdir -p "$tmp/data/m3.1f-hd2-build"
+  cat > "$tmp/data/m3.1f-hd2-build/brief.md" <<'BRIEF'
 # Task
 Valid lane key test.
 BRIEF
@@ -190,11 +203,12 @@ BRIEF
         FM_CONFIG_OVERRIDE="$tmp/config" \
         FM_PROJECTS_OVERRIDE="$tmp/projects" \
         FM_SPAWN_NO_GUARD=1 \
-        "$SPAWN" "m2.7-hd2-build" firstmate "sh -c 'echo ok'" 2>&1); rc=$?
+        FM_DISPATCH_GUARD_BYPASS=1 \
+        "$SPAWN" "m3.1f-hd2-build" firstmate "sh -c 'echo ok'" 2>&1); rc=$?
   rm -rf "$tmp"
 
-  [ "$rc" -ne 5 ] || fail "valid lane key 'm2.7-hd2-build' should NOT be rejected at lane naming gate; got exit 5: $out"
-  pass "valid lane key 'm2.7-hd2-build' passed the lane-naming gate (exit $rc != 5)"
+  [ "$rc" -ne 5 ] || fail "valid lane key 'm3.1f-hd2-build' should NOT be rejected at lane naming gate; got exit 5: $out"
+  pass "valid lane key 'm3.1f-hd2-build' passed the lane-naming gate (exit $rc != 5)"
 }
 
 # test_secondmate_spawn_exempt_from_lane_naming: secondmate spawn uses
@@ -221,6 +235,7 @@ test_secondmate_spawn_exempt_from_lane_naming() {
         FM_CONFIG_OVERRIDE="$tmp/config" \
         FM_PROJECTS_OVERRIDE="$tmp/projects" \
         FM_SPAWN_NO_GUARD=1 \
+        FM_DISPATCH_GUARD_BYPASS=1 \
         "$SPAWN" "sm-alpha" "$tmp" --secondmate 2>&1); rc=$?
   rm -rf "$tmp"
 
