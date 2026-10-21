@@ -92,3 +92,43 @@ tests/fm-helper-permissions.test.sh
 ```
 
 When any entry is added to or removed from the live host configurations without being reconciled in `docs/helper-permissions.json`, the check exits with code `1` and details the exact mismatch.
+
+## 6. Denied Patterns — Raw `herdr` From an Agent Turn
+
+| Category | Policy | Denied Pattern | Rationale |
+| :--- | :--- | :--- | :--- |
+| **Direct herdr CLI** | **PERMANENT DENY** | `herdr:*` | An agent must never call the herdr CLI directly. Splitting the coordinator pane stacks worker panes on the operator's visible screen, and raw `send-text` / `send-keys` into a pane bypasses the sanctioned send path. |
+
+**Why this is denied, and where the rule comes from.** The rule is documented, not invented:
+`docs/audits-20260928/AGENTSEC.md` §3.5 describes the Pi runtime extension
+`06-worker-pane-isolation.ts`, which matches `herdr pane split <target>` and blocks the target when
+it is `--current`, `$PANE`, `${PANE}` or the live coordinator pane id, and which "enforces use of
+`/root/bin/herdr-worker-pane`". §5.1 (GAP-01, HIGH) records the hole that extension left: it only
+intercepted `herdr pane split`, never `herdr pane send-text` / `send-keys`.
+
+**Two gaps this closes.**
+
+1. That extension lived only in the Pi runtime and was not installed on this host, so an MCode
+   agent had nothing stopping it. `bin/fm-pane-isolation-guard.sh` plus the tracked MCode plugin
+   `extensions/mcode-pane-isolation/` are the MCode side of the same rule, and the guard refuses the
+   raw dispatch path as well as the split.
+2. The `deny` rule above is enforced by the runtime itself, so it holds even when the plugin is not
+   loaded.
+
+**Matcher semantics (measured, not assumed).** The mcode permission matcher treats a command
+pattern as a prefix on the **first command token**; `*` is the only wildcard, so `herdr:*` refuses
+every direct herdr invocation from an agent turn. Multi-segment patterns such as
+`herdr:pane:split:*` do **not** match, because the pattern is not a free regex. Script-file
+invocations are unaffected: `bash bin/fm-herdr-agent-report.sh working` still runs, because its
+first token is `bash`.
+
+**The sanctioned way instead.** Create a worker pane with `bin/fm-spawn.sh` (or
+`/root/bin/herdr-worker-pane` where it exists); report the agent state with
+`bin/fm-herdr-agent-report.sh`. Both are script-file invocations, so they pass this policy while a
+raw `herdr` call does not.
+
+**Proof.** `tests/fm-pane-isolation.test.sh` — 20/20, hermetic (a fake `herdr` reports a fixed
+coordinator pane id) and non-vacuous (it asserts the guard *does* refuse the forbidden cases, so a
+guard that always allowed could not pass). Live proof on this host: `herdr pane list` was refused
+by `bash(herdr:*)` with "Permission denied for bash: Blocked: matched global deny permission rule
+for bash(herdr:*)", while `bash bin/fm-herdr-agent-report.sh working` ran normally.

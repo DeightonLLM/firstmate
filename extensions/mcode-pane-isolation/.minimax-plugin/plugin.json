@@ -1,0 +1,17 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "schemaVersion": 1,
+  "name": "mcode-pane-isolation",
+  "displayName": "Firstmate MCode Pane Isolation",
+  "version": "1.0.0",
+  "description": "Refuses pane operations that target the operator's coordinator pane: splitting it to stack worker panes on the operator's screen, and driving it with raw send-text/send-keys. Closes the MCode side of the documented worker-pane-isolation rule and AGENTSEC GAP-01.",
+  "author": {
+    "name": "Firstmate"
+  },
+  "category": "Code",
+  "exampleQueries": [],
+  "apps": [],
+  "mcpServers": [],
+  "skills": [],
+  "hooks": "hooks/hooks.json"
+}
