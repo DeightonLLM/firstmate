@@ -16,6 +16,22 @@ Inputs (all read-only, all optional - missing inputs degrade, they never crash):
   <repo>/docs/hd2-residuals/*.md                  residual registers, if present
   <repo>/ops/lane-ledger.tsv                      the machine lane ledger (lanes)
 
+The lane ledger and the claims board live in the Core repo's ops directory, which
+each host installs under its own path, so both are resolved from ONE fixed search
+order and the first hit wins (see ops_dir_candidates):
+  <repo>/ops                    the repo's own ops directory
+  /root/agent-work/ops           HD2Stack
+  /root/ops                      Controller
+  /home/hd2admin/ops             Hetzner (the installed Core ops directory)
+  /home/hd2admin/agent-work/core-distro-saas-clean/ops
+                                 Hetzner (the Core clone, the git-tracked source)
+Both inputs come out of the same directory on purpose: a ledger from one copy
+checked against a claims board from another reports a disagreement that is not
+there. The Hetzner entries sit where the Core repo's own drift checker
+(ops/bin/fm-todo-sync.sh) puts them: that checker searches /home/hd2admin/ops
+before its own directory, so on the Hetzner host the board and the checker read
+one input. A missing input stays a violation: it never becomes a silent pass.
+
 The lane ledger is a TSV whose first line is a `#` comment and whose columns are:
   lane_id  state  owner  opened  updated  expires  next  artifact  branch
 `state` is one of ACTIVE, DONE, BLOCKED, RELEASED. It is the machine truth: the
@@ -57,6 +73,32 @@ OWNER_DEFAULT = "unassigned"
 NEXT_RE = re.compile(r"^\s*[-*]?\s*\**NEXT\**\s*[:：]", re.M | re.I)
 VERDICT_RE = re.compile(r"^\s*VERDICT\s*:", re.M)
 CLAIM_STATE_RE = re.compile(r"\b(%s)\b" % "|".join(LEDGER_STATE_TOKENS))
+
+# The Core repo's ops directory on the Hetzner host. The host installs it under
+# its own home, and it also keeps the Core clone's working copy of the same
+# files, which is the git-tracked source. The installed copy is the one this
+# host's drift checker reads, and on this host it is ahead of the clone's
+# committed copy, so it is searched first and the clone is the fallback.
+HETZ_OPS_DIR = pathlib.Path("/home/hd2admin/ops")
+HETZ_CORE_CLONE_OPS_DIR = pathlib.Path(
+    "/home/hd2admin/agent-work/core-distro-saas-clean/ops")
+
+
+def ops_dir_candidates(repo):
+    """The Core ops directories, in the one fixed order every host agrees on.
+
+    The lane ledger and the claims board are both resolved from this one list,
+    so the two always come out of the same directory. A ledger from one copy
+    checked against a claims board from another reports a disagreement that is
+    not there, and a list that could drift apart is how that happens.
+    """
+    return [
+        pathlib.Path(repo) / "ops",
+        pathlib.Path("/root/agent-work/ops"),
+        pathlib.Path("/root/ops"),
+        HETZ_OPS_DIR,
+        HETZ_CORE_CLONE_OPS_DIR,
+    ]
 
 
 def read_json(path):
@@ -105,15 +147,19 @@ def resolve_ledger(repo, explicit=None):
     An explicit path is honoured as given: if it does not exist the caller must
     see that the ledger is missing, because a missing ledger must never silently
     become a missing to-do list.
+
+    The search order is the ops directory list, first hit wins:
+      1. <repo>/ops                                    the repo's own ops dir
+      2. /root/agent-work/ops                          HD2Stack
+      3. /root/ops                                     Controller
+      4. /home/hd2admin/ops                            Hetzner (installed)
+      5. /home/hd2admin/agent-work/core-distro-saas-clean/ops
+         the Hetzner host's Core clone (the git-tracked source)
     """
     if explicit:
         candidates = [pathlib.Path(explicit)]
     else:
-        candidates = [
-            pathlib.Path(repo) / "ops" / "lane-ledger.tsv",
-            pathlib.Path("/root/agent-work/ops/lane-ledger.tsv"),
-            pathlib.Path("/root/ops/lane-ledger.tsv"),
-        ]
+        candidates = [d / "lane-ledger.tsv" for d in ops_dir_candidates(repo)]
     for candidate in candidates:
         try:
             if candidate.is_file():
@@ -391,6 +437,8 @@ def collect(repo, stale_days, now, ledger_path=None):
     # ledger: push attempts, cleared and refused. Every host keeps its own copy,
     # so read them all and label the source - reading only the first one
     # understated the fleet (it showed 0 cleared while the merge lane had 37).
+    # The Hetzner host's copy is /home/hd2admin/ops/state/push-ledger.tsv, which
+    # is already in this list; the Core clone carries no ops/state directory.
     ledger = []
     for lp in [pathlib.Path(repo) / "ops" / "state" / "push-ledger.tsv",
                pathlib.Path("/root/ops/state/push-ledger.tsv"),
@@ -407,10 +455,11 @@ def collect(repo, stale_days, now, ledger_path=None):
         for row in rows:
             ledger.append(row + [str(lp)])
 
-    # claims board: who holds what right now
+    # claims board: who holds what right now. It is resolved from the same ops
+    # directory list as the lane ledger, in the same order, so the two inputs
+    # always come out of the same directory.
     claims = []
-    for cp in [pathlib.Path(repo) / "ops" / "LANE-CLAIMS.md",
-               pathlib.Path("/root/agent-work/ops/LANE-CLAIMS.md")]:
+    for cp in [d / "LANE-CLAIMS.md" for d in ops_dir_candidates(repo)]:
         if cp.is_file():
             try:
                 for line in cp.read_text(encoding="utf-8").splitlines():
@@ -716,7 +765,9 @@ def main():
     ap.add_argument("--now", default=None)
     ap.add_argument("--ledger", default=None,
                     help="the machine lane ledger (default: <repo>/ops/lane-ledger.tsv, "
-                         "then /root/agent-work/ops/lane-ledger.tsv, then /root/ops/lane-ledger.tsv)")
+                         "then /root/agent-work/ops/lane-ledger.tsv, then /root/ops/lane-ledger.tsv, "
+                         "then /home/hd2admin/ops/lane-ledger.tsv, then "
+                         "/home/hd2admin/agent-work/core-distro-saas-clean/ops/lane-ledger.tsv)")
     ap.add_argument("--todo-list", action="store_true",
                     help="print only the canonical to-do list and its verdict")
     args = ap.parse_args()
