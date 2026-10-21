@@ -35,6 +35,15 @@
 #   docs/configuration.md "Crew dispatch profiles" owns the declared fields and
 #   "Typed dispatch resolution" owns this tool's operator contract.
 #
+# Temporary directive: an expiring dispatch override. A LIVE temporary
+#   directive decides the profile before the standing rules are consulted, so a
+#   temporary instruction stops applying the moment it expires whether or not
+#   anyone clears it. An EXPIRED one is reported on the resolution output and
+#   ignored, never applied and never dropped silently. A MALFORMED directive
+#   store is an actionable error that exits 2, never resolved around.
+#   bin/fm-temporary-directive.sh owns the store, its shape and its expiry, so
+#   this tool never holds a second copy of that contract.
+#
 # Never-send check: when the optional $FM_HOME/config/dispatch-never-send list
 #   exists, every string value of the built request is checked against it
 #   before the POST. Each non-blank, non-# line is a literal matched
@@ -101,6 +110,18 @@ no_rules() {
   printf 'dispatch-resolve:\n  status: escalate\n  reason: no rules to match\n'
   exit 0
 }
+
+# dispatch_stale_warning: report a standing dispatch directive whose recorded
+# justification no longer holds. It warns and never changes the standing
+# directive, and it runs only where this tool is dispatching.
+dispatch_stale_warning() {
+  local report warning
+  [ -x "$DIRECTIVE_SCRIPT" ] || return 0
+  report=$("$DIRECTIVE_SCRIPT" staleness --json 2>/dev/null) || return 0
+  warning=$(printf '%s' "$report" | jq -r '.warning // empty' 2>/dev/null)
+  [ -n "$warning" ] || return 0
+  printf '%s\n' "$warning" >&2
+}
 usage() {
   awk '
     NR == 1 { next }
@@ -120,12 +141,49 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# ---- temporary directive: the expiring dispatch override ---------------------
+# A live temporary directive decides the profile before the standing rules are
+# consulted. An expired one is reported and ignored. A malformed store is an
+# actionable error, never resolved around.
+DIRECTIVE_SCRIPT="$SCRIPT_DIR/fm-temporary-directive.sh"
+DIRECTIVE_JSON=''
+DIRECTIVE_LIVE=''
+DIRECTIVE_EXPIRED=''
+DIRECTIVE_EXPIRED_ONELINE=''
+if [ -x "$DIRECTIVE_SCRIPT" ]; then
+  DIRECTIVE_JSON=$("$DIRECTIVE_SCRIPT" effective --json 2>/dev/null) || true
+  if [ -n "$DIRECTIVE_JSON" ]; then
+    directive_error=$(printf '%s' "$DIRECTIVE_JSON" | jq -r 'if .ok == true then "" else (.error // "the temporary directive store is unusable") end' 2>/dev/null)
+    [ -z "$directive_error" ] || die "$directive_error"
+    DIRECTIVE_LIVE=$(printf '%s' "$DIRECTIVE_JSON" | jq -r '.live.id // ""' 2>/dev/null)
+    DIRECTIVE_EXPIRED=$(printf '%s' "$DIRECTIVE_JSON" | jq -r '[.expired[]? | "  expired: " + .id + " (expired " + .until + ") - ignored"] | join("\n")' 2>/dev/null)
+    DIRECTIVE_EXPIRED_ONELINE=$(printf '%s' "$DIRECTIVE_JSON" | jq -r '[.expired[]? | .id + " (expired " + .until + ")"] | join(", ")' 2>/dev/null)
+  fi
+fi
+
+if [ -n "$DIRECTIVE_LIVE" ]; then
+  directive_profile=$(printf '%s' "$DIRECTIVE_JSON" | jq -r '.live | "--harness " + (.harness // "") + (if ((.model // "") | length) > 0 then " --model " + .model else "" end) + (if ((.effort // "") | length) > 0 then " --effort " + .effort else "" end)' 2>/dev/null)
+  directive_until=$(printf '%s' "$DIRECTIVE_JSON" | jq -r '.live.until' 2>/dev/null)
+  printf 'dispatch-resolve:\n'
+  printf '  status: clear\n'
+  printf '  source: temporary directive %s\n' "$DIRECTIVE_LIVE"
+  printf '  profile: %s\n' "$directive_profile"
+  printf '  note: a live temporary directive overrides the standing dispatch rules until %s\n' "$directive_until"
+  if [ -n "$DIRECTIVE_EXPIRED" ]; then printf '%s\n' "$DIRECTIVE_EXPIRED"; fi
+  dispatch_stale_warning
+  exit 0
+fi
+
 # ---- opt-in gate ---------------------------------------------------------------
 if [ -z "$TYPESAFE_API_KEY_PRIVATE" ]; then
   TYPESAFE_API_KEY_PRIVATE=$(fmx_env_get TYPESAFE_API_KEY "$FM_HOME/.env")
 fi
 if [ -z "$TYPESAFE_API_KEY_PRIVATE" ]; then
-  echo "dispatch-resolve: off (TYPESAFE_API_KEY absent from the environment and $FM_HOME/.env)" >&2
+  if [ -n "$DIRECTIVE_EXPIRED_ONELINE" ]; then
+    echo "dispatch-resolve: off (TYPESAFE_API_KEY absent from the environment and $FM_HOME/.env; expired temporary directives ignored: $DIRECTIVE_EXPIRED_ONELINE)" >&2
+  else
+    echo "dispatch-resolve: off (TYPESAFE_API_KEY absent from the environment and $FM_HOME/.env)" >&2
+  fi
   exit 0
 fi
 
@@ -496,6 +554,7 @@ RESULT=$(jq -n --arg floor "$CONFIDENCE_FLOOR" --argjson lat "$LAT_MS" --arg non
   end') || emit_error "resolution failed"
 
 TEXT=$(jq -r '
+
   def flat: tostring | gsub("[\t\r\n]"; " ");
   def show($value): ($value // "-") | flat;
   def shell_arg: flat | @sh;
@@ -516,5 +575,10 @@ TEXT=$(jq -r '
   (if .chosen then "  profile: --harness \(.chosen.profile.harness | shell_arg)"
       + (if .chosen.profile.model then " --model \(.chosen.profile.model | shell_arg)" else "" end)
       + (if .chosen.profile.effort then " --effort \(.chosen.profile.effort | shell_arg)" else "" end) else empty end)' <<<"$RESULT") || emit_error "output rendering failed"
-printf '%s\n' "$TEXT"
+if [ -n "$DIRECTIVE_EXPIRED" ]; then
+  printf '%s\n%s\n' "$TEXT" "$DIRECTIVE_EXPIRED"
+else
+  printf '%s\n' "$TEXT"
+fi
+dispatch_stale_warning
 exit 0
