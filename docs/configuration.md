@@ -192,6 +192,53 @@ about the same host, so the file is retired rather than implemented. The live ce
 `config/dispatch-max-provider-lanes` as the legacy fallbacks.
 
 
+## Choosing a capacity (config/dispatch.json)
+
+The live-lane ceiling is `.max_lanes` and the per-provider ceiling is `.max_provider_lanes`, and `config/dispatch.json` is the only place either one is configured.
+This section owns the RULE for choosing a capacity, and it does not repeat the schema of the file, which the section "The ONE dispatch file (config/dispatch.json)" above owns, nor the mechanical resolution of the ceilings, which the section "Dispatch lane ceilings" above owns.
+
+### An exported environment variable beats the configured value
+
+The guard reads the environment before it reads the file.
+In [`bin/fm-dispatch-guard.sh`](bin/fm-dispatch-guard.sh), the live-lane cap resolution seeds itself from `FM_DISPATCH_GUARD_MAX_LANES` at line 310 and reads `.max_lanes` from `config/dispatch.json` only when that environment value is empty, at line 311.
+The per-provider cap resolution seeds itself from `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES` at line 337 and reads `.max_provider_lanes` only when that environment value is empty, at line 338.
+The guard's own header records the same precedence: line 28 documents `FM_DISPATCH_GUARD_MAX_LANES=<n>` as an override of `config/dispatch.json` `.max_lanes`, and line 30 documents `FM_DISPATCH_GUARD_MAX_PROVIDER_LANES=<n>` as an override of `.max_provider_lanes`.
+So an exported environment variable wins over the configured value, and an operator who wants the configured value to be the truth must make sure that no such variable is exported in the shell that dispatches.
+An ambient override that is read ahead of the durable config makes the durable config a lie: the file says one number and the environment silently decides another.
+That is why a capacity belongs in `config/dispatch.json` and not in a shell profile.
+
+### How to change a capacity
+
+Change the one file: edit `config/dispatch.json`, set `.max_lanes` and `.max_provider_lanes` there, and change nothing else.
+Then run `bin/fm-config-push.sh` to propagate the new ceilings to the second mate homes, which inherit the one file from the primary.
+
+### What each ceiling counts
+
+The two ceilings count different things.
+The live-lane ceiling counts live crewmate lanes, counted per window or pane rather than per session: the guard's own refusal says so at line 397 of [`bin/fm-dispatch-guard.sh`](bin/fm-dispatch-guard.sh), and the inventory it counts walks the recorded lane metas from line 360.
+The per-provider ceiling counts the lanes attributed to a provider, and that attribution is read out of the recorded lane metadata: `fm_dispatch_guard_provider_of_meta` at line 326 reads the provider prefix of a meta's recorded `model=` and falls back to its recorded `harness=`, and the guard attributes each lane to that provider at line 365.
+The per-provider ceiling is then applied to each provider separately at line 401.
+
+### The per-provider ceiling is a fleet number
+
+The per-provider ceiling is a FLEET number and not a per-host number, because the MiniMax and Codex accounts are shared between the Hetz and HD2Stack hosts, so a host that raises its own ceiling does not entitle it to run lanes that the other host is already running.
+The fleet total for a shared account is reconciled across the hosts that share it before the configured number is treated as final.
+
+### A capacity expires like a route does
+
+A capacity number whose reason expires is operational configuration and not documentation, so it lives in `config/dispatch.json` with its expiry beside it.
+That is the shape the route already uses: the `route._mode` object carries the reason, the date it expires, and the action that retires it, and this file owns the rule for choosing a route and never the route that is chosen right now.
+A capacity decision follows the same rule, so `route._mode` carries `capacity_reason`, `capacity_expires` and `capacity_expires_action` beside the route's own fields, and this file owns the rule for choosing a capacity and never the number that is chosen right now.
+As of 2026-10-21 the Hetz home runs a live-lane ceiling of 15 and a per-provider ceiling of 15, and that is a dated record of a measured decision whose reason expires on 2026-10-25, not a permanent value, so a later reader can tell a measured window from a policy.
+The authoritative number lives in that home's own `config/dispatch.json`, never in this document.
+
+### The second ceiling: the treehouse worktree pool
+
+There is a second, separate ceiling, and it is not in `config/dispatch.json`.
+The treehouse worktree pool refuses a dispatch outright with `all N worktrees are in use or dirty (max_trees = M)`, and that pool ceiling is the `max_trees` value in `treehouse.toml` at the repository root.
+There are two ceilings because they bound two different things, a worktree slot and a lane: the treehouse ceiling binds when the pool has no free or reclaimable slot, and the lane ceiling binds when the host or the shared provider account runs out of lanes.
+
+
 ## Away-mode supervisor backend (FM_SUPERVISOR_BACKEND / FM_SUPERVISOR_TARGET)
 
 The `/afk` sub-supervisor injects escalation digests into firstmate's own pane independently of where new task endpoints are spawned.
