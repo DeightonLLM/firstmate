@@ -44,6 +44,15 @@ install_one "$HERE/fm-tracker-view-serve.py" "fm-tracker-view-serve.py"
 if [ -f "$HERE/build-next-board.py" ]; then
   install_one "$HERE/build-next-board.py" "build-next-board.py"
 fi
+# The token-band collector and the board's chat controller travel with the
+# publisher too: the runtime directory is what the systemd unit runs from, and a
+# runtime copy that is missing its helper would silently publish a degraded
+# board. They are optional so an older checkout still installs cleanly.
+for optional in fm-token-collect.py fm-next-board-chat.sh fm-next-board-feedback.sh; do
+  if [ -f "$HERE/$optional" ]; then
+    install_one "$HERE/$optional" "$optional"
+  fi
+done
 
 # The tracker server already serves this directory. The board is published inside the
 # runtime directory and reached through this link, so the served tree never holds a copy
