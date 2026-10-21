@@ -38,6 +38,8 @@ Use the session-read section first. Open dispatch/blocker guidance when its trig
 - [`scripts.md`](scripts.md) — purpose map for `bin/` scripts; each script header/help remains authoritative for exact use.
 - [`provider-routing.md`](PROVIDER-ROUTING.md) — AFK provider schedule and quota-routing policy.
 - [`gitlab-merge-watch.md`](gitlab-merge-watch.md) — recorded GitLab merge-watch verification and its evidence limits.
+- [`token-usage-surface-contract.md`](token-usage-surface-contract.md) — how every coding surface publishes its token usage for the fleet-wide aggregate, and what the Collector guarantees.
+- [`next-board-token-and-chat-contract.md`](next-board-token-and-chat-contract.md) — the board's token band and chat contract (Contract A v2), including the per-surface coverage rules.
 - [`merge-packet.md`](merge-packet.md) - the read-only merge packet reporter, which carries branch identity, diff, blast radius, the byte-identical-copy invariant check, proven conflicts, rollback commands, and the single merge decision the Captain is asked to make.
 - [`verification/runtime-backends.md`](verification/runtime-backends.md) — version-scoped evidence for active backend guarantees.
 - [`verification/supervision.md`](verification/supervision.md) — evidence for session-start, turn-end, watcher continuity, and wedge-alarm guarantees.
