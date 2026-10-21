@@ -229,7 +229,8 @@ The fleet total for a shared account is reconciled across the hosts that share i
 A capacity number whose reason expires is operational configuration and not documentation, so it lives in `config/dispatch.json` with its expiry beside it.
 That is the shape the route already uses: the `route._mode` object carries the reason, the date it expires, and the action that retires it, and this file owns the rule for choosing a route and never the route that is chosen right now.
 A capacity decision follows the same rule, so `route._mode` carries `capacity_reason`, `capacity_expires` and `capacity_expires_action` beside the route's own fields, and this file owns the rule for choosing a capacity and never the number that is chosen right now.
-As of 2026-10-21 the Hetz home runs a live-lane ceiling of 15 and a per-provider ceiling of 15, and that is a dated record of a measured decision whose reason expires on 2026-10-25, not a permanent value, so a later reader can tell a measured window from a policy.
+As of 2026-10-21 the Hetz home runs a live-lane ceiling of 12 and a per-provider ceiling of 6, and that is a dated record of a measured decision whose reason expires on 2026-10-25, not a permanent value, so a later reader can tell a measured window from a policy.
+The 12 is this host's allocation and the 6 is the fleet's, for the reason the section above gives: the per-provider ceiling is a FLEET number because the MiniMax and Codex accounts are shared between the Hetz and HD2Stack hosts, so the two ceilings are deliberately different numbers and this host may not raise its per-provider ceiling to match its own live-lane ceiling.
 The authoritative number lives in that home's own `config/dispatch.json`, never in this document.
 
 ### The second ceiling: the treehouse worktree pool
