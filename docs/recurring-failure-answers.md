@@ -6,14 +6,17 @@ Durable rules, root-cause explanations, enforcement mechanisms, and honest enfor
 
 ## 1. Writing a file into the outbox being treated as delivery when it was never transmitted
 
-**Durable rule:** Published ≠ Transmitted. A file placed in the outbox directory is not evidence of delivery. The file must also be recorded in the outbound hash ledger.
+**Durable rule:** Published ≠ Transmitted. A file placed in the outbox directory is not evidence of delivery. A transmission is recorded by MESSAGE NAME, and the SHA-256 hash is kept as the evidence of the bytes that were transmitted.
 
 **Why it keeps happening:** The outbox is a plain directory. Anyone can write a file there and report "it's in the outbox" as if it were sent. The writing step is cheap and looks like completion.
 
+A second shape of the same failure appeared when the ledger was keyed by content hash. A note that was transmitted and then reissued has bytes that are not the bytes that went out, so the hash on record was the old one and the note was reported as never sent on every cycle. A permanently unsent backlog made the watcher exit with an actionable reason on every cycle, so supervision never held.
+
 **Mechanism that now enforces it:**
 
-- `bin/fm-to-controller.sh` performs write-and-send as one atomic step. It copies the file to both the local mirror and the shared exchange directory, records the SHA-256 hash in `state/.controller-inbox-outbound`, and only then reports success. Writing without running this helper leaves the hash absent from the ledger.
-- `bin/fm-controller-pending.sh` detects the gap: it scans every `.md` file in the outbox, computes its SHA-256, and checks whether that hash appears in `state/.controller-inbox-outbound`. If the hash is absent, it prints `unsent-to-controller:` and exits 1.
+- `bin/fm-to-controller.sh` performs write-and-send as one atomic step. It copies the file to both the local mirror and the shared exchange directory, records the message name and the SHA-256 hash in `state/.controller-inbox-outbound`, and only then reports success. Writing without running this helper leaves the name absent from the ledger.
+- `bin/fm-controller-pending.sh` detects the gap. It resolves a note by name, then by the hash ledger, then by the delivery route. A name that was transmitted is TRANSMITTED even when its bytes changed since, and the change is reported as a reissue carrying the old and the new hash without blocking. A name that was never transmitted is UNSENT and still reports, so a note that only looks like a reissue is never suppressed.
+- The reissue report is written to a durable log rather than to stdout, because a stdout line re-arms the watcher on every cycle.
 
 **Enforcement strength:** CONVENTION-ONLY, with a supplemental advisory check. The atomic helper is the documented path, but nothing blocks a bare write to the outbox directory. `fm-controller-pending.sh` is an advisory detector — it surfaces the problem when run, but it is not wired as a hard gate in the delivery path. A worker who writes a file and claims it was sent without running `fm-to-controller.sh` will not be stopped by code.
 
