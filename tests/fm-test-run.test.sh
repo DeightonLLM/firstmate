@@ -182,6 +182,33 @@ test_changed_dependency_selection_and_unmapped_failure() {
   pass "changed selection covers dependents and fails closed for unmapped source"
 }
 
+test_changed_untracked_unmapped_is_skipped_and_counted() {
+  local tmp repo listed rc err
+  tmp=$(fm_test_tmproot fm-test-run-untracked)
+  repo="$tmp/repo"
+  init_changed_fixture_repo "$repo"
+  err="$tmp/err"
+
+  # An untracked stray with no consuming test is not a source change: it must
+  # not fail the run, it must be skipped and counted, and it must be named.
+  printf 'stray note\n' >"$repo/src/stray.ts"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD 2>"$err")
+  rc=$?
+  [ "$rc" -eq 0 ] || fail "untracked unmapped path must not fail --changed, got $rc"
+  assert_contains "$listed" "FM_TEST_SKIPPED_UNMAPPED_UNTRACKED count=1" \
+    "untracked unmapped path is not counted"
+  assert_contains "$(cat "$err")" "skipped unmapped untracked path: src/stray.ts" \
+    "untracked unmapped path is not named"
+
+  # An untracked path that does map still selects its suite.
+  printf '#!/usr/bin/env bash\n' >"$repo/tests/fm-new-suite.test.sh"
+  chmod +x "$repo/tests/fm-new-suite.test.sh"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD 2>/dev/null)
+  assert_contains "$listed" "tests/fm-new-suite.test.sh" \
+    "untracked mapped path must still select its suite"
+  pass "changed selection skips and counts unmapped untracked paths"
+}
+
 test_empty_selection_emits_summary() {
   local tmp repo out json
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/fm-test-run-empty.XXXXXX")
@@ -572,6 +599,7 @@ test_family_selection
 test_single_script_selection
 test_changed_file_selection_is_conservative
 test_changed_dependency_selection_and_unmapped_failure
+test_changed_untracked_unmapped_is_skipped_and_counted
 test_empty_selection_emits_summary
 test_timing_markers_and_json
 test_aggregate_exit_behavior

@@ -673,6 +673,28 @@ if ! "$SCRIPT_DIR/fm-dispatch-guard.sh" "$HARNESS" "$GUARD_MODEL"; then
   exit 64
 fi
 
+# Leave-refused binding gate (captain ruling 2026-10-21, board question
+# "quota-provider-binding", answer "leave-refused"): the claude, grok, kimi
+# and opencode harness FAMILIES have no provider account binding on this
+# fleet, so quota-axi cannot measure their spend surface and no dispatch may
+# spend it. This runs HERE - after the harness, the concrete model and the
+# launch command are resolved, and BEFORE any worktree, endpoint, backend, or
+# state mutation - so a refused dispatch leaves absolutely nothing behind.
+#
+# It runs for EVERY spawn kind, including --secondmate. A secondmate launch
+# carries no quota measurement (it stands up its own home rather than acting
+# as a fresh worker dispatch), but the binding refusal is a property of the
+# HARNESS FAMILY, not of the spawn kind: the refused families are refused on
+# every dispatch path.
+#
+# The WHOLE launch command is handed over as well, not only the harness name
+# derived from it. A raw launch derives that name from the FIRST word of the
+# command, so a refused harness hidden behind another word ("env opencode
+# ...", "sh -c 'grok ...'") would otherwise reach the gate under a name it
+# does not recognise, be measured against a bound provider's quota, and pass.
+"$SCRIPT_DIR/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" \
+  --launch-command "$LAUNCH" --binding-only || exit $?
+
 secondmate_registry_value() {
   secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
 }
@@ -2099,7 +2121,8 @@ fi
 # guard above: a mandatory gate must never be missing just because FM_ROOT
 # points at a checkout that does not carry it.
 if [ "$KIND" != secondmate ]; then
-  "$SCRIPT_DIR/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" || exit $?
+  "$SCRIPT_DIR/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" \
+    --launch-command "$LAUNCH" || exit $?
 fi
 
 META_WINDOW=$T
