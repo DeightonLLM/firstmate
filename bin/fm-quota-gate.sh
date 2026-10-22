@@ -9,7 +9,20 @@
 #
 # Usage:
 #   fm-quota-gate.sh check --harness <name> [--model <name>]
+#                          [--launch-command <cmd>] [--binding-only]
 #                          [--min-percent <N>] [--min-runway-sec <N>]
+#
+#   --launch-command <cmd> hands the gate the WHOLE command the dispatch will
+#   run, not only the harness name derived from it. A raw launch derives that
+#   name from the FIRST word of the command, so a refused harness hidden
+#   behind another word ("env opencode ...", "sh -c 'grok ...'") otherwise
+#   reached the gate under a name the gate did not recognise, was measured
+#   against a bound provider's quota, and passed.
+#
+#   --binding-only runs the leave-refused binding check and nothing else: no
+#   provider mapping is resolved and no quota is measured. It is how a
+#   dispatch path that carries no quota measurement (a --secondmate launch)
+#   still routes through the leave-refused refusal.
 #
 # Exit codes:
 #   0  pass (measured and healthy, or unmeasured-but-live with disclosure)
@@ -26,26 +39,89 @@
 set -u
 
 # Captain ruling 2026-10-21, question "quota-provider-binding", answer
-# "leave-refused", provider "": the claude, grok, kimi and opencode harnesses
-# are NOT to be bound to any provider. They have no provider account binding
-# on this fleet, so quota-axi cannot measure their spend surface, and an
-# unmeasurable spend surface is not a verified-eligible surface (captain ruling
-# 2026-10-13, header above). The gate therefore refuses them BY NAME with
-# exit 4 - deliberately and visibly - instead of letting them fall through to
-# the generic "no provider mapping" refusal, and instead of letting a model
-# prefix route them onto a bound provider's quota.
+# "leave-refused", provider "": the claude, grok, kimi and opencode harness
+# FAMILIES are NOT to be bound to any provider. They have no provider account
+# binding on this fleet, so quota-axi cannot measure their spend surface, and
+# an unmeasurable spend surface is not a verified-eligible surface (captain
+# ruling 2026-10-13, header above). The gate therefore refuses them BY NAME
+# with exit 4 - deliberately and visibly - instead of letting them fall
+# through to the generic "no provider mapping" refusal, and instead of
+# letting a model prefix route them onto a bound provider's quota.
+#
+# The refusal is a property of the FAMILY, not of one spelling of it. This
+# fleet spells the opencode harness "opencode" but its own quota provider -
+# the identifier its quota board, its quota-axi output and its dispatch
+# config use - is "opencode-go". A refusal that matched only the literal
+# string "opencode" was side-stepped by that alias: the harness fell through
+# to the model branch, a model prefix re-routed it onto a bound provider's
+# quota, and the gate passed while the dispatch spent an unmeasured surface.
+# An alias of a refused family is still a refused family.
 LEAVE_REFUSED_HARNESSES="claude grok kimi opencode"
+
+# fm_quota_normalize_harness_name <name>
+# Print the canonical spelling of a harness name: its basename (a path names
+# the same harness as its basename), without quoting, lowercased.
+fm_quota_normalize_harness_name() {
+  local raw=${1:-} name
+  [ -n "$raw" ] || return 1
+  name=${raw##*/}
+  name=${name//\"/}
+  name=${name//\'/}
+  printf '%s' "$name" | tr '[:upper:]' '[:lower:]'
+}
+
+# fm_quota_leave_refused_family <name>
+# Print the leave-refused harness FAMILY <name> belongs to and return 0, or
+# print nothing and return 1 when it belongs to none.
+#
+# The match is deliberately conservative so it can never refuse a DIFFERENT
+# harness by accident: the family name itself, or that name followed by a
+# separator ("opencode", "opencode-go"). "opencoder" is not the opencode
+# family and is not refused.
+fm_quota_leave_refused_family() {
+  local raw=${1:-} name family
+  [ -n "$raw" ] || return 1
+  name=$(fm_quota_normalize_harness_name "$raw")
+  for family in $LEAVE_REFUSED_HARNESSES; do
+    if [ "$name" = "$family" ] \
+       || [ "${name#"$family-"}" != "$name" ] \
+       || [ "${name#"${family}_"}" != "$name" ]; then
+      printf '%s' "$family"
+      return 0
+    fi
+  done
+  return 1
+}
 
 leave_refused_reason() {
   # leave_refused_reason <harness> - print the refusal reason when the harness
-  # is deliberately unbound on this fleet and return 0; otherwise print
-  # nothing and return 1.
-  local harness=${1:-} candidate
-  for candidate in $LEAVE_REFUSED_HARNESSES; do
-    if [ "$harness" = "$candidate" ]; then
-      printf '%s' 'deliberately unbound on this fleet (Captain ruling 2026-10-21, quota-provider-binding=leave-refused): no provider account binding exists for this harness, so quota-axi cannot measure its spend surface, and an unmeasurable spend surface is not a verified-eligible surface'
-      return 0
-    fi
+  # names a family the captain left unbound on this fleet and return 0;
+  # otherwise print nothing and return 1.
+  local harness=${1:-} family
+  family=$(fm_quota_leave_refused_family "$harness") || return 1
+  printf '%s' 'deliberately unbound on this fleet (Captain ruling 2026-10-21, quota-provider-binding=leave-refused): no provider account binding exists for this harness, so quota-axi cannot measure its spend surface, and an unmeasurable spend surface is not a verified-eligible surface'
+  return 0
+}
+
+# fm_quota_leave_refused_launch_token <launch-command>
+# Print the first token of <launch-command> that names a leave-refused harness
+# family, or print nothing and return 1 when it names none.
+#
+# The harness name fm-spawn derives from a raw launch command is the FIRST
+# word of that command, so a refused harness hidden behind another word
+# ("env opencode ...", "sh -c 'grok ...'") reached the gate under a name the
+# gate did not recognise. The gate therefore reads the WHOLE command. An
+# environment assignment (NAME=value) is not a binary and is skipped.
+fm_quota_leave_refused_launch_token() {
+  local command=${1:-} word family
+  [ -n "$command" ] || return 1
+  for word in $command; do
+    case "$word" in
+      *=*) continue ;;
+    esac
+    family=$(fm_quota_leave_refused_family "$word") || continue
+    fm_quota_normalize_harness_name "$word"
+    return 0
   done
   return 1
 }
@@ -53,7 +129,7 @@ leave_refused_reason() {
 die() { printf 'error: %s\n' "$1" >&2; exit "${2:-4}"; }
 
 usage() {
-  sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^set -u$/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -105,11 +181,14 @@ PY
 }
 
 cmd_check() {
-  local harness="" model="" min_percent="${FM_QUOTA_MIN_PERCENT:-10}" min_runway="${FM_QUOTA_MIN_RUNWAY_SEC:-3600}"
+  local harness="" model="" launch_command="" binding_only=0
+  local min_percent="${FM_QUOTA_MIN_PERCENT:-10}" min_runway="${FM_QUOTA_MIN_RUNWAY_SEC:-3600}"
   while [ $# -gt 0 ]; do
     case "$1" in
       --harness) harness=${2:-}; shift 2 ;;
       --model) model=${2:-}; shift 2 ;;
+      --launch-command) launch_command=${2:-}; shift 2 ;;
+      --binding-only) binding_only=1; shift ;;
       --min-percent) min_percent=${2:-}; shift 2 ;;
       --min-runway-sec) min_runway=${2:-}; shift 2 ;;
       *) usage ;;
@@ -120,9 +199,26 @@ cmd_check() {
   # Named refusal for the harnesses the captain left unbound. This runs
   # BEFORE provider_for(), so it cannot be side-stepped by naming a model
   # that maps to a bound provider (e.g. --harness opencode --model gpt-6-*).
+  # The match is on the harness FAMILY, so an alias of a refused family
+  # (e.g. --harness opencode-go) is refused the same way.
   local refusal
   if refusal=$(leave_refused_reason "$harness"); then
     die "quota gate: REFUSE harness=$harness - $refusal" 4
+  fi
+
+  # The WHOLE launch command is read too, not only the harness name derived
+  # from it: a raw launch can hide a refused harness behind another word.
+  local launch_token launch_refusal
+  if launch_token=$(fm_quota_leave_refused_launch_token "$launch_command"); then
+    launch_refusal=$(leave_refused_reason "$launch_token")
+    die "quota gate: REFUSE launch command names refused harness '$launch_token' - $launch_refusal" 4
+  fi
+
+  # Binding-only dispatch paths (a --secondmate launch) carry no quota
+  # measurement, but the leave-refused refusal above is unconditional.
+  if [ "$binding_only" -eq 1 ]; then
+    printf 'quota-gate: BINDING-OK harness=%s\n' "$harness"
+    exit 0
   fi
 
   local provider

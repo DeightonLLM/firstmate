@@ -64,13 +64,16 @@ mk() { # mk <provider> <state> <semantics> <scope> <eff> <runway_status> <secs>
 # A healthy payload for every provider the gate CAN bind, so that any refusal
 # observed for the four unbound harnesses can only come from the named
 # refusal path and not from an exhausted or stale provider.
-payload '{"providers":[
+healthy_payload() {
+  payload '{"providers":[
 {"provider":"minimax","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"model:general","status":"known","effectivePercentRemaining":90,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]},
 {"provider":"agy","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"gemini","status":"known","effectivePercentRemaining":90,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]},
 {"provider":"codex","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":90,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]},
 {"provider":"zai","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":90,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]}
 ]}'
-stub
+  stub
+}
+healthy_payload
 
 # ---------------------------------------------------------------------------
 # 1. Each of the four unbound harnesses is refused BY NAME with exit 4 and a
@@ -201,6 +204,151 @@ OUT=$(FM_QUOTA_AXI_BIN=/nonexistent/quota-axi "$GATE" check --harness claude --m
 [ "$RC" -eq 4 ] && echo "$OUT" | grep -q "REFUSE harness=claude" \
   && pass "unbound harness refused by name even without quota-axi (rc=$RC)" \
   || fail "unbound harness must be refused by name without quota-axi (rc=$RC out=$OUT)"
+
+# ---------------------------------------------------------------------------
+# 7. FAMILY ALIASES. The refusal is a property of the harness FAMILY, not of
+#    one spelling of it. This fleet spells the opencode harness "opencode"
+#    but its own quota provider - the identifier its quota board, its
+#    quota-axi output and its dispatch config use - is "opencode-go". Before
+#    the fix, "--harness opencode-go --model gpt-6-luna" resolved to
+#    provider=codex and PASSED, so the dispatch spent an unmeasured surface.
+# ---------------------------------------------------------------------------
+healthy_payload
+for alias in opencode-go opencode-zen claude-code grok-build kimi-code; do
+  for m in "" gpt-6-luna minimax/MiniMax-M3.1-Flash; do
+    run_gate "$alias" "$m"
+    if [ "$RC" -eq 4 ] && echo "$OUT" | grep -q "REFUSE harness=$alias" \
+       && echo "$OUT" | grep -q "$REFUSE_MARKER" \
+       && echo "$OUT" | grep -q "$REFUSE_MARKER2"; then
+      pass "alias $alias --model $m is refused by family (rc=$RC)"
+    else
+      fail "alias $alias --model $m must be refused by family (rc=$RC out=$OUT)"
+    fi
+  done
+done
+
+# the family match must never refuse a DIFFERENT harness that merely shares a
+# prefix with a refused family.
+run_gate opencoder gpt-6-luna
+if [ "$RC" -eq 0 ] && echo "$OUT" | grep -q "PASS provider=codex"; then
+  pass "a harness that only shares a prefix with a refused family is not refused (rc=$RC)"
+else
+  fail "a harness that only shares a prefix with a refused family must not be refused (rc=$RC out=$OUT)"
+fi
+
+# ---------------------------------------------------------------------------
+# 8. THE RAW-LAUNCH HATCH. bin/fm-spawn.sh derives the harness name from the
+#    FIRST word of a raw launch command, so a refused harness hidden behind
+#    another word ("env opencode ...", "sh -c 'grok ...'") reached the gate
+#    under a name the gate did not recognise, was measured against a bound
+#    provider's quota, and passed. The gate reads the WHOLE command.
+# ---------------------------------------------------------------------------
+run_launch() { # run_launch <harness> <model> <launch-command>
+  OUT=$(FM_QUOTA_AXI_BIN="$STUB_BIN" "$GATE" check --harness "$1" --model "$2" --launch-command "$3" 2>&1); RC=$?
+}
+for cmd in "env opencode --prompt hi" "sh -c 'grok --always-approve'" \
+           "opencode-go --model gpt-6-luna" "FOO=1 claude --dangerously-skip-permissions"; do
+  run_launch env gpt-6-luna "$cmd"
+  if [ "$RC" -eq 4 ] && echo "$OUT" | grep -q "REFUSE launch command" \
+     && echo "$OUT" | grep -q "$REFUSE_MARKER"; then
+    pass "launch command naming a refused family is refused (rc=$RC)"
+  else
+    fail "launch command naming a refused family must be refused (rc=$RC out=$OUT)"
+  fi
+done
+
+run_launch codex gpt-6-luna "codex --model gpt-6-luna"
+[ "$RC" -eq 0 ] && echo "$OUT" | grep -q "PASS provider=codex" \
+  && pass "a launch command naming a bound family still passes (rc=$RC)" \
+  || fail "a launch command naming a bound family must still pass (rc=$RC out=$OUT)"
+
+# ---------------------------------------------------------------------------
+# 9. BINDING-ONLY. A dispatch path that carries no quota measurement (a
+#    --secondmate launch) still routes through the leave-refused refusal.
+# ---------------------------------------------------------------------------
+OUT=$(FM_QUOTA_AXI_BIN="$STUB_BIN" "$GATE" check --harness opencode-go --model "" --binding-only 2>&1); RC=$?
+[ "$RC" -eq 4 ] && echo "$OUT" | grep -q "REFUSE harness=opencode-go" \
+  && pass "binding-only still refuses a refused family (rc=$RC)" \
+  || fail "binding-only must refuse a refused family (rc=$RC out=$OUT)"
+
+OUT=$(FM_QUOTA_AXI_BIN=/nonexistent/quota-axi "$GATE" check --harness codex --model "" --binding-only 2>&1); RC=$?
+[ "$RC" -eq 0 ] \
+  && pass "binding-only passes a bound family without measuring (rc=$RC)" \
+  || fail "binding-only must pass a bound family without measuring (rc=$RC out=$OUT)"
+
+# ---------------------------------------------------------------------------
+# 10. REGRESSION: the generic "no provider mapping" refusal still fires for a
+#     harness that is not refused by name.
+# ---------------------------------------------------------------------------
+run_gate omp ""
+[ "$RC" -eq 4 ] && echo "$OUT" | grep -q "no provider mapping" \
+  && pass "an unmapped harness still refuses with the generic reason (rc=$RC)" \
+  || fail "an unmapped harness must still refuse with the generic reason (rc=$RC out=$OUT)"
+
+# ---------------------------------------------------------------------------
+# 11. THE DISPATCH ENTRY POINT. bin/fm-spawn.sh is the script that starts a
+#     harness, so the refusal has to hold there: on every spawn kind, and
+#     through the raw-launch hatch. These cases drive the real spawn script
+#     and assert that it refuses with exit 4 and leaves no task record
+#     behind. They use the tree's OWN gate (the spawn resolves it from its
+#     own code root), so pointing this suite at another gate copy proves the
+#     gate cases above, not these.
+# ---------------------------------------------------------------------------
+SPAWN="$REPO_ROOT/bin/fm-spawn.sh"
+# A lane key the naming owner accepts, so the refusal cases are not masked
+# by a lane-naming violation that a different rule owns.
+PROBE_ID="mcode-m3.1f-hetz-qg-probe"
+spawn_probe() { # spawn_probe <secondmate?> <spawn-args...> ; sets OUT, RC, PROBE_HOME
+  local secondmate=$1; shift
+  PROBE_HOME=$(mktemp -d "$TMP/spawn-home.XXXXXX")
+  mkdir -p "$PROBE_HOME/data/$PROBE_ID" \
+           "$PROBE_HOME/state" "$PROBE_HOME/projects" "$PROBE_HOME/config" \
+           "$PROBE_HOME/project"
+  printf 'brief\n' > "$PROBE_HOME/data/$PROBE_ID/brief.md"
+  ( cd "$PROBE_HOME/project" && git init -q . && \
+    git -c user.name=qg -c user.email=qg@example.invalid commit -q --allow-empty -m init ) >/dev/null 2>&1
+  # A --secondmate launch stands up its own home, and that home may not live
+  # inside the active firstmate home, so it gets its own seeded directory.
+  PROBE_TARGET="$PROBE_HOME/project"
+  if [ "$secondmate" = secondmate ]; then
+    PROBE_TARGET=$(mktemp -d "$TMP/spawn-secondmate.XXXXXX")
+    mkdir -p "$PROBE_TARGET/bin" "$PROBE_TARGET/data"
+    printf '# Firstmate\n' > "$PROBE_TARGET/AGENTS.md"
+    printf '%s\n' "$PROBE_ID" > "$PROBE_TARGET/.fm-secondmate-home"
+    printf 'charter\n' > "$PROBE_TARGET/data/charter.md"
+  fi
+  OUT=$(HOME="$PROBE_HOME" FM_HOME="$PROBE_HOME" FM_ROOT_OVERRIDE="$REPO_ROOT" \
+    FM_STATE_OVERRIDE="$PROBE_HOME/state" FM_DATA_OVERRIDE="$PROBE_HOME/data" \
+    FM_PROJECTS_OVERRIDE="$PROBE_HOME/projects" FM_CONFIG_OVERRIDE="$PROBE_HOME/config" \
+    FM_SPAWN_NO_GUARD=1 TMUX=fake,1,0 \
+    timeout 60 bash "$SPAWN" "$PROBE_ID" "$PROBE_TARGET" "$@" 2>&1); RC=$?
+}
+spawn_refused() { # spawn_refused <label> <secondmate?> <spawn-args...>
+  local label=$1 kind=$2; shift 2
+  spawn_probe "$kind" "$@"
+  if [ "$RC" -eq 4 ] && echo "$OUT" | grep -q "quota gate: REFUSE" \
+     && echo "$OUT" | grep -q "$REFUSE_MARKER"; then
+    pass "spawn refuses $label with exit 4 and the captain's reason (rc=$RC)"
+  else
+    fail "spawn must refuse $label with exit 4 + reason (rc=$RC out=$OUT)"
+  fi
+  if [ -f "$PROBE_HOME/state/$PROBE_ID.meta" ]; then
+    fail "spawn refused $label but still wrote a task record"
+  else
+    pass "spawn refused $label and wrote no task record"
+  fi
+}
+
+spawn_refused "a raw launch that hides opencode behind another word" crewmate \
+  --harness "env opencode --prompt hi" --model gpt-6-luna
+spawn_refused "a raw launch that hides grok behind another word" crewmate \
+  --harness "sh -c 'grok --always-approve'" --model gpt-6-luna
+spawn_refused "a raw launch on the opencode-go alias" crewmate \
+  --harness "opencode-go --model gpt-6-luna"
+spawn_refused "a secondmate launch on a refused family" secondmate \
+  --harness claude --secondmate
+spawn_refused "a secondmate launch on the opencode family" secondmate \
+  --harness opencode --secondmate
 
 echo
 echo "passed=$PASS_COUNT failed=$FAIL_COUNT"

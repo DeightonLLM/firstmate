@@ -546,7 +546,7 @@ spawn_secondmate() {
   [ -n "$harness" ] && spawn_args+=("$harness")
   [ -n "$model" ] && spawn_args+=(--model "$model")
   spawn_args+=(--secondmate)
-  PATH="$fakebin:$BASE_PATH" TMUX='' CLAUDECODE=1 \
+  PATH="$fakebin:$BASE_PATH" TMUX='' ANTIGRAVITY_AGENT=1 \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$world/home" \
     FM_STATE_OVERRIDE="$world/home/state" FM_DATA_OVERRIDE="$world/home/data" \
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
@@ -616,7 +616,7 @@ test_spawn_backward_compat_crew_fallback() {
 }
 
 # Bare backward-compat: no config at all. The secondmate falls through to its own
-# harness (claude here), and with no inheritable file the home is left untouched -
+# harness (agy here), and with no inheritable file the home is left untouched -
 # no config/ side effects.
 test_spawn_bare_backward_compat() {
   local w sm meta
@@ -627,8 +627,8 @@ test_spawn_bare_backward_compat() {
   spawn_secondmate "$w" sm "$sm"
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_harness "$meta")" = claude ] \
-    || fail "bare: secondmate launched on '$(meta_harness "$meta")', expected own harness claude"
+  [ "$(meta_harness "$meta")" = agy ] \
+    || fail "bare: secondmate launched on '$(meta_harness "$meta")', expected own harness agy"
   [ -e "$sm/config/crew-dispatch.json" ] && fail "bare: an unset primary still created a home crew-dispatch.json"
   [ -e "$sm/config/crew-harness" ] && fail "bare: an unset primary still created a home crew-harness"
   pass "B4 spawn: no config at all -> own harness and no propagation side effects"
@@ -643,11 +643,11 @@ test_spawn_explicit_harness_wins() {
   printf 'codex\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate "$w" sm "$sm" claude
+  spawn_secondmate "$w" sm "$sm" agy
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_harness "$meta")" = claude ] \
-    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit claude over config codex"
+  [ "$(meta_harness "$meta")" = agy ] \
+    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit agy over config codex"
   pass "B5 spawn: an explicit per-spawn harness arg overrides config/secondmate-harness"
 }
 
@@ -705,7 +705,7 @@ spawn_secondmate_capture() {
   mkdir -p "$world/home/state" "$world/home/data"
   fakebin=$(make_launch_capturing_tmux "$world/tmux-$id")
   : > "$launchlog"
-  PATH="$fakebin:$BASE_PATH" TMUX='' CLAUDECODE=1 \
+  PATH="$fakebin:$BASE_PATH" TMUX='' ANTIGRAVITY_AGENT=1 \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$world/home" \
     FM_STATE_OVERRIDE="$world/home/state" FM_DATA_OVERRIDE="$world/home/data" \
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
@@ -766,7 +766,7 @@ test_spawn_bare_harness_no_model_effort_flag() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude\n' > "$w/home/config/secondmate-harness"
+  printf 'agy\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   out=$(spawn_secondmate_capture "$w" sm "$sm" "$launchlog" 2>&1); status=$?
@@ -789,17 +789,17 @@ test_spawn_secondmate_harness_model_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = claude ] || fail "model-token: meta harness not claude"
+  [ "$(meta_field "$meta" harness)" = agy ] || fail "model-token: meta harness not agy"
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-token: meta model not opus (got '$(meta_field "$meta" model)')"
   [ "$(meta_field "$meta" effort)" = default ] || fail "model-token: meta effort not default (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions --model 'opus'" \
+  assert_contains "$launch" "agy --model 'opus'" \
     "model-token: launch did not carry --model opus"
   assert_not_contains "$launch" "--effort" "model-token: launch must not carry an --effort flag"
   pass "C3 spawn: config/secondmate-harness's model token threads --model into the launch and meta"
@@ -812,7 +812,7 @@ test_spawn_secondmate_harness_model_and_effort_tokens() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" >/dev/null 2>&1
@@ -821,7 +821,7 @@ test_spawn_secondmate_harness_model_and_effort_tokens() {
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-effort-tokens: meta model not opus"
   [ "$(meta_field "$meta" effort)" = high ] || fail "model-effort-tokens: meta effort not high (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions --model 'opus' --effort 'high'" \
+  assert_contains "$launch" "agy --model 'opus' --effort 'high'" \
     "model-effort-tokens: launch did not carry both --model opus and --effort high"
   pass "C4 spawn: config/secondmate-harness's model+effort tokens thread into the launch and meta"
 }
@@ -833,7 +833,7 @@ test_spawn_explicit_model_overrides_secondmate_harness_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --model sonnet >/dev/null 2>&1
@@ -855,7 +855,7 @@ test_spawn_explicit_effort_overrides_secondmate_harness_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --effort low >/dev/null 2>&1
@@ -876,25 +876,32 @@ test_spawn_explicit_harness_does_not_inherit_secondmate_harness_tokens() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  # The explicit harness is claude, not codex: a codex spawn with no concrete
+  # The explicit harness is agy, not codex: a codex spawn with no concrete
   # model is refused by the dispatch guard (codex defaults to the banned
   # gpt-6.1-sol, captain ruling 2026-10-11, no bypass), and an explicit
   # --harness deliberately leaves the file's model token behind - so codex
   # could not reach a launch here at all. The case still proves the same rule,
-  # and more sharply: the file names claude WITH model and effort tokens, and
+  # and more sharply: the file names agy WITH model and effort tokens, and
   # an explicitly named harness must start with clean defaults anyway.
-  spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness claude >/dev/null 2>&1
+  #
+  # agy is a DISPATCHABLE adapter here: the claude, grok, kimi and opencode
+  # harness families are leave-refused on this fleet (captain ruling
+  # 2026-10-21, quota-provider-binding=leave-refused), so a secondmate
+  # launch on one of them is refused in code before it can spend an
+  # unmeasured surface. These cases test the config plumbing, not the
+  # admission, so they run on an adapter the fleet may actually dispatch.
+  spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness agy >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = claude ] || fail "explicit-harness-no-tokens: meta harness not claude"
+  [ "$(meta_field "$meta" harness)" = agy ] || fail "explicit-harness-no-tokens: meta harness not agy"
   [ "$(meta_field "$meta" model)" = default ] || fail "explicit-harness-no-tokens: meta model should stay default"
   [ "$(meta_field "$meta" effort)" = default ] || fail "explicit-harness-no-tokens: meta effort should stay default"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions" \
-    "explicit-harness-no-tokens: launch did not use claude"
+  assert_contains "$launch" "agy --dangerously-skip-permissions --prompt-interactive" \
+    "explicit-harness-no-tokens: launch did not use agy"
   assert_not_contains "$launch" "--model" "explicit-harness-no-tokens: launch must not carry a --model flag"
   assert_not_contains "$launch" "opus" \
     "explicit-harness-no-tokens: launch must not carry the file's model token"
@@ -909,7 +916,7 @@ test_spawn_explicit_harness_uses_explicit_profile_axes() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness codex --model gpt-5.5 --effort xhigh >/dev/null 2>&1
@@ -944,7 +951,7 @@ test_spawn_fallback_chain_and_crew_scout_unaffected() {
   # token, and a codex spawn with no concrete model is refused outright by the
   # dispatch guard (codex defaults to the banned gpt-6.1-sol, captain ruling
   # 2026-10-11, no bypass). minimax-code is still a different harness from the
-  # own harness (claude under CLAUDECODE=1), so the assertion still proves the
+  # own harness (agy under ANTIGRAVITY_AGENT=1), so the assertion still proves the
   # crew-harness file was consulted rather than the own-harness fallback.
   printf 'minimax-code\n' > "$w/home/config/crew-harness"
   make_seeded_home "$sm" sm
