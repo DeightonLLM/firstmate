@@ -321,17 +321,29 @@ fm_lock_scratch_shape_ok() {
 # fm_lock_pointer_basename_matches <name>
 # 0 when <name> is a lock pointer or reclaim pointer name at any steal depth.
 #
-# The name is <lock-basename> + zero or more ".steal" infixes, and
-# <lock-basename> always ends in ".lock". A glob cannot express the
-# repetition, so the infixes are peeled off one at a time.
+# The name is <lock-basename> + zero or more ".steal" infixes. A
+# <lock-basename> is EITHER a root lock ("<prefix>.lock") OR a DERIVED mutex
+# of a root lock ("<prefix>.lock.<suffix>", e.g. ".lock.acquire"). The derived
+# form is what the fleet actually uses for the session lock's claim mutex, so
+# a matcher that knows only the root form cannot see the claim mutex at all.
+# A glob cannot express the repetition, so the infixes are peeled off one at a
+# time.
 fm_lock_pointer_basename_matches() {
-  local name=$1 rest
+  local name=$1 rest seg
   [ -n "$name" ] || return 1
   rest=$name
   while :; do
     case "$rest" in
       *.lock) return 0 ;;
       *.steal) rest=${rest%.steal} ;;
+      *.lock.*)
+        # A derived mutex of a lock: "<lock-basename>.<suffix>". The suffix is
+        # exactly ONE segment, so a second dot is not a mutex name.
+        seg=${rest##*.lock.}
+        [ -n "$seg" ] || return 1
+        case "$seg" in *.*) return 1 ;; esac
+        return 0
+        ;;
       *) return 1 ;;
     esac
   done
@@ -341,10 +353,13 @@ fm_lock_pointer_basename_matches() {
 # 0 when <name> is a lock owner dir name at any steal depth.
 #
 # The name is <lock-basename> + zero or more ".steal" infixes + ".owner." +
-# six characters, and <lock-basename> always ends in ".lock". A glob cannot
+# six characters. A <lock-basename> is EITHER a root lock ("<prefix>.lock")
+# OR a derived mutex of a root lock ("<prefix>.lock.<suffix>", e.g.
+# ".lock.acquire"), because the session lock's claim mutex is named
+# ".lock.acquire" and its owner dirs are named after it. A glob cannot
 # express the repetition, so the infixes are peeled off one at a time.
 fm_lock_owner_dir_basename_matches() {
-  local name=$1 rest
+  local name=$1 rest seg
   [ -n "$name" ] || return 1
   [ "${#name}" -ge 18 ] || return 1
   case "${name:$((${#name} - 13))}" in
@@ -356,6 +371,14 @@ fm_lock_owner_dir_basename_matches() {
     case "$rest" in
       *.lock) return 0 ;;
       *.steal) rest=${rest%.steal} ;;
+      *.lock.*)
+        # A derived mutex of a lock: "<lock-basename>.<suffix>". The suffix is
+        # exactly ONE segment, so a second dot is not a mutex name.
+        seg=${rest##*.lock.}
+        [ -n "$seg" ] || return 1
+        case "$seg" in *.*) return 1 ;; esac
+        return 0
+        ;;
       *) return 1 ;;
     esac
   done
