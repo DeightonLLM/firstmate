@@ -487,11 +487,24 @@ launch_template() {
     # var is the correct control. The dim-aware composer reader in fm-tmux-lib.sh is
     # the defense-in-depth backstop for any pane this flag cannot reach.
     claude) printf '%s' 'CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions __MODELFLAG____EFFORTFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    # codex: --dangerously-bypass-hook-trust is required for an UNATTENDED codex
+    # lane. MEASURED 2026-10-23 on Hetz: with the fleet's own hooks installed
+    # (~/.codex/hooks.json changed at 02:49), the Codex TUI opens on a
+    # "Hooks need review" modal - "7 hooks are new or changed" - and the lane
+    # sits there forever with ZERO cpu time and no model call. Six lanes were
+    # launched, all six idled at that dialog for 35 minutes, and the fleet
+    # could not see it because a live process looks like a working lane. The
+    # CLI's own flag exists for exactly this case ("Run enabled hooks without
+    # requiring persisted hook trust for this invocation... for automation that
+    # already vets hook sources"), and the hooks here are the fleet's own
+    # (hooks.json plus its byte-identical .bak). Proven on the same host: with
+    # the flag the same TUI launch submits its prompt and answers ("Worked for
+    # 3s"); without it the modal never clears.
     codex)
       if [ "$kind" = secondmate ]; then
-        printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+        printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       else
-        printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox -c "notify=[\"bash\",\"-c\",\"touch __TURNEND__\"]" "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+        printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust -c "notify=[\"bash\",\"-c\",\"touch __TURNEND__\"]" "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       fi
       ;;
     opencode) printf '%s' 'OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"allow"}}'\'' opencode __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
@@ -733,7 +746,25 @@ model_flag_for_harness() {
   local harness=$1 model=$2
   [ -n "$model" ] && [ "$model" != default ] || return 0
   case "$harness" in
-    claude|codex|opencode|pi|pi-signed|grok|kimi|agy|minimax-code)
+    codex)
+      # The Codex CLI hands --model straight to the service, and the service
+      # refuses a provider-qualified id. MEASURED 2026-10-23 on Hetz:
+      # `codex exec --model openai-codex/gpt-6-luna` answers
+      #   400 invalid_request_error: The 'openai-codex/gpt-6-luna' model is not
+      #   supported when using Codex with a ChatGPT account
+      # while the SAME command with the bare id answers correctly.
+      # The fleet's canonical id for this model IS provider-qualified (the
+      # naming owner's alias table maps openai-codex/gpt-6-luna -> luna6), so
+      # the recorded meta, the minted lane key, the provider attribution and
+      # the board all keep the canonical id, and ONLY the CLI argument is
+      # reduced to the bare model name. The pi harness is deliberately NOT
+      # changed: pi takes provider/id and answers the qualified form correctly
+      # (measured on the same host, the same day).
+      local cli_model=$model
+      case "$cli_model" in */*) cli_model=${cli_model##*/} ;; esac
+      printf -- '--model %s ' "$(shell_quote "$cli_model")"
+      ;;
+    claude|opencode|pi|pi-signed|grok|kimi|agy|minimax-code)
       printf -- '--model %s ' "$(shell_quote "$model")"
       ;;
   esac
@@ -1592,7 +1623,23 @@ if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   # pane that is already settled by the first real read only costs the one existing
   # inter-poll sleep as confirmation, not a whole extra cycle on top.
   candidate=""
-  for _ in $(seq 1 60); do
+  # The settle window is a TUNABLE now. MEASURED 2026-10-23 on Hetz with the
+  # fleet at full width (six codex/Luna lanes plus ten MiniMax workers and
+  # their pool worktrees): `treehouse get` took longer than 60 s to move the
+  # pane into its worktree, the wait expired, fm-spawn reported the spawn as
+  # failed - and the worktree and the worker were created anyway. A recorded
+  # failure with a live worker behind it is the worst of both: the lane slot
+  # keeps its old task, the daemon retries the same row, and the same work can
+  # be done twice. The default stays 60 s (unchanged behaviour for every other
+  # host); a busy host raises it explicitly.
+  # NOTE: this block is top-level script scope, not a function body, so `local`
+  # is invalid here and bash aborts the whole spawn with
+  # "local: can only be used in a function". MEASURED 2026-10-23 on Hetz: that
+  # one token broke EVERY spawn, including the always-four lane stream, whose
+  # rc=1 failures were read as a treehouse capacity problem rather than a
+  # syntax error. Plain assignment is the correct form at this scope.
+  settle_secs="${FM_TREEHOUSE_SETTLE_SECS:-60}"
+  for _ in $(seq 1 "$settle_secs"); do
     p=$(spawn_current_path "$WT_TARGET" || true)
     if [ -n "$p" ]; then
       p_real=$(real_path_or_raw "$p")
@@ -1611,7 +1658,7 @@ if [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
     sleep 1
   done
   if [ -z "$WT" ]; then
-    echo "error: treehouse get did not enter a worktree within 60s; inspect window $T" >&2
+    echo "error: treehouse get did not enter a worktree within ${settle_secs}s; inspect window $T" >&2
     exit 1
   fi
 
@@ -2268,6 +2315,77 @@ if [ "$KIND" = secondmate ]; then
   fi
 fi
 
+# fm_spawn_harness_process_alive: <backend> <target>
+#
+# The MCode harness has no Herdr agent adapter: `herdr integration` ships no
+# mcode entry, so an MCode pane carries no agent label and never appears in
+# `herdr agent list`. The backend's agent registry therefore reports a running
+# MCode lane as "dead" - there is no registry entry to find - and every MCode
+# spawn failed its own liveness verification while its worker was running.
+#
+# MEASURED 2026-10-23 on Hetz: 15 live MCode panes, every one with a live
+# `minimax-code` foreground process, and exactly ONE of them (w78:p2, started
+# outside the spawn path) registered with Herdr. The other 14 carried
+# `agent_status: unknown`, and `herdr agent get <pane>` answered
+# `agent_not_found` while their worker was alive and running.
+#
+# The registry is not the only truth about whether a lane is alive. A pane that
+# is still running the HARNESS'S OWN foreground process IS alive: that process
+# is the lane. So when the registry has no entry for the pane, fall back to a
+# pane-scoped process-presence read:
+#   * the pane must still exist (a missing pane stays missing), and
+#   * the pane's foreground process must be the harness process itself and not
+#     the pane's shell.
+# A pane whose worker exited puts its shell back in the foreground, so the
+# fallback reports dead and the spawn still fails.
+#
+# This is a process-presence read and nothing else. It adds no CPU-time,
+# sleep-state or mtime heuristic, so it stays consistent with the repository's
+# busy contract (bin/fm-busy-lib.sh: "Endpoint death is the only process-level
+# override").
+#
+# Only the minimax-code harness takes this fallback. Every other harness, and
+# every other backend, keeps the registry verdict untouched.
+fm_spawn_harness_process_alive() {  # <backend> <target>
+  local backend=$1 target=$2 session pane out
+  [ "$backend" = herdr ] || return 1
+  [ "$HARNESS" = minimax-code ] || return 1
+  command -v herdr >/dev/null 2>&1 || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+  # The target shape is "<session>:<pane>", the same split that
+  # bin/backends/herdr.sh's fm_backend_herdr_parse_target owns.
+  session=${target%%:*}
+  pane=${target#*:}
+  [ "$pane" != "$target" ] || session=""
+  [ -n "$pane" ] || return 1
+  if [ -n "$session" ]; then
+    out=$(HERDR_SESSION="$session" herdr pane process-info --pane "$pane" --session "$session" 2>/dev/null) || return 1
+  else
+    out=$(herdr pane process-info --pane "$pane" 2>/dev/null) || return 1
+  fi
+  printf '%s' "$out" | jq -e '
+    [ (.result.process_info.foreground_processes // [])[]
+      | select((.name // "") == "minimax-code"
+               or (((.argv // []) | index("minimax-code")) != null))
+    ] | length > 0
+  ' >/dev/null 2>&1
+}
+
+# fm_spawn_verify_agent_state: <backend> <target>
+#
+# The spawn verification's single state read: the backend's agent state, with
+# the MCode process-presence fallback applied ONLY where the registry has no
+# entry for a pane whose worker is demonstrably running. Any other harness and
+# any other backend return the backend's verdict unchanged.
+fm_spawn_verify_agent_state() {  # <backend> <target>
+  local backend=$1 target=$2 state
+  state=$(fm_backend_agent_state "$backend" "$target")
+  if [ "$state" = dead ] && fm_spawn_harness_process_alive "$backend" "$target"; then
+    state=alive
+  fi
+  printf '%s' "$state"
+}
+
 # Agent liveness verification (honest spawn verification).
 # Assert the agent process is genuinely running in the pane it was given before
 # reporting success. A pane sitting at a bare shell prompt (observed state: dead)
@@ -2281,11 +2399,11 @@ deadline=$(( $(date +%s) + SPAWN_VERIFY_TIMEOUT + 1 ))
 agent_state="unknown"
 
 while :; do
-  agent_state=$(fm_backend_agent_state "$BACKEND" "$T")
+  agent_state=$(fm_spawn_verify_agent_state "$BACKEND" "$T")
   if [ "$agent_state" = alive ]; then
     # Settle verification: confirm the agent survived launch and did not exit immediately
     sleep 0.5
-    agent_state=$(fm_backend_agent_state "$BACKEND" "$T")
+    agent_state=$(fm_spawn_verify_agent_state "$BACKEND" "$T")
     if [ "$agent_state" = alive ]; then
       break
     fi

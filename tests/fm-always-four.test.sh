@@ -12,6 +12,9 @@
 #   - M3 lane protection: can_replace_lane blocks protected M3 lanes
 #   - event emission: emit_coordinator_wake, emit_review_event
 #   - G-3 fix: pane count vs meta-file count in cmd_cycle capacity check
+#   - lane accounting: fm-backend.sh sourced at top level, configuration-derived
+#     worker-model filter, distinct endpoint_task_id counting, controller-meta
+#     exclusion, and the task-status-log liveness rule
 
 set -u
 
@@ -96,10 +99,10 @@ test_scheduler_dispatch_requires_explicit_non_pi_harness() {
   # Scheduler dispatch must require an explicit concrete adapter.  First Mate
   # is the coordinator role, not a harness, and Pi/AGY must never be selected
   # implicitly for these lanes.
-  assert_contains "$(sed -n '/local spawn_args=(\"\$task_id\"/,/\$SCRIPT_DIR\/fm-spawn.sh/p' "$ALWAYS_FOUR")" \
+  assert_contains "$(sed -n '/local spawn_args=(\"\$task_id\"/,/\$SCRIPT_DIR\/fm-spawn.sh/p;/local spawn_args=(\"\$lane_key\" \"\$project\" --harness \"\$SCHEDULER_HARNESS\")/,/\$SCRIPT_DIR\/fm-spawn.sh/p' "$ALWAYS_FOUR")" \
     '--harness "$SCHEDULER_HARNESS"' \
     "initial scheduler spawn must pass the guarded scheduler harness"
-  assert_contains "$(sed -n '/local spawn_args=(\"\$eligible\"/,/\$SCRIPT_DIR\/fm-spawn.sh/p' "$ALWAYS_FOUR")" \
+  assert_contains "$(sed -n '/local spawn_args=(\"\$eligible\"/,/\$SCRIPT_DIR\/fm-spawn.sh/p;/local spawn_args=(\"\$lane_key\" \"\$project\" --harness \"\$SCHEDULER_HARNESS\" --model/,/\$SCRIPT_DIR\/fm-spawn.sh/p' "$ALWAYS_FOUR")" \
     '--harness "$SCHEDULER_HARNESS"' \
     "replacement scheduler spawn must pass the guarded scheduler harness"
   assert_contains "$(sed -n '/SCHEDULER_HARNESS=/p' "$ALWAYS_FOUR")" \
@@ -823,8 +826,250 @@ test_pane_count_guarded_by_reap_stale() {
 }
 
 # =============================================================================
+# Lane-accounting census tests (D1-D5 regression guards)
+#
+# These tests use an ISOLATED home: a temp state dir plus a fakebin whose
+# `tmux` stub exits 0, so fm_backend_target_exists reports a synthetic endpoint
+# as present without touching a real pane.  The live state/ and data/ are never
+# read or written: every call runs with FM_STATE_OVERRIDE pointed at the temp
+# state dir and inside a command substitution (a subshell), so no override
+# leaks into the next test.
+# =============================================================================
+
+# fm_test_census_home <prefix>: build the isolated home.  Prints the state dir
+# and the fakebin dir on ONE space-separated line (a herestring feeds `read` a
+# single line, so the two paths must share it).
+fm_test_census_home() {
+  local prefix=${1:-always-four-census} root fakebin
+  root=$(fm_test_tmproot "$prefix")
+  mkdir -p "$root/state" "$root/data" "$root/projects/routable-project/.git"
+  fakebin=$(fm_fakebin "$root")
+  fm_fake_exit0 "$fakebin" tmux
+  printf '%s %s\n' "$root/state" "$fakebin"
+}
+
+# fm_test_write_worker_meta <state_dir> <meta-basename> <task-id> <model> [kind]
+# [verb]: write a synthetic worker meta plus the TASK status log it names.
+# The meta file is <meta-basename>.meta.
+# The status log's last line carries <verb>, so the terminal/non-terminal
+# distinction is exercised through the real status reader.
+fm_test_write_worker_meta() {
+  local state_dir=$1 name=$2 task_id=$3 model=$4 kind=${5:-} verb=${6:-working}
+  {
+    printf 'endpoint_task_id=%s\n' "$task_id"
+    printf 'window=default:fake-pane-1\n'
+    printf 'backend=tmux\n'
+    printf 'harness=minimax-code\n'
+    printf 'model=%s\n' "$model"
+    if [ -n "$kind" ]; then printf 'kind=%s\n' "$kind"; fi
+    true
+  } > "$state_dir/$name.meta"
+  printf '%s: synthetic task log\n' "$verb" > "$state_dir/$task_id.status"
+}
+
+test_scheduler_sources_fm_backend_library() {
+  # D1 regression guard: fm-backend.sh must be sourced at TOP LEVEL of the
+  # scheduler, so the backend/meta primitives are defined in the scheduler's
+  # own shell.  Sourcing it in a subshell left all of them missing, which
+  # killed the lane liveness gate and made every meta classify "unknown
+  # no-target".
+  local fn
+  for fn in fm_backend_of_meta fm_backend_target_of_meta fm_backend_target_exists \
+            fm_backend_capture fm_backend_busy_state fm_meta_get; do
+    declare -F "$fn" >/dev/null 2>&1 \
+      || fail "$fn must be defined after sourcing the scheduler (fm-backend.sh sourced at top level)"
+  done
+  command -v fm_backend_target_exists >/dev/null 2>&1 \
+    || fail "command -v fm_backend_target_exists must resolve after sourcing the scheduler"
+  pass "scheduler sources fm-backend.sh at top level (backend primitives are defined)"
+}
+
+test_count_active_worker_tasks_uses_configured_worker_model() {
+  # D3: the accepted model is derived from the scheduler's OWN configuration
+  # (WORKER_MODEL, resolved from FM_ALWAYS_FOUR_WORKER_MODEL), never from a
+  # hardcoded model list that goes stale when a model is retired.
+  local state_dir fakebin count
+
+  # The configured worker model is counted.
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-model)"
+  fm_test_write_worker_meta "$state_dir" "task-configured.meta" "task-configured" "$WORKER_MODEL"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "1" ] || fail "census should count the configured worker model once, got: $count"
+
+  # A meta with any other model is not counted.
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-other-model)"
+  fm_test_write_worker_meta "$state_dir" "task-other.meta" "task-other" "model-not-configured"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "0" ] || fail "census must not count a meta whose model is not configured, got: $count"
+
+  # The filter follows the configuration: the same meta is counted when the
+  # configuration names its model, and rejected when it does not.
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-config-derived)"
+  fm_test_write_worker_meta "$state_dir" "task-probe.meta" "task-probe" "configured-model-probe"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" \
+          WORKER_MODEL="configured-model-probe" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "1" ] || fail "census must follow the configured worker model, got: $count"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" \
+          WORKER_MODEL="a-different-configured-model" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "0" ] || fail "census must reject a model the configuration does not name, got: $count"
+
+  pass "count_active_worker_tasks accepts the configured worker model and rejects others"
+}
+
+test_count_active_worker_tasks_counts_distinct_endpoint_task_ids() {
+  # D4: each managed lane owns BOTH state/<lane-id>.meta and
+  # state/<endpoint_task_id>.meta carrying the SAME endpoint_task_id, so the
+  # census must count DISTINCT endpoint_task_id values only.
+  local state_dir fakebin count
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-duplicate)"
+  fm_test_write_worker_meta "$state_dir" "lane-009.meta" "task-duplicate" "$WORKER_MODEL"
+  fm_test_write_worker_meta "$state_dir" "task-duplicate.meta" "task-duplicate" "$WORKER_MODEL"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "1" ] || fail "one endpoint_task_id in two metas must be counted once, got: $count"
+  pass "count_active_worker_tasks counts distinct endpoint_task_ids only"
+}
+
+test_count_active_worker_tasks_excludes_controller_metas() {
+  # D4: controller metas carry the worker model but are not workers.  ship and
+  # scout kinds ARE workers and must stay in the census.
+  local state_dir fakebin count
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-controller)"
+  fm_test_write_worker_meta "$state_dir" "agents-console.meta" "task-secondmate" "$WORKER_MODEL" "secondmate"
+  fm_test_write_worker_meta "$state_dir" "system-ops.meta" "task-controller" "$WORKER_MODEL" "controller"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "0" ] || fail "controller metas must not be counted as workers, got: $count"
+
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-ship)"
+  fm_test_write_worker_meta "$state_dir" "task-ship.meta" "task-ship" "$WORKER_MODEL" "ship"
+  fm_test_write_worker_meta "$state_dir" "task-scout.meta" "task-scout" "$WORKER_MODEL" "scout"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "2" ] || fail "ship and scout kinds are real workers and must be counted, got: $count"
+  pass "count_active_worker_tasks excludes controller metas and keeps ship/scout workers"
+}
+
+test_count_active_worker_tasks_respects_task_status_verb() {
+  # D5: the liveness rule reads the TASK status log.  A task whose log ends in
+  # a terminal verb is not working; a task whose log ends in a non-terminal
+  # verb is.
+  local state_dir fakebin count
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-verb-done)"
+  fm_test_write_worker_meta "$state_dir" "task-done.meta" "task-done" "$WORKER_MODEL" "" "done"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "0" ] || fail "a task whose task log ends in done: must not be counted, got: $count"
+
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-verb-working)"
+  fm_test_write_worker_meta "$state_dir" "task-live.meta" "task-live" "$WORKER_MODEL" "" "working"
+  count=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "1" ] || fail "a task whose task log ends in working: must be counted, got: $count"
+
+  pass "count_active_worker_tasks counts only tasks whose task log ends in a non-terminal verb"
+}
+
+test_lane_is_active_reads_the_task_status_log() {
+  # D2: lane_is_active must read the TASK status log (state/<task-id>.status),
+  # not the slot log (state/<lane-id>.status, which holds this scheduler's own
+  # binding and wake events), and it must be able to report a lane ACTIVE.
+  local state_dir fakebin active
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-lane)"
+
+  # lane-007: its task log ends in done:, so the lane is settled.
+  fm_test_write_worker_meta "$state_dir" "lane-007" "task-lane-done" "$WORKER_MODEL" "" "done"
+  printf '2026-10-23T00:00:00Z: always-four[stall]: lane=lane-007 max attempts reached\n' \
+    > "$state_dir/lane-007.status"
+  active=0
+  ( PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" lane_is_active lane-007 ) && active=1
+  [ "$active" -eq 0 ] || fail "lane_is_active must not report a lane active when its TASK log ends in done:"
+
+  # lane-008: its task log ends in working:, so the lane IS working.
+  fm_test_write_worker_meta "$state_dir" "lane-008" "task-lane-live" "$WORKER_MODEL" "" "working"
+  active=0
+  ( PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" lane_is_active lane-008 ) && active=1
+  [ "$active" -eq 1 ] || fail "lane_is_active must report a lane active when its TASK log ends in working:"
+
+  pass "lane_is_active reads the task status log and can report a lane active"
+}
+
+# =============================================================================
 # Run all tests
 # =============================================================================
+
+test_next_eligible_task_skips_captain_call_rows() {
+  # D6: a Captain Call row is NOT lane work. The decision-hold lifecycle
+  # creates one backlog row per unresolved Captain decision, marked
+  # "(kind: captain)"; that row waits for the Captain answer. Dispatching it
+  # to a lane burns a lane on work the Captain must do.
+  local root fakebin chosen
+  root=$(fm_test_tmproot always-four-captain-skip)
+  mkdir -p "$root/state" "$root/data" "$root/projects/routable-project/.git"
+  fakebin=$(fm_fakebin "$root")
+  fm_fake_exit0 "$fakebin" tmux
+  cat > "$root/data/backlog.md" <<'BACKLOG'
+# Backlog
+
+## In flight
+
+## Queued
+- [ ] captain-decision-row - Decide something for the Captain (repo: routable-project) (kind: captain) (since 2026-10-23)
+- [ ] normal-work-row - Do ordinary lane work (repo: routable-project) (kind: scout)
+
+## Done
+BACKLOG
+  chosen=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$root/state" FM_DATA_OVERRIDE="$root/data" \
+          FM_LANE_PROJECT_BASE="$root/projects" next_eligible_task 2>/dev/null)
+  [ "$chosen" = "normal-work-row" ] \
+    || fail "next_eligible_task must skip a Captain Call row, got: '$chosen'"
+  pass "next_eligible_task skips Captain Call rows"
+}
+
+test_lane_key_for_task_never_doubles_the_prefix() {
+  # D7: the decision-hold lifecycle names its Captain rows after the lane that
+  # raised them ("<harness>-<model>-<host>-<task>-decision-<key>"). Minting
+  # such an id produced "<harness>-<model>-<host>-<harness>-<model>-<host>-...".
+  local key
+  key=$(FM_ALWAYS_FOUR_HARNESS=codex lane_key_for_task lane-001 "codex-luna6-brandon-luna-credentials-runbook-11-decision-host-targets" "openai-codex/gpt-6-luna" 2>/dev/null || true)
+  [ -n "$key" ] || fail "lane_key_for_task must mint a key for an already-prefixed planning id"
+  case "$key" in
+    codex-luna6-brandon-codex-luna6-brandon-*) fail "lane_key_for_task must not prefix an already lane-key-shaped id twice: $key" ;;
+  esac
+  [ "${#key}" -le 64 ] || fail "minted lane key must stay within the 64-character cap: $key"
+  # The task segment must still be recognisable, just not doubled. The task
+  # segment is longer than the 64-character cap allows, so the naming owner
+  # shortens it and appends a deterministic hash suffix; the readable part of
+  # the original segment must survive.
+  case "$key" in
+    *credentials-runbook-11-decision-*) : ;;
+    *) fail "minted lane key must keep the original task segment: $key" ;;
+  esac
+  pass "lane_key_for_task never prefixes an already lane-key-shaped id twice"
+}
+
+test_next_eligible_task_skips_unroutable_project_rows() {
+  # D8: a queued row naming a project that is not a git checkout can never be
+  # spawned. fm-spawn.sh fails with "could not resolve the shared Treehouse
+  # project lock", the lane burns its attempts, and the whole half starves on
+  # one unroutable row while routable rows sit queued.
+  local root fakebin chosen
+  root=$(fm_test_tmproot always-four-unroutable-skip)
+  mkdir -p "$root/state" "$root/data" "$root/projects/routable-project/.git"
+  fakebin=$(fm_fakebin "$root")
+  fm_fake_exit0 "$fakebin" tmux
+  cat > "$root/data/backlog.md" <<'BACKLOG'
+# Backlog
+
+## In flight
+
+## Queued
+- [ ] unroutable-work-row - Do work in a directory that is not a checkout (repo: not-a-checkout) (kind: ship)
+- [ ] routable-work-row - Do ordinary lane work (repo: routable-project) (kind: scout)
+
+## Done
+BACKLOG
+  chosen=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$root/state" FM_DATA_OVERRIDE="$root/data" \
+          FM_LANE_PROJECT_BASE="$root/projects" next_eligible_task 2>/dev/null)
+  [ "$chosen" = "routable-work-row" ] \
+    || fail "next_eligible_task must skip a row whose project is not a checkout, got: '$chosen'"
+  pass "next_eligible_task skips rows whose project is not a checkout"
+}
 
 for _t in \
   test_slot_model_worker_lanes \
@@ -857,7 +1102,16 @@ for _t in \
   test_emit_coordinator_wake_kind_types \
   test_emit_review_event_requires_pane_and_classification \
   test_cmd_cycle_uses_pane_count_not_meta_count \
-  test_pane_count_guarded_by_reap_stale; do
+  test_pane_count_guarded_by_reap_stale \
+  test_scheduler_sources_fm_backend_library \
+  test_count_active_worker_tasks_uses_configured_worker_model \
+  test_count_active_worker_tasks_counts_distinct_endpoint_task_ids \
+  test_count_active_worker_tasks_excludes_controller_metas \
+  test_count_active_worker_tasks_respects_task_status_verb \
+  test_lane_is_active_reads_the_task_status_log \
+  test_next_eligible_task_skips_captain_call_rows \
+  test_lane_key_for_task_never_doubles_the_prefix \
+  test_next_eligible_task_skips_unroutable_project_rows; do
   "$_t" || { echo "FAIL: $_t"; exit 1; }
 done
 echo "# fm-always-four.test.sh: all assertions passed"

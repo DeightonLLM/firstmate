@@ -60,6 +60,16 @@
 #                                      unset, Pi, AGY, Gemini, and role aliases stop safely
 #   FM_ALWAYS_FOUR_DRY_RUN             set to 1 for dry-run mode (default: 0)
 #   FM_ALWAYS_FOUR_GBRAIN_SYNC         sync lane state to gbrain (default: 1)
+#   FM_ALWAYS_FOUR_MINT_LANE_KEY       mint a compliant lane key from the
+#                                      backlog planning id (default: 1). Set to 0
+#                                      to hand the planning id to fm-spawn.sh
+#                                      unchanged (the pre-2026-10-22 behaviour,
+#                                      which every backlog dispatch refused with
+#                                      exit 5).
+#   FM_ALWAYS_FOUR_SCAFFOLD_BRIEF      scaffold a brief from the backlog row
+#                                      when a queued task has none (default: 1).
+#                                      Set to 0 to dispatch only work whose brief
+#                                      already exists.
 #
 set -u
 
@@ -73,6 +83,16 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 # Source supporting libraries
 ( . "$SCRIPT_DIR/fm-crew-state.sh" 2>/dev/null ) || true  # subshell protects against fm-crew-state.sh exit-2-on-missing-arg
 . "$SCRIPT_DIR/fm-classify-lib.sh" 2>/dev/null || true
+# fm-backend.sh owns the backend/meta primitives (fm_backend_of_meta,
+# fm_backend_target_of_meta, fm_backend_target_exists, fm_backend_capture,
+# fm_backend_busy_state, fm_meta_get).  It MUST be sourced at TOP LEVEL: a
+# subshell's function definitions never escape into the caller, so sourcing it
+# inside a subshell left every backend helper undefined here - the measured
+# consequence was fm_busy_classify_meta answering "unknown no-target" for
+# every meta and fm_backend_target_exists failing as "command not found", which
+# killed the lane liveness gate.  Sourced after fm-classify-lib.sh so the
+# classification helpers exist first.
+. "$SCRIPT_DIR/fm-backend.sh" 2>/dev/null || true
 . "$SCRIPT_DIR/fm-busy-lib.sh" 2>/dev/null || true
 
 # Source fm-wake-lib.sh for wake event emission
@@ -118,6 +138,10 @@ _daemon_cycle_count=0
 # environment at call time keeps retries deterministic without caching a stale
 # provider choice at script load.  Pi, AGY, Gemini, and First Mate are display,
 # provider, or role names here—not approved scheduler adapters.
+# minimax-code IS an approved scheduler adapter: bin/fm-harness.sh lists it in
+# its verified set and bin/fm-spawn.sh builds a real mcode launch command for
+# it. It is accepted on that evidence alone. The Pi/AGY/Gemini/First Mate
+# refusals below are unchanged and stay refusals.
 scheduler_harness_guard() {
   local requested="${1:-${FM_ALWAYS_FOUR_HARNESS:-}}"
   local normalized
@@ -129,7 +153,7 @@ scheduler_harness_guard() {
         "${requested:-<unset>}" >&2
       return 64
       ;;
-    claude|codex|grok|kimi|opencode)
+    claude|codex|grok|kimi|opencode|minimax-code)
       SCHEDULER_HARNESS="$normalized"
       return 0
       ;;
@@ -138,6 +162,302 @@ scheduler_harness_guard() {
       return 64
       ;;
   esac
+}
+
+# --- Lane key minting -------------------------------------------------------
+# The backlog's planning ids are NOT lane keys. bin/fm-spawn.sh treats its
+# first positional argument as the lane key and enforces the canonical
+# <harness>-<model>-<host>-<task> shape through bin/fm-lane-naming-check.sh
+# (exit 5). A planning id such as
+# "core-gate-twin-parity-absent-member-bypass-20261021" begins with a project
+# segment, so EVERY dispatch of a backlog task was refused with rc=5 and the
+# lane slot stayed empty.
+#
+# The backlog rows are shared with other lanes and are referenced from outside
+# this home, so they are NOT rewritten. The scheduler MINTS a compliant lane
+# key from the planning id instead and keeps the planning id as the backlog
+# identity. The minted key is the LANE identity.
+#
+# Minting rule:  <harness>-<model>-<host>-<task>
+#   harness  the configured scheduler harness in its lane-key spelling
+#            (minimax-code -> mcode; see the naming owner's harness tokens)
+#   model    the canonical alias of the lane's configured model id, read from
+#            the naming owner's OWN alias table so the vocabulary stays in one
+#            place (minimax/MiniMax-M3.1-Flash -> m3.1f)
+#   host     this machine's host token (the hostname label; brandon-compute ->
+#            brandon)
+#   task     the planning id, sanitized to the lane-task pattern and shortened
+#            to the 64-character task-id cap, with a deterministic hash suffix
+#            so two long planning ids can never share one lane key
+#
+# The minted key is used only when the naming owner accepts it, so this file
+# never carries a second copy of the naming rules.
+MINT_LANE_KEY="${FM_ALWAYS_FOUR_MINT_LANE_KEY:-1}"
+
+# Scaffold a brief for a queued row that has none, so a settled lane can take
+# genuinely new work. Set to 0 to dispatch only work whose brief already
+# exists.
+SCAFFOLD_BRIEF="${FM_ALWAYS_FOUR_SCAFFOLD_BRIEF:-1}"
+
+# lane_key_harness_segment: the lane-key harness token for a harness name.
+lane_key_harness_segment() {
+  local harness=${1:-}
+  case "$harness" in
+    minimax-code) printf 'mcode' ;;
+    ''|*[!A-Za-z0-9.-]*) printf '' ;;
+    *) printf '%s' "$harness" ;;
+  esac
+}
+
+# lane_key_model_segment <model-id>: the canonical model alias for a model id,
+# read from the naming owner's own alias table. Fails when the id names no
+# alias the owner knows (a retired family included: the owner refuses a
+# retired alias for a NEW lane key, and this script must not second-guess it).
+lane_key_model_segment() {
+  local model_id=${1:-}
+  [ -n "$model_id" ] || return 1
+  local alias identifier
+  while IFS=$'\t' read -r alias identifier; do
+    [ -n "$alias" ] || continue
+    if [ "$identifier" = "$model_id" ]; then
+      printf '%s' "$alias"
+      return 0
+    fi
+  done < <("$SCRIPT_DIR/fm-todo-prefix-check.sh" --alias-table 2>/dev/null)
+  return 1
+}
+
+# lane_key_host_segment: this machine's host token. The fleet's host tokens
+# are the first label of the machine name (brandon-compute -> brandon,
+# hd2stack -> hd2stack, controller -> controller).
+lane_key_host_segment() {
+  local host
+  host=$(hostname 2>/dev/null || true)
+  [ -n "$host" ] || host=${HOSTNAME:-}
+  [ -n "$host" ] || return 1
+  host=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')
+  host=${host%%.*}
+  host=${host%%-*}
+  host=$(printf '%s' "$host" \
+    | sed 's/[^a-z0-9.-]\{1,\}/-/g; s/-\{2,\}/-/g; s/^[.-]*//; s/[.-]*$//')
+  [ -n "$host" ] || return 1
+  printf '%s' "$host"
+}
+
+# lane_key_task_segment <planning-id> <budget>: the lane-key task segment.
+lane_key_task_segment() {
+  local planning_id=$1 budget=$2
+  [ -n "$planning_id" ] || return 1
+  local slug
+  slug=$(printf '%s' "$planning_id" | tr '[:upper:]' '[:lower:]' \
+    | sed 's/[^a-z0-9.-]\{1,\}/-/g; s/-\{2,\}/-/g; s/^[.-]*//; s/[.-]*$//')
+  [ -n "$slug" ] || return 1
+  if [ "${#slug}" -le "$budget" ]; then
+    printf '%s' "$slug"
+    return 0
+  fi
+  # Longer than the id cap: keep a readable prefix and append a deterministic
+  # hash of the FULL planning id, so two long ids never share a lane key.
+  local digest suffix keep
+  digest=$(printf '%s' "$planning_id" | sha256sum 2>/dev/null | cut -c1-6)
+  [ -n "$digest" ] || digest=000000
+  suffix="-$digest"
+  keep=$(( budget - ${#suffix} ))
+  [ "$keep" -gt 0 ] || return 1
+  slug=$(printf '%s' "$slug" | cut -c1-"$keep")
+  case "$slug" in *-*) slug=${slug%-*} ;; esac
+  [ -n "$slug" ] || return 1
+  printf '%s%s' "$slug" "$suffix"
+}
+
+# lane_key_for_task <lane-id> <planning-id> [model-id]: the compliant lane
+# key for a backlog planning id. Fails when no compliant key can be minted.
+# The model segment names the model the lane ACTUALLY runs, so a caller that
+# overrides the model must pass it in.
+lane_key_for_task() {
+  local lane_id=$1 planning_id=$2 model_id=${3:-}
+  [ -n "$planning_id" ] || return 1
+  if [ "$MINT_LANE_KEY" != "1" ]; then
+    printf '%s' "$planning_id"
+    return 0
+  fi
+  local harness model host prefix budget task key
+  harness=$(lane_key_harness_segment "${FM_ALWAYS_FOUR_HARNESS:-}")
+  [ -n "$harness" ] || return 1
+  [ -n "$model_id" ] || model_id=$(slot_model_for_lane "$lane_id")
+  model=$(lane_key_model_segment "$model_id") || return 1
+  host=$(lane_key_host_segment) || return 1
+  prefix="$harness-$model-$host-"
+  budget=$(( 64 - ${#prefix} ))
+  [ "$budget" -ge 8 ] || return 1
+
+  # A planning id that is ALREADY a lane key must not be prefixed a second
+  # time. The decision-hold lifecycle names its Captain rows after the lane
+  # that raised them ("codex-luna6-brandon-luna-<task>-decision-<key>"), and
+  # minting that produced "codex-luna6-brandon-codex-luna6-brandon-...". Shorten
+  # the TASK segment of an already-prefixed id instead of prefixing it again.
+  case "$planning_id" in
+    "$prefix"*)
+      local already_rest="${planning_id#"$prefix"}"
+      [ -n "$already_rest" ] || return 1
+      task=$(lane_key_task_segment "$already_rest" "$budget") || return 1
+      key="$prefix$task"
+      [ "${#key}" -le 64 ] || return 1
+      "$SCRIPT_DIR/fm-lane-naming-check.sh" "$key" >/dev/null 2>&1 || return 1
+      printf '%s' "$key"
+      return 0
+      ;;
+  esac
+
+  task=$(lane_key_task_segment "$planning_id" "$budget") || return 1
+  key="$prefix$task"
+  [ "${#key}" -le 64 ] || return 1
+  # The naming owner is the single authority for the vocabulary.
+  "$SCRIPT_DIR/fm-lane-naming-check.sh" "$key" >/dev/null 2>&1 || return 1
+  printf '%s' "$key"
+}
+
+# backlog_row_text <planning-id>: the queued backlog row's text for a
+# planning id, with the list marker and the id token removed. The row is the
+# task's authoritative text.
+backlog_row_text() {
+  local task_id=$1
+  local backlog="$DATA/backlog.md"
+  [ -f "$backlog" ] || return 1
+  awk -v id="$task_id" '
+    /^##[[:space:]]+/ {
+      section = $0
+      sub(/^##[[:space:]]+/, "", section)
+      sub(/[[:space:]]+$/, "", section)
+      next
+    }
+    section == "Queued" && index($0, id) > 0 {
+      line = $0
+      sub(/^[[:space:]]*-[[:space:]]+\[[[:space:]]\][[:space:]]*/, "", line)
+      if (index(line, id) == 1 &&
+          (length(line) == length(id) || substr(line, length(id) + 1, 1) == " ")) {
+        sub(/^[^[:space:]]+[[:space:]]*/, "", line)
+        sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+        print line
+        exit
+      }
+    }
+  ' "$backlog" 2>/dev/null
+}
+
+# fill_brief_task <brief-path> <task-text>: replace the {TASK} placeholder a
+# scaffolded brief carries with the task text. python3 does the substitution
+# because the text is arbitrary prose with backticks and quotes.
+fill_brief_task() {
+  local brief=$1 text=$2
+  [ -f "$brief" ] || return 1
+  command -v python3 >/dev/null 2>&1 || return 1
+  FM_BRIEF_TASK_TEXT="$text" python3 - "$brief" <<'PY' || return 1
+import os, sys
+path = sys.argv[1]
+text = os.environ.get("FM_BRIEF_TASK_TEXT", "")
+with open(path, encoding="utf-8") as fh:
+    body = fh.read()
+if "{TASK}" not in body:
+    sys.exit(1)
+body = body.replace("{TASK}", text, 1)
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(body)
+PY
+}
+
+# scaffold_lane_key_brief <lane-key> <planning-id>: create the lane key's
+# brief when the planning id has none. bin/fm-brief.sh owns the brief
+# contract, so it is CALLED and never re-implemented; the {TASK} placeholder
+# it leaves is filled with the backlog row, which is that row's authoritative
+# text. A lane with no brief is not dispatchable at all (fm-spawn.sh refuses a
+# spawn without data/<id>/brief.md), so this is what lets a settled lane take
+# genuinely NEW queued work instead of only work whose brief was hand-written
+# for it.
+scaffold_lane_key_brief() {
+  local lane_key=$1 planning_id=$2
+  [ -n "$lane_key" ] && [ -n "$planning_id" ] || return 1
+  [ "$SCAFFOLD_BRIEF" = "1" ] || return 1
+  local dst="$DATA/$lane_key/brief.md"
+  [ -f "$dst" ] && return 0
+  local row repo kind
+  row=$(backlog_row_text "$planning_id") || return 1
+  [ -n "$row" ] || return 1
+  repo=$(printf '%s' "$row" | sed -n 's/.*(repo: \([^)]*\)).*/\1/p')
+  [ -n "$repo" ] || return 1
+  kind=$(printf '%s' "$row" | sed -n 's/.*(kind: \([^)]*\)).*/\1/p')
+  local -a brief_args=("$lane_key" "$repo" --harness "${FM_ALWAYS_FOUR_HARNESS:-}")
+  [ "$kind" = "scout" ] && brief_args+=(--scout)
+  "$SCRIPT_DIR/fm-brief.sh" "${brief_args[@]}" >/dev/null 2>&1 || return 1
+  fill_brief_task "$dst" "$row" || return 1
+  return 0
+}
+
+# prepare_lane_key_brief <planning-id> <lane-key>: make sure the lane key's
+# brief exists. bin/fm-spawn.sh refuses to spawn without data/<id>/brief.md.
+# The brief is authored against the planning id, so the bridge copies it and
+# rewrites the three id-bearing references a brief carries (branch, status
+# file, report file) to the minted lane key. The task text is carried over
+# verbatim. When the planning id has no brief at all, one is scaffolded from
+# the backlog row. An existing brief is never overwritten.
+prepare_lane_key_brief() {
+  local planning_id=$1 lane_key=$2
+  [ -n "$planning_id" ] && [ -n "$lane_key" ] || return 1
+  # The rewrite below is a literal text substitution, so both ids must be
+  # plain identifiers.
+  case "$planning_id" in *[!A-Za-z0-9._-]*) return 1 ;; esac
+  case "$lane_key" in *[!A-Za-z0-9._-]*) return 1 ;; esac
+  local src="$DATA/$planning_id/brief.md"
+  local dst_dir="$DATA/$lane_key"
+  local dst="$dst_dir/brief.md"
+  [ -f "$dst" ] && return 0
+  if [ -f "$src" ]; then
+    mkdir -p "$dst_dir" || return 1
+    local tmp="$dst_dir/.brief.md.$$.tmp"
+    if sed -e "s|fm/$planning_id|fm/$lane_key|g" \
+           -e "s|$planning_id\.status|$lane_key.status|g" \
+           -e "s|$planning_id/report\.md|$lane_key/report.md|g" \
+           "$src" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+      if mv "$tmp" "$dst" 2>/dev/null; then
+        return 0
+      fi
+    fi
+    return 1
+  fi
+  scaffold_lane_key_brief "$lane_key" "$planning_id"
+}
+
+# record_lane_key_origin <lane-key> <planning-id>: remember which backlog
+# planning id a minted lane key serves. The lane's own meta records the lane
+# key, so without this record the queued row would look free and the same
+# backlog task could be dispatched twice.
+record_lane_key_origin() {
+  local lane_key=$1 planning_id=$2
+  [ -n "$lane_key" ] && [ -n "$planning_id" ] || return 1
+  printf '%s\n' "$planning_id" > "$STATE/$lane_key.planning-id" 2>/dev/null || return 1
+}
+
+# record_lane_slot_binding <lane-id> <lane-key>: point the lane slot at the
+# task it now runs. state/lane-<N>.meta is THIS scheduler's record of which
+# task a lane holds (see the header contract). Nothing wrote it, so a refilled
+# slot kept naming the task that had just finished: the slot then read as
+# terminal and was replaced again on the very next cycle, burning the bounded
+# attempt budget on a lane that was already working. The endpoint fields are
+# copied from the task's own meta, which fm-spawn.sh just wrote.
+record_lane_slot_binding() {
+  local lane_id=$1 lane_key=$2
+  local task_meta="$STATE/$lane_key.meta"
+  [ -f "$task_meta" ] || return 1
+  local key value tmp="$STATE/$lane_id.meta.new"
+  {
+    printf 'endpoint_task_id=%s\n' "$lane_key"
+    for key in window backend herdr_pane_id model harness worktree; do
+      value=$(grep "^$key=" "$task_meta" 2>/dev/null | cut -d= -f2- || true)
+      [ -n "$value" ] && printf '%s=%s\n' "$key" "$value"
+    done
+  } > "$tmp" 2>/dev/null || return 1
+  mv "$tmp" "$STATE/$lane_id.meta" 2>/dev/null || return 1
+  return 0
 }
 
 # --- Helpers ----------------------------------------------------------------
@@ -213,15 +533,96 @@ can_replace_lane() {
   return 0
 }
 
+# status_verb_of_line: the leading verb of a status line, after an optional
+# ISO-8601 timestamp prefix is stripped.  fm-classify-lib.sh owns the verb
+# grammar (status_line_verb) but reads the line verbatim, so a timestamped
+# line would yield "2026-10-23T10" as its verb.  lane_state strips the same
+# prefix before reading a verb, and the two censuses must read a line exactly
+# the same way.
+status_verb_of_line() {
+  local line=$1 stripped
+  stripped=$(printf '%s' "$line" \
+    | sed -e 's/^\[[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9:]\{8\}Z\] *//' \
+          -e 's/^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9:]\{8\}Z: *//')
+  status_line_verb "$stripped" 2>/dev/null || true
+}
+
+# worker_task_is_working: the scheduler's OWN honest liveness rule, shared by
+# lane_is_active and count_active_worker_tasks so the two censuses can never
+# disagree.  <meta-file> <endpoint_task_id> <state-dir>
+#
+# Returns 0 (the worker is working) only when ALL of these hold:
+#   1. the meta file exists and has a non-empty endpoint_task_id=
+#   2. the meta has a non-empty window= target
+#   3. the backend target still EXISTS - a gone endpoint is NEVER working
+#   4. the task status log <state-dir>/<endpoint_task_id>.status exists and its
+#      last non-empty line's verb is non-empty and NOT a terminal verb
+#
+# No CPU time, process sleep state, marker mtime, or rendered-UI regex is read
+# here: bin/fm-busy-lib.sh explicitly forbids those as liveness signals, so
+# this rule stays inside the repository's busy contract.
+worker_task_is_working() {
+  local meta=$1 id=$2 state_dir=$3
+  local backend target log last verb
+
+  [ -f "$meta" ] || return 1
+
+  if [ -z "$id" ]; then
+    id=$(grep '^endpoint_task_id=' "$meta" 2>/dev/null | cut -d= -f2- || true)
+  fi
+  [ -n "$id" ] || return 1
+
+  target=$(grep '^window=' "$meta" 2>/dev/null | cut -d= -f2- || true)
+  [ -n "$target" ] || return 1
+
+  backend=$(grep '^backend=' "$meta" 2>/dev/null | cut -d= -f2- || true)
+  [ -n "$backend" ] || backend=tmux
+
+  # A gone endpoint is NEVER working.
+  fm_backend_target_exists "$backend" "$target" "fm-$id" >/dev/null 2>&1 || return 1
+
+  log="$state_dir/$id.status"
+  [ -f "$log" ] || return 1
+  last=$(last_status_line "$log" 2>/dev/null || true)
+  [ -n "$last" ] || return 1
+  verb=$(status_verb_of_line "$last")
+  [ -n "$verb" ] || return 1
+  if is_terminal_verb "$verb"; then
+    return 1
+  fi
+
+  return 0
+}
+
 # Return 0 if the given lane is provably working (active).
 # A working lane must NOT be replaced.
 lane_is_active() {
   local lane_id=$1
-  local meta="$STATE/$lane_id.meta"
-  local status_log="$STATE/$lane_id.status"
+  # Resolve the state dir at CALL time (the same override lane_current_task
+  # honours) so an isolated home never reads the live state directory.
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  local meta="$state_dir/$lane_id.meta"
+  local slot_log="$state_dir/$lane_id.status"
+  local status_log task_id task_log
   local target backend harness label
 
   [ -f "$meta" ] || return 1
+
+  # The agent's own progress/done lines live in the TASK status log
+  # (state/<task-id>.status).  The slot log (state/<lane-id>.status) holds
+  # only this scheduler's own binding and wake events, so reading it alone
+  # could never see a lane settle.  Resolve the task log exactly the way
+  # lane_state does: task log first, slot log only as the fallback for a lane
+  # that has no task log yet.
+  task_id=$(lane_current_task "$lane_id" 2>/dev/null || true)
+  task_log=""
+  [ -n "$task_id" ] && task_log="$state_dir/$task_id.status"
+  if [ -n "$task_log" ] && [ -f "$task_log" ]; then
+    status_log="$task_log"
+  else
+    status_log="$slot_log"
+  fi
+
   [ -f "$status_log" ] || return 1
 
   target=$(grep '^window=' "$meta" 2>/dev/null | cut -d= -f2- || true)
@@ -231,6 +632,7 @@ lane_is_active() {
 
   backend=$(grep '^backend=' "$meta" 2>/dev/null | cut -d= -f2- || echo 'tmux')
 
+  # A dead pane is never active: the liveness gate stays BEFORE the verdict.
   if ! fm_backend_target_exists "$backend" "$target" "fm-$lane_id" >/dev/null 2>&1; then
     return 1
   fi
@@ -240,15 +642,21 @@ lane_is_active() {
 
   local tail40 verdict
   tail40=$(fm_backend_capture "$backend" "$target" 40 "$label" 2>/dev/null || true)
-  verdict=$(fm_busy_classify "$backend" "$target" "$harness" "$lane_id" "$STATE" "$tail40")
+  verdict=$(fm_busy_classify "$backend" "$target" "$harness" "$lane_id" "$state_dir" "$tail40")
 
   case "${verdict%% *}" in
     busy) return 0 ;;
   esac
 
+  # The scheduler's own honest liveness rule - the same rule the worker-task
+  # census uses, so the two censuses cannot disagree.
+  if worker_task_is_working "$meta" "$task_id" "$state_dir"; then
+    return 0
+  fi
+
   local last state
   last=$(last_status_line "$status_log" 2>/dev/null || true)
-  state=$(status_line_verb "$last" 2>/dev/null || true)
+  state=$(status_verb_of_line "$last")
   if is_terminal_verb "$state"; then
     return 1
   fi
@@ -257,7 +665,9 @@ lane_is_active() {
     return 1
   fi
 
-  return 1
+  # The endpoint is live and the lane's last status verb is present and
+  # non-terminal: the lane is working and must not be replaced.
+  return 0
 }
 
 # Read lane state from status log. Fully self-contained — does NOT call
@@ -275,30 +685,40 @@ lane_state() {
     printf 'state: unknown · source: none'
     return
   fi
-  if [ ! -f "$status_log" ]; then
-    printf 'state: unknown · source: no-status-log'
-    return
+  # The lane's CURRENT state is the state its TASK reports. The agent appends
+  # to state/<task-id>.status (its brief names that exact file); the slot log
+  # state/lane-<N>.status holds this scheduler's own binding and wake events.
+  # Reading the slot log alone could never see a lane settle, so a finished
+  # lane was refilled by hand and the wave stalled. The task log is read first;
+  # the slot log stays the fallback for a lane with no task log yet.
+  local task_id task_log
+  task_id=$(lane_current_task "$lane_id" 2>/dev/null || true)
+  task_log=""
+  [ -n "$task_id" ] && task_log="$STATE/$task_id.status"
+
+  if [ -n "$task_log" ] && [ -f "$task_log" ]; then
+    last_line=$(last_status_line "$task_log" 2>/dev/null || true)
+    status_log="$task_log"
+  else
+    [ -f "$status_log" ] || { printf 'state: unknown · source: no-status-log'; return; }
+    last_line=$(grep -v '^[[:space:]]*$' "$status_log" 2>/dev/null | tail -1 || true)
   fi
 
   # Read last non-empty status line
-  last_line=$(grep -v '^[[:space:]]*$' "$status_log" 2>/dev/null | tail -1 || true)
   if [ -z "$last_line" ]; then
     printf 'state: unknown · source: empty-status-log'
     return
   fi
 
-  # Extract verb: first word after the colon following the timestamp.
-  # Format: "YYYY-MM-DDTHH:MM:SSZ: verb: detail"
-  # Extract verb: split by colon, verb is field 4 in
-    # "YYYY-MM-DDTHH:MM:SSZ: verb: detail" (fields: date, HH, MMSSZ, verb, ...)
-    last_verb=$(printf '%s' "$last_line" | awk '{
-    n = split($0, f, ":")
-    for (i=1; i<=n; i++) gsub(/^[[:space:]]+|[[:space:]]+$/, "", f[i])
-    # Field 4 after colon-split is the verb (field 1=date, 2=HH, 3=SSZ, 4=verb)
-    verb = (n >= 4) ? f[4] : f[2]
-    sub(/:$/, "", verb)
-    print verb
-  }' 2>/dev/null | tr -d '[:space:]' || true)
+  # Extract verb: the leading word of the last status line, after any leading
+  # ISO-8601 timestamp. fm-classify-lib.sh owns that reading, so the same
+  # "<verb>: <note>" line that lane_is_active() already understands is the
+  # line understood here.
+  local stripped
+  stripped=$(printf '%s' "$last_line" \
+    | sed -e 's/^\[[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9:]\{8\}Z\] *//' \
+          -e 's/^[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9:]\{8\}Z: *//')
+  last_verb=$(status_line_verb "$stripped" 2>/dev/null || true)
 
   if [ -z "$last_verb" ]; then
     printf 'state: unknown · source: no-verb-in-status'
@@ -474,20 +894,74 @@ count_active_lanes() {
 # Count live worker processes from authoritative task metadata.  Real Herdr
 # lanes are keyed by task ID (core-next-v3.meta, etc.), not lane-001.meta; the
   # old slot-only census therefore reported active=0 while a worker was visibly
-# working.  Checker/controller models are excluded from the worker target.
+# working.  Controller metas (kind=secondmate / kind=controller) are excluded
+  # from the worker target; ship and scout kinds are real workers and count.
 count_active_worker_tasks() {
-  local count=0 meta id model verdict
-  for meta in "$STATE"/*.meta; do
+  local count=0 meta id model verdict kind backend target harness
+  local counted_ids=""
+  # Resolve the state dir at CALL time so an isolated home never reads the
+  # live state directory.
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+
+  # The accepted models are derived from THIS scheduler's own configuration
+  # (WORKER_MODEL, plus CHECKER_MODEL when it differs - the checker slot is a
+  # worker too), never from a hardcoded list.  A hardcoded model list goes
+  # stale the moment a model is retired: the old list still named the retired
+  # M2.7 and therefore rejected every live worker, reading the census as 0.
+  # Do NOT turn this back into a hardcoded model list.
+  for meta in "$state_dir"/*.meta; do
     [ -f "$meta" ] || continue
-    model=$(grep '^model=' "$meta" 2>/dev/null | cut -d= -f2- || true)
-    case "$model" in
-      minimax-m2.7|MiniMax-M2.7|minimax-m2.7-highspeed) ;;
-      *) continue ;;
+
+    # Controller metas (kind=secondmate / kind=controller) carry the worker
+    # model but are not workers.  ship and scout kinds ARE real workers and
+    # must stay in the census.
+    kind=$(grep '^kind=' "$meta" 2>/dev/null | cut -d= -f2- || true)
+    case "$(printf '%s' "$kind" | tr '[:upper:]' '[:lower:]')" in
+      secondmate|controller) continue ;;
     esac
+
+    model=$(grep '^model=' "$meta" 2>/dev/null | cut -d= -f2- || true)
+    [ -n "$model" ] || continue
+    if [ "$model" != "$WORKER_MODEL" ]; then
+      if [ -z "$CHECKER_MODEL" ] || [ "$CHECKER_MODEL" = "$WORKER_MODEL" ] \
+        || [ "$model" != "$CHECKER_MODEL" ]; then
+        continue
+      fi
+    fi
+
     id=$(grep '^endpoint_task_id=' "$meta" 2>/dev/null | cut -d= -f2- || true)
     [ -n "$id" ] || continue
-    verdict=$(fm_busy_classify_meta "$meta" "$id" "$STATE" 2>/dev/null || true)
-    [ "${verdict%% *}" = busy ] && count=$((count + 1))
+
+    # Each managed lane owns BOTH state/<lane-id>.meta and
+    # state/<endpoint_task_id>.meta, and both carry the SAME
+    # endpoint_task_id, so the census counts DISTINCT endpoint_task_id values
+    # only - counting meta files counted every live lane twice.
+    case " $counted_ids " in
+      *" $id "*) continue ;;
+    esac
+
+    # The busy contract stays the primary signal whenever it can classify the
+    # harness; worker_task_is_working is the honest fallback for the harnesses
+    # it cannot classify (minimax-code, codex -> "unknown").
+    if worker_task_is_working "$meta" "$id" "$state_dir"; then
+      counted_ids="$counted_ids $id"
+      count=$((count + 1))
+      continue
+    fi
+
+    # The busy verdict is read through the LIVE classification, so a gone
+    # endpoint is never counted - the same gate lane_is_active applies.  The
+    # two censuses must not be able to disagree.
+    backend=$(fm_backend_of_meta "$meta")
+    target=$(fm_backend_target_of_meta "$meta")
+    harness=$(fm_meta_get "$meta" harness)
+    if [ -n "$target" ]; then
+      verdict=$(fm_busy_classify_live "$backend" "$target" "$harness" "$id" "$state_dir" "fm-$id" 2>/dev/null || true)
+      if [ "${verdict%% *}" = busy ]; then
+        counted_ids="$counted_ids $id"
+        count=$((count + 1))
+      fi
+    fi
   done
   # Preserve compatibility with isolated test homes that only create slot
   # metadata and do not have endpoint_task_id records.
@@ -517,8 +991,24 @@ count_terminal_lanes() {
 # Uses only POSIX awk features (no gawk-specific 3-arg match()).
 # Returns the first queued, unblocked, non-in-flight task id.
 next_eligible_task() {
-  local backlog="$DATA/backlog.md"
+  # Resolve the data dir at CALL time, the same way the census functions do,
+  # so an isolated home (FM_DATA_OVERRIDE) never reads the live backlog.
+  local data_dir="${FM_DATA_OVERRIDE:-$DATA}"
+  local backlog="$data_dir/backlog.md"
   [ -f "$backlog" ] || { echo ''; return; }
+
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  # Rebuild the in-flight set HERE, not once per cycle. The set was built at
+  # Step 0 of the cycle, BEFORE any lane in this cycle had a meta, and it was
+  # never refreshed after a spawn - so a cycle that filled several empty slots
+  # handed EVERY slot the same queued row (measured 2026-10-23 in a dry run of
+  # the Luna half: six empty lanes, six times the same task). Rebuilding before
+  # each selection makes each slot in one cycle take a different row. A spawn
+  # writes state/<lane-key>.meta and state/<lane-key>.planning-id before
+  # cmd_spawn returns, so the row just taken is in the set by the next
+  # selection.
+  build_inflight_tmp 2>/dev/null || true
+  build_valid_projects_tmp 2>/dev/null || true
 
   # Build in-flight set from lane metas
   local in_flight_cmd="grep -l 'endpoint_task_id=' $STATE/lane-*.meta 2>/dev/null | "
@@ -534,10 +1024,14 @@ next_eligible_task() {
     BEGIN {
       section = ""
       # Populate in_flight from shell-generated temp file
-      while ((getline line < ("'"$STATE"'/.always-four.inflight.tmp")) > 0) {
+      while ((getline line < ("'"$state_dir"'/.always-four.inflight.tmp")) > 0) {
         in_flight[line] = 1
       }
-      close("'"$STATE"'/.always-four.inflight.tmp")
+      close("'"$state_dir"'/.always-four.inflight.tmp")
+      while ((getline pname < ("'"$state_dir"'/.always-four.projects.tmp")) > 0) {
+        project_ok[pname] = 1
+      }
+      close("'"$state_dir"'/.always-four.projects.tmp")
     }
     /^##[[:space:]]+/ {
       section = $0
@@ -549,6 +1043,25 @@ next_eligible_task() {
       # Parse task id: "- [ ] task-id - title"
       # Skip if contains blocked-by
       if (index($0, "blocked-by:") > 0) next
+
+      # A Captain Call row is NOT lane work. The decision-hold lifecycle
+      # creates one backlog row per unresolved Captain decision, marked
+      # "(kind: captain)" and "(hold: ...)", and that row waits for the
+      # Captain answer. Dispatching one to a lane burns a lane on work the
+      # Captain must do, and mints a malformed lane key from a row id that is
+      # already lane-key shaped. Skip it exactly like a blocked-by row.
+      if (index($0, "(kind: captain)") > 0) next
+
+      # Skip a row whose project is not a resolvable treehouse project. A row
+      # naming a repo that is not a git checkout can never be spawned:
+      # fm-spawn.sh fails with "could not resolve the shared Treehouse project
+      # lock", the lane burns its attempts, and the whole half starves on one
+      # unroutable row while routable rows sit queued. The row stays in the
+      # backlog for the Captain to see; it is simply not dispatched.
+      if (match($0, /\(repo: [^)]+\)/)) {
+        repo_name = substr($0, RSTART + 7, RLENGTH - 8)
+        if (length(repo_name) > 0 && !(repo_name in project_ok)) next
+      }
 
       # Extract task id: it is the first non-flag word after "- [ ]"
       rest = $0
@@ -570,22 +1083,65 @@ next_eligible_task() {
 }
 
 # build_inflight_tmp: write current in-flight tasks to a temp file for awk.
+# build_valid_projects_tmp: list the project names that actually resolve to a
+# git checkout, so a queued row naming anything else is not dispatched into a
+# lane that cannot possibly spawn it.
+#
+# The project names come from the row text "(repo: <name>)". fm-spawn.sh
+# resolves a bare project name relative to the scheduler working directory,
+# and treehouse can only make a worktree from a git checkout, so a name whose
+# directory has no .git is not a project at all.
+build_valid_projects_tmp() {
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  local tmp="$state_dir/.always-four.projects.tmp"
+  : > "$tmp"
+  local base="${FM_LANE_PROJECT_BASE:-$PWD}"
+  local name dir
+  for dir in "$base"/*; do
+    [ -d "$dir" ] || continue
+    name=$(basename "$dir")
+    [ -e "$dir/.git" ] || continue
+    printf '%s\n' "$name" >> "$tmp"
+  done
+  # A project may also be named as a path relative to the base (projects/<name>).
+  for dir in "$base"/*/*; do
+    [ -d "$dir" ] || continue
+    [ -e "$dir/.git" ] || continue
+    printf '%s\n' "${dir#"$base"/}" >> "$tmp"
+  done
+}
+
 build_inflight_tmp() {
-  local tmp="$STATE/.always-four.inflight.tmp"
+  # Resolve the state dir at CALL time, the same way the census functions do,
+  # so an isolated home (FM_STATE_OVERRIDE) never reads the live state dir.
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  local tmp="$state_dir/.always-four.inflight.tmp"
   : > "$tmp"
   # Task metadata is keyed by task ID (not scheduler slot), so lane-only
   # scanning misses real in-flight work and allows duplicate respawns.  Include
   # every authoritative meta record, then retain slot fallback for test homes.
-  local meta task
-  for meta in "$STATE"/*.meta; do
+  #
+  # BOTH loops write INTO the temp file. The first loop's output used to go
+  # to this function's stdout instead, so the in-flight set never held the
+  # task metas at all and a queued row could be dispatched twice.
+  local meta task origin
+  for meta in "$state_dir"/*.meta; do
     [ -f "$meta" ] || continue
     task=$(grep '^endpoint_task_id=' "$meta" 2>/dev/null | cut -d= -f2- || true)
-    [ -n "$task" ] && printf '%s\n' "$task"
+    [ -n "$task" ] && printf '%s\n' "$task" >> "$tmp"
+    # A minted lane key is NOT the backlog planning id, so the meta above
+    # names the lane, not the queued row. The planning id a minted lane
+    # serves is recorded in state/<lane-key>.planning-id; read it so the
+    # queued row is not dispatched a second time.
+    if [ -n "$task" ]; then
+      origin=$(cat "$state_dir/$task.planning-id" 2>/dev/null || true)
+      [ -n "$origin" ] && printf '%s\n' "$origin" >> "$tmp"
+    fi
   done
   for lane_id in $(lane_ids); do
     task=$(lane_current_task "$lane_id")
-    [ -n "$task" ] && printf '%s\n' "$task"
-  done >> "$tmp"
+    [ -n "$task" ] && printf '%s\n' "$task" >> "$tmp"
+  done
 }
 
 backlog_task_to_project() {
@@ -911,9 +1467,29 @@ cmd_spawn() {
     model_arg=$(slot_model_for_lane "$lane_id")
   fi
 
+  # Mint the lane key. The backlog planning id is NOT a lane key: fm-spawn.sh
+  # enforces <harness>-<model>-<host>-<task> on its first positional argument
+  # and refused every backlog dispatch with exit 5. The backlog row is not
+  # rewritten; the key is minted from it.
+  local lane_key
+  lane_key=$(lane_key_for_task "$lane_id" "$task_id" "$model_arg") || {
+    printf 'always-four: spawn BLOCKED — no compliant lane key for %s in %s\n' \
+      "$task_id" "$lane_id" >&2
+    record_rollback_evidence "$lane_id" "$task_id" "lane-key-mint-failed" \
+      "no compliant <harness>-<model>-<host>-<task> key for $task_id"
+    return 65
+  }
+  if ! prepare_lane_key_brief "$task_id" "$lane_key"; then
+    printf 'always-four: spawn BLOCKED — no brief for lane key %s (%s)\n' \
+      "$lane_key" "$task_id" >&2
+    record_rollback_evidence "$lane_id" "$task_id" "lane-key-brief-missing" \
+      "no brief at data/$lane_key/brief.md"
+    return 65
+  fi
+
   # Pass the explicitly guarded adapter so fm-spawn cannot silently resolve a
   # controller or pane-default harness for this worker/checker lane.
-  local spawn_args=("$task_id" "$project" --harness "$SCHEDULER_HARNESS")
+  local spawn_args=("$lane_key" "$project" --harness "$SCHEDULER_HARNESS")
   [ -n "$harness_arg" ] && spawn_args+=(--harness "$harness_arg")
   [ -n "$model_arg" ] && spawn_args+=(--model "$model_arg")
   [ -n "$effort_arg" ] && spawn_args+=(--effort "$effort_arg")
@@ -922,16 +1498,18 @@ cmd_spawn() {
 
   if [ "${spawn_rc:-0}" -eq 0 ]; then
     lane_reset_attempts "$lane_id"
-    emit_coordinator_wake replacement "$lane_id" "$task_id" "spawned ok"
+    [ "$lane_key" != "$task_id" ] && record_lane_key_origin "$lane_key" "$task_id"
+    record_lane_slot_binding "$lane_id" "$lane_key" || true
+    emit_coordinator_wake replacement "$lane_id" "$task_id" "spawned ok lane_key=$lane_key"
     sync_gbrain
-    printf 'always-four: spawned %s in %s\n' "$task_id" "$lane_id"
+    printf 'always-four: spawned %s in %s (lane key %s)\n' "$task_id" "$lane_id" "$lane_key"
   else
     lane_inc_attempts "$lane_id"
-    record_rollback_evidence "$lane_id" "$task_id" "spawn-failed" "rc=$spawn_rc model=$model_arg"
-    emit_coordinator_wake replacement "$lane_id" "$task_id" "spawn FAILED rc=$spawn_rc"
+    record_rollback_evidence "$lane_id" "$task_id" "spawn-failed" "rc=$spawn_rc model=$model_arg lane_key=$lane_key"
+    emit_coordinator_wake replacement "$lane_id" "$task_id" "spawn FAILED rc=$spawn_rc lane_key=$lane_key"
     sync_gbrain
-    printf 'always-four: spawn %s in %s FAILED (rc=%s, attempts=%s)\n' \
-      "$task_id" "$lane_id" "$spawn_rc" "$(lane_attempts "$lane_id")"
+    printf 'always-four: spawn %s in %s FAILED (rc=%s, attempts=%s, lane key %s)\n' \
+      "$task_id" "$lane_id" "$spawn_rc" "$(lane_attempts "$lane_id")" "$lane_key"
   fi
 
   return 0
@@ -963,6 +1541,17 @@ cmd_cycle() {
   for lane_id in $(lane_ids); do
     [ "$active_count" -ge "$TARGET" ] && break
     [ -n "$(lane_current_task "$lane_id")" ] && continue
+    # The bounded-attempt cap must apply to THIS path too. It was only
+    # consulted in the terminal-lane replacement path, so an empty slot whose
+    # spawn kept failing was retried every poll interval forever (measured:
+    # lane-001 attempts=34 against a cap of 3) and the cap that exists to stop
+    # exactly that never fired here. An empty slot that has exhausted its
+    # attempts is reported as a stall and left empty for the operator, not
+    # hammered.
+    if lane_at_max_attempts "$lane_id"; then
+      emit_coordinator_wake stall "$lane_id" "" "max attempts reached ($(lane_attempts "$lane_id")/$MAX_ATTEMPTS) - empty slot not refilled"
+      continue
+    fi
     eligible=$(next_eligible_task)
     [ -z "$eligible" ] && break
     if [ -z "$dry_run" ]; then
@@ -1052,6 +1641,34 @@ cmd_cycle() {
         continue
       fi
 
+      # This lane has CLAIMED the row: mark it in flight for the rest of this
+      # cycle so the next lane in the same cycle cannot pick the same row.
+      printf '%s\n' "$eligible" >> "$STATE/.always-four.inflight.tmp"
+
+      # Mint the lane key and resolve the project BEFORE the queued row is
+      # moved: the row leaves the Queued section, and the project is read from
+      # that row. The planning id is not a lane key, so fm-spawn.sh refused
+      # every one of these dispatches with exit 5 and the slot stayed empty.
+      local lane_key project
+      lane_key=$(lane_key_for_task "$lane_id" "$eligible" "$(slot_model_for_lane "$lane_id")") || {
+        printf 'always-four: replacement BLOCKED — no compliant lane key for %s\n' \
+          "$eligible" >&2
+        record_rollback_evidence "$lane_id" "$eligible" "lane-key-mint-failed" \
+          "no compliant <harness>-<model>-<host>-<task> key for $eligible"
+        emit_coordinator_wake route-blocked "$lane_id" "$eligible" "no compliant lane key"
+        continue
+      }
+      project=$(backlog_task_to_project "$eligible" 2>/dev/null || true)
+      [ -z "$project" ] && project="projects/$eligible"
+      if ! prepare_lane_key_brief "$eligible" "$lane_key"; then
+        printf 'always-four: replacement BLOCKED — no brief for lane key %s (%s)\n' \
+          "$lane_key" "$eligible" >&2
+        record_rollback_evidence "$lane_id" "$eligible" "lane-key-brief-missing" \
+          "no brief at data/$lane_key/brief.md"
+        emit_coordinator_wake route-blocked "$lane_id" "$eligible" "no brief for lane key"
+        continue
+      fi
+
       # Update backlog state
       if command -v tasks-axi >/dev/null 2>&1; then
         tasks-axi mv "$eligible" --file "$DATA/backlog.md" --to-section "In flight" 2>/dev/null || true
@@ -1070,24 +1687,26 @@ cmd_cycle() {
 
       # Keep replacement lanes on the explicitly guarded adapter; never inherit
       # the controller harness while refilling a terminal slot.
-      local spawn_args=("$eligible" "projects/$eligible" --harness "$SCHEDULER_HARNESS" --model "$slot_model")
+      local spawn_args=("$lane_key" "$project" --harness "$SCHEDULER_HARNESS" --model "$slot_model")
       "$SCRIPT_DIR/fm-spawn.sh" "${spawn_args[@]}" && spawn_rc=$? || spawn_rc=$?
 
       if [ "${spawn_rc:-0}" -eq 0 ]; then
         lane_reset_attempts "$lane_id"
-        emit_coordinator_wake replacement "$lane_id" "$eligible" "spawned ok model=$slot_model"
+        [ "$lane_key" != "$eligible" ] && record_lane_key_origin "$lane_key" "$eligible"
+        record_lane_slot_binding "$lane_id" "$lane_key" || true
+        emit_coordinator_wake replacement "$lane_id" "$eligible" "spawned ok model=$slot_model lane_key=$lane_key"
         sync_gbrain
-        printf 'always-four: replaced %s with %s in %s (model=%s)\n' \
-          "${replace_lanes[$lane_id]}" "$eligible" "$lane_id" "$slot_model"
+        printf 'always-four: replaced %s with %s in %s (model=%s, lane key %s)\n' \
+          "${replace_lanes[$lane_id]}" "$eligible" "$lane_id" "$slot_model" "$lane_key"
       else
         lane_inc_attempts "$lane_id"
         record_rollback_evidence "$lane_id" "$eligible" "replacement-spawn-failed" \
-          "rc=$spawn_rc model=$slot_model"
+          "rc=$spawn_rc model=$slot_model lane_key=$lane_key"
         emit_coordinator_wake replacement "$lane_id" "$eligible" \
-          "spawn FAILED rc=$spawn_rc model=$slot_model"
+          "spawn FAILED rc=$spawn_rc model=$slot_model lane_key=$lane_key"
         sync_gbrain
-        printf 'always-four: replacement spawn of %s in %s FAILED (rc=%s, model=%s, attempts=%s/%s)\n' \
-          "$eligible" "$lane_id" "$spawn_rc" "$slot_model" "$(lane_attempts "$lane_id")" "$MAX_ATTEMPTS"
+        printf 'always-four: replacement spawn of %s in %s FAILED (rc=%s, model=%s, attempts=%s/%s, lane key %s)\n' \
+          "$eligible" "$lane_id" "$spawn_rc" "$slot_model" "$(lane_attempts "$lane_id")" "$MAX_ATTEMPTS" "$lane_key"
       fi
     else
       printf 'always-four [DRY RUN]: would replace %s with %s in %s\n' \
