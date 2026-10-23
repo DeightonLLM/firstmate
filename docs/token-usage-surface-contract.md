@@ -127,6 +127,21 @@ Two kinds of unknown are carried, and they are different facts:
 
 Quota is a different field and stays where it belongs: `quota-axi` reports the Gemini windows, and the usage half of the band reports that Gemini's token counts are unknown.
 
+### 4.1 Account identity: the usage side and the quota side stay separate
+
+The Captain ruled on 2026-10-22: keep them separate and keep them marked unknown.
+
+The usage-side account ids and the quota-side account keys are different namespaces.
+The usage side does not map onto `codex-home` or `openai-codex`, and it must not be made to.
+`quota-axi` owns the quota keys; the usage ledger owns only what a surface measured locally.
+A quota-side key must never be written into a usage row, and a usage-side account id must never be written into a quota record.
+Every usage-side account that cannot be joined to a quota identity carries `identity_status: unknown_local_subset`, and it stays that way.
+That status is visible rather than hidden, so a measured local subset is never read as a known account.
+A local account id such as `codex-local-unmapped` names what was measured, not who paid for it.
+Its label says the same thing in words, so a reader of the ledger sees `local (unmapped)` rather than a bare account name.
+Joining a usage account to a quota identity later requires evidence, not similarity of name.
+Until that evidence exists, the two sets are separate and unknown, and guessing between them is not the way to close the gap.
+
 ## 5. Adding a surface
 
 Adding a surface is a deliberate operator action, exactly like adding one to the fleet roster.

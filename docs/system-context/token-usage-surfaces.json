@@ -15,7 +15,7 @@
         "method": "owner_ledger",
         "path": "data/tracker-tokens-20261019/ledger/usage.json"
       },
-      "notes": "The Captain's own surface and the one the board runs on. 'Crisp-R' is the Captain's name for this session; it is an alias of this surface, not a separate host, so it never gets its own row in a total."
+      "notes": "The Captain's own surface and the one the board runs on. 'Crisp-R' is the Captain's name for this session; it is an alias of this surface, not a separate host, so it never gets its own row in a total. Any usage-side account it reports is an unmapped local subset with unknown identity and stays marked `unknown_local_subset`, because the usage side does not map onto a quota-side key."
     },
     {
       "surface": "hd2stack",
@@ -27,7 +27,7 @@
       "collection": {
         "method": "published_surface_usage"
       },
-      "notes": "The fleet's primary firstmate and execution surface. Usage rows for this surface already exist inside the Controller's owner ledger; a published surface-usage document adds the days that ledger does not carry."
+      "notes": "The fleet's primary firstmate and execution surface. Usage rows for this surface already exist inside the Controller's owner ledger; a published surface-usage document adds the days that ledger does not carry. Any usage-side account it reports is an unmapped local subset with unknown identity and stays marked `unknown_local_subset`, because the usage side does not map onto a quota-side key."
     },
     {
       "surface": "brandon-compute",
@@ -39,7 +39,7 @@
       "collection": {
         "method": "published_surface_usage"
       },
-      "notes": "Reached over the sanctioned comms route only. This lane never reads or writes the Hetz host."
+      "notes": "Reached over the sanctioned comms route only. This lane never reads or writes the Hetz host. Any usage-side account it reports is an unmapped local subset with unknown identity and stays marked `unknown_local_subset`, because the usage side does not map onto a quota-side key."
     },
     {
       "surface": "elevatesVPS",
@@ -51,7 +51,7 @@
       "collection": {
         "method": "published_surface_usage"
       },
-      "notes": "The fourth coding surface in the roster. Listed so its absence from the token total is visible as unknown coverage, not as a quiet omission."
+      "notes": "The fourth coding surface in the roster. Listed so its absence from the token total is visible as unknown coverage, not as a quiet omission. Any usage-side account it reports is an unmapped local subset with unknown identity and stays marked `unknown_local_subset`, because the usage side does not map onto a quota-side key."
     }
   ],
   "provider_labels": {
