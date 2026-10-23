@@ -466,12 +466,12 @@ SH
 
 # 13. Zero repeated model turns for unchanged mail
 test_zero_repeated_model_turns_for_unchanged_mail() {
-  local home fb log count i
+  local home fb log count
   home=$(make_env zero_turns)
   fb=$(make_fake_herdr "$TMP_ROOT/zero_turns" "idle" "true")
   log="$TMP_ROOT/zero_turns/logs/prompts.log"
 
-  for i in 1 2 3 4 5; do
+  for _ in 1 2 3 4 5; do
     PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
       "$NOTIFY" notify --route controller --file "static-mail.msg" --content "static content" >/dev/null 2>&1
   done
