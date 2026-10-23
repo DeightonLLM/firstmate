@@ -71,6 +71,25 @@ ssh root@vmi3196300-dubzai-deightonllm.tailddbb4d.ts.net \
 
 The remote `post` writes to `.part` and renames, so the message is either absent or complete.
 
+## Where it lives, and who can read it
+
+The canonical path on every host is `/root/dubz-handoff`. Two hosts carry it today:
+
+| Host | Path | Who can read it | Who can post |
+|---|---|---|---|
+| dubz Controller `vmi3196300` | `/root/dubz-handoff` (0700) | the fleet and the Captain | the fleet |
+| Elevate VPS `srv1137994` | `/opt/dubz-handoff`, with `/root/dubz-handoff` symlinked to it | the P.K. team and the fleet | the fleet |
+
+On Elevate the real directory is `/opt/dubz-handoff` (0755) rather than under `/root`,
+because `/root` is 0700 there and the external team could not reach a channel hidden
+inside it. The `/root/dubz-handoff` symlink keeps the canonical path working for root.
+The `outbox/` on Elevate is a sticky drop box (1777): any team member can drop a reply
+there, and only they can remove their own file. The `inbox/`, `sent/` and `consumed/`
+folders stay root-owned and read-only to others.
+
+`ensure_layout` never forces modes — the install sets them per host, and `doctor`
+reports what it finds rather than rewriting it.
+
 ## Checks
 
 `doctor` is the health check. It exits non-zero when a directory is missing, a staged `.part`

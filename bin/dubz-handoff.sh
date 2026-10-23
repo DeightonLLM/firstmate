@@ -64,8 +64,11 @@ ensure_layout() {
   done
   [ -f "$INDEX" ] || : > "$INDEX"
   [ -f "$LOG" ] || : > "$LOG"
-  chmod 700 "$ROOT" 2>/dev/null || true
-  chmod 750 "$BIN_DIR" "$INBOX" "$OUTBOX" "$SENT" "$CONSUMED" "$LEGACY" "$TEMPLATES" 2>/dev/null || true
+  # Modes are NOT forced here.  The install sets them per host: the Controller
+  # keeps this channel root-private (0700/0750/0640), while a host where an
+  # external team needs to read the inbox and drop replies in the outbox runs
+  # it world-readable with a sticky, world-writable outbox.  Forcing one mode
+  # here would silently undo that on every run by a different user.
 }
 
 log_action() {
