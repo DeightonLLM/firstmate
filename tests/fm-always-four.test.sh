@@ -1140,6 +1140,129 @@ test_tasks_axi_start_moves_the_row_and_is_idempotent() {
   pass "tasks-axi start moves the row to In flight and is idempotent"
 }
 
+test_build_inflight_tmp_drops_a_finished_lanes_row() {
+  # A lane that has finished must not keep its queued row pinned in flight.
+  # The task metas of finished lanes are never cleaned up, so a row the half
+  # had ever run stayed in the set and could never be dispatched again.
+  local state_dir fakebin tmp
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-inflight-terminal)"
+  fm_test_write_worker_meta "$state_dir" "task-done.meta" "task-done" "$WORKER_MODEL" "" "done"
+  printf 'queued-row-done\n' > "$state_dir/task-done.planning-id"
+  fm_test_write_worker_meta "$state_dir" "task-live.meta" "task-live" "$WORKER_MODEL" "" "working"
+  printf 'queued-row-live\n' > "$state_dir/task-live.planning-id"
+
+  FM_STATE_OVERRIDE="$state_dir" build_inflight_tmp >/dev/null 2>&1
+  tmp="$state_dir/.always-four.inflight.tmp"
+  [ -f "$tmp" ] || fail "build_inflight_tmp did not write its temp file"
+  if grep -qx 'queued-row-done' "$tmp"; then
+    fail "a finished lane's row must not stay pinned in flight"
+  fi
+  grep -qx 'queued-row-live' "$tmp" \
+    || fail "a working lane's row must stay pinned in flight"
+  pass "a finished lane's row is released; a working lane's row stays pinned"
+}
+
+test_capacity_gate_counts_managed_lane_slots_not_crew() {
+  # The scheduler target is a count of this half's own managed slots. The
+  # standing crew (ship, scout, secondmate) run outside those slots, so
+  # counting every worker meta here made a six-slot half read as seven and
+  # stopped a finished lane from ever being refilled.
+  grep -q 'managed_active=$(count_active_lanes)' "$ALWAYS_FOUR" \
+    || fail "the capacity gate must compare managed lane slots with the target"
+  if grep -vE '^[[:space:]]*#' "$ALWAYS_FOUR" | grep -q 'managed_active=$(count_active_worker_tasks)'; then
+    fail "the capacity gate must not compare every worker meta with the lane target"
+  fi
+  pass "the capacity gate counts managed lane slots, not the standing crew"
+}
+
+test_attempt_budget_belongs_to_the_task_not_the_slot() {
+  # The cap stops a hopeless spawn of the SAME task from being hammered. It
+  # must not tombstone a lane slot because an unrelated, now-gone task failed
+  # to spawn three times - that is how a finished lane stayed unfilled forever.
+  local state_dir fakebin
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-attempt-budget)"
+  printf '3 old-task-that-failed\n' > "$state_dir/lane-001.attempts"
+
+  # The attempt helpers resolve the state dir at CALL time, so the isolated
+  # home must be in force for every call.
+  (
+    export FM_STATE_OVERRIDE="$state_dir"
+    lane_at_max_attempts lane-001 old-task-that-failed \
+      || { echo "the same task must still be blocked at the cap" >&2; exit 1; }
+    if lane_at_max_attempts lane-001 a-different-task; then
+      echo "a different task must have a fresh budget" >&2; exit 1
+    fi
+    lane_inc_attempts lane-001 a-different-task
+    [ "$(lane_attempts lane-001)" = "1" ] \
+      || { echo "a different task must start its own budget at 1, got $(lane_attempts lane-001)" >&2; exit 1; }
+    lane_inc_attempts lane-001 a-different-task
+    [ "$(lane_attempts lane-001)" = "2" ] \
+      || { echo "repeated failures of the same task must count up, got $(lane_attempts lane-001)" >&2; exit 1; }
+  ) || fail "the attempt budget must follow the task, not the lane slot"
+  pass "the attempt budget belongs to the task, not to the lane slot"
+}
+
+test_pane_foreground_state_distinguishes_dead_from_unknown() {
+  # The corroboration oracle must be able to say "definitively dead" as well as
+  # "alive", and it must be able to say "I do not know" - a caller that treats
+  # unknown as dead would replace a working lane.
+  local dir fakebin
+  dir=$(mktemp -d)
+  fakebin="$dir/bin"; mkdir -p "$fakebin"
+
+  cat > "$fakebin/herdr" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"result":{"process_info":{"foreground_processes":[{"name":"minimax-code","argv":["minimax-code"]}]}}}
+JSON
+STUB
+  chmod +x "$fakebin/herdr"
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_state herdr default:w99:p1 minimax-code )
+  [ $? -eq 0 ] || fail "a pane running minimax-code must read as alive (0)"
+
+  cat > "$fakebin/herdr" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"result":{"process_info":{"foreground_processes":[{"name":"bash","argv":["/bin/bash"]}]}}}
+JSON
+STUB
+  chmod +x "$fakebin/herdr"
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_state herdr default:w99:p1 minimax-code )
+  [ $? -eq 1 ] || fail "a pane with no harness process must read as dead (1)"
+
+  cat > "$fakebin/herdr" <<'STUB'
+#!/usr/bin/env bash
+echo "not json at all"
+STUB
+  chmod +x "$fakebin/herdr"
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_state herdr default:w99:p1 minimax-code )
+  [ $? -eq 2 ] || fail "an unreadable answer must read as unknown (2), not dead"
+
+  cat > "$fakebin/herdr" <<'STUB'
+#!/usr/bin/env bash
+exit 3
+STUB
+  chmod +x "$fakebin/herdr"
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_state herdr default:w99:p1 minimax-code )
+  [ $? -eq 2 ] || fail "a failed query must read as unknown (2), not dead"
+
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_state tmux default:w99:p1 minimax-code )
+  [ $? -eq 2 ] || fail "a non-herdr backend must read as unknown (2)"
+
+  pass "the corroboration oracle separates alive, dead and unknown"
+}
+
+test_lane_is_active_releases_a_finished_lane_with_a_dead_worker() {
+  # A finished lane whose worker has exited must be released even though
+  # herdr's stale transcript still reads busy.  The source must consult the
+  # corroboration oracle, and only for a terminal task log.
+  grep -q 'fm_pane_foreground_harness_state' "$ALWAYS_FOUR" \
+    || fail "lane_is_active must corroborate a busy verdict for a finished lane"
+  grep -vE '^[[:space:]]*#' "$ALWAYS_FOUR" | grep -q 'fm_pane_foreground_harness_state "$backend" "$target" "$harness" || fg_state=\$?' \
+    || fail "lane_is_active must capture the corroboration oracle state before accepting busy"
+  pass "a finished lane with a dead worker is released, and only then"
+}
+
 for _t in \
   test_slot_model_worker_lanes \
   test_slot_model_checker_lane \
@@ -1183,7 +1306,12 @@ for _t in \
   test_next_eligible_task_skips_unroutable_project_rows \
   test_pane_foreground_harness_alive_matches_only_the_running_harness \
   test_scheduler_moves_a_dispatched_row_with_tasks_axi_start \
-  test_tasks_axi_start_moves_the_row_and_is_idempotent; do
+  test_tasks_axi_start_moves_the_row_and_is_idempotent \
+  test_build_inflight_tmp_drops_a_finished_lanes_row \
+  test_capacity_gate_counts_managed_lane_slots_not_crew \
+  test_attempt_budget_belongs_to_the_task_not_the_slot \
+  test_pane_foreground_state_distinguishes_dead_from_unknown \
+  test_lane_is_active_releases_a_finished_lane_with_a_dead_worker; do
   "$_t" || { echo "FAIL: $_t"; exit 1; }
 done
 echo "# fm-always-four.test.sh: all assertions passed"

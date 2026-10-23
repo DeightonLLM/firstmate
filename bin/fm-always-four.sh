@@ -633,6 +633,47 @@ worker_task_is_working() {
 # fm_spawn_harness_process_alive: it answers "is the worker this pane was
 # started for still running?", and it reads nothing about CPU, sleep state,
 # mtime or rendered UI.  It is never used to decide that a lane is BUSY.
+# Three-state version of the oracle above.
+#   0 = the harness IS running in the pane
+#   1 = the pane is readable and the harness is NOT running  (definitively dead)
+#   2 = unknown: the query failed, the pane is gone, or the answer could not
+#       be parsed.  A caller must fail CLOSED on 2 and keep treating the lane
+#       as active.
+fm_pane_foreground_harness_state() {  # <backend> <target> <harness>
+  local backend=$1 target=$2 harness=$3
+  local session pane out
+
+  [ "$backend" = herdr ] || return 2
+  [ -n "$target" ] || return 2
+  [ -n "$harness" ] || return 2
+  command -v herdr >/dev/null 2>&1 || return 2
+  command -v jq >/dev/null 2>&1 || return 2
+
+  session=${target%%:*}
+  pane=${target#*:}
+  [ "$pane" != "$target" ] || session=""
+  [ -n "$pane" ] || return 2
+
+  if [ -n "$session" ]; then
+    out=$(HERDR_SESSION="$session" herdr pane process-info --pane "$pane" --session "$session" 2>/dev/null) || return 2
+  else
+    out=$(herdr pane process-info --pane "$pane" 2>/dev/null) || return 2
+  fi
+
+  # The answer must be readable, otherwise it is unknown - not dead.
+  printf '%s' "$out" | jq -e '.result.process_info.foreground_processes | type == "array"' \
+    >/dev/null 2>&1 || return 2
+
+  if printf '%s' "$out" | jq -e --arg h "$harness" '
+        [ (.result.process_info.foreground_processes // [])[]
+          | select((( .name // "") | contains($h))
+                   or (((.argv // []) | join(" ")) | contains($h))) ] | length > 0
+      ' >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 fm_pane_foreground_harness_alive() {  # <backend> <target> <harness>
   local backend=$1 target=$2 harness=$3
   local session pane out
@@ -717,7 +758,33 @@ lane_is_active() {
   verdict=$(fm_busy_classify "$backend" "$target" "$harness" "$lane_id" "$state_dir" "$tail40")
 
   case "${verdict%% *}" in
-    busy) return 0 ;;
+    busy)
+      # A busy verdict on its own is not enough to keep a lane that has already
+      # finished.  herdr's pane transcript can keep showing a worker as busy
+      # long after the process exited, which wedges the slot: the lane reads
+      # active, the capacity gate sees every slot occupied, and a finished
+      # lane is never refilled (measured: MCODE lane-006 wedged in an
+      # overcapacity loop while its worker was dead).
+      #
+      # Overriding the verdict needs TWO independent facts: the work is
+      # finished (terminal verb in the task log) AND the pane no longer runs
+      # the worker.  Either one alone is not enough, and an unreadable pane
+      # fails closed and stays active.
+      local fg_state=0
+      local term_last term_verb
+      term_last=$(last_status_line "$status_log" 2>/dev/null || true)
+      term_verb=$(status_verb_of_line "$term_last")
+      if [ -n "$term_verb" ] && is_terminal_verb "$term_verb"; then
+        # The oracle returns its state as an EXIT CODE, not on stdout, so the
+        # code must be captured from the call itself.  `|| fg_state=$?` keeps
+        # it safe under `set -e` as well.
+        fg_state=0
+        fm_pane_foreground_harness_state "$backend" "$target" "$harness" || fg_state=$?
+        if [ "$fg_state" = "1" ]; then
+          return 1
+        fi
+      fi
+      return 0 ;;
   esac
 
   # The scheduler's own honest liveness rule - the same rule the worker-task
@@ -838,31 +905,81 @@ lane_current_task() {
 }
 
 # Get attempt count for a lane from state/lane-<N>.attempts
+# The attempts file holds "<count> <task-id>".  The count is the budget for
+# THAT task: a slot whose earlier task failed to spawn three times must not be
+# tombstoned forever, because the failures were about a task that no longer
+# exists.  A different task gets a fresh budget.
 lane_attempts() {
   local lane_id=$1
-  local f="$STATE/$lane_id.attempts"
-  [ -f "$f" ] && cat "$f" || echo 0
+  # Resolve the state dir at CALL time, like every other state-reading helper
+  # in this script, so an isolated test home never reads the live one.
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  local f="$state_dir/$lane_id.attempts"
+  local n
+  [ -f "$f" ] || { echo 0; return; }
+  n=$(cut -d' ' -f1 "$f" 2>/dev/null || true)
+  case "$n" in
+    ''|*[!0-9]*) echo 0 ;;
+    *) echo "$n" ;;
+  esac
 }
 
 lane_inc_attempts() {
-  local lane_id=$1
-  local f="$STATE/$lane_id.attempts"
-  local n
-  n=$(lane_attempts "$lane_id")
+  local lane_id=$1 task=${2:-}
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  local f="$state_dir/$lane_id.attempts"
+  local n cur_task
+  n=0
+  cur_task=""
+  if [ -f "$f" ]; then
+    n=$(cut -d' ' -f1 "$f" 2>/dev/null || true)
+    cur_task=$(cut -d' ' -f2- "$f" 2>/dev/null || true)
+  fi
+  case "$n" in
+    ''|*[!0-9]*) n=0 ;;
+  esac
+  # A different task gets a fresh budget: the cap exists to stop hammering a
+  # hopeless spawn of the SAME task, not to kill a lane slot permanently.
+  if [ -n "$task" ] && [ -n "$cur_task" ] && [ "$task" != "$cur_task" ]; then
+    n=0
+  fi
   n=$((n + 1))
-  mkdir -p "$STATE"
-  printf '%s\n' "$n" > "$f"
+  mkdir -p "$state_dir"
+  printf '%s %s\n' "$n" "$task" > "$f"
 }
 
 lane_reset_attempts() {
   local lane_id=$1
-  rm -f "$STATE/$lane_id.attempts"
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  rm -f "$state_dir/$lane_id.attempts"
 }
 
+# <lane-id> [task-id]
+# With a task id, the budget checked is that task's: a lane whose previous
+# task exhausted the cap is still fillable with a DIFFERENT task.
 lane_at_max_attempts() {
-  local lane_id=$1
-  local n
-  n=$(lane_attempts "$lane_id")
+  local lane_id=$1 task=${2:-}
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  local f="$state_dir/$lane_id.attempts"
+  local n cur_task
+  [ -f "$f" ] || return 1
+  n=$(cut -d' ' -f1 "$f" 2>/dev/null || true)
+  case "$n" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  if [ -n "$task" ]; then
+    cur_task=$(cut -d' ' -f2- "$f" 2>/dev/null || true)
+    if [ -n "$cur_task" ]; then
+      # The budget belongs to the task it was spent on.
+      [ "$cur_task" != "$task" ] && return 1
+    else
+      # A LEGACY file (a bare count, written before the budget became
+      # task-scoped) cannot say which task it was spent on.  Its failures
+      # were about a task that no longer exists, so the slot must not be
+      # tombstoned by them.
+      return 1
+    fi
+  fi
   [ "$n" -ge "$MAX_ATTEMPTS" ]
 }
 
@@ -1185,7 +1302,7 @@ build_valid_projects_tmp() {
 
 build_inflight_tmp() {
   # Resolve the state dir at CALL time, the same way the census functions do,
-  # so an isolated home (FM_STATE_OVERRIDE) never reads the live state dir.
+  # so an isolated home (FM_DATA_OVERRIDE) never reads the live state dir.
   local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
   local tmp="$state_dir/.always-four.inflight.tmp"
   : > "$tmp"
@@ -1196,24 +1313,49 @@ build_inflight_tmp() {
   # BOTH loops write INTO the temp file. The first loop's output used to go
   # to this function's stdout instead, so the in-flight set never held the
   # task metas at all and a queued row could be dispatched twice.
+  #
+  # A task whose own log has reached a TERMINAL verb is EXCLUDED.  Its lane has
+  # finished, and a finished lane must not keep its queued row pinned in
+  # flight forever: the task metas of finished lanes are never cleaned up, so
+  # every row the half had ever run stayed in this set and could never be
+  # dispatched again - which is how a re-run package stayed undeliverable while
+  # the scheduler reported "no eligible queued tasks".
   local meta task origin
   for meta in "$state_dir"/*.meta; do
     [ -f "$meta" ] || continue
     task=$(grep '^endpoint_task_id=' "$meta" 2>/dev/null | cut -d= -f2- || true)
-    [ -n "$task" ] && printf '%s\n' "$task" >> "$tmp"
+    [ -n "$task" ] || continue
+    if task_log_is_terminal "$state_dir" "$task"; then
+      continue
+    fi
+    printf '%s\n' "$task" >> "$tmp"
     # A minted lane key is NOT the backlog planning id, so the meta above
     # names the lane, not the queued row. The planning id a minted lane
     # serves is recorded in state/<lane-key>.planning-id; read it so the
     # queued row is not dispatched a second time.
-    if [ -n "$task" ]; then
-      origin=$(cat "$state_dir/$task.planning-id" 2>/dev/null || true)
-      [ -n "$origin" ] && printf '%s\n' "$origin" >> "$tmp"
-    fi
+    origin=$(cat "$state_dir/$task.planning-id" 2>/dev/null || true)
+    [ -n "$origin" ] && printf '%s\n' "$origin" >> "$tmp"
   done
   for lane_id in $(lane_ids); do
+    # A lane slot whose lane has finished is a candidate for replacement, so
+    # its row is free again and must not block a re-dispatch.
+    lane_is_active "$lane_id" || continue
     task=$(lane_current_task "$lane_id")
     [ -n "$task" ] && printf '%s\n' "$task" >> "$tmp"
   done
+}
+
+# Return 0 if the task's own status log has reached a terminal verb.
+# <state-dir> <task-id>
+task_log_is_terminal() {  # <state-dir> <task-id>
+  local state_dir=$1 id=$2 log last verb
+  log="$state_dir/$id.status"
+  [ -f "$log" ] || return 1
+  last=$(last_status_line "$log" 2>/dev/null || true)
+  [ -n "$last" ] || return 1
+  verb=$(status_verb_of_line "$last")
+  [ -n "$verb" ] || return 1
+  is_terminal_verb "$verb"
 }
 
 backlog_task_to_project() {
@@ -1576,7 +1718,7 @@ cmd_spawn() {
     sync_gbrain
     printf 'always-four: spawned %s in %s (lane key %s)\n' "$task_id" "$lane_id" "$lane_key"
   else
-    lane_inc_attempts "$lane_id"
+    lane_inc_attempts "$lane_id" "$task_id"
     record_rollback_evidence "$lane_id" "$task_id" "spawn-failed" "rc=$spawn_rc model=$model_arg lane_key=$lane_key"
     emit_coordinator_wake replacement "$lane_id" "$task_id" "spawn FAILED rc=$spawn_rc lane_key=$lane_key"
     sync_gbrain
@@ -1620,12 +1762,14 @@ cmd_cycle() {
     # exactly that never fired here. An empty slot that has exhausted its
     # attempts is reported as a stall and left empty for the operator, not
     # hammered.
-    if lane_at_max_attempts "$lane_id"; then
+    eligible=$(next_eligible_task)
+    [ -z "$eligible" ] && break
+    # The attempt budget belongs to the task being spawned. A slot whose
+    # earlier task exhausted the cap is still fillable with a different one.
+    if lane_at_max_attempts "$lane_id" "$eligible"; then
       emit_coordinator_wake stall "$lane_id" "" "max attempts reached ($(lane_attempts "$lane_id")/$MAX_ATTEMPTS) - empty slot not refilled"
       continue
     fi
-    eligible=$(next_eligible_task)
-    [ -z "$eligible" ] && break
     if [ -z "$dry_run" ]; then
       if cmd_spawn spawn "$lane_id" "$eligible"; then
         active_count=$((active_count + 1))
@@ -1681,8 +1825,13 @@ cmd_cycle() {
     # This keeps review asynchronous: dispatch M3, then immediately refill
     # eligible worker slots while M3 verifies in parallel.
     . "$CAP_SH" 2>/dev/null || true
+    # The capacity comparison must count MANAGED LANE SLOTS, not every worker
+    # meta.  The target is a count of this half's own slots; the standing crew
+    # (ship, scout, secondmate) run outside those slots and are not managed
+    # capacity, so counting them here made a half with six slots read as seven
+    # and stopped a finished lane from ever being refilled.
     local managed_active
-    managed_active=$(count_active_worker_tasks)
+    managed_active=$(count_active_lanes)
 
     if [ "$managed_active" -ge "$TARGET" ]; then
       emit_coordinator_wake overcapacity "$lane_id" "" "at managed_capacity=TARGET(${TARGET}) active_worker_lanes(${managed_active})"
@@ -1698,8 +1847,8 @@ cmd_cycle() {
       continue
     fi
 
-    # Check attempt limit
-    if lane_at_max_attempts "$lane_id"; then
+    # Check attempt limit for THIS task
+    if lane_at_max_attempts "$lane_id" "$eligible"; then
       emit_coordinator_wake stall "$lane_id" "" "max attempts reached ($(lane_attempts "$lane_id")/$MAX_ATTEMPTS)"
       continue
     fi
@@ -1789,7 +1938,7 @@ cmd_cycle() {
         printf 'always-four: replaced %s with %s in %s (model=%s, lane key %s)\n' \
           "${replace_lanes[$lane_id]}" "$eligible" "$lane_id" "$slot_model" "$lane_key"
       else
-        lane_inc_attempts "$lane_id"
+        lane_inc_attempts "$lane_id" "$eligible"
         record_rollback_evidence "$lane_id" "$eligible" "replacement-spawn-failed" \
           "rc=$spawn_rc model=$slot_model lane_key=$lane_key"
         emit_coordinator_wake replacement "$lane_id" "$eligible" \
