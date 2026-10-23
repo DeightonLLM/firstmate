@@ -761,6 +761,50 @@ def shadow_by_origin(rows, conflicts):
     return kept, conflicts
 
 
+def demote_covered_by_reported(rows, covered):
+    """A reported total covers the measured subset of the SAME provider on the SAME day.
+
+    The ledger applies this rule inside one store: a measured local subset whose
+    provider already has an operator-reported total is surfaced as `unmapped` and
+    is never added to the additive total, because the reported number already
+    covers it. The very same reading can also arrive from another surface's own
+    published document, so the rule has to hold across stores too. Without it the
+    reported number and the measured subset are added together and one day's
+    usage is counted twice.
+
+    The demoted reading is REPORTED, never dropped in silence: the band carries
+    it under `ledger.covered_by_reported` with its total, so a reader can see
+    exactly how much is being held back and why.
+    """
+    reported = set()
+    for row in rows:
+        if row.get("measurement") == REPORTED:
+            reported.add((str(row["date"]), str(row.get("provider") or "")))
+    if not reported:
+        return rows
+    kept = []
+    for row in rows:
+        key = (str(row["date"]), str(row.get("provider") or ""))
+        if row.get("measurement") != REPORTED and key in reported:
+            covered.append({
+                "key": "|".join((str(row["surface"]), str(row["date"]),
+                                 str(row.get("provider") or ""), str(row["account_id"]))),
+                "surface": row["surface"],
+                "date": str(row["date"]),
+                "provider": row.get("provider"),
+                "account_id": row["account_id"],
+                "source_id": row.get("source_id"),
+                "covered_total_tokens": row.get("total_tokens"),
+                "reason": "an operator-reported total for this provider on this day already "
+                          "covers this measured subset, so the subset is shown as covered "
+                          "rather than added to the total",
+            })
+            continue
+        kept.append(row)
+    covered.sort(key=lambda entry: (entry["date"], entry["surface"], entry["account_id"]))
+    return kept
+
+
 def index_cells(rows):
     """The account cells: (surface, account, date) -> the account's reading.
 
@@ -1240,6 +1284,9 @@ def build_band(quota_payload, ledger_payload, now, ledger_path_display,
             source_accounts.setdefault(str(account["id"]), account)
     rows, conflicts = merge_rows([ledger_rows, doc_rows])
 
+    covered = []
+    rows = demote_covered_by_reported(rows, covered)
+
     source_info = list(surface_sources or [])
     status = _surface_status(surfaces, rows, source_info)
 
@@ -1276,6 +1323,7 @@ def build_band(quota_payload, ledger_payload, now, ledger_path_display,
         "surfaces": [],
         "sources": [],
         "conflicts": conflicts,
+        "covered_by_reported": covered,
     }
     for entry in coverage["surfaces"]:
         ledger["surfaces"].append({
