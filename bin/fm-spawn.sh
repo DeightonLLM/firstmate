@@ -192,6 +192,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-busy-lib.sh"
 # shellcheck source=bin/fm-pr-lib.sh
 . "$SCRIPT_DIR/fm-pr-lib.sh"
+# shellcheck source=bin/fm-lane-registry-lib.sh
+. "$SCRIPT_DIR/fm-lane-registry-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -2394,6 +2396,42 @@ if [ "$agent_state" != alive ]; then
   printf 'failed: %s\n' "$failure_detail" >> "$STATE/$ID.status"
   echo "error: $failure_detail; inspect window $META_WINDOW" >&2
   exit 1
+fi
+
+# --- lane registry -----------------------------------------------------------
+# The fleet's own live-lane registry (state/lanes/<name>.lane) is what the host
+# safety net counts and what the fleet's lane board renders. It is written HERE,
+# after the agent is confirmed alive, because a registration for a lane that
+# never started would silence the safety net's no-live-lanes alarm - a DEAD
+# alarm, which is worse than a false one. A lane that fails to start leaves no
+# registration behind, and its teardown removes the task records as usual.
+#
+# Only a herdr-paned lane is registered. The host script resolves a
+# registration's pane against the CURRENT herdr layout, so a pane it cannot see
+# would be logged as a stale registration instead of counted as live.
+#
+# A secondmate is NOT registered here: it is a separate home with its own
+# FM_HOME and its own state/lanes/, and the safety net reads the primary home.
+# Its own home's spawn path registers its own crewmates the same way.
+if fm_lane_registry_should_register "$KIND" "${HERDR_PANE_ID:-}"; then
+  lane_name=
+  if lane_name=$(fm_lane_registry_lane_name "$ID"); then
+    lane_report="data/$ID/report.md"
+    case "$DATA" in
+      "$FM_HOME"/data) : ;;
+      *) lane_report="$DATA/$ID/report.md" ;;
+    esac
+    if ! fm_lane_registry_ensure_todo "$STATE" "$lane_name"; then
+      echo "warning: lane work list could not be scaffolded for $ID; the registration still counts the lane as live" >&2
+    fi
+    if ! fm_lane_registry_write "$STATE" "$lane_name" "$HERDR_PANE_ID" "$ID" \
+      "${MODEL:-default}" "${HERDR_SES:-default}" "$lane_report" \
+      "$KIND lane; report: $lane_report"; then
+      echo "warning: lane registry registration failed for $ID; the safety net cannot see this lane" >&2
+    fi
+  else
+    echo "warning: task id is not a safe lane name; no lane registration was written for $ID" >&2
+  fi
 fi
 
 echo "spawned $ID harness=$HARNESS kind=$KIND mode=$MODE yolo=$YOLO window=$META_WINDOW worktree=$WT"
