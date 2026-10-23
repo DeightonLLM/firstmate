@@ -129,7 +129,7 @@ test_legacy_owner_host_row_rejected() {
 }
 
 test_legacy_model_surface_row_rejected() {
-  run_check "[m2.7h @ brandon] widget fix ${EMDASH} working"
+  run_check "[m3.1f @ brandon] widget fix ${EMDASH} working"
   expect_exit 1 "$RUN_RC" 'the legacy [model @ surface] row must be rejected' || return 1
   expect_contains "$RUN_OUT" '[<harness>·<ModelAbbrev> <effort> @<Host>]' \
     'the rejection must name the expected canonical shape' || return 1
