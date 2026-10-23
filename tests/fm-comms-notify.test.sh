@@ -266,6 +266,7 @@ test_absent_route_unknown_identity_rejection() {
   code=$?
   if [ "$code" -eq 0 ]; then
     fail "absent route must not exit 0"
+    # shellcheck disable=SC2317 # Guard clause: fail already exits, so this return is only a readability guard.
     return
   fi
   assert_contains "$out" "error:" "absent route must report error"
@@ -314,6 +315,7 @@ test_retry_reconnect_without_duplicate_prompt() {
     "$NOTIFY" notify --route controller --file "msg-001.msg" --content "same content" 2>&1)
   out2=$(PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
     "$NOTIFY" notify --route controller --file "msg-001.msg" --content "same content" 2>&1)
+  assert_contains "$out1" "notified" "the first send must report the notification"
   assert_contains "$out2" "already-notified" "second send must report already-notified"
   count=$(wc -l < "$log" 2>/dev/null || echo 0)
   assert_contains "$count" "1" "herdr prompt must be called exactly once"
@@ -464,12 +466,12 @@ SH
 
 # 13. Zero repeated model turns for unchanged mail
 test_zero_repeated_model_turns_for_unchanged_mail() {
-  local home fb log count i
+  local home fb log count
   home=$(make_env zero_turns)
   fb=$(make_fake_herdr "$TMP_ROOT/zero_turns" "idle" "true")
   log="$TMP_ROOT/zero_turns/logs/prompts.log"
 
-  for i in 1 2 3 4 5; do
+  for _ in 1 2 3 4 5; do
     PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$ROOT" \
       "$NOTIFY" notify --route controller --file "static-mail.msg" --content "static content" >/dev/null 2>&1
   done

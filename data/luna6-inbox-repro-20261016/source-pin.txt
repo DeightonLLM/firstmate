@@ -1,3 +1,0 @@
-source=/home/hd2admin/kun-agent-workspace/state/controller-inbox.check.sh
-sha256=c75fb91acb0174dcff8eefaa74a8843a093cbbc5e84176f5623b715d664e25ff
-isolation-check=grep -nE on copied poll before run; exit 1 iff any original watched path remains

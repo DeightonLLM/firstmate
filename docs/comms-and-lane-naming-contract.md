@@ -1,7 +1,7 @@
 # Comms and lane-naming contract
 
 Owner: this file owns the comms and delivery facts below; [`AGENT-TODO-PROMPT-STYLE.md`](../AGENT-TODO-PROMPT-STYLE.md) owns the naming format.
-Status: 2026-10-17. Unlanded in this repository; mirrors confirm receipt by returning the exact sha256.
+Status: 2026-10-17; transmission-record rule amended 2026-10-22. Unlanded in this repository; mirrors confirm receipt by returning the exact sha256.
 
 ## 1. What "delivered" means
 
@@ -23,6 +23,29 @@ A notification is not delivery. A "delivered" report is not receipt. If you cann
 - Inbound: the recipient publishes into this home's `BRANDON-COMPUTE-COMMS/to-brandon-compute/`. A poll reports filenames and digests only, never content.
 - A file placed in a SUBDIRECTORY of the outbox is not exempt from delivery guards and is not the documented path. Use the outbox root.
 - Every note carries a `Correlation:` line and ends with a `VERDICT:` line stating the measured outcome.
+
+### 2.1 How a transmission is recorded
+
+**THE RULE: a transmission is recorded by MESSAGE NAME, and the hash is the evidence of the bytes that were transmitted.**
+
+- The name is the key of the record. The sha256 is kept as the evidence of which bytes went out under that name, not as the key.
+- A name that has been transmitted is TRANSMITTED, even when its bytes have changed since it was transmitted.
+- A name that has never been transmitted is UNSENT. It still reports, and it stays visible. A note is never suppressed because its name looks like a reissue.
+- A note that was transmitted and then reissued has bytes that are not the bytes that went out. It is reported as REISSUED, with the old hash and the new hash. A reissue is VISIBLE and it is NOT BLOCKING: it is not an unsent note, and it does not re-arm the watcher on every cycle.
+
+Why the name and not the hash: a ledger keyed by the hash alone makes a reissued note read as a message that was never sent, on every scan, forever. A permanently unsent backlog then keeps the watcher exiting with an actionable reason and supervision never holds. Keyed by the name, the note is known to have been sent, and the change in its bytes is a reissue - a visible change, not a false alarm.
+
+The record lives beside the hash ledger in the home's state directory: the hash ledger keeps the bare sha256 of the transmitted bytes, the name ledger keeps one message name per line, and the transmission record keeps the name, the hash of the bytes transmitted under that name, and the UTC time of the transmission. `bin/fm-outbound.sh` writes all three, and `bin/fm-outbound.sh --mark-only <file>` reconciles a transmission that the name ledger predates, by the file's own name.
+
+### 2.2 What the pending check reports
+
+`bin/fm-controller-pending.sh` is the enforcement point, and it is a watcher check.
+
+- Its stdout carries the ACTIONABLE finding ONLY: the notes that were never transmitted, oldest first, and the action line. The watcher treats any stdout from a check as actionable, so a notice on stdout is itself the defect.
+- A reissue is not on stdout. It goes to a durable reissue log, once per reissue, so the change stays visible without re-arming the watcher on every cycle and without the log growing on every scan.
+- `--report` prints the classification of every note for a human reader. It is not the watcher check mode and must not be registered as one.
+- The age of an unsent note is reported in whole days in check mode, so two scans of an unchanged set produce identical output and the watcher is not woken by the clock alone. The report mode gives the exact age.
+
 
 ## 3. Reading
 

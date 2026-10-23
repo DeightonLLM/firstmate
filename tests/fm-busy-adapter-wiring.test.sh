@@ -105,7 +105,7 @@ EOF
 }
 
 test_pi_extension_semantic_lifecycle() {
-  local rec id=busy-pi-1 out state ext
+  local rec id=luna6-hd2-busy-pi-1 out state ext
   rec=$(make_spawn_case pi-lifecycle pi "$id")
   read_case_record "$rec"
   out=$(run_spawn "$HOME_DIR" "$WT_DIR" "$FAKEBIN_DIR" "$id" "$PROJ_DIR")

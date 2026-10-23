@@ -1,2 +1,0 @@
-working: beginning read-only provenance audit preflight
-blocked: report is written, but decision-hold completion requires writes to task metadata/status outside the explicitly permitted report and status files

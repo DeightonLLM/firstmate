@@ -28,11 +28,11 @@ documentation against source code already read in this session.
 **File:** `AGENTS.md`
 **Line:** 167
 **Current claim:** `"claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, `agy`, and `minimax-code` are empirically verified"`
-**Should claim:** `"claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, and `agy` are empirically verified" — `minimax-code` is NOT in the canonical verified list.
+**Should claim:** `"claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, `kimi`, `agy`, and `minimax-code` are empirically verified"` - `minimax-code` IS in the canonical verified list, so `AGENTS.md` line 167 is correct as written.
 
-**Verification:** `bin/fm-harness.sh` line 31 defines `VERIFIED_HARNESSES=(claude codex opencode pi pi-signed grok kimi agy)` — 8 entries, no `minimax-code`. The `minimax-code` string appears in that file only in the ancestry-walk detection layer (lines 96, 109), not in the canonical array. `bin/fm-spawn.sh` lines 686–692 shows `minimax-code` accepted in the case statement, but that is a spawn-entry guard, not a verified-harness declaration. The canonical source is `bin/fm-harness.sh`.
+**Verification:** `bin/fm-harness.sh` line 31 defines `VERIFIED_HARNESSES=(claude codex opencode pi pi-signed grok kimi agy minimax-code)` - 9 entries. The `minimax-code` string also appears in that file in the ancestry-walk detection layer (lines 96, 109), and `bin/fm-spawn.sh` carries a working `mcode` launch template for it. The canonical source is `bin/fm-harness.sh`.
 
-**Status: OPEN** — cannot fix here; requires a code change to either (a) add `minimax-code` to `VERIFIED_HARNESSES` in `bin/fm-harness.sh` if it is genuinely verified, or (b) remove it from `AGENTS.md` line 167 if it is not. **Owner: harness-adapters skill / fm-harness.sh maintainer.**
+**Status: FIXED** - `minimax-code` was added to `VERIFIED_HARNESSES` in `bin/fm-harness.sh`, so `AGENTS.md` line 167 and the canonical list now agree. **Owner: harness-adapters skill / fm-harness.sh maintainer.**
 
 ---
 
@@ -41,11 +41,11 @@ documentation against source code already read in this session.
 **File:** `AGENTS.md`
 **Line:** 167
 **Current claim:** nine harnesses including `minimax-code` are verified.
-**Should claim:** matches the bootstrap hardcode fallback (see Finding 3).
+**Should claim:** matches the bootstrap hardcode fallback (see Finding 3), which now carries the same 9 names.
 
-**Verification:** `bin/fm-bootstrap.sh` line 736 hardcodes a fallback JSON array with eight names and no `minimax-code`. AGENTS.md and bootstrap disagree. The bootstrap fallback is consulted when `fm-harness.sh verified-json` fails, so it is effectively part of the verified-harness contract.
+**Verification:** `bin/fm-bootstrap.sh` line 736 hardcodes a fallback JSON array that `fm-harness.sh verified-json` falls back to when it fails, so it is effectively part of the verified-harness contract. It now carries the same 9 names as `bin/fm-harness.sh`, so AGENTS.md and bootstrap agree.
 
-**Status: OPEN** — same resolution path as Finding 1. **Owner: same.**
+**Status: FIXED** - same resolution path as Finding 1. **Owner: same.**
 
 ---
 
@@ -53,12 +53,12 @@ documentation against source code already read in this session.
 
 **File:** `bin/fm-bootstrap.sh`
 **Line:** 736
-**Current claim (in hardcoded fallback JSON string):** `["claude","codex","opencode","pi","pi-signed","grok","kimi","agy"]` — 8 entries, no `minimax-code`.
-**Should claim:** either 9 entries including `minimax-code` (if it is verified) or the 8-entry list that matches `bin/fm-harness.sh`'s `VERIFIED_HARNESSES` array exactly.
+**Current claim (in hardcoded fallback JSON string):** `["claude","codex","opencode","pi","pi-signed","grok","kimi","agy","minimax-code"]` - 9 entries.
+**Should claim:** the 9-entry list that matches `bin/fm-harness.sh`'s `VERIFIED_HARNESSES` array exactly.
 
-**Verification:** `bin/fm-harness.sh` line 31 is the authoritative source; the bootstrap fallback must mirror it. Currently it does.
+**Verification:** `bin/fm-harness.sh` line 31 is the authoritative source; the bootstrap fallback mirrors it. It now does.
 
-**Status: OPEN** — this file is correct as-is IF `minimax-code` is not verified. The issue is AGENTS.md being wrong, not bootstrap. If `minimax-code` is later verified, this line must be updated atomically with `bin/fm-harness.sh`. **Owner: bootstrap maintainer / harness-adapters.**
+**Status: FIXED** - `minimax-code` is verified, so this fallback was updated in the same change that added it to `VERIFIED_HARNESSES`. **Owner: bootstrap maintainer / harness-adapters.**
 
 ---
 
@@ -127,7 +127,7 @@ documentation against source code already read in this session.
 
 | Claim | Why unverifiable locally | Owner who can settle |
 |-------|-------------------------|----------------------|
-| Whether `minimax-code` is genuinely a verified, shippable harness (AGENTS.md says yes; fm-harness.sh says no) | Requires live test of `minimax-code` on PATH, a brief dispatch, and confirmation of working busy-state, turn-end, and teardown | `fm-harness.sh` / `harness-adapters` maintainer — must either add it to `VERIFIED_HARNESSES` or confirm it is not supported and remove it from AGENTS.md |
+| Whether `minimax-code` is genuinely a verified, shippable harness (AGENTS.md says yes; fm-harness.sh says no) | Resolved: `minimax-code` was added to `VERIFIED_HARNESSES` in `bin/fm-harness.sh`. Its busy-state, turn-end, and teardown behaviour is still not live-verified, and the harness-adapters skill records that gap. | `fm-harness.sh` / `harness-adapters` maintainer - keep the skill section current. |
 | Whether agy requires any non-PATH setup beyond what is documented | No agy setup guide exists; whether one is needed cannot be determined from docs alone | `harness-adapters` skill owner |
 | Whether `docs/docs-correction-programme.md` should exist as a tracked document (it is the output of this task; whether it belongs in `docs/` or `data/` is a routing decision) | This is the document being written; its final resting place (tracked `docs/` vs gitignored `data/`) is a policy call | Captain or `firstmate-coding-guidelines` skill |
 
@@ -137,18 +137,18 @@ documentation against source code already read in this session.
 
 | Category | Count |
 |----------|-------|
-| Fixed in this run | 1 (Finding 7 — symlink check is correct) |
+| Fixed in this run | 1 (Finding 7 - symlink check is correct) |
+| Fixed by the `minimax-code` harness registration | 3 (Findings 1, 2, 3 - the `minimax-code` / verified-harness list inconsistency) |
 | Open, docs-only fix | 4 (Findings 4, 5, 6, 8) |
-| Open, requires code+docs coordination | 3 (Findings 1, 2, 3 — all the `minimax-code` / verified-harness list inconsistency) |
 
 **Total actionable items: 7**
-**Fixed: 1**
-**Open: 6**
+**Fixed: 4**
+**Open: 4**
 
 ### Most dangerous remaining false claim
 
-**AGENTS.md line 167** — declares `minimax-code` a verified harness when it is absent from the canonical `VERIFIED_HARNESSES` array in `bin/fm-harness.sh`.
+None from this report. The `minimax-code` inconsistency that Findings 1, 2, and 3 recorded is closed: `minimax-code` is in the canonical `VERIFIED_HARNESSES` array in `bin/fm-harness.sh`, so `AGENTS.md` line 167 and the code agree.
 
-This is the most dangerous because it is a hard rule in the distro's operating contract that directly governs dispatch authorization. A captain reading this line could attempt to dispatch on `minimax-code` believing it is supported, and the dispatch would either fail silently (if the harness is on PATH but not in the verified list) or behave unexpectedly. The false claim also infects the bootstrap fallback (`bin/fm-bootstrap.sh` line 736), creating an internal inconsistency between AGENTS.md's documented policy and the bootstrap enforcement layer.
+Findings 4, 5, and 6 remain open and are docs-only: `README.md` still does not mention `agy`.
 
-**Resolution path:** `bin/fm-harness.sh` line 31 and `bin/fm-bootstrap.sh` line 736 must agree; AGENTS.md must be corrected to match. If `minimax-code` is genuinely verified, add it to the array in both places atomically. If it is not verified, remove it from AGENTS.md and close Findings 1 and 2 as FIXED.
+**Resolution path taken:** `minimax-code` was added to `VERIFIED_HARNESSES` in `bin/fm-harness.sh` and to the matching fallback array in `bin/fm-bootstrap.sh` in the same change, and `AGENTS.md` line 167 was left as written because it was already correct.

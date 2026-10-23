@@ -2,13 +2,15 @@ projects/
 state/
 data/
 .no-mistakes/
-.lavish/
+.lavish/*
+!.lavish/CAPTAIN-BOARD.html
 .fm-secondmate-home
 .DS_Store
 __pycache__/
 *.pyc
 .env
 config/
+treehouse.toml
 
 # Live channels, generated deps, external mirrors and client campaign data.
 # Live comms must never be committed or deleted.

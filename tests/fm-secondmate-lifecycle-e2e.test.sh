@@ -114,7 +114,7 @@ phase_spawn() {
   : > "$LOG"
   PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_CONFIG_OVERRIDE="$HOME_DIR/parent-config" \
     FM_FAKE_TMUX_LOG="$LOG" FM_FAKE_TMUX_CAPTURE="$PANE" \
-    "$ROOT/bin/fm-spawn.sh" design "$SUB" codex --secondmate >/dev/null \
+    "$ROOT/bin/fm-spawn.sh" design "$SUB" codex --model gpt-6-luna --secondmate >/dev/null \
     || fail "secondmate spawn failed"
 
   local meta="$HOME_DIR/state/design.meta"
@@ -199,6 +199,11 @@ phase_recovery() {
   # Simulate a restart: drop the live meta, then respawn from the registry +
   # persistent home (no explicit home argument).
   rm -f "$HOME_DIR/state/design.meta"
+  # The tmux session outlives a firstmate restart, so the stale window is still
+  # there - and the fleet's relaunch path kills a confirmed-dead endpoint before
+  # it relaunches (bin/fm-secondmate-liveness-lib.sh, FM_SM_LIVE_KILL). Model
+  # that here, otherwise the respawn would refuse with "window already exists".
+  PATH="$FAKEBIN:$PATH" tmux kill-window -t "=firstmate:=fm-design" >/dev/null 2>&1 || true
   PATH="$FAKEBIN:$PATH" FM_HOME="$HOME_DIR" FM_FAKE_TMUX_LOG="$LOG" FM_FAKE_TMUX_CAPTURE="$PANE" \
     "$ROOT/bin/fm-spawn.sh" design "echo relaunch" --secondmate >/dev/null 2>&1 \
     || fail "recovery respawn failed"

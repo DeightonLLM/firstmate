@@ -1,5 +1,0 @@
-working [at=1790474276]: isolated worktree verified and task branch created
-blocked [at=1790474323]: required data/core-v3-prd-gap-map/report.md and data/core-v3-prd-gap-map-agy-review-20260926/report.md are absent from the worktree and all reachable git refs
-resolved [at=1790474347]: required gap-map reports supplied at authorized Firstmate-home paths and read
-working [at=1790474717]: proposed acceptance spec validation passed; committing the single documentation file
-done [at=1790474729]: ready in branch fm/core-v3-product-acceptance-spec-0927

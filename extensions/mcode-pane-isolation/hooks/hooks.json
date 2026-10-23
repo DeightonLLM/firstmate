@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(herdr .*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "fm-pane-isolation-guard.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

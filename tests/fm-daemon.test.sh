@@ -1567,24 +1567,27 @@ test_inject_wedge_alarm_throttles_when_marker_cannot_be_written() {
 test_fm_send_exits_nonzero_on_confirmed_swallow() {
   # fm-send.sh must exit NON-ZERO when a steer's Enter is positively swallowed
   # (text left in the composer), so firstmate learns the instruction did not land
-  # — and exit ZERO on a clean submit.
-  local dir fakebin err
+  # — and exit ZERO on a clean submit. A swallow lands in the DISTINCT
+  # delivered-but-unconfirmed code, never the not-delivered code: the text
+  # reached the target, only the submit acknowledgement is missing.
+  local dir fakebin err rc
   dir=$(make_bordered_case send-swallow)
   fakebin="$dir/fakebin"; err="$dir/send.err"
   # Clean submit -> exit 0.
   PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$dir/state" FM_FAKE_COMPOSER="$dir/composer" \
     FM_SEND_SLEEP=0.05 "$ROOT/bin/fm-send.sh" sess:win 'route this work' >/dev/null 2>"$err" \
     || fail "fm-send exited non-zero on a clean submit: $(cat "$err")"
-  # Persistent swallow -> exit non-zero with a clear message.
+  # Persistent swallow -> the distinct unconfirmed code with a clear message.
   printf '╭─────╮\n│ >   │\n╰─────╯\n' > "$dir/composer"
   touch "$dir/.swallow"
-  if PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$dir/state" FM_FAKE_COMPOSER="$dir/composer" \
+  PATH="$fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$dir/state" FM_FAKE_COMPOSER="$dir/composer" \
     FM_FAKE_SWALLOW="$dir/.swallow" FM_FAKE_PERSIST_SWALLOW=1 FM_SEND_SLEEP=0.05 \
-    "$ROOT/bin/fm-send.sh" sess:win 'fix findings 1 and 3, skip 2' >/dev/null 2>"$err"; then
-    fail "fm-send exited zero despite a swallowed Enter (silent unsubmitted instruction)"
-  fi
+    "$ROOT/bin/fm-send.sh" sess:win 'fix findings 1 and 3, skip 2' >/dev/null 2>"$err"; rc=$?
+  expect_code 2 "$rc" "a confirmed swallow must exit with the distinct delivered-but-unconfirmed code"
   grep -F 'not submitted' "$err" >/dev/null || fail "fm-send did not explain the swallowed submit: $(cat "$err")"
-  pass "fm-send exits non-zero on a confirmed swallow, zero on a clean submit"
+  grep -F 'delivered but unconfirmed' "$err" >/dev/null \
+    || fail "fm-send did not name the unconfirmed outcome: $(cat "$err")"
+  pass "fm-send exits with the distinct unconfirmed code on a confirmed swallow, zero on a clean submit"
 }
 
 test_fm_send_exits_nonzero_on_initial_send_failure() {

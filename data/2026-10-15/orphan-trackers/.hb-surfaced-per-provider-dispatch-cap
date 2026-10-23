@@ -1,1 +1,0 @@
-blocked: authorized test invocation `bash tests/fm-dispatch-guard-max-lanes.test.sh` was still refused by the shell allowlist (exit 126: bash is not allowlisted); cannot reproduce before fixing, stopped without retry or workaround

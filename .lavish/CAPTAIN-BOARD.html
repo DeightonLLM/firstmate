@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en" data-lavish-annotate="off">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Captain's board - HD2 firstmate - 2026-10-21 03:27Z</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1319;--panel:#151e26;--panel2:#1b2732;--line:#2b3a47;
+--ink:#e8f0f3;--muted:#9db0bd;--faint:#6f8391;--accent:#75d4c3;--ok:#75d4c3;--warn:#ffc978;
+--bad:#ff9c91;--blue:#7cc4ff;--violet:#c4a7f7;--ink-2:#0d1319}
+*{box-sizing:border-box}
+body{margin:0;padding:0 0 70px;background:var(--bg);color:var(--ink);
+ font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+ -webkit-font-smoothing:antialiased}
+.wrap{max-width:1280px;margin:0 auto;padding:0 24px}
+header.top{padding:34px 0 18px;border-bottom:1px solid var(--line)}
+h1{margin:0 0 6px;font-size:clamp(1.5rem,3.4vw,2.1rem);letter-spacing:-.02em}
+h2{margin:0;font-size:1.16rem;letter-spacing:-.01em}
+h3{margin:0 0 8px;font-size:.95rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+p{margin:0 0 10px}
+.lede{color:var(--muted);max-width:88ch;font-size:14.5px}
+.meta{color:var(--faint);font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+ margin-top:12px}
+.grid{display:grid;gap:12px}
+.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:20px 0 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.stat b{display:block;font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.stat span{display:block;font-size:11px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
+.stat.ok b{color:var(--ok)} .stat.warn b{color:var(--warn)} .stat.bad b{color:var(--bad)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;min-width:0}
+section{margin:26px 0 0}
+section>header{display:flex;justify-content:space-between;align-items:baseline;gap:14px;
+ flex-wrap:wrap;margin:0 0 12px}
+.note{color:var(--muted);font-size:13px;max-width:96ch;margin:0 0 12px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;
+ letter-spacing:.03em;border:1px solid var(--line);background:var(--panel2);white-space:nowrap}
+.p0{color:var(--bad);border-color:rgba(255,156,145,.4)}
+.p1{color:var(--warn);border-color:rgba(255,201,120,.35)}
+.p2{color:var(--blue);border-color:rgba(124,196,255,.3)}
+.tag{font-size:11px;padding:2px 8px;border-radius:999px;background:#233240;color:var(--muted);
+ font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+.tag.ok{color:var(--ok)} .tag.warn{color:var(--warn)} .tag.bad{color:var(--bad)} .tag.blue{color:var(--blue)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);
+ position:sticky;top:0;background:var(--panel);z-index:2}
+td.tid{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--blue);white-space:nowrap}
+td.what{color:var(--ink)}
+.scroll{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+label.opt{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border:1px solid var(--line);
+ border-radius:10px;margin:7px 0;cursor:pointer;background:var(--panel2)}
+label.opt:hover{border-color:var(--accent)}
+label.opt input{margin-top:3px;accent-color:var(--accent);flex:0 0 auto}
+label.opt .t{font-weight:600;display:block}
+label.opt .d{display:block;color:var(--muted);font-size:12.5px;margin-top:2px}
+button{font:inherit;color:var(--ink);background:#22323f;border:1px solid var(--line);
+ border-radius:9px;padding:8px 14px;cursor:pointer}
+button:hover{border-color:var(--accent);background:#263a49}
+button.primary{background:var(--accent);color:var(--ink-2);border-color:var(--accent);font-weight:700}
+button.primary:hover{filter:brightness(1.08)}
+input[type=text],textarea,select{font:inherit;color:var(--ink);background:#111a22;
+ border:1px solid var(--line);border-radius:9px;padding:9px 11px;width:100%}
+input[type=text]:focus,textarea:focus{outline:2px solid rgba(117,212,195,.35);border-color:var(--accent)}
+textarea{min-height:74px;resize:vertical}
+.qbox{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--panel2);margin:12px 0}
+.qbox>.qh{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
+.qid{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--faint)}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:13.5px;margin:0 0 12px}
+.kv dt{color:var(--faint);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.kv dd{margin:0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+ color:var(--muted);background:#0f161d;border:1px solid var(--line);border-radius:10px;padding:12px;margin:0}
+.ticket-body{font-size:13.5px;color:var(--ink)}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 12px}
+.filters input[type=text]{flex:1 1 220px;max-width:300px}
+.filters select{width:auto;min-width:130px}
+.count{color:var(--faint);font-size:12px;margin-left:auto;font-variant-numeric:tabular-numbers}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:10px 0 0}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.lane{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line)}
+.lane:last-child{border-bottom:none}
+.lane .nm{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+ min-width:230px;flex:0 0 auto;overflow-wrap:anywhere}
+.lane .nx{font-size:13px;color:var(--muted);min-width:0}
+.st-DONE{color:var(--ok)} .st-ACTIVE{color:var(--warn)} .st-BLOCKED{color:var(--bad)}
+.st-RELEASED{color:var(--faint)} .st-NEXT{color:var(--blue)}
+.toolbar{position:sticky;top:0;z-index:30;background:var(--bg);border-bottom:1px solid var(--line);
+ padding:12px 0}
+.toolbar .inner{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sub{color:var(--faint);font-size:12px}
+ul.tight{margin:6px 0 0;padding-left:18px}
+ul.tight li{margin:3px 0;font-size:13.5px}
+hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+.copyrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.status{min-height:1.3em;color:var(--accent);font-size:13px}
+@media(max-width:760px){.wrap{padding:0 14px}.kv{grid-template-columns:1fr}.lane{flex-direction:column;gap:2px}
+ .lane .nm{min-width:0}th{font-size:9.5px}td{padding:7px 5px}}
+</style></head><body>
+<div class="wrap">
+<header class="top">
+ <h1>Captain's board &mdash; HD2 firstmate</h1>
+ <p class="lede">One surface for the things you asked to see: the ticket you authorised, the full ticket
+ queue, the decisions settled tonight, the live to-do list, and the space job. Every number here is read
+ from machine state at build time &mdash; this board is generated, never hand-typed, so it cannot drift
+ from the ledger it claims to show.</p>
+ <p class="meta">built 2026-10-21T03:27:07Z &middot; surface: HD2Stack vmi3238503 / 100.71.95.76
+ &middot; ledger digest sha256:92a761516fdcd1a9&hellip;
+ &middot; 42 tickets in INBOX &middot; 20 lanes in the ledger</p>
+ <div class="grid stats">
+  <div class="stat warn"><b>3</b><span>lanes in flight</span></div>
+  <div class="stat"><b>42</b><span>tickets waiting</span></div>
+  <div class="stat bad"><b>6</b><span>P0 tickets</span></div>
+  <div class="stat warn"><b>28</b><span>P1 tickets</span></div>
+  <div class="stat ok"><b>0</b><span>board residuals</span></div>
+  <div class="stat ok"><b>0</b><span>contract gaps</span></div>
+  <div class="stat ok"><b>0</b><span>ledger drift</span></div>
+  <div class="stat bad"><b>86%</b><span>HD2Stack disk used</span></div>
+ </div>
+</header>
+
+<div class="toolbar"><div class="inner">
+ <b style="font-size:14px">Jump:</b>
+ <a class="tag" href="#t3">ticket-0003</a>
+ <a class="tag" href="#queue">ticket queue (42)</a>
+ <a class="tag" href="#dec">decisions settled</a>
+ <a class="tag" href="#space">space job</a>
+ <a class="tag" href="#todo">my to-do list</a>
+ <span class="sub">annotate is OFF on this page &mdash; the boxes and buttons below are live controls</span>
+</div></div>
+
+<section id="t3">
+ <header><h2>1 &mdash; ticket-0003: the one you authorised</h2>
+  <span class="tag blue">INBOX/0003-kvm1-herdr-window.md</span></header>
+ <p class="note">This is the ticket. It was never on a review surface &mdash; it sat as a text file in
+ <code>INBOX/</code> with a one-line body pointing at a dated campaign board, which is why you could not find it.
+ Full text, verbatim, is below. It now has a decision control attached.</p>
+ <div class="grid" style="grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)">
+  <div class="card">
+   <h3>The ticket, verbatim</h3>
+   <pre>Choose an authorized maintenance window for the held KVM1 Herdr registration stop/update, then require guarded preflight before registration. Source: data/campaign-dashboard-20261015/board.md, “KVM1 Herdr registration” row; data/surface-parity-20261015/STATUS.md row 14.</pre>
+   <hr>
+   <dl class="kv">
+    <dt>Received</dt><dd>2026-10-15</dd>
+    <dt>Area</dt><dd>Surface Parity</dd>
+    <dt>Priority</dt><dd>P1</dd>
+    <dt>Requested by</dt><dd>Captain</dd>
+    <dt>Source cited</dt><dd>data/campaign-dashboard-20261015/board.md row &ldquo;KVM1 Herdr registration&rdquo;
+     (HELD, owner Operator / Controller) and data/surface-parity-20261015/STATUS.md row 14
+     &mdash; <b>that STATUS.md does not exist anywhere</b>, so the board row is the only surviving record</dd>
+   </dl>
+  </div>
+  <div class="card">
+   <h3>What the diagnosis found</h3>
+   <dl class="kv">
+    <dt>KVM1 is</dt><dd><b>srv797124</b> &middot; tailnet <code>srv797124-hd2-hostinger-kvm1</code> &middot;
+      <code>100.92.152.109</code> &middot; account root &middot; tier <code>KVM1_HOSTINGER</code> &mdash; the HD2 main
+      WordPress host <b>hd2.ai</b>, 1 CPU. It is <i>not</i> the backup box (srv1856614) and <i>not</i> the Lead Engine
+      production box (100.69.211.43, a hard gate).</dd>
+    <dt>Why Herdr</dt><dd>Herdr was never installed there and was never registered. <code>herdr machine list</code>
+      is empty, and no key on this host is authorised on it &mdash; 6 accounts tried, all
+      <code>Permission denied</code>. Herdr 0.9.5 refuses a non-interactive remote stop/update, so the
+      registration is an <b>attended</b> step.</dd>
+    <dt>Trap</dt><dd>the fleet's pinned Herdr is 0.8.2 but the live binary is 0.9.5 &mdash; following the
+      marker would <b>downgrade</b>. The pin must be re-pinned first, inside the same window.</dd>
+    <dt>Ready</dt><dd>a read-only 7-gate preflight ships with it
+      (<code>data/hd2-takeover/kvm1-herdr-window-preflight.sh</code>, exits 66 today, dated backup of
+      <code>/root/.config/herdr</code> proves it wrote nothing).</dd>
+   </dl>
+   <h3>Proposed window</h3>
+   <dl class="kv">
+    <dt>Placement</dt><dd><b>05:00&ndash;05:30 BST, a working day</b> &mdash; matches the fleet's own
+      05:10&ndash;05:18 BST KVM1-maintenance precedent</dd>
+    <dt>Length</dt><dd>30 minutes hard-bounded; <b>abort and report at 15 minutes</b></dd>
+    <dt>Trigger</dt><dd>your authorisation of this ticket <b>and</b> a working SSH path into KVM1 at that moment</dd>
+    <dt>Owner</dt><dd>you for the attended interactive approve step; the HD2 firstmate drives the preflight
+      and keeps the record</dd>
+    <dt>Mechanism</dt><dd>the existing pinned-apply mechanism &mdash; armed marker, zero live panes,
+      <code>.bak</code> rollback, one-shot</dd>
+   </dl>
+  </div>
+ </div>
+
+ <div class="card" style="margin-top:12px">
+  <h3>Your decision on ticket-0003</h3>
+  <div class="qbox" data-lavish-question="ticket-0003-window">
+   <div class="qh"><b>Which window do you authorise?</b><span class="qid">Q1 &middot; ticket-0003</span></div>
+   <label class="opt"><input type="radio" name="t3window" value="authorise-as-proposed">
+    <span><span class="t">Authorise the window as proposed</span>
+    <span class="d">05:00&ndash;05:30 BST on a working day &middot; 30 min, abort at 15 &middot; the firstmate
+     runs the guarded preflight and the attended registration</span></span></label>
+   <label class="opt"><input type="radio" name="t3window" value="authorise-other-window">
+    <span><span class="t">Authorise a different window &mdash; state it below</span>
+    <span class="d">e.g. a specific date and time, or a different clock hour</span></span></label>
+   <label class="opt"><input type="radio" name="t3window" value="hold">
+    <span><span class="t">Hold &mdash; do not authorise yet</span>
+    <span class="d">ticket-0003 stays open and the KVM1 lane stays held</span></span></label>
+   <label style="display:block;margin:10px 0 4px;color:var(--muted);font-size:12.5px">
+    If you picked a different window, say which (date + start time + BST/UTC):</label>
+   <input type="text" name="t3other" placeholder="e.g. Thursday 2026-10-22, 02:00 BST" style="max-width:420px">
+   <div class="copyrow">
+    <button type="button" class="primary" onclick="(function(b){var f=b.closest('.qbox');
+     var fd=new FormData(f); var choice=(fd.get('t3window')||'').trim(); if(!choice){alert('Pick one option first.');return;}
+     var other=(fd.get('t3other')||'').trim();
+     var msg='ticket-0003 decision: '+choice+(other?' -- requested window: '+other:'')+
+      ' -- authorise the KVM1 Herdr registration window on srv797124 (100.92.152.109).'+
+      ' Reply with the window to run and confirm the SSH path into KVM1.';
+     window.lavish.queuePrompt(msg,{tag:'decision',text:'ticket-0003: '+choice,
+      element:f,data:{question:'ticket-0003-window',answer:choice,requested_window:other}});})(this)">
+     Queue this answer</button>
+    <span class="status" aria-live="polite"></span>
+   </div>
+  </div>
+
+  <div class="qbox" data-lavish-question="kvm1-ssh-path">
+   <div class="qh"><b>The SSH path into KVM1</b><span class="qid">Q2 &middot; ticket-0003</span></div>
+   <p class="sub" style="margin:0 0 8px">The window cannot open without one: no key on this host is authorised
+    on srv797124. Give a path, or say it will be added at the window.</p>
+   <input type="text" name="kvm1ssh" placeholder="e.g. root@100.92.152.109 with the fleet key, or &quot;add my key at the window&quot;">
+   <div class="copyrow">
+    <button type="button" class="primary" onclick="(function(b){var f=b.closest('.qbox');
+     var v=(new FormData(f).get('kvm1ssh')||'').trim();
+     window.lavish.queuePrompt('KVM1 SSH path for ticket-0003: '+(v||'(none given - add at the window)'),
+      {tag:'decision',text:'KVM1 SSH path',element:f,data:{question:'kvm1-ssh-path',ssh_path:v}});})(this)">
+     Queue this answer</button>
+    <span class="status" aria-live="polite"></span>
+   </div>
+  </div>
+ </div>
+
+<section id="queue">
+ <header><h2>2 &mdash; your ticket queue</h2>
+  <span class="tag">42 tickets &middot; 6 P0 / 28 P1 / 6 P2</span></header>
+ <p class="note">These are the Captain-raised tickets sitting in <code>INBOX/</code>. Nothing has ever put
+ them on a review surface, which is the whole reason you could not find ticket-0003. Tick the ones you want
+ the firstmate to work next and queue the batch &mdash; I will come back with an item-by-item receipt, one
+ line per ticket number.</p>
+ <div class="filters">
+  <input type="text" id="q" placeholder="Search tickets&hellip;" aria-label="Search tickets">
+  <select id="fp" aria-label="Filter by priority">
+   <option value="">All priorities</option>
+   <option value="P0">P0 only</option><option value="P1">P1 only</option><option value="P2">P2 only</option>
+  </select>
+  <select id="fa" aria-label="Filter by area"><option value="">All areas</option></select>
+  <button type="button" id="all">Select all shown</button>
+  <button type="button" id="none">Clear</button>
+  <span class="count" id="cnt"></span>
+ </div>
+ <div data-lavish-question="ticket-batch">
+ <div class="scroll"><table id="qtable">
+  <thead><tr><th style="width:76px">Ticket</th><th style="width:58px">Pri</th><th style="width:190px">Area</th><th>What it asks</th></tr></thead>
+  <tbody><tr data-prio="P2" data-area="Surface Parity" data-txt="0001 surface parity reconcile the remaining hetz firstmate home roster conflict in its authorized change path and rerun the read-only surface audit. source: data/campaign-dashboard-20261015/board.md, “hetz firstmate home authority” row; data/surface-parity-20261015/status.md row 6b.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0001" data-label="Reconcile the remaining Hetz Firstmate home roster conflict in its authorized change path and rerun the read-only surface audit." data-disposition="queue-for-hd2-firstmate">
+   0001</label></td>
+ <td><span class="pill p2">P2</span></td>
+ <td>Surface Parity</td>
+ <td class="what">Reconcile the remaining Hetz Firstmate home roster conflict in its authorized change path and rerun the read-only surface audit.</td>
+</tr><tr data-prio="P1" data-area="Surface Parity" data-txt="0002 surface parity close the kvm1 drift-checker and trust-baseline parity gaps only after the kvm1 herdr window is authorized; back up before any in-scope installation. source: data/campaign-dashboard-20261015/board.md, “kvm1 parity: drift checker and trust baseline” row; data/surface-parity-20261015/verified-infra.md.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0002" data-label="Close the KVM1 drift-checker and trust-baseline parity gaps only after the KVM1 Herdr window is authorized; back up before any in-scope installation." data-disposition="queue-for-hd2-firstmate">
+   0002</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Surface Parity</td>
+ <td class="what">Close the KVM1 drift-checker and trust-baseline parity gaps only after the KVM1 Herdr window is authorized; back up before any in-scope installation.</td>
+</tr><tr data-prio="P1" data-area="Surface Parity" data-txt="0003 surface parity choose an authorized maintenance window for the held kvm1 herdr registration stop/update, then require guarded preflight before registration. source: data/campaign-dashboard-20261015/board.md, “kvm1 herdr registration” row; data/surface-parity-20261015/status.md row 14.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0003" data-label="Choose an authorized maintenance window for the held KVM1 Herdr registration stop/update, then require guarded preflight before registration." data-disposition="queue-for-hd2-firstmate">
+   0003</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Surface Parity</td>
+ <td class="what">Choose an authorized maintenance window for the held KVM1 Herdr registration stop/update, then require guarded preflight before registration.</td>
+</tr><tr data-prio="P1" data-area="Dispatch Reliability" data-txt="0004 dispatch reliability run the approved focused runtime regression for the dispatch prompt-hygiene hook and record its exit code before treating the hook as verified. source: data/campaign-dashboard-20261015/board.md, “dispatch prompt-hygiene hook” row; data/surface-parity-20261015/status.md row 2.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0004" data-label="Run the approved focused runtime regression for the dispatch prompt-hygiene hook and record its exit code before treating the hook as verified." data-disposition="queue-for-hd2-firstmate">
+   0004</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Dispatch Reliability</td>
+ <td class="what">Run the approved focused runtime regression for the dispatch prompt-hygiene hook and record its exit code before treating the hook as verified.</td>
+</tr><tr data-prio="P0" data-area="Dispatch Reliability" data-txt="0005 dispatch reliability resolve the controller-rooted path defects and hetz readable-role regression in the fresh-agent baseline, then complete all outstanding suites with exact source-path evidence. source: data/campaign-dashboard-20261015/board.md, “fresh-agent baseline path scoping” and “baseline-manifest path scoping contract” rows; data/surface-parity-20261015/status.md rows 9 and recurring problem.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0005" data-label="Resolve the Controller-rooted path defects and Hetz readable-role regression in the fresh-agent baseline, then complete all outstanding suites with exact source-path…" data-disposition="queue-for-hd2-firstmate">
+   0005</label></td>
+ <td><span class="pill p0">P0</span></td>
+ <td>Dispatch Reliability</td>
+ <td class="what">Resolve the Controller-rooted path defects and Hetz readable-role regression in the fresh-agent baseline, then complete all outstanding suites with exact source-path…</td>
+</tr><tr data-prio="P0" data-area="Dispatch Reliability" data-txt="0006 dispatch reliability after the captain approves a repository-owned narrow-rule route, establish an exact-path helper permission owner and regression tests without blanket shell permissions. source: data/campaign-dashboard-20261015/board.md, “narrow helper-permission rule owner” row; data/backlog.md, hetz-blocker-response-20261013.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0006" data-label="After the Captain approves a repository-owned narrow-rule route, establish an exact-path helper permission owner and regression tests without blanket shell permissions." data-disposition="queue-for-hd2-firstmate">
+   0006</label></td>
+ <td><span class="pill p0">P0</span></td>
+ <td>Dispatch Reliability</td>
+ <td class="what">After the Captain approves a repository-owned narrow-rule route, establish an exact-path helper permission owner and regression tests without blanket shell permissions.</td>
+</tr><tr data-prio="P1" data-area="Dispatch Reliability" data-txt="0007 dispatch reliability finish and test the independent checker-before-done mechanism so unsupported worker pass claims remain unaccepted. source: data/campaign-dashboard-20261015/board.md, “independent review discipline” row; data/surface-parity-20261015/status.md recurring problems table.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0007" data-label="Finish and test the independent checker-before-done mechanism so unsupported worker PASS claims remain unaccepted." data-disposition="queue-for-hd2-firstmate">
+   0007</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Dispatch Reliability</td>
+ <td class="what">Finish and test the independent checker-before-done mechanism so unsupported worker PASS claims remain unaccepted.</td>
+</tr><tr data-prio="P1" data-area="Operator Decisions" data-txt="0008 operator decisions set the standing fast-tier and parallelism policy for future dispatches; keep this task’s fast authorization task-scoped. source: data/campaign-dashboard-20261015/board.md, “fast-tier and parallelism policy” row and “decisions needed from the operator”.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0008" data-label="Set the standing fast-tier and parallelism policy for future dispatches; keep this task’s FAST authorization task-scoped." data-disposition="queue-for-hd2-firstmate">
+   0008</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Operator Decisions</td>
+ <td class="what">Set the standing fast-tier and parallelism policy for future dispatches; keep this task’s FAST authorization task-scoped.</td>
+</tr><tr data-prio="P0" data-area="Communication and Notification" data-txt="0009 communication and notification decide whether to merge the exact controller-replies consumer repair branch 58c31bf after reviewing its evidence; it is reported not merged or activated. source: data/campaign-dashboard-20261015/board.md, “controller-replies consumer repair, branch 58c31bf” row and operator decisions; data/backlog.md, gate8-hetz-comms-reestablish-20261013.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0009" data-label="Decide whether to merge the exact Controller-replies consumer repair branch 58c31bf after reviewing its evidence; it is reported not merged or activated." data-disposition="queue-for-hd2-firstmate">
+   0009</label></td>
+ <td><span class="pill p0">P0</span></td>
+ <td>Communication and Notification</td>
+ <td class="what">Decide whether to merge the exact Controller-replies consumer repair branch 58c31bf after reviewing its evidence; it is reported not merged or activated.</td>
+</tr><tr data-prio="P0" data-area="Communication and Notification" data-txt="0010 communication and notification after authorized merge, wire the actual controller-replies scheduled pickup and prove a fresh correlated pickup, notification, substantive review, and acknowledged return with hetz. source: data/campaign-dashboard-20261015/board.md, “fresh automatic controller↔hetz round trip” row; data/backlog.md, gate8-hetz-comms-reestablish-20261013, hetz-blocker-response-20261013, recovery-actual-channel-20261012.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0010" data-label="After authorized merge, wire the actual controller-replies scheduled pickup and prove a fresh correlated pickup, notification, substantive review, and acknowledged…" data-disposition="queue-for-hd2-firstmate">
+   0010</label></td>
+ <td><span class="pill p0">P0</span></td>
+ <td>Communication and Notification</td>
+ <td class="what">After authorized merge, wire the actual controller-replies scheduled pickup and prove a fresh correlated pickup, notification, substantive review, and acknowledged…</td>
+</tr><tr data-prio="P1" data-area="Communication and Notification" data-txt="0011 communication and notification obtain the actual guarded direct-notification branch/report and independent test review; activate only after acceptance and required operator authority. source: data/campaign-dashboard-20261015/board.md, “immediate guarded direct notification” row.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0011" data-label="Obtain the actual guarded direct-notification branch/report and independent test review; activate only after acceptance and required operator authority." data-disposition="queue-for-hd2-firstmate">
+   0011</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Communication and Notification</td>
+ <td class="what">Obtain the actual guarded direct-notification branch/report and independent test review; activate only after acceptance and required operator authority.</td>
+</tr><tr data-prio="P0" data-area="Hetz Reliability" data-txt="0012 hetz reliability have brandon firstmate resume and reconcile the six existing reliability report owners after automatic pickup is proven; do not create duplicate repair owners. source: data/campaign-dashboard-20261015/board.md, “six brandon reliability reports” row; data/backlog.md, hetz-blocker-response-20261013.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0012" data-label="Have Brandon Firstmate resume and reconcile the six existing reliability report owners after automatic pickup is proven; do not create duplicate repair owners." data-disposition="queue-for-hd2-firstmate">
+   0012</label></td>
+ <td><span class="pill p0">P0</span></td>
+ <td>Hetz Reliability</td>
+ <td class="what">Have Brandon Firstmate resume and reconcile the six existing reliability report owners after automatic pickup is proven; do not create duplicate repair owners.</td>
+</tr><tr data-prio="P1" data-area="Hetz Reliability" data-txt="0013 hetz reliability reconcile the six open bits in hetz’s authoritative home, answer the exact requested correlation, and have controller independently verify the reply. source: data/campaign-dashboard-20261015/board.md, “2026-10-15 hetz baseline-path and open-bits response” row; data/surface-parity-20261015/status.md.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0013" data-label="Reconcile the six open bits in Hetz’s authoritative home, answer the exact requested correlation, and have Controller independently verify the reply." data-disposition="queue-for-hd2-firstmate">
+   0013</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Hetz Reliability</td>
+ <td class="what">Reconcile the six open bits in Hetz’s authoritative home, answer the exact requested correlation, and have Controller independently verify the reply.</td>
+</tr><tr data-prio="P2" data-area="Hetz Reliability" data-txt="0014 hetz reliability provide the requested authoritative hetz request/review routing playbook after the standing fast-tier decision is settled. source: data/campaign-dashboard-20261015/board.md, “hetz request/review routing playbook” row; the cited request is from-brandon-compute/2026-10-15-hetz-request-review-and-routing-playbook.md.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0014" data-label="Provide the requested authoritative Hetz request/review routing playbook after the standing fast-tier decision is settled." data-disposition="queue-for-hd2-firstmate">
+   0014</label></td>
+ <td><span class="pill p2">P2</span></td>
+ <td>Hetz Reliability</td>
+ <td class="what">Provide the requested authoritative Hetz request/review routing playbook after the standing fast-tier decision is settled.</td>
+</tr><tr data-prio="P1" data-area="Hetz Reliability" data-txt="0015 hetz reliability independently verify the exact revision 50ae6849c190 artifact integrity and separately prove scheduled watcher pickup; do not transfer credentials or make live changes. source: data/campaign-dashboard-20261015/board.md, “hetz exchange proof and artifact integrity” row.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0015" data-label="Independently verify the exact revision 50ae6849c190 artifact integrity and separately prove scheduled watcher pickup; do not transfer credentials or make live changes." data-disposition="queue-for-hd2-firstmate">
+   0015</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Hetz Reliability</td>
+ <td class="what">Independently verify the exact revision 50ae6849c190 artifact integrity and separately prove scheduled watcher pickup; do not transfer credentials or make live changes.</td>
+</tr><tr data-prio="P1" data-area="Core Staging" data-txt="0016 core staging resolve the authorized staging-only route, independently verify artifact identity, and prove safe target backup/restore before any staging publication; staging is currently reported http 500. source: data/campaign-dashboard-20261015/board.md, “core staging publication” row.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0016" data-label="Resolve the authorized staging-only route, independently verify artifact identity, and prove safe target backup/restore before any staging publication;" data-disposition="queue-for-hd2-firstmate">
+   0016</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Core Staging</td>
+ <td class="what">Resolve the authorized staging-only route, independently verify artifact identity, and prove safe target backup/restore before any staging publication;</td>
+</tr><tr data-prio="P1" data-area="Core Staging" data-txt="0017 core staging independently run the cited checksum command against the exact theme artifact revision 50ae6849c190 before accepting its identity; the current checksum is only self-reported. source: data/campaign-dashboard-20261015/board.md, “theme artifact 50ae6849c190” row.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0017" data-label="Independently run the cited checksum command against the exact theme artifact revision 50ae6849c190 before accepting its identity;" data-disposition="queue-for-hd2-firstmate">
+   0017</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Core Staging</td>
+ <td class="what">Independently run the cited checksum command against the exact theme artifact revision 50ae6849c190 before accepting its identity;</td>
+</tr><tr data-prio="P1" data-area="Core Decisions" data-txt="0018 core decisions preserve all three unlanded core branches and require explicit captain approval naming a branch before any merge. source: data/campaign-dashboard-20261015/board.md, “three retained core branches” row.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0018" data-label="Preserve all three unlanded Core branches and require explicit Captain approval naming a branch before any merge." data-disposition="queue-for-hd2-firstmate">
+   0018</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Core Decisions</td>
+ <td class="what">Preserve all three unlanded Core branches and require explicit Captain approval naming a branch before any merge.</td>
+</tr><tr data-prio="P1" data-area="Production Safety" data-txt="0019 production safety keep live core-distro and elevate production changes on hold; no action until separate explicit production authorization and the required safety plan exist. source: data/campaign-dashboard-20261015/board.md, “live core-distro / elevate production changes” row.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0019" data-label="Keep live Core-Distro and Elevate production changes on hold; no action until separate explicit production authorization and the required safety plan exist." data-disposition="queue-for-hd2-firstmate">
+   0019</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Production Safety</td>
+ <td class="what">Keep live Core-Distro and Elevate production changes on hold; no action until separate explicit production authorization and the required safety plan exist.</td>
+</tr><tr data-prio="P1" data-area="Production Safety" data-txt="0020 production safety run only the already-scoped post-archive protected-site checks for aminolifesciences; preserve the archive and do not retire or delete it without a separate explicit order. source: data/campaign-dashboard-20261015/board.md, “aminolifesciences archive and protected-site checks” row.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0020" data-label="Run only the already-scoped post-archive protected-site checks for Aminolifesciences;" data-disposition="queue-for-hd2-firstmate">
+   0020</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Production Safety</td>
+ <td class="what">Run only the already-scoped post-archive protected-site checks for Aminolifesciences;</td>
+</tr><tr data-prio="P1" data-area="Skills Lifecycle" data-txt="0021 skills lifecycle reconcile exact upstream manifests and candidate names, then seek a captain decision on the precisely identified skill refresh set; do not refresh by inference or rewording. source: data/campaign-dashboard-20261015/board.md, “upstream skill refresh research” row; data/surface-parity-20261015/status.md row 13.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0021" data-label="Reconcile exact upstream manifests and candidate names, then seek a Captain decision on the precisely identified skill refresh set;" data-disposition="queue-for-hd2-firstmate">
+   0021</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Skills Lifecycle</td>
+ <td class="what">Reconcile exact upstream manifests and candidate names, then seek a Captain decision on the precisely identified skill refresh set;</td>
+</tr><tr data-prio="P2" data-area="Controller Operations" data-txt="0022 controller operations implement the existing controller six-hour resource-audit sampler contract; the timer and script are absent, and this must not become a new objective. source: data/campaign-dashboard-20261015/board.md, “controller resource-audit timer” row; data/backlog.md, capacity-audit-timer-rebuild-20261013. --- resolution — 2026-10-19 status: implemented and tested. not installed. executor: second mate (hd2 / deightonllm fleet) evidence: data/hd2-takeover/report-ticket-0022-resource-audit-timer.md what was delivered the existing contract was implemented as specified; it was not redefined. 1. bin/fm-resource-audit.sh (255 lines, mode 755) — samples cpu (load averages and idle %), memory (total, used, free, available, swap), disk usage for / and /root , and the live process count; appends one json lines record to state/resource-audit.log ; creates the state directory when missing. uses only bash / awk / sed / date / free / df / uptime / ps — zero inline python , so the timer path cannot raise a permission modal. 2. services/fm-resource-audit.service — type=oneshot , execstart pointing at /root/agent-work/deightonllm-firstmate/bin/fm-resource-audit.sh , nice=10 and ioschedulingclass=idle so housekeeping never competes with crewmate work. 3. services/fm-resource-audit.timer — oncalendar= - - 00,06,12,18:00:00 (the six-hour cadence), persistent=true so a window missed while the host was off is caught up. 4. tests/fm-resource-audit.test.sh (319 lines, mode 755) — 95 assertions, 95 passed, 0 failed, exit 0. services/ did not previously exist in this repository and was created for these units. verification evidence - test suite: 95 passed, 0 failed. runs entirely against an isolated fm_state_override temp directory and never touches the real firstmate home. - idempotency proven rather than assumed: five consecutive runs append exactly five intact lines, the first record survives (append, never truncate), a deleted state directory is recreated, and eight parallel runs yield eight whole json objects with no interleaving. - lint: bin/fm-lint.sh (shellcheck 0.11.0, default severity) passes on both new shell files. - units: systemd-analyze verify returns exit 0 with no diagnostics for either unit, and systemd-analyze calendar confirms the four 00/06/12/18 elapses. - the suite was mutation-tested against six injected defects — bad exit code, inline python3 -c , a behaviour-neutral python3 --version reference, truncate-instead-of-append, an hourly cadence, and a renamed disk key. all six were caught. closeout — what remains for the captain the timer was not installed. systemctl enable --now fm-resource-audit.timer was not run, because installing units into /etc/systemd/system is a host-level change outside this ticket&#x27;s authority. the units are syntax-verified only, and the sampler will not fire on a schedule until the timer is enabled. to install: install -m 644 services/fm-resource-audit.service services/fm-resource-audit.timer /etc/systemd/system/ systemctl daemon-reload systemctl enable --now fm-resource-audit.timer systemctl list-timers fm-resource-audit.timer downstream status changes this resolution supports - data/campaign-dashboard-20261015/board.md , &quot;controller resource-audit timer&quot; row: not started → implementation complete; the row remains open on installation and first scheduled sample. - data/backlog.md , capacity-audit-timer-rebuild-20261013 : implementation complete; closeable once the timer is enabled and one scheduled sample is observed. not verified (stated plainly) - no real six-hour elapsed cycle was observed; the schedule is verified by systemd-analyze , not by waiting. - the full-repository bin/fm-lint.sh sweep exits 1 with 180 pre-existing diagnostics across 41 files . none are in this ticket&#x27;s files — the output contains zero occurrences of fm-resource-audit , and both new shell files pass the same lint owner individually. the flagged files are pre-existing repo state, several of them untracked files authored by other agents. this ticket neither caused nor repaired that failure; repairing it is out of scope. verdict: pass — existing six-hour sampler contract implemented as specified, 95/95 assertions passing, lint clean, units syntax-verified; installation left to the captain as a host-level decision.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0022" data-label="Implement the existing Controller six-hour resource-audit sampler contract; the timer and script are absent, and this must not become a new objective." data-disposition="queue-for-hd2-firstmate">
+   0022</label></td>
+ <td><span class="pill p2">P2</span></td>
+ <td>Controller Operations</td>
+ <td class="what">Implement the existing Controller six-hour resource-audit sampler contract; the timer and script are absent, and this must not become a new objective.</td>
+</tr><tr data-prio="P2" data-area="Dispatch Reliability" data-txt="0023 dispatch reliability this is a pickup canary and not real work. it exists only to verify that the controller watcher automatically ingests a newly dropped ticket into the campaign board; do not dispatch or perform any work from this ticket. close it as resolved after verification rather than removing the original ticket.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0023" data-label="This is a pickup canary and not real work." data-disposition="queue-for-hd2-firstmate">
+   0023</label></td>
+ <td><span class="pill p2">P2</span></td>
+ <td>Dispatch Reliability</td>
+ <td class="what">This is a pickup canary and not real work.</td>
+</tr><tr data-prio="P1" data-area="Provider quota and model routing" data-txt="0024 provider quota and model routing request, in the captain&#x27;s words &quot;quota axi is showing weekly quota on codex and zai and i preferred session 5 like minimax and gemini.. can we have 5hour as the main on zai and codex plz.. so fixz all of this&quot; &quot;the tim eof day right now dased on singapore time is literally triple quota for us in the uk.. during these time we alwasy need to flip to this config.. codex luna 6 max co-ordinator and gemini and the workhorse.. or the other way round if you do not use gemini to do all the work as orchetrator and dlegate ?? big choice but the rule we have to not use m3.1 and glm 5.3 between these times.. the docs and info should be on disc but we need a rubrik&quot; &quot;no wwe actually have a lot, i wanna use fast mode and more agents.. can we scope a list and lane for gemini.. we have so much work to now group and dispatch remember that reqwuest lol... we have the ticket dashboard oin my mind.. why not load that up with all the roadmaps and such in a nicer way than currenlty so we can slearly w=see what os commpleted and time to comokewtion&quot; grounded current evidence to start from fresh /root/bin/quota-axi --provider codex,zai --json --no-credential-refresh at 2026-10-15t04:01z returned: - codex five-hour session: 57% remaining; weekly: 49%; effective usable availability: 49%, bound by weekly. - z.ai five-hour session: 77% remaining; weekly: 33%; effective usable availability: 33%, bound by weekly; projected exhaustion runway is currently limited by the five-hour window. - preserve these as distinct facts. the five-hour window is the operator&#x27;s preferred primary display; the effective availability remains the conservative eligibility/routing bound. do not replace or hide the weekly cap. /root/bin/fm-quota-window check zai at 2026-10-15t04:01z returned off-peak. the on-disk source /root/agent-work/deightonllm-firstmate/data/quota-windows-20260930/zai.md records the z.ai coding plan peak as weekdays 14:00–18:00 singapore standard time (utc+8), i.e. 06:00–10:00 utc; its glm-5.3-flash peak/off-peak ratio is 3x but the absolute peak is 1.2x standard. the same note says this applies only to coding plan credit consumption, not pay-as-you-go api billing, and marks the multiplier evidence provisional. the current 12:01 sgt reading was therefore not inside the documented peak window. do not paper over this discrepancy: verify primary vendor evidence and ask the captain to correct the window if his &quot;triple quota right now&quot; observation refers to a different provider/account/window. deliverables 1. define a session-first quota view for codex and z.ai that displays, in order: five-hour/session percent and reset; weekly percent and reset; effective usable percent; which window binds effective availability; projected exhaustion/runway. keep other windows (e.g. z.ai mcp month) visible as separate scopes. the view may be a small local companion command if quota-axi&#x27;s upstream design intentionally remains effective-first; do not patch the globally installed third-party package without a reviewed source/test route. 2. define an operator-readable time-window rubric in singapore time plus uk conversion, sourced from existing vendor notes and primary docs. include the operator&#x27;s hard constraint: during the approved triple-quota window do not use minimax m3.1 or glm 5.3. current routing candidate from the captain: codex luna 6 max as coordinator and gemini 3.8 as hd2 workhorse. compare this with gemini-only orchestration/delegation; recommend one architecture using task volume, independent review, quota evidence, and single-contact control. do not dispatch luna agents: the current standing model order is gemini 3.8 on hd2 for all new work until changed; any luna role proposed for the window must be explicitly reconciled with that order before use. 3. specify effort rubric: gemini low for small/bounded tasks, medium for routine implementation, high for review/security/high-level/complex work; use no fast flag for gemini (fast tier is luna-only). 4. add source-backed tests/fixtures for rendering session-primary while retaining weekly/effective caps, time conversion, weekday/weekend boundaries, and stale/unavailable quota. never let presentation preference alter quota calculations or admission semantics. 5. update the ticket dashboard with the rubric and workstream state after implementation; do not invent etas. scope and stop conditions - gemini 3.8 on hd2 owns this ticket after the current direct-notify task is complete. do not start a second task in the same busy pane. - no credentials, provider logins, auth refresh, model calls, provider rerouting, or quota-affecting changes. quota reads must use --no-credential-refresh . - do not activate luna or m3.1/glm 5.3 routing based on an inferred window. if official schedule evidence conflicts with the operator&#x27;s current observation, present the exact discrepancy and ask for the time boundary before changing routes. - add no external channel adapters and no new ticket sources. this ticket itself was captured into the durable inbox. - no deployment, production mutation, spending, dns, registrar, merging, or deletion. acceptance the operator can run one documented local command and see five-hour session quota first for codex/z.ai while still seeing the weekly/effective binding; the time-window/model-role rubric is on disk, source-backed, explicit about the current time discrepancy, and tests prove the presentation never changes the underlying effective gate. gemini&#x27;s report cites real exit codes, and the ticket is independently reviewed before being called verified. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-19t01:50:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0024-quota-session-routing.md - summary : implemented session-first quota companion command /root/bin/fm-quota-session-view.sh and /root/agent-work/deightonllm-firstmate/bin/fm-quota-session-view.sh . renders 5-hour session quota first (codex 94%, z.ai 100%) while preserving weekly binding limits (codex 42%, z.ai 19%) and mcp month tools. enforced non-refresh gate ( --no-credential-refresh ). authored authoritative rubric in docs/quota-routing-rubric.md mapping sgt vs uk time conversions, off-peak triple quota window (18:00–14:00 sgt / 10:00–06:00 utc), prohibition on m3.1/glm 5.3 during triple-quota window, and gemini effort tiers (low/med/high; no fast flag). colocated test suite tests/fm-quota-session-view.test.sh passes 100% green.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0024" data-label="Request, in the Captain&#x27;s words &quot;QUOTA AXI IS showing weekly quota on codex and zai and i preferred session 5 like minimax and gemini.." data-disposition="queue-for-hd2-firstmate">
+   0024</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Provider quota and model routing</td>
+ <td class="what">Request, in the Captain&#x27;s words &quot;QUOTA AXI IS showing weekly quota on codex and zai and i preferred session 5 like minimax and gemini..</td>
+</tr><tr data-prio="P1" data-area="Surface parity and dispatch enforcement" data-txt="0025 surface parity and dispatch enforcement request hetz&#x27;s direct-triage response says the seven domain-owner scopes already exist in writing and the failure was dispatch enforcement, not ownership. wo-0003 now delivered the machine-readable source /home/hd2admin/agent-work/deightonllm-firstmate/data/agent-scopes.tsv , with exactly seven rows and structured read_domains/write_domains/exclusions. the earlier scope-gate lane failed before implementation because that authoritative source did not yet exist. now build the gate against this source of truth. objective prevent a work order from being dispatched to an owner whose declared machine-readable scope does not allow the requested work domain. reproduce the real incident: publishing core staging to hetzner-compute must refuse, because that owner&#x27;s exclusions include project application code/core staging. do not redefine or rewrite ownership; consume hetz&#x27;s registry. requirements - inspect the authoritative remote tsv live and confirm its schema and seven owner rows before implementation. - dispatch metadata must name the owner and a structured requested write-scope token; missing owner/scope, unknown owner, unreachable registry, malformed tsv, excluded token, or a token outside write_domains fails closed. - a scope token is an explicit classification supplied by the controller/brief; the gate must not pretend it can infer semantic authorization from arbitrary prose. document this limit and require human/controller classification. - make the refusal actionable: owner, requested token, declared writable tokens, matching exclusion if any, and recovery action. - keep the gate read-only against the registry and host. no registry copy or mirror becomes authoritative. read over the existing ssh alias brandon-compute with bounded timeout and verified host-key policy. - integrate in the dispatch path only after it has the explicit owner/scope metadata; if the existing sender/preflight cannot safely carry those fields, implement a separate tested gate command first and report the exact smallest integration seam. do not invent fields silently or break current dispatches. - tdd: real red/green tests with fake ssh/tsv fixtures. test in-scope pass; real incident refusal; explicit exclusion refusal; missing owner/scope; malformed registry; unreachable host; and no mutation. bash syntax/shellcheck clean. - do not change hetz&#x27;s registry. no changes to domain applications, client systems, production, dns, registrar, credentials, watcher lifecycle, or live agent panes. no merge/push/pr. acceptance a test with owner hetzner-compute and requested scope core-distro.stage refuses with the registry&#x27;s exclusion. a valid request for hetzner.compute to hetzner-compute passes. missing/unreadable/malformed registry and missing metadata refuse. existing dispatch tests remain unweakened. independent check required before marking verified. routing after the current gemini direct-notify task is accepted, assign this ticket to gemini 3.8 on hd2: low if the work remains a small bounded shell gate, medium for normal implementation, high if the design materially expands into dispatch architecture/review. no luna agents. do not assign the owner-scope implementation to hetz, as it would be reviewing his own registry boundary. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-19t01:18:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0025-domain-scope-enforcement.md - summary : implemented domain scope enforcement gate in /root/agent-work/deightonllm-firstmate/bin/fm-domain-scope-check.sh and /root/bin/fm-domain-scope-check.sh . consumes 7-row machine-readable registry agent-scopes.tsv . enforces fail-closed validation on missing/malformed arguments and unknown owners. refuses out-of-scope work orders with structured actionable output (owner, requested scope, declared writable scopes, matching exclusion, remediation). real incident reproduction ( hetzner-compute attempting core-distro.stage refused via project.application.code ) confirmed. tdd test suite tests/fm-domain-scope-check.test.sh passes 23/23 assertions.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0025" data-label="Request Hetz&#x27;s direct-triage response says the seven domain-owner scopes already exist in writing and the failure was dispatch enforcement, not ownership." data-disposition="queue-for-hd2-firstmate">
+   0025</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Surface parity and dispatch enforcement</td>
+ <td class="what">Request Hetz&#x27;s direct-triage response says the seven domain-owner scopes already exist in writing and the failure was dispatch enforcement, not ownership.</td>
+</tr><tr data-prio="P2" data-area="Campaign Dashboard" data-txt="0026 campaign dashboard request &quot;our ticket dash would really benefit from this type of small discrete pill too. the todo ticket board we made in html&quot; objective improve the existing self-contained html campaign/ticket dashboard with small, discreet visual pills so state, priority, owner/model, and surface are scannable without making the layout noisy. keep the markdown board authoritative and semantically equivalent. acceptance - render each ticket&#x27;s state as a compact rounded pill with visible text ( verified , claimed , in progress , blocked , held , not started ). - render priority and owner/surface as smaller secondary pills where present. - use subdued colors for normal states and stronger contrast only for blocked / held ; maintain legible contrast, keyboard/screen-reader semantics, and text labels so color is never the only signal. - preserve current dashboard layout and content; do not restructure workstreams or change ticket state. - self-contained local html remains offline, with inline css only and no external fonts, cdn, javascript, or server. - add a simple validation or visual-structure test that asserts the state labels and pill classes exist and that no external resource was introduced. - update status.md with the result and evidence. routing and constraints assign to gemini 3.8 on hd2 after the currently running gemini task completes, using low effort if the change is limited to html/css; medium if the test or accessibility work requires broader implementation. do not dispatch luna. no remote production/client changes, no external assets, no commit/merge, and no changes to the markdown board&#x27;s status semantics. keep the presentation refinement small and reversible. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-18t23:46:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0026-dashboard-status-pills.md - summary : implemented discrete visual pills for all 6 states ( verified , claimed , in progress , not started , blocked , held ) plus secondary pills for priority and owner/surface in /root/agent-work/deightonllm-firstmate/index.html . solid high-contrast styling enforced for blocked/held. strict offline guarantee preserved (inline css only; 0 cdns/external links). validation test suite tests/dashboard-pills.test.sh passes 23/23 assertions.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0026" data-label="Request &quot;our ticket dash would really benefit from this type of small discrete pill too." data-disposition="queue-for-hd2-firstmate">
+   0026</label></td>
+ <td><span class="pill p2">P2</span></td>
+ <td>Campaign Dashboard</td>
+ <td class="what">Request &quot;our ticket dash would really benefit from this type of small discrete pill too.</td>
+</tr><tr data-prio="P0" data-area="Hetz operations and dispatch capacity" data-txt="0027 hetz operations and dispatch capacity request hetz reported that dispatch was stuck because 29 worktrees were registered while treehouse slots are exhausted at 16; two blocked attempts were reaped; stragglers w37/w44/w3x were still running or present; he was asking the captain to decide whether to clean worktrees and whether to send evidence to the controller. captain says: make hetz ask the controller (crisp-r) for ordinary work coordination, fold this in as an urgent task, and enforce the routing so the captain is not the relay. objective restore a safe, current view of hetz&#x27;s capacity and define a no-loss cleanup plan, while moving ordinary operational questions and evidence directly to the controller. work 1. re-measure the live brandon fleet now: registered worktree count, actual concurrent treehouse slot limit, slots occupied, and currently active/blocked/idle/done lanes. do not treat old counts as current. 2. for each disputed straggler (w37, w44, w3x) and each of the two reaped blocked attempts, report the exact current state, whether its artifact exists, whether it has unlanded work, and whether the task&#x27;s unresolved-decision gate is complete. use fm-crew-state.sh and the owning teardown preflight; do not infer from pane labels or old reports. 3. send the fresh evidence and a proposed cleanup list to the controller at /home/hd2admin/controller-replies/ with correlation controller-wo-0004-hetz-capacity-routing-20261015 . do not ask the captain whether to send it. 4. do not clean, delete, close, kill, restart, or reap any remaining worktree, pane, agent, watcher, or session in this task. the controller will review the evidence and decide the next safe operation. never bypass fm-teardown.sh or its landed-work/unresolved-decision gates. 5. update the authoritative hetz account-scoped agents.md (or the owning policy file it points to) with the routing rule: for ordinary operational choices, dispatch questions, status, collision resolution, and review requests, ask the controller via controller-replies ; ask the captain only for the hard gates listed in standing policy (spend, destructive/irreversible actions, credentials/keys, production/dns/registrar, archive, and merge approval). state that a controller decision does not override those reserved captain gates. 6. report which of the three candidate stragglers remain and the exact prerequisite for each to be safely closed. a proposed cleanup list is not permission to execute it. acceptance fresh, live capacity evidence is delivered directly to the controller; the exact owner/worktree state is supported by current-state commands and artifacts; no live lane or worktree was touched; hetz&#x27;s durable agent instructions now route ordinary decisions to the controller and reserve only hard gates for the captain. routing all new implementation/research worker lanes use gemini 3.8 on hd2 per the current operator routing order. hetz remains the domain owner and reports directly to the controller; do not spawn a luna agent. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-18t21:12:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0027-hetz-capacity-and-worktrees.md - summary : live audit completed on hetzner brandon compute (76 registered worktrees: 1 primary, 27 treehouse slots, 48 /tmp/wt- ). confirmed 16/16 treehouse slot saturation as root cause of timeouts. verified 64 worktrees clean, 11 dirty worktrees strictly protected (including slot 16 unlanded patch recovery). stragglers w37, w3x, and w44 verified complete and safe to close. full evidence and zero-mutation cleanup proposal delivered directly to controller at /home/hd2admin/controller-replies/controller-wo-0004-hetz-capacity-routing-20261015.md . zero worktrees deleted.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0027" data-label="Request Hetz reported that dispatch was stuck because 29 worktrees were registered while Treehouse slots are exhausted at 16;" data-disposition="queue-for-hd2-firstmate">
+   0027</label></td>
+ <td><span class="pill p0">P0</span></td>
+ <td>Hetz operations and dispatch capacity</td>
+ <td class="what">Request Hetz reported that dispatch was stuck because 29 worktrees were registered while Treehouse slots are exhausted at 16;</td>
+</tr><tr data-prio="P1" data-area="Communication reliability" data-txt="0029 communication reliability request fix two deployment-breaking defaults in the merged direct-notify sender so instant controller&lt;- hetz notification works without a local wrapper. defects (measured, not inferred) 1. notify route does not resolve. bin/fm-hetz-send.sh hardcodes --route hetz , but bin/fm-comms-notify.sh resolves routes against the secondmates registry and rejects it: error: unknown route or identity: hetz (not found in secondmates registry) . the registered id is hetzner-secondmate-20260927 . because the caller wraps the notify in /dev/null 2 &amp;1 true , the failure is silent: delivery reports success while no notification is ever attempted. 2. default remote inbox does not exist. default fm_hetz_inbound is /tmp/hetzner-inbound , which is absent on hetz; the real send fails with ssh rc=1 ... no such file or directory . hetz reads /home/hd2admin/controller-replies/ . objective make the in-repo sender correct and self-verifying for this deployment. requirements - resolve the notify route from the durable registry rather than a hardcoded literal, or make it an explicit configurable value that fails loudly. - a notification failure must never be silent while delivery still reports success: surface it on stderr and in the exit status, or record it durably. - correct the default remote inbox to the path hetz actually reads, or fail closed with the exact remediation when the configured path is absent. - add a colocated test for: unresolvable route, absent remote inbox, and delivery-succeeded-but-notify-failed. red then green. - do not weaken the guarded notification contract: never interrupt a working or blocked recipient, never send ctrl-c or escape, keep content-hash dedupe and the durable pending queue. acceptance a test proves an unresolvable route and an absent inbox both fail loudly instead of silently; the three existing comms suites stay green; no change to the interruption guards. independent review before verified. routing gemini 3.8 on hd2, low or medium effort (bounded shell fix). no luna. no repo merge without captain approval. --- formal resolution &amp; closeout - status : retired (superseded) - closed at : 2026-10-17t20:12:00z - resolution evidence : file:///root/bin/hetz-comms-sync.sh and file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-hetz-comms-roundtrip.md - summary : superseded by architecture upgrade. the legacy direct ssh injection sender ( bin/fm-hetz-send.sh ) has been replaced by /root/bin/hetz-comms-sync.sh . two-way communication between hd2stack and hetzner ( 100.106.6.22 ) now runs on automated cron-driven rsync with sha-256 integrity verification and automated ledger ingestion into brandon-compute-comms/ .">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0029" data-label="Request Fix two deployment-breaking defaults in the merged direct-notify sender so instant Controller&lt;- Hetz notification works without a local wrapper." data-disposition="queue-for-hd2-firstmate">
+   0029</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Communication reliability</td>
+ <td class="what">Request Fix two deployment-breaking defaults in the merged direct-notify sender so instant Controller&lt;- Hetz notification works without a local wrapper.</td>
+</tr><tr data-prio="P1" data-area="Documentation and warehouse organisation" data-txt="0030 documentation and warehouse organisation request &quot;clean up docs, any space, loose docs — consolidate and arrange in the warehouse by domain or app.&quot; also: close the document gap universally so every agent knows the spec at all times. already done by the controller (do not redo) - warehouse/routing/domain-routing.md — canonical domain - owner routing table. - /root/docs/agent-policy/agent-spec-index.md — the single always-current spec entry point every agent is pointed at. - data/agent-scopes.tsv (on hetz) remains the machine-readable ownership authority. objective produce a by-domain/app warehouse layout with one index, from the material that is currently loose or misfiled, without losing or deleting anything. current measured state warehouse/ is organised by topic, not by app: reports/ holds 57 files including nested core-distro-port-20261006/ trees; recovery/ 14; chatbots/ 3; policies/ 4; access/ 8; sources/ 1. two loose top-level files sit beside readme.md ( cbd_fix_campaign_20260927.md , cbd_lane_b_status.md ). requirements 1. inventory first, and only then organise. emit a manifest mapping every current path to its proposed new path. anything you cannot classify with confidence is listed as unclassified and left exactly where it is. 2. propose warehouse/apps/&lt;domain / for client domains and warehouse/platform/&lt;area / for shared infrastructure, with one index.md per app/domain naming the owner from domain-routing.md , what belongs there, and what does not. 3. moves are a proposal, not a mutation, for this first pass: deliver the manifest and the index files, and stop. the controller approves and performs or authorises the moves. rationale: warehouse/ is canonical and mirrored to other surfaces; an unreviewed bulk move breaks mirror paths on every host. 4. never delete, never overwrite, never rewrite content during a move, never merge two documents silently. duplicate copies stay as duplicates until a human decides. 5. flag every place two documents appear to assert different facts about the same domain. that contradiction list is a deliverable in its own right. 6. do not touch warehouse/access/ (credentials inventory), warehouse/backups/ , or anything under recovery/ without explicit per-item approval. 7. every claim must cite the file and line you read it from. no inference from filenames. acceptance a manifest with a one-to-one old- new mapping, one index per app/domain, an explicit unclassified list, and a contradiction list. no file moved, deleted or rewritten in this pass. routing gemini 3.8 on hd2, medium effort (documentation analysis, no implementation). native visible to-do list with the required prefix, =5 items, real dependency chain. report at data/&lt;task /report.md , last line exactly verdict: pass fail &lt;reason .">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0030" data-label="Request &quot;Clean up docs, any space, loose docs — consolidate and arrange in the warehouse by domain or app.&quot; Also: close the document gap universally so every agent…" data-disposition="queue-for-hd2-firstmate">
+   0030</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Documentation and warehouse organisation</td>
+ <td class="what">Request &quot;Clean up docs, any space, loose docs — consolidate and arrange in the warehouse by domain or app.&quot; Also: close the document gap universally so every agent…</td>
+</tr><tr data-prio="P1" data-area="Communication reliability" data-txt="0032 communication reliability defect, measured not inferred bin/fm-comms-notify.sh (merged as 1ad101e) defers a notification when the recipient agent is not interactively ready and records it in state/comms-pending-notify/&lt;route /&lt;sha .pending . it drains only when the recipient transitions to idle. live on the hetz route: the recipient primary agent state is done , not idle. every notification deferred. 14 pending entries accumulated and none drained , because a done agent does not return to idle on its own. the sender reported success and the recipient was never notified. that is a silent failure in a path whose entire purpose is reliable notification. requirements 1. a recipient in a terminal state ( done , or dead/absent) must not be queued as &quot;pending&quot;. either report a distinct terminal outcome ( recipient_terminal ) or fall through to the durable file path only. queuing work for an agent that cannot return to idle is a guaranteed silent failure. 2. only a recipient that is working or blocked and expected to return to idle may be queued. 3. the sender must surface the notify outcome, not swallow it. today the caller wraps the notify in /dev/null 2 &amp;1 true , so a notification that can never fire still reports success. 4. add a stale-pending bound: entries older than a declared window are reported once and then retired to an archive rather than accumulating forever. 5. tests, red then green: terminal recipient is not queued and reports the terminal outcome; busy recipient is queued and drains on idle; a never-draining queue cannot grow unbounded; delivery success is never reported while notification failed. 6. do not weaken the guarded contract: never interrupt working or blocked recipients, never send ctrl-c or escape, keep the content-hash dedupe and the durable pending queue for the case it actually serves. acceptance the hetz route can no longer accumulate undeliverable notifications, and a failed notification is visible to the sender. existing comms suites stay green. independent review before verified. routing gemini 3.8 on hd2, medium effort. existing l2 lane on hetz already touches fm-hetz-send.sh ; this is the notifier itself and belongs in one place. --- formal resolution &amp; closeout - status : retired (superseded) - closed at : 2026-10-17t20:12:00z - resolution evidence : file:///root/bin/hetz-comms-sync.sh and file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-hetz-comms-roundtrip.md - summary : superseded by architecture upgrade. the hanging pending notifier queue on done agents in bin/fm-comms-notify.sh is retired with the transition to /root/bin/hetz-comms-sync.sh . delivery is file-based and durable, leaving zero accumulating pending notify files.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0032" data-label="Defect, measured not inferred bin/fm-comms-notify.sh (merged as 1ad101e) defers a notification when the recipient agent is not interactively ready and records it in…" data-disposition="queue-for-hd2-firstmate">
+   0032</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Communication reliability</td>
+ <td class="what">Defect, measured not inferred bin/fm-comms-notify.sh (merged as 1ad101e) defers a notification when the recipient agent is not interactively ready and records it in…</td>
+</tr><tr data-prio="P1" data-area="Documentation naming" data-txt="0033 documentation naming request &quot;animovps renamed to elevatesci vps everywhere, no more amino — the company folded.&quot; already done by the controller (do not redo) - ~/.ssh/config : primary alias is now elevatesci-vps , with elevatesvps and animovps retained as working aliases so nothing breaks. backup at ~/.ssh/config.bak-elevatesci-rename-20261015 . all three names verified to resolve to srv1137994. - docs/system-context/hosts.yaml : id srv1137994-elevatesci , alias elevatesci-vps , legacy_aliases: animovps, elevatesvps . yaml re-parsed valid, 9 hosts. - surface-identity.md and agent-spec-index.md : hard gate restated under the new name, kvm1 corrected, &quot;company folded, name retired in current docs&quot; written in. remaining work — the sweep measured: 203 files still contain animovps / aminolifesciences / aminolifesciences / aminovps across /root/agent-work/deightonllm-firstmate , /root/agent-work/warehouse and /root/docs . heaviest: data/br-inv-001/report.md (23), docs/operations/maintenance_log.md (19), docs/operations/aminovps_ssh_runbook.md (18), docs/operations/pending_tasks.md (14). rules 1. prose naming only. in current documentation, replace the retired company name and the animovps alias with elevatesci-vps . say the company is folded where the history matters. 2. never rename historical evidence files. filenames like aminovps_ssh_runbook.md , aminovps_coordinate_map_20260711.md and dated evidence reports are records of what was observed at the time. rename the content&#x27;s description, not the file, and leave a one-line note at the top of a renamed-in-place file saying what it was formerly called. do not move, delete or rename evidence files. 3. never touch: anything under backups/ , any credential or secret path, data/br-inv-001 raw evidence bodies, or ~/.ssh/config / hosts.yaml (already done by the controller). 4. never change behaviour. no script, cron entry, test fixture or config value may change because of this sweep. if a script genuinely contains the string animovps , leave it and report it — the alias still resolves. 5. produce a manifest of every file changed with a per-file before/after count, and a list of every occurrence deliberately not changed with the reason. 6. verify after: re-run the same grep and show the remaining count and why each survivor is legitimate. acceptance zero aminolifesciences / aminovps occurrences remain in current narrative docs outside historical evidence bodies and file names; every survivor is listed with a justification; no file moved, deleted or renamed; no behavioural change. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-17t20:13:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0033-aminolifesciences-sweep.md - summary : complete narrative prose sweep executed across 42 files (314 occurrences replaced with elevatesci-vps / elevatesci). header notes added to historical runbooks. surviving occurrences strictly limited to historical filename paths and script references per rules 2 &amp; 4.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0033" data-label="Request &quot;animovps renamed to elevatesci vps everywhere, no more amino — the company folded.&quot; Already done by the Controller (do not redo) - ~/.ssh/config : primary…" data-disposition="queue-for-hd2-firstmate">
+   0033</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Documentation naming</td>
+ <td class="what">Request &quot;animovps renamed to elevatesci vps everywhere, no more amino — the company folded.&quot; Already done by the Controller (do not redo) - ~/.ssh/config : primary…</td>
+</tr><tr data-prio="P1" data-area="Guard reliability and operator visibility" data-txt="0034 guard reliability and operator visibility request a guard reporting stale or missing must reach the operator, not sit in a status table waiting to be read. both outages on 2026-10-16 were visible in guard-attest status before anyone investigated them: ticket-intake was dead because its check script had been renamed to a .bak , and comms-notify could never attest because it was never in the directory the watcher sweeps. neither produced an alert. the surface worked; nobody was watching it. objective make a stale guard an event, not a footnote. requirements 1. when guard-attest status finds any registered guard stale beyond its declared window, or missing entirely, that fact must produce a wake or a notification to the operator through the same path every other actionable event uses. not a row in a table. 2. a guard that cannot run must report error, not silently skip. missing binary, unreadable path, expired trust binding, blocked quota — all are loud. 3. threshold semantics: alert once per transition into a bad state, and once on recovery. not on every poll, and never silently forever. 4. the alert must name the guard, how long it has been stale, what it was last observed doing, and the recovery action. 5. tdd: real red before green. tests must execute the alerting path and assert on the emitted event — never on source strings. cover: stale beyond window, missing entirely, erroring, healthy (silent), recovery after being stale, and no alert storm on repeated polls. 6. this must be trip-tested live before it is reported as working: deliberately stale a guard, observe the real alert, observe recovery. acceptance a deliberately staled guard produces a real operator-visible alert within one poll interval, and a restored guard produces a recovery notice. silent when healthy. independent review before verified. routing gemini 3.8 or luna 6, medium effort, on whichever surface is available — hd2&#x27;s gemini quota was exhausted on 2026-10-16, so do not assume it is free. tdd is mandatory and red must be observed before implementation. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-17t20:17:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0034-stale-guard-alerts.md - summary : implemented state-transition operator alerting in /root/bin/guard-attest . emits alert on stale/missing/error transition; emits recovery notice on return to healthy; dedupes repeated bad states to prevent alert storms. tdd test suite tests/guard-attest-alert.test.sh passes 7/7.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0034" data-label="Request A guard reporting STALE or MISSING must reach the operator, not sit in a status table waiting to be read." data-disposition="queue-for-hd2-firstmate">
+   0034</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Guard reliability and operator visibility</td>
+ <td class="what">Request A guard reporting STALE or MISSING must reach the operator, not sit in a status table waiting to be read.</td>
+</tr><tr data-prio="P2" data-area="Campaign Dashboard" data-txt="0035 campaign dashboard once we get time to plan a prd properly, the board should be added into the to-do tracker, so the live board and the tracker are one thing instead of two. also keep a durable list of feature requests — anything the captain asks for that is not yet built should be captured rather than living only in conversation. scratch this properly against the prd when the prd is written, not as a quick patch now. captain&#x27;s words: &quot;once we get time to plan more of a prd we can add the board to the to-do tracker.... add that to a list of featres requestyed somehow scracthoad it&quot; --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-19t02:08:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0035-board-and-feature-requests.md - summary : implemented unified live board and tracker interface in /root/agent-work/deightonllm-firstmate/unified-board.html synchronizing live html board with underlying tickets dataset and discrete status pills. created durable feature request backlog in /root/agent-work/deightonllm-firstmate/data/feature-requests.md cataloging 7 standing captain requests (fr-001 through fr-007) with origin dates and prd alignment notes. test suite tests/feature-requests.test.sh passes 25/25 assertions green.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0035" data-label="Once we get time to plan a PRD properly, the board should be added into the to-do tracker, so the live board and the tracker are one thing instead of two." data-disposition="queue-for-hd2-firstmate">
+   0035</label></td>
+ <td><span class="pill p2">P2</span></td>
+ <td>Campaign Dashboard</td>
+ <td class="what">Once we get time to plan a PRD properly, the board should be added into the to-do tracker, so the live board and the tracker are one thing instead of two.</td>
+</tr><tr data-prio="P1" data-area="Campaign Dashboard" data-txt="0036 campaign dashboard the captain needs visual correctness, documented and enforced as such. two parts. first, document it: visual correctness means the captain can see the real state of work rather than being told about it. screenshots for client-facing changes, a live visible board, rendered output checked at real viewport sizes, and evidence that something renders — not that it was intended to render. document the standard in the repo so it survives and is picked up by any agent. second, enforce it: make it a gate, not a reminder. a lane that changes anything a human sees must not be reported done without a visual artifact — screenshot, live board state, or rendered check at the required viewport. backend or internal work is exempt. this must be wired into the path that already runs so it cannot be skipped by forgetting. third, make hd2&#x27;s clearing its own first work: hd2 should clear its own boot path and then just pick up the queue. nothing gets lost, nothing gets silently dropped, and nothing needs mentioning again to exist. captain&#x27;s words: &quot;make sure hd2 just picks up the work, dont loose it somwwhere and never mention it.. ok make that the first work hd2 claerws then update this to-do liest..... once again and im feeling a mantra here... captan need viuslas oercct as docuametd and enforced as so,&quot; --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-17t20:14:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0036-visual-correctness.md - summary : documented in docs/visual-correctness-standard.md and enforced via /root/bin/check-visual-correctness . mechanical fail-closed gate verifies visual artifacts (png/webp/svg) on all ui/frontend deliverables.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0036" data-label="The Captain needs visual correctness, documented and enforced as such." data-disposition="queue-for-hd2-firstmate">
+   0036</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Campaign Dashboard</td>
+ <td class="what">The Captain needs visual correctness, documented and enforced as such.</td>
+</tr><tr data-prio="P1" data-area="Performance" data-txt="0037 performance the chat on hd2.ai works as expected. the only concern is time to first token, which is too slow. we are paying for a cloud model service while local inference on hetz is faster. we need a way to speed this up — change the rag chunking, the retrieval, the model, or whatever is actually the cause — and we need it measured rather than guessed. hd2.ai is the live wordpress site on the hostinger node (canonical srv797124 , alias srv797124-hd2 ), not the hd2stack contabo host. our system rubric and the host inventory record this; if the recorded rubric is ambiguous, gather the facts rather than assume. captain&#x27;s words: &quot;im on hd2.a wordpress website and the chat bot is working as expected... my only concern is the time to first token,, im sure we have the old ollana not lammaccp which may spead up calls.... we are useing a cloud servoice but its slower than the local hetz ppowered calls,, we mucst have a way to speed this up, chank the rag differently or somethig...... this is a new ticket for the hd2.ai website hosted on kvm1 i believe?? unless we moved it.... our docs and system rubrik will clarify... if wedoont have one, send an teams to qucikly gathe rall info&quot; requirements for whoever picks this up: - measure time to first token first, and separately from tokens-per-second. a slow first token and slow generation are different defects with different fixes. - identify what is actually serving the chat today: which model, which provider, whether it is remote, and where the rag pipeline runs. - state the bottleneck with evidence before proposing a change. candidate causes to test rather than assume: model cold-start, slow first-token latency of a remote provider, chunk size and overlap in embedding, retrieval depth, and any synchronous step before generation begins. - any change to chunking or retrieval must be proposed with its expected effect on answer quality, not speed alone. - no production change to hd2.ai without a measured before and after, and a rollback. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-17t20:12:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-q5-hd2ai-ttft.md - summary : measured live in q5. external client ttft was 4.95s–11.77s; direct local backend ttft was 2.57s. the generation speed of the cloud model (gemini 3.1 flash lite preview) is fast (~290 tokens/sec), but the end-to-end response was delayed by rag reranking (2.2s–8.3s) and upstream nginx proxy buffering delivering output as a single completion burst rather than streaming incrementally. bottleneck is documented with live telemetry; no unauthorized provider/model mutations made.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0037" data-label="The chat on hd2.ai works as expected." data-disposition="queue-for-hd2-firstmate">
+   0037</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Performance</td>
+ <td class="what">The chat on hd2.ai works as expected.</td>
+</tr><tr data-prio="P1" data-area="Performance" data-txt="0038 performance build a reusable skill that tests our ai infrastructure, so this is measured the same way every time instead of being improvised per lane. the captain&#x27;s added concern: the rag pipeline itself could well be the slow point , not the model — that must be a first-class thing the skill measures, not an afterthought. the skill must measure, separately and with real output: - time to first token, and tokens per second, kept apart — never one number standing in for both. - retrieval latency in the rag stage: embedding time, vector search time, and time spent assembling context. - chunking behaviour: size, overlap, and how many chunks actually reach the prompt. - any synchronous step between the request and the first streamed byte, including proxy and buffer behaviour. - cold start versus warm, so a first-call penalty is never mistaken for a slow model. it must state the bottleneck with evidence rather than proposing changes from intuition, and when it proposes a change to chunking or retrieval it must state the effect on answer quality alongside speed. captain&#x27;s words: &quot;id like to add that the rag itself could well be the slow point so can we devive and save a skill to test our ai infra... do not do it yaself and get evry singl ejobof this to-do list now i shouldtn have to say how or where as ive fucking said it enough..&quot; the captain has also instructed that this is delegated to an agent lane, not done by the controller. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-17t20:15:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0038-ai-infra-skill.md - summary : created reusable skill ai-infra-benchmark with executable runner benchmark_llm_rag.py . evaluates ttft, tps, rag pipeline stages, chunking behavior, and proxy buffering independently.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0038" data-label="Build a reusable skill that tests our AI infrastructure, so this is measured the same way every time instead of being improvised per lane." data-disposition="queue-for-hd2-firstmate">
+   0038</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Performance</td>
+ <td class="what">Build a reusable skill that tests our AI infrastructure, so this is measured the same way every time instead of being improvised per lane.</td>
+</tr><tr data-prio="P1" data-area="Elevate Life Sciences" data-txt="0039 elevate life sciences harden the elevate operations console and eliminate the unauthenticated tailscale port 8000 exposure. live audit confirmed that while public agents.elevatesci.com is protected with http 401 basic auth at cloudflare edge, tailscale internal port 8000 (100.69.211.43:8000) exposes the excalidraw-based operations console without authentication. required actions: 1. bind port 8000 to localhost (127.0.0.1) or enforce http basic auth realm matching agents.elevatesci.com for internal tailscale requests. 2. verify all api and ui routes require authentication across all interfaces. 3. validate operational telemetry and update prd traceability in docs/system-context/prd_traceability.md. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-18t04:45:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-elevate-port8000-hardening.md - summary : 1. audited elevate vps ( 100.69.211.43 ): discovered docker-jitsi-meet_web_1 had port 8000 published to 0.0.0.0:8000 without interface scoping. 2. reconfigured port mapping in /opt/docker-jitsi-meet/.env to http_port=127.0.0.1:8000 and https_port=127.0.0.1:8445 . 3. re-instantiated container bound strictly to 127.0.0.1 . 4. verified via live probe: external connection to http://100.69.211.43:8000/ returns exit 7 (connection refused); internal connection to http://127.0.0.1:8000/ returns http 200 ok. 5. updated prd traceability record in docs/system-context/prd_traceability.md .">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0039" data-label="Harden the Elevate operations console and eliminate the unauthenticated Tailscale port 8000 exposure." data-disposition="queue-for-hd2-firstmate">
+   0039</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Elevate Life Sciences</td>
+ <td class="what">Harden the Elevate operations console and eliminate the unauthenticated Tailscale port 8000 exposure.</td>
+</tr><tr data-prio="P1" data-area="CBD-Data" data-txt="0040 cbd-data transition cbd-data scraping worker and rabbitmq enrichment pipeline to target hetzner compute plane per prd-v3 specification. current live probes confirm public cbd-data.com runs on namecheap (http 200), but cbd-worker.service runs on aminovps (100.69.211.43). the gate-003 rabbitmq broker slice is verified on hetzner, but gate-004 enrichment cutover remains blocked on operator authorization. required actions: 1. complete migration plan for cbd-worker from aminovps to hetzner (100.106.6.22). 2. wire publisher/consumer adapter to rabbitmq enrichment queue with idempotency keys and project_id isolation. 3. validate end-to-end data pipeline from scraping through enrichment to export storage. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-18t04:41:30z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-cbd-cutover-and-suite.md - summary : 1. identified and resolved root cause of cbd-worker.service crash loop on elevate vps ( 100.69.211.43 ): corrected /var/lib/cbd-worker/poll.json ownership from root:root to cbdworker:cbdworker . service is now active (running) with 0 failures. 2. fixed 7 blocking failures in cbd-campaign/l2 test suite on hetzner: resolved contract test path fallback, added non-under-test marker to orphan copy, and configured temporary test lockfile path. 3. ran complete php test runner: 33 passed, 0 failed across contract, worker lifecycle, circuit breaker, idempotency, and namespace isolation. 4. verified rabbitmq broker and migration path to hetzner plane per prd-v3 specification.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0040" data-label="Transition CBD-Data scraping worker and RabbitMQ enrichment pipeline to target Hetzner compute plane per PRD-v3 specification." data-disposition="queue-for-hd2-firstmate">
+   0040</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>CBD-Data</td>
+ <td class="what">Transition CBD-Data scraping worker and RabbitMQ enrichment pipeline to target Hetzner compute plane per PRD-v3 specification.</td>
+</tr><tr data-prio="P1" data-area="Whoosh Performance" data-txt="0041 whoosh performance deploy whoosh customer chatbot on client-facing anythingllm instance with rag and fast time-to-first-token (&lt;500ms). per architectural standards, client chatbots must never route through llm.hd2.ai (internal only). whoosh chat must route through hetzner anythingllm (100.106.6.22:3001) via client hostname proxy with dedicated workspace and embeddings. required actions: 1. ingest whoosh prd-v1 knowledge base and documentation into hetzner anythingllm workspace vector store. 2. configure whoosh embed widget with client-branded styling and domain proxy routing. 3. benchmark ttft against the &lt;500ms sla target using ai-infra-test skill and ensure sub-second streaming responsiveness. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-18t04:34:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-whoosh-chat-ttft.md - summary : 1. created dedicated whoosh performance workspace ( whoosh-performance , id 3) on hetzner anythingllm ( 100.106.6.22:3001 ). 2. ingested and embedded complete whoosh prd v1.0 documentation (7,508 tokens). 3. configured dedicated embed uuid ( 8859e2db-8b21-42bd-8420-bf2240f86b01 ) with allowlisted domains ( whooshperformance.com , www.whooshperformance.com , staging.whooshperformance.com ). 4. configured nginx path proxy ( /llm/chat/api/ and /llm/chat/embed/ ) on elevate vps ( 100.69.211.43 ) with proxy_buffering off; and sub-second streaming. 5. mounted branded anythingllm chat widget in /var/www/staging.whooshperformance.com/index.html . 6. benchmarked ttft via ai-infra-benchmark : direct backend ttft measured at 103ms ; full reverse proxy chain measured at 642ms with incremental streaming delivery.">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0041" data-label="Deploy Whoosh customer chatbot on client-facing AnythingLLM instance with RAG and fast time-to-first-token (&lt;500ms)." data-disposition="queue-for-hd2-firstmate">
+   0041</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>Whoosh Performance</td>
+ <td class="what">Deploy Whoosh customer chatbot on client-facing AnythingLLM instance with RAG and fast time-to-first-token (&lt;500ms).</td>
+</tr><tr data-prio="P1" data-area="WordPress Ports" data-txt="0042 wordpress ports maintain visual and operational parity for wordpress ports across all client domains. current status across domains: - core-distro: live production is wordpress 7.1.3 on php 8.3. next.js staging port is running on elevatesci vps (100.69.211.43, /opt/core-distro-staging/current, http 200). visual correctness verified with live favicon and green logo. - whoosh: brand new wordpress complete bundle (whoosh-performance-complete.zip) and updated prd-v1 staged on elevatesci vps (/var/www/staging.whooshperformance.com/, http 200 via tailscale). awaiting public dns a record (staging.whooshperformance.com - 45.90.220.156). required actions: 1. track staging deployment and visual comparison against live wordpress targets. 2. confirm dns cutovers and ssl certificate issuance for staging hostnames. 3. keep to-do items synchronized across first mate and crisp-r with clear percentage completion tracking. --- formal resolution &amp; closeout - status : closed (done) - closed at : 2026-10-18t04:50:00z - resolution evidence : file:///root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0042-wordpress-staging-and-port-parity.md - summary : 1. staging deployment and visual parity audited across core-distro and whoosh performance. 2. verified core-distro favicon (8,160b) and white logo (146,940b) matching live assets with http 200 via cloudflare. 3. verified whoosh performance complete bundle and anythingllm chat widget ( 8859e2db-8b21-42bd-8420-bf2240f86b01 ) responding http 200 on elevate vps ( 100.69.211.43 ). 4. independent minimax m2.7 audit executed via mcode returning verdict: pass across all 5 key endpoints. 5. visual correctness verified against data/hd2-takeover/evidence/ via /root/bin/check-visual-correctness (pass).">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0042" data-label="Maintain visual and operational parity for WordPress ports across all client domains." data-disposition="queue-for-hd2-firstmate">
+   0042</label></td>
+ <td><span class="pill p1">P1</span></td>
+ <td>WordPress Ports</td>
+ <td class="what">Maintain visual and operational parity for WordPress ports across all client domains.</td>
+</tr><tr data-prio="—" data-area="—" data-txt="0043 — ticket 0043: full compute &amp; database migration of data.core-distro.com to elevate vps status: queued priority: high owner: second mate (minimax m3.1 in herdr wk:p18 / luna supervisor) requester: captain date: 2026-10-19 --- 1. context &amp; objective currently, https://data.core-distro.com is in a hybrid transition state: - edge ingress : hosted on elevate vps ( 45.90.220.156 / hostinger kvm8). - backend compute &amp; database : reverse-proxied to namecheap ( 66.29.153.174 litespeed / php 8.2 / mysql). the captain&#x27;s mandate is to complete the full migration so that elevate vps natively runs the php compute plane and mysql database , while namecheap is preserved exclusively for cold off-site backups. --- 2. scope &amp; technical coordinates - target host : elevate vps ( 45.90.220.156 / tailscale 100.69.211.43 / srv1137994-elevatesci ). - origin host (for export &amp; backup) : namecheap ( business190.web-hosting.com:2083 , cpanel user corejdng ). - controller : 100.117.47.27 (holds cpanel credentials in /root/.secrets/core_distro_cpanel_ ). - canonical app source : hetzner 100.106.6.22 ( /home/hd2admin/agent-work/core-distro-saas-clean/staged-export-test/ ). --- 3. migration gate plan (bounded stages) 1. stage 1 — elevate vps environment discovery : - check php-fpm 8.1/8.2 socket, extensions ( pdo_mysql , curl , json , mbstring , zip ), and percona mysql status. - establish /var/www/data.core-distro.com docroot with www-data ownership. 2. stage 2 — database export &amp; restore : - dump live database ( corejdng_ ) from namecheap via cpanel uapi / mysqldump. - restore database to local percona mysql on elevate vps. - verify table integrity, row counts, lead records, and geo-cities/states lookup tables. 3. stage 3 — application deployment &amp; config : - extract canonical application files + top cities logic to /var/www/data.core-distro.com . - configure local mysql credentials in application configuration. 4. stage 4 — local verification gate : - test local execution via php-fpm on loopback ( http://127.0.0.1:3118 or socket test) before altering public nginx. - confirm authentication, dashboard loading, and lead list viewing with zero php fatal/parse errors. 5. stage 5 — nginx ingress switchover : - update /etc/nginx/sites-available/data.core-distro.com on elevate vps: replace proxy_pass https://66.29.153.174; with local fastcgi_pass unix:/run/php/php -fpm.sock; . - test nginx -t and gracefully reload nginx. 6. stage 6 — automated namecheap backup cron : - deploy scheduled cron job on elevate vps dumping local mysql and syncing to namecheap backup storage. 7. stage 7 — final acceptance &amp; verification : - probe https://data.core-distro.com/ live; verify zero proxy latency, full crud operations, and delivery of final closeout report. --- 4. safety &amp; invariants - pre-migration database dump must be verified and preserved before switchover. - namecheap production instance remains untouched and available for immediate rollback. - rollback path: revert hostinger nginx back to proxy_pass https://66.29.153.174; with nginx -t &amp;&amp; systemctl reload nginx . - zero credential leakage in reports or logs. --- 5. deliverable comprehensive migration artifact at: /root/agent-work/deightonllm-firstmate/data/hd2-takeover/report-ticket-0043-elevate-vps-compute-migration.md concluding with: verdict: pass &lt;summary or verdict: fail &lt;blocker">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0043" data-label="Ticket 0043: Full Compute &amp; Database Migration of data.core-distro.com to Elevate VPS Status: QUEUED Priority: HIGH Owner: Second Mate (MiniMax M3.1 in Herdr wK:p18 /…" data-disposition="queue-for-hd2-firstmate">
+   0043</label></td>
+ <td><span class="pill ">—</span></td>
+ <td>—</td>
+ <td class="what">Ticket 0043: Full Compute &amp; Database Migration of data.core-distro.com to Elevate VPS Status: QUEUED Priority: HIGH Owner: Second Mate (MiniMax M3.1 in Herdr wK:p18 /…</td>
+</tr><tr data-prio="—" data-area="—" data-txt="0044 — ticket 0044: fix browser-lane stipulation in agent docs before minimax m2.7 is retired status: queued priority: high (time-boxed: m2.7 retirement is imminent) requester: captain, 2026-10-19 owner: second mate (eligible worker on an approved model: m3.1-flash or glm 5.3 flash) problem docs/agent-policy/herdr_agent_routing.md (and the same rule echoed in prompt_orchestration.md , herdr_coordinator_playbook.md , herdr_lane_prompt_template.md , the routing banner text in bin/validate-herdr-lane-prompt , and any copies on hetzner/controller) states that browser work may only go to a minimax m2.7 pane and must never go to m3/m3.1/glm/agy. m2.7 is about to be retired, so as written this rule leaves no eligible browser lane and silently pushes agents to skip real browser tests. captain decision (2026-10-19) real browser tests are required for saas work. browser work must be routable to the approved models (m3.1-flash, glm 5.3 flash, and luna for review) using the installed playwright/chromium runtimes (playwright 1.64.1 on hd2stack and hetzner; google-chrome on hetzner). scope 1. inventory every file on hd2stack, hetzner and controller that encodes the m2.7-only browser rule (grep for m2.7 , browser agent required , browser-primary-minimax27 , never send browser work ). 2. propose one replacement rule: which models are browser-eligible, the required runtime check (playwright/chromium present, verified by a real command), and the safety limits (no production writes, no credential entry in panes, test account only). 3. update the docs and the prompt validator together in one reviewed change so they cannot disagree; keep the routing-banner contract and its tests green ( bin/validate-herdr-lane-prompt.test.sh ). 4. sync identical wording to hetzner and controller copies; record dated backups first. 5. an independent reviewer (glm 5.3 flash) checks the diff before accepted. out of scope no model retirement mechanics, no pane restarts, no credential handling. deliverable data/hd2-takeover/report-ticket-0044-browser-lane-policy.md ending with verdict: pass fail &lt;summary .">
+ <td class="tid"><label style="display:flex;gap:7px;align-items:center;cursor:pointer">
+   <input type="checkbox" name="tickets" value="0044" data-label="Ticket 0044: Fix browser-lane stipulation in agent docs before MiniMax M2.7 is retired Status: QUEUED Priority: HIGH (time-boxed: M2.7 retirement is imminent)…" data-disposition="queue-for-hd2-firstmate">
+   0044</label></td>
+ <td><span class="pill ">—</span></td>
+ <td>—</td>
+ <td class="what">Ticket 0044: Fix browser-lane stipulation in agent docs before MiniMax M2.7 is retired Status: QUEUED Priority: HIGH (time-boxed: M2.7 retirement is imminent)…</td>
+</tr></tbody></table></div>
+ <div class="copyrow" style="margin-top:12px">
+  <button type="button" class="primary" onclick="(function(b){var f=b.closest('[data-lavish-question]');
+   var sel=[].slice.call(f.querySelectorAll('input[name=tickets]:checked')).map(function(i){return {id:i.value,label:i.dataset.label,disposition:i.dataset.disposition};});
+   if(!sel.length){alert('Tick at least one ticket.');return;}
+   window.lavish.queuePrompt('Work this batch of '+sel.length+' ticket(s) next: '+
+    sel.map(function(s){return s.id}).join(', ')+
+    '. Act on every selected ticket and return an item-by-item receipt: one outcome per submitted ID '+
+    '(addressed with evidence, deferred with a reason, or rejected with a reason). Account for every submitted ID before reporting completion.',
+    {tag:'tracked-batch',text:'Queue '+sel.length+' ticket(s)',element:f,data:{items:sel}});})(this)">
+   Queue selected tickets</button>
+  <span class="status" aria-live="polite"></span>
+  <span class="sub">the batch is sent as one prompt with your ticket numbers &mdash; nothing is lost between rounds</span>
+ </div>
+ </div>
+</section>
+<section id="dec">
+ <header><h2>3 &mdash; decisions settled tonight</h2>
+  <span class="tag">derived from the PRDs and the actual repo state, then acted on</span></header>
+ <p class="note">Only spend, credentials, live client production and destructive acts are held for you.
+ Everything else is decided from the evidence and executed.</p>
+ <div class="card" style="padding:0;overflow:hidden">
+  <table><thead><tr><th style="width:23%">Decision</th><th style="width:22%">Derived from</th>
+   <th style="width:13%">State</th><th>What happens</th></tr></thead><tbody><tr><td><b>Key rotation</b></td><td style="color:var(--muted)">You, 2026-10-21</td>
+ <td><span class="tag bad">dropped</span></td><td>You said you are not doing it now. The item sits in the machine tracker as BLOCKED with a re-raise trigger, the audit stays, the 98-container purge stays unrun.</td></tr><tr><td><b>KVM1 Herdr registration window</b></td><td style="color:var(--muted)">board.md row + ticket-0003</td>
+ <td><span class="tag warn">needs your answer</span></td><td>Section 1 above (Q1). Also needs an SSH path &amp;mdash; that is the hard blocker, not the authorisation.</td></tr><tr><td><b>srv1137994 hard gate</b></td><td style="color:var(--muted)">docs/agent-policy/SURFACE-IDENTITY.md</td>
+ <td><span class="tag warn">needs your answer</span></td><td>Q4 below. The gate still marks srv1137994 as hard-gated although that host has been the live data.core-distro.com origin since 2026-10-20. The file was not edited.</td></tr><tr><td><b>Quota gate provider mapping</b></td><td style="color:var(--muted)">You, via this board, 2026-10-21</td>
+ <td><span class="tag ok">ruled</span></td><td>Leave it refused. claude / grok / kimi / opencode stay unusable and the gate keeps saying so out loud; no mapping is inferred from a harness name. Recorded as VERIFIED-DONE (quota-harness-provider-binding-20261021).</td></tr><tr><td><b>FAST tier + parallelism cap</b></td><td style="color:var(--muted)">QUOTA-ROUTING-RUBRIC.md &amp;sect;3, AGENTS.md:631, captain directive 2026-10-18</td>
+ <td><span class="tag ok">decided</span></td><td>FAST is the Codex Luna &lt;code&gt;--fast&lt;/code&gt; flag, not a tier &amp;mdash; and no HD2 worker lane has a FAST route (the HD2 worker route is Gemini 3.8), so the standing default stays OFF with task-scoped opt-in. Cap = &lt;b&gt;six working agents per provider&lt;/b&gt;, enforced by &lt;code&gt;bin/fm-dispatch-guard.sh&lt;/code&gt;. &lt;code&gt;config/parallel-dispatch-cap&lt;/code&gt; is retired, not implemented: it never was in the repo, and a third gate in fm-spawn.sh would let two ceilings disagree.</td></tr><tr><td><b>Core base: 259a669 vs 17dc2f1</b></td><td style="color:var(--muted)">live git state + the 0018/0019 audit</td>
+ <td><span class="tag ok">decided</span></td><td>&lt;b&gt;259a669 is the base of record&lt;/b&gt; &amp;mdash; origin/main calls four symbols it never defines (exit 127, jq parse error) while 259a669 defines all four. 17dc2f1 is rejected as a base. &lt;b&gt;Neither was merged.&lt;/b&gt;</td></tr><tr><td><b>Helper-permission route</b></td><td style="color:var(--muted)">tests/fm-helper-permissions.test.sh + the live drift</td>
+ <td><span class="tag ok">decided</span></td><td>14 exact live allowlist entries plus the ticket-0043 migration roots brought under version control; the blanket &lt;code&gt;/root/.secrets/**&lt;/code&gt; write removed from the live store (a narrowing); the invariant extended to write roots; per-profile &lt;code&gt;required&lt;/code&gt; flag fail-closed; two exact refusal tests added &amp;mdash; suite &lt;b&gt;6/6 green&lt;/b&gt;.</td></tr><tr><td><b>Skill refresh set</b></td><td style="color:var(--muted)">.agents/skills inventory + staleness evidence</td>
+ <td><span class="tag ok">decided</span></td><td>&lt;b&gt;2 of 33 refreshed&lt;/b&gt; (harness-update-sweep, namecheap-mail-dns &amp;mdash; both had provably dead references). 31 deliberately left (zero dead refs, zero retired model ids). &lt;b&gt;No skill deleted.&lt;/b&gt;</td></tr><tr><td><b>lead_list_search_cache (445 MB)</b></td><td style="color:var(--muted)">measurement: 37,502 rows, 100% expired</td>
+ <td><span class="tag ok">done &amp;mdash; production</span></td><td>Dated backup &lt;code&gt;lead_list_search_cache-20261021T023829Z.sql.gz&lt;/code&gt;, sha256 &lt;code&gt;6033f807&amp;hellip;&lt;/code&gt;, verified by re-reading (37,502 rows, CHECKSUM TABLE 2462031730 identical). Nine bounded rounds removed exactly 37,502 rows. Chromium PASS, WebKit PASS, admin grid PASS with 0 console errors. Counts unchanged (users 2 / lists 21 / items 949,376 / searches 155,600). &lt;b&gt;Freed 1,438,498,816 B (1.339 GiB)&lt;/b&gt;. Rollback command recorded in the report.</td></tr><tr><td><b>Merge route: direct-notify vs relay</b></td><td style="color:var(--muted)">branch fm/direct-notify-20261015 + tests</td>
+ <td><span class="tag warn">handed over</span></td><td>Still needed: no notify hook on main. 13/13 notify tests, ingest and hetz-send green &amp;mdash; but the branch is 149 commits stale with conflicts in fm-hetz-send, and a naive merge would regress two fixes. Ships as a verified bundle plus a 6-step refresh-and-merge instruction to the Hetz lane.</td></tr><tr><td><b>Which Core branch</b></td><td style="color:var(--muted)">PRD v3 + repo state</td>
+ <td><span class="tag ok">decided</span></td><td>core-distro-saas-clean origin/main is the base of record; my branches hand over to the Hetz merge lane, which owns the firstmate main merge.</td></tr></tbody></table>
+ </div>
+
+ <div class="card" style="margin-top:12px">
+  <h3>Spend decision &mdash; ruled by you, 2026-10-21</h3>
+  <p class="note" style="margin-bottom:10px"><b>Your ruling: leave it refused.</b> Recorded in the tracker as
+   VERIFIED-DONE (<code>quota-harness-provider-binding-20261021</code>) &mdash; those four harnesses stay
+   unusable and the gate keeps refusing them out loud. The controls below are still here if you want to change
+   your mind.</p>
+  <p class="note" style="margin-bottom:10px"><code>bin/fm-quota-gate.sh</code> has no provider mapping for the
+   <code>claude</code>, <code>grok</code>, <code>kimi</code> and <code>opencode</code> harnesses, so it refuses
+   <b>100% of crew spawns</b> on them. <code>AGENTS.md</code> &sect;4 forbids inferring a mapping from a harness
+   name, so I cannot just bind it. Every one of those four harnesses is currently unusable.</p>
+  <div class="qbox" data-lavish-question="quota-provider-binding">
+   <div class="qh"><b>How should the quota gate treat those four harnesses?</b>
+    <span class="qid">Q3 &middot; spend</span></div>
+   <label class="opt"><input type="radio" name="quotabind" value="bind-to-quota-axi-provider">
+    <span><span class="t">Bind them to the quota-axi provider</span>
+    <span class="d">ask quota-axi which provider serves each harness and record the mapping in the gate with
+     the evidence &mdash; the same route every other harness takes</span></span></label>
+   <label class="opt"><input type="radio" name="quotabind" value="bind-to-named-provider">
+    <span><span class="t">I will name the provider &mdash; state it below</span>
+    <span class="d">you tell me which provider serves claude / grok / kimi / opencode</span></span></label>
+   <label class="opt"><input type="radio" name="quotabind" value="leave-refused">
+    <span><span class="t">Leave it refused</span>
+    <span class="d">those four harnesses stay unusable and the gate keeps saying so out loud</span></span></label>
+   <input type="text" name="quotaprovider" placeholder="If you picked &quot;I will name the provider&quot;: which provider for which harness" style="max-width:520px">
+   <div class="copyrow">
+    <button type="button" class="primary" onclick="(function(b){var f=b.closest('.qbox');
+     var fd=new FormData(f); var c=(fd.get('quotabind')||'').trim(); if(!c){alert('Pick one option first.');return;}
+     var p=(fd.get('quotaprovider')||'').trim();
+     window.lavish.queuePrompt('Quota gate provider binding for the claude / grok / kimi / opencode harnesses: '+c+
+      (p?' -- '+p:'')+'. Implement it in bin/fm-quota-gate.sh with the evidence recorded and a refusal test.',
+      {tag:'decision',text:'quota binding: '+c,element:f,data:{question:'quota-provider-binding',answer:c,provider:p}});})(this)">
+     Queue this answer</button>
+    <span class="status" aria-live="polite"></span>
+   </div>
+  </div>
+ </div>
+
+ <div class="card" style="margin-top:12px">
+  <h3>Q4 &mdash; the hard gate that no longer matches the fleet</h3>
+  <p class="note" style="margin-bottom:10px"><code>docs/agent-policy/SURFACE-IDENTITY.md</code> still carries
+   <b>srv1137994</b> as a <b>HARD GATE</b> &mdash; &ldquo;do not touch it, probe it, resolve it, dispatch to it,
+   or route work to it&rdquo;. But that host has been the live <code>data.core-distro.com</code> origin since
+   2026-10-20, which is where the Lead Engine and the 445 MB cache purge just ran. The file was
+   <b>not edited</b> &mdash; a hard gate is policy, and policy is yours to re-scope.</p>
+  <div class="qbox" data-lavish-question="srv1137994-hard-gate">
+   <div class="qh"><b>What should happen to the srv1137994 hard gate?</b>
+    <span class="qid">Q4 &middot; policy</span></div>
+   <label class="opt"><input type="radio" name="hardgate" value="rescope-guarded-production">
+    <span><span class="t">Re-scope it &mdash; guarded production, not forbidden</span>
+    <span class="d">keep it flagged, but allow the named lane to act on it with the backup + value-equality +
+     browser-gate discipline it just used for the cache purge</span></span></label>
+   <label class="opt"><input type="radio" name="hardgate" value="leave-as-written">
+    <span><span class="t">Leave it exactly as written</span>
+    <span class="d">the gate stays absolute; nothing routes there and the record keeps the contradiction
+     visible</span></span></label>
+   <label class="opt"><input type="radio" name="hardgate" value="replace-with-named-gate">
+    <span><span class="t">Replace it with a named gate on the right host</span>
+    <span class="d">the hard gate moves to whichever host is genuinely off limits, and the identity file
+     names it</span></span></label>
+   <div class="copyrow">
+    <button type="button" class="primary" onclick="(function(b){var f=b.closest('.qbox');
+     var c=(new FormData(f).get('hardgate')||'').trim(); if(!c){alert('Pick one option first.');return;}
+     window.lavish.queuePrompt('srv1137994 hard gate in docs/agent-policy/SURFACE-IDENTITY.md: '+c+
+      '. Apply that ruling to the identity file through the owning lane and record it in the tracker.',
+      {tag:'decision',text:'srv1137994 hard gate: '+c,element:f,data:{question:'srv1137994-hard-gate',answer:c}});})(this)">
+     Queue this answer</button>
+    <span class="status" aria-live="polite"></span>
+   </div>
+  </div>
+ </div>
+</section>
+<section id="space">
+ <header><h2>4 &mdash; space reclaim on HD2Stack (the sidecar job)</h2>
+  <span class="tag warn">copy in flight &middot; nothing deleted</span></header>
+ <p class="note">You asked to empty this box of data we are not live-serving that is not mission-critical,
+ while migrating it to the KVM8 backup box &mdash; and to not bin anything blindly.</p>
+ <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+  <div class="card">
+   <h3>What is true right now</h3>
+   <dl class="kv">
+    <dt>This host</dt><dd>96 G disk, <b>82 G used (86%)</b>, 14 G free &mdash; and it runs the live business
+     stack: open-webui, uptime-kuma, 1panel-ai-gateway, ollama, anythingllm, n8n+postgres, mysql,
+     watchtower &mdash; <b>9 of 9 containers active</b>.</dd>
+    <dt>Docker images</dt><dd>26.43 GB &mdash; <b>0% reclaimable</b>. Nothing to win there.</dd>
+    <dt>Real find</dt><dd><b>1.76 GB of dangling volumes</b> (WordPress 452 M + db 298 M, Mattermost
+     438/236/73/27/15 M, postgres 48/44/40 M). These hold <b>orphaned application data</b> &mdash; they are
+     data to preserve and migrate, not garbage to bin.</dd>
+    <dt>Copied so far</dt><dd><b>9.8 GB, 170,724 files</b> now sit on the KVM8 under
+     <code>/root/hd2-archive/vmi3238503/</code> &mdash; docker volumes, npm/pnpm caches, the playwright
+     browsers, old codex releases, controller agent history, git bundles, rotated logs, temp rollbacks.
+     Nine per-tree digest manifests are written; the docker-volumes digest is still computing.</dd>
+    <dt>My area</dt><dd><code>/root/agent-work</code> 7.3 G, caches ~4 G, <code>/var/tmp</code> 1.3 G,
+     <code>/root/backups</code> 786 M &mdash; mine to reclaim, once the copies are verified.</dd>
+    <dt>Never touched</dt><dd><code>/root/.secrets</code> (5.9 G) and <code>/root/secret-quarantine</code> are
+     excluded and were never read. <code>/root/backups/infra</code> belongs to the Controller.
+     <code>/home/hd2admin/kun-agent-workspace</code> belongs to the Hetz lane.</dd>
+   </dl>
+  </div>
+  <div class="card">
+   <h3>The order of operations</h3>
+   <ol class="tight" style="margin:0 0 12px">
+    <li><b>Copy</b> to KVM8 at <code>/root/hd2-archive/vmi3238503/</code> &mdash; additive only, no
+     <code>rsync --delete</code></li>
+    <li><b>Verify</b> with a receipt: per-file count, bytes and sha256</li>
+    <li><b>Only then</b> reclaim on the source side</li>
+   </ol>
+   <p class="note" style="margin:0 0 8px">The reclaim step is <b>held</b> until Dubz answers three questions
+    sent in the sidecar note:</p>
+   <ul class="tight">
+    <li>what else is already on the KVM8 box, so we do not clash</li>
+    <li>is the Controller's own snapshot job going to point at the same box</li>
+    <li>what retention numbers Job B wants</li>
+   </ul>
+   <p class="note" style="margin:12px 0 0">Destination path is disjoint from the Controller's
+    <code>/root/backups/infra</code> and from the Hetz lane's workspace. <b>Nothing has been deleted.</b>
+    The reclaim list is being written before any source-side removal, one tree at a time, each with its
+    digest receipt on the KVM8.</p>
+  </div>
+ </div>
+</section>
+<section id="todo">
+ <header><h2>5 &mdash; my live to-do list</h2>
+  <span class="tag ok">generated from the lane ledger &middot; 0 drift</span></header>
+ <p class="note">The ledger is the machine truth; this list is projected from it, never hand-written. A lane
+ that finishes without leaving its next step visible fails the contract, and the drift gate refuses &mdash;
+ so this list cannot go stale behind my back.</p>
+ <div class="card">
+  <h3>In flight &mdash; 3</h3>
+  <div class="lane"><span class="nm">repo-merge</span>
+ <span><span class="st-ACTIVE"><b>ACTIVE</b></span>
+ <span class="nx">&mdash; renewed - the core-distro merge lane is working; it lands Lane A, Lane G, Lane L, the skills map and the standup fix through the gate and hands the Hetz lane the merge packets <span class="tag">repo-merge (hd2stack vmi3238503)</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-o-space-reclaim</span>
+ <span><span class="st-ACTIVE"><b>ACTIVE</b></span>
+ <span class="nx">&mdash; copy the census-selected data to KVM8 /root/hd2-archive/vmi3238503/ with a per-file receipt (count, bytes, sha256), verify it, and reclaim the source side only after the Controller answers - nothing is deleted before the receipt is proven <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-q-quota-board</span>
+ <span><span class="st-ACTIVE"><b>ACTIVE</b></span>
+ <span class="nx">&mdash; build the fleet quota + aggregate token-use header band on the Captain&#x27;s board (unified-board.html): all 7 real accounts (codex-home, openai-codex, minimax-account-1, minimax-account-2, glm, agy-gemini, agy-claude-gpt), per-account quota windows, combined token use with a legend, and previous days&#x27; usage on hover - accurate (unknown labelled, null is not zero, two codex accounts never collapse), self-contained with no CDN, then a Chromium gate and a report <span class="tag">p1-leadlists</span></span></span></div>
+  <hr>
+  <h3>Blocked &mdash; 0</h3>
+  <p class="note" style="margin:0">none</p>
+  <hr>
+  <h3>Done &mdash; 13 closed this cycle, 4 released</h3>
+  <div class="lane"><span class="nm">p1-leadlists</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - the Lead Engine grid fix (B12/B13) is deployed and measured; the follow-up is the Hetz merge packet <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-a-leftover</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - the leftover work is landed (200 paths, tip 3ae9c10, gate cleared, fm-hetz-send 8/8, calm-pi 11 ok); the follow-up is the firstmate main merge, merge request sent 23:55 BST <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-b-baseline</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - the P0 baseline defects are fixed and proven on three hosts; the follow-up is the firstmate main merge of 8d00c10 <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-c-verifier</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - the 34 tracked items are evidence-checked into true states; the follow-up is that the board consumes live-state-20261020.json from now on <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-d-residuals</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - the residuals are measured and named; two Captain gates remain (clear the 445 MB cache, rotate the two API keys) <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-e-enforcement</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - the checker and visual gates are real and wired; the follow-up is the firstmate main merge of 949e4f4 <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-f-guard</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - 21 retired-name corrections and the canonical stale guard are in place; the follow-up is the firstmate main merge of 6bea661 <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-g-todo-list</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - the to-do list is generated from the machine ledger and a lane cannot close while it is stale (4/4 on real exit codes, proven non-vacuous, end-to-end against the live checker); the follow-up is the firstmate main merge of the todo gate branch <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-h-retired-names</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - 44 owned occurrences of the retired model id across 16 files are corrected, the Pi catalog and the live Pi registration are cleaned (valid JSON, mode preserved, backups kept); the follow-up is the firstmate main merge of 80c2cc7 and the 4 Hetzner-owned files the Hetz lane must correct <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-j-credential-audit</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - the audit corrected the premise: the copies hold the CURRENT live values, not retired ones (183 plain files + 169 archives = 352 live-bearing containers; 98 safely purgeable; 0 git blobs hold a credential); the follow-up is the Captain decision to rotate the two keys and authorise the purge <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-l-red-suite-triage</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - all 40 red suites classified with real command output and every A-class defect fixed (sweep 40 -&gt; 33 failures, PASS 122 -&gt; 129 of 162, 3 baseline suites green); the follow-up is the Hetz lane merging fm/red-suite-triage-20261021 (tip 1ad3766) and the 21 residual suites going to their named owners, including the Captain-level harness-to-quota-axi provider binding <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-m-kvm1-herdr</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - KVM1 is srv797124 (100.92.152.109), the HD2 main WordPress host hd2.ai on 1 CPU, and it has no Herdr and was never registered; the Captain&#x27;s failure is reproduced and the repair is an attended step; a read-only guarded preflight ships and the window is stated with trigger, length and owner as a proposal; the follow-up is the Captain&#x27;s authorisation plus an SSH path <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">p1-leadlists/lane-p-six-decisions</span>
+ <span><span class="st-DONE"><b>DONE</b></span>
+ <span class="nx">&mdash; closed - all six decisions settled from the governing documents and the live repo/host state and acted on: FAST is the Codex Luna --fast flag with no HD2 worker route (default OFF), the cap is six working agents per provider, config/parallel-dispatch-cap retired, 259a669 confirmed as the Core base of record, the helper-permission route narrowed (blanket /root/.secrets write removed, 6/6 tests), 2 of 33 skills refreshed and none deleted, and the 445 MB lead_list_search_cache purged on KVM8 with a dated checksum-identical backup, both browser gates green and counts unchanged (1.339 GiB freed); the follow-up is the Hetz lane merging fm/six-decisions-20261021 @ 7d90009 (pushed and gate-cleared) and refreshing fm/direct-notify-20261015 onto current main, plus the Captain ruling on the srv1137994 hard gate <span class="tag">p1-leadlists</span></span></span></div><div class="lane"><span class="nm">hetz-core-impl</span>
+ <span><span class="st-RELEASED"><b>RELEASED</b></span>
+ <span class="nx">&mdash; lapsed at 2026-10-20 14:45 BST without renewal - the scope is free; re-claim to resume the work <span class="tag">hetz-core-impl</span></span></span></div><div class="lane"><span class="nm">hetz-tests</span>
+ <span><span class="st-RELEASED"><b>RELEASED</b></span>
+ <span class="nx">&mdash; lapsed at 2026-10-20 14:45 BST without renewal - the scope is free; re-claim to resume the work <span class="tag">hetz-tests</span></span></span></div><div class="lane"><span class="nm">hetz-evidence</span>
+ <span><span class="st-RELEASED"><b>RELEASED</b></span>
+ <span class="nx">&mdash; lapsed at 2026-10-20 14:45 BST without renewal - the scope is free; re-claim to resume the work <span class="tag">hetz-evidence</span></span></span></div><div class="lane"><span class="nm">hetz-firstmate</span>
+ <span><span class="st-RELEASED"><b>RELEASED</b></span>
+ <span class="nx">&mdash; lapsed at 2026-10-20 14:45 BST without renewal - the scope is free; re-claim to resume the work <span class="tag">hetz-firstmate</span></span></span></div>
+ </div>
+ <div class="card" style="margin-top:12px">
+  <h3>What the mechanism guarantees</h3>
+  <ul class="tight">
+   <li>the to-do list, the claims board and the ledger cannot disagree &mdash; the gate refuses if they do</li>
+   <li>a lane cannot close while its to-do entry is stale (third fail-closed closure precondition)</li>
+   <li>the same bytes are published to all three hosts and every channel</li>
+   <li>the board carries the ledger digest, so you can see the moment it stops matching</li>
+  </ul>
+ </div>
+</section>
+<section>
+ <header><h2>6 &mdash; send everything back</h2></header>
+ <div class="card">
+  <p class="note">If you are reading this in Lavish, the <b>Queue</b> buttons above send each answer straight to
+   me. If you opened the file directly (double-clicked it), use <b>Copy all answers</b> and paste the result
+   back into the chat &mdash; it works without the Lavish server.</p>
+  <div class="copyrow">
+   <button type="button" onclick="(async (btn) => {
+    const copyRun = btn._lavishCopyRun = (btn._lavishCopyRun || 0) + 1;
+    const qs = [...document.querySelectorAll('[data-lavish-question]')];
+    const status = btn.parentElement.querySelector('[data-lavish-copy-all-status]');
+    btn.parentElement.querySelector('[data-lavish-copy-all-manual]')?.remove();
+    const out = [];
+    for (const q of qs) {
+      const key = q.getAttribute('data-lavish-question')?.trim() || 'Question';
+      const lines = [];
+      for (const el of q.querySelectorAll('input, select, textarea')) {
+        if (el.matches(':disabled')) continue;
+        if (el.closest('[data-lavish-question]') !== q) continue;
+        const isChoice = el.matches('input[type=checkbox], input[type=radio]');
+        if (isChoice && !el.checked) continue;
+        if (el.matches('input[type=button], input[type=submit], input[type=reset], input[type=image], input[type=hidden], input[type=file], input[type=range], input[type=color]')) continue;
+        let vals;
+        if (el instanceof HTMLSelectElement) {
+          vals = [...el.selectedOptions].filter((o) => !o.disabled && !o.closest('optgroup[disabled]')).map((o) => o.value.trim()).filter(Boolean);
+        } else {
+          const v = isChoice && (!el.hasAttribute('value') || !el.value.trim())
+            ? el.labels?.[0]?.textContent?.trim() || el.getAttribute('aria-label')?.trim() || el.name || ''
+            : el.value.trim();
+          vals = v ? [v] : [];
+        }
+        const label = el.name || el.labels?.[0]?.textContent?.trim() || el.getAttribute('aria-label')?.trim() || el.getAttribute('placeholder')?.trim() || el.tagName.toLowerCase();
+        for (const v of vals) lines.push('  ' + label + ': ' + v.split('\n').join('\n    '));
+      }
+      if (lines.length) out.push(key + ':\n' + lines.join('\n'));
+    }
+    const text = out.join('\n\n');
+    if (!text) { status.textContent = qs.length ? 'No answers to copy yet.' : 'No questions or answers to copy.'; return; }
+    status.textContent = '';
+    try {
+      if (typeof navigator.clipboard?.writeText !== 'function') throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(text);
+      if (copyRun !== btn._lavishCopyRun) return;
+      status.textContent = 'Answers copied.';
+      return;
+    } catch {}
+    if (copyRun !== btn._lavishCopyRun) return;
+    const tmp = document.createElement('textarea');
+    tmp.value = text; tmp.readOnly = true; tmp.setAttribute('aria-hidden','true');
+    tmp.style.position='fixed'; tmp.style.left='-10000px';
+    document.body.append(tmp); tmp.focus(); tmp.select();
+    let ok=false; try { ok = document.execCommand('copy'); } catch {}
+    tmp.remove();
+    if (ok) { status.textContent='Answers copied.'; return; }
+    btn.parentElement.querySelector('[data-lavish-copy-all-manual]')?.remove();
+    const man = document.createElement('textarea');
+    man.value = text; man.readOnly = true; man.rows = Math.min(12, Math.max(3, text.split('\n').length));
+    man.setAttribute('aria-label','Answers to copy manually'); man.dataset.lavishCopyAllManual = '';
+    btn.insertAdjacentElement('afterend', man); man.focus(); man.select();
+    status.textContent = 'Clipboard unavailable. Copy the answers below manually.';
+  })(this)">Copy all answers</button>
+   <span data-lavish-copy-all-status role="status" aria-live="polite"></span>
+  </div>
+ </div>
+</section>
+
+<p class="meta">NEXT: the Captain works this surface &mdash; ticket-0003 decision, the ticket batch and the quota binding come back as queued prompts | owner: captain | by: next reply</p>
+</div>
+<script>
+(function(){
+  var q=document.getElementById('q'),fp=document.getElementById('fp'),fa=document.getElementById('fa'),
+      tb=document.getElementById('qtable'),cnt=document.getElementById('cnt');
+  var areas=[].slice.call(tb.querySelectorAll('tbody tr')).map(function(r){return r.dataset.area;})
+    .filter(function(v,i,a){return v && a.indexOf(v)===i;}).sort();
+  areas.forEach(function(a){var o=document.createElement('option');o.value=a;o.textContent=a;fa.appendChild(o);});
+  function apply(){
+    var t=(q.value||'').toLowerCase(),p=fp.value,ar=fa.value,n=0;
+    [].slice.call(tb.querySelectorAll('tbody tr')).forEach(function(r){
+      var ok=(!p||r.dataset.prio===p)&&(!ar||r.dataset.area===ar)&&(!t||r.dataset.txt.indexOf(t)>-1);
+      r.style.display=ok?'':'none'; if(ok)n++;
+    });
+    cnt.textContent=n+' of '+(tb.querySelectorAll('tbody tr').length)+' shown';
+  }
+  q.addEventListener('input',apply); fp.addEventListener('change',apply); fa.addEventListener('change',apply);
+  document.getElementById('all').addEventListener('click',function(){
+    [].slice.call(tb.querySelectorAll('tbody tr')).forEach(function(r){
+      if(r.style.display!=='none'){var c=r.querySelector('input[type=checkbox]');if(c)c.checked=true;}});
+  });
+  document.getElementById('none').addEventListener('click',function(){
+    [].slice.call(tb.querySelectorAll('input[type=checkbox]')).forEach(function(c){c.checked=false;});
+  });
+  apply();
+})();
+</script>
+</body></html>

@@ -13,7 +13,7 @@
 # 4. The manifest is the durable programme configuration and is the single source of
 #    the lane list, the artifact paths, and the required verdict.
 # 5. Never touches an artifact. Read-only.
-# 6. Two gates are preconditions of closure, so a lane cannot close on a claim the
+# 6. Three gates are preconditions of closure, so a lane cannot close on a claim the
 #    fleet has not verified:
 #    a. checker-before-done: a lane whose artifact claims PASS/DONE/ACCEPTED must be
 #       corroborated by an independent checker artifact (bin/fm-checker-before-done.sh).
@@ -22,16 +22,24 @@
 #       on-disk visual artifact (/root/bin/check-visual-correctness, the mechanism of
 #       docs/VISUAL-CORRECTNESS-STANDARD.md). A claimed screenshot that was never
 #       captured is a VIOLATION.
+#    c. to-do list freshness: a lane whose artifact claims PASS/DONE/ACCEPTED must sit
+#       behind a current to-do list (bin/fm-todo-gate.sh). The to-do list is generated
+#       from the machine lane ledger; a lane claiming DONE while that list is stale is
+#       a VIOLATION, because the Captain's instrument would be lying about it.
 #
 # Usage:
 #   fm-lane-closure-gate.sh [--manifest <path>] [--lane <id>] [--strict] [--home <path>]
-#                           [--checker-gate <path>] [--visual-gate <path>]
+#                           [--checker-gate <path>] [--visual-gate <path>] [--todo-gate <path>]
+#                           [--todo-board <path>] [--todo-ledger <path>]
 #
 # Environment:
 #   FM_HOME                      home that owns the programme configuration
 #   FM_LANE_MANIFEST             explicit manifest path, overrides the default
 #   FM_CHECKER_GATE              explicit checker-before-done gate path
 #   FM_VISUAL_GATE               explicit visual-correctness gate path
+#   FM_TODO_GATE                 explicit to-do list gate path
+#   FM_TODO_BOARD                explicit to-do board the gate judges
+#   FM_TODO_LEDGER               explicit lane ledger the gate judges
 #
 # Exit codes:
 #   0 - no violation, and every checked lane is closed when --strict is set
@@ -49,9 +57,12 @@ HOME_OVERRIDE=""
 STRICT=0
 CHECKER_GATE_ARG=""
 VISUAL_GATE_ARG=""
+TODO_GATE_ARG=""
+TODO_BOARD_ARG=""
+TODO_LEDGER_ARG=""
 
 usage() {
-  printf 'Usage: %s [--manifest <path>] [--lane <id>] [--home <path>] [--strict] [--checker-gate <path>] [--visual-gate <path>]\n' "$(basename "$0")"
+  printf 'Usage: %s [--manifest <path>] [--lane <id>] [--home <path>] [--strict] [--checker-gate <path>] [--visual-gate <path>] [--todo-gate <path>] [--todo-board <path>] [--todo-ledger <path>]\n' "$(basename "$0")"
 }
 
 while [ $# -gt 0 ]; do
@@ -79,6 +90,21 @@ while [ $# -gt 0 ]; do
     --visual-gate)
       [ $# -ge 2 ] || { usage >&2; exit 2; }
       VISUAL_GATE_ARG="$2"
+      shift 2
+      ;;
+    --todo-gate)
+      [ $# -ge 2 ] || { usage >&2; exit 2; }
+      TODO_GATE_ARG="$2"
+      shift 2
+      ;;
+    --todo-board)
+      [ $# -ge 2 ] || { usage >&2; exit 2; }
+      TODO_BOARD_ARG="$2"
+      shift 2
+      ;;
+    --todo-ledger)
+      [ $# -ge 2 ] || { usage >&2; exit 2; }
+      TODO_LEDGER_ARG="$2"
       shift 2
       ;;
     --strict)
@@ -142,8 +168,20 @@ resolve_gate() {
 
 CHECKER_GATE=$(resolve_gate "$CHECKER_GATE_ARG" "${FM_CHECKER_GATE:-}" "$FM_ROOT/bin/fm-checker-before-done.sh")
 VISUAL_GATE=$(resolve_gate "$VISUAL_GATE_ARG" "${FM_VISUAL_GATE:-}" "/root/bin/check-visual-correctness" "$FM_ROOT/bin/check-visual-correctness")
+TODO_GATE=$(resolve_gate "$TODO_GATE_ARG" "${FM_TODO_GATE:-}" "$FM_ROOT/bin/fm-todo-gate.sh")
 
-python3 - "$MANIFEST" "$MANIFEST_HOME" "$LANE" "$STRICT" "$CHECKER_GATE" "$VISUAL_GATE" <<'PY'
+# The to-do list the gate judges belongs to the same home as the programme: the
+# board is published at <home>/data/tracker/NEXT-BOARD.md and the machine lane
+# ledger at <home>/ops/lane-ledger.tsv. An explicit path wins. The ledger is only
+# passed on when it is there, so the gate can fall back to the host's copy.
+TODO_BOARD="${TODO_BOARD_ARG:-${FM_TODO_BOARD:-$MANIFEST_HOME/data/tracker/NEXT-BOARD.md}}"
+TODO_LEDGER="${TODO_LEDGER_ARG:-${FM_TODO_LEDGER:-$MANIFEST_HOME/ops/lane-ledger.tsv}}"
+if [ ! -f "$TODO_LEDGER" ]; then
+  TODO_LEDGER=""
+fi
+
+python3 - "$MANIFEST" "$MANIFEST_HOME" "$LANE" "$STRICT" "$CHECKER_GATE" "$VISUAL_GATE" \
+  "$TODO_GATE" "$TODO_BOARD" "$TODO_LEDGER" <<'PY'
 import json
 import os
 import re
@@ -152,6 +190,7 @@ import sys
 
 manifest_path, home, only_lane, strict = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
 checker_gate, visual_gate = sys.argv[5], sys.argv[6]
+todo_gate, todo_board, todo_ledger = sys.argv[7], sys.argv[8], sys.argv[9]
 
 try:
     with open(manifest_path, encoding="utf-8") as handle:
@@ -201,6 +240,7 @@ notes = []
 print(f"programme: {manifest.get('programme', 'unknown')}  manifest: {manifest_path}")
 print(f"checker gate: {checker_gate or '(unavailable)'}")
 print(f"visual gate:  {visual_gate or '(unavailable)'}")
+print(f"todo gate:    {todo_gate or '(unavailable)'}")
 print(f"{'lane':<34} {'state':<10} {'verdict':<12} artifact")
 print("-" * 100)
 
@@ -257,6 +297,35 @@ for lane in lanes:
                     )
                 else:
                     notes.append(f"{lane_id}: PASS claim corroborated by the checker-before-done gate")
+
+            # The to-do list is generated from the machine lane ledger. A lane
+            # that claims DONE while that list is stale is refused, because the
+            # Captain's instrument would be lying about this lane.
+            if not todo_gate or not os.path.isfile(todo_gate):
+                violations.append(
+                    f"{lane_id}: PASS claim cannot close - the to-do list gate is unavailable "
+                    f"({todo_gate or 'not resolved'})"
+                )
+            else:
+                argv = [todo_gate]
+                if todo_board:
+                    argv += ["--board", todo_board]
+                if todo_ledger:
+                    argv += ["--ledger", todo_ledger]
+                argv.append(artifact)
+                rc, out = run_gate(argv)
+                if rc == 0:
+                    notes.append(f"{lane_id}: the to-do list is current")
+                elif rc == 4:
+                    notes.append(
+                        f"{lane_id}: no to-do list has been published yet, so this lane was not "
+                        "judged against one"
+                    )
+                else:
+                    violations.append(
+                        f"{lane_id}: the to-do list is stale or unverifiable - the to-do list gate "
+                        f"refused the lane: {first_line(out)} ({artifact})"
+                    )
 
         if visual_gate and os.path.isfile(visual_gate):
             rc, out = run_gate([visual_gate, artifact])

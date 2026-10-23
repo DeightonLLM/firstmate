@@ -844,6 +844,31 @@ event_wait_or_sleep() {
   esac
 }
 
+# Board refresh: the to-do board is GENERATED from the machine lane ledger, so
+# every republication of that ledger makes the board stale and the to-do gate
+# (which the lane-closure gate runs) refuse to close a lane that is otherwise
+# closed. The gate keeps its teeth: a stale board is still a refusal. This is
+# the separate explicit step that runs BEFORE the gate judges, so the board
+# follows the ledger instead of decaying behind the gate's back.
+BOARD_REFRESH_RETRY_SECS=${FM_BOARD_REFRESH_RETRY_SECS:-60}
+
+# fm_board_refresh: rebuild the generated to-do board when the live ledger has
+# moved on. A failed refresh is logged, never surfaced as a wake: the to-do gate
+# still refuses the stale board, and that refusal is the loud channel. Waking
+# the supervisor on every cycle for a failure it cannot fix would re-arm the
+# watcher exactly like the defect this refresh was added to remove.
+fm_board_refresh() {
+  local out rc=0
+  out=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-board-refresh.sh" 2>&1) || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    triage_log "board refresh failed (rc=$rc): $out"
+    touch "$STATE/.board-refresh-failed-at" 2>/dev/null || true
+    return 0
+  fi
+  rm -f -- "$STATE/.board-refresh-failed-at" 2>/dev/null || true
+  return 0
+}
+
 # --- Main entry: the runtime below runs only when this file is executed as a
 # script. When sourced (unit tests loading the functions above), return here
 # before acquiring the singleton lock or entering the blocking loop.
@@ -941,6 +966,18 @@ while :; do
   # published while this watcher was between cycles.
   procevent_surface_queued
   _wphase procevent
+
+  # Keep the generated to-do board in step with the machine lane ledger. This
+  # runs before the slow checks so a board that is judged later in the cycle -
+  # or by a lane closing against it - sees the current ledger, not a stale one.
+  # The refresh is cheap when the board is current (it compares the digest the
+  # board records against the digest of the live ledger bytes) and only rebuilds
+  # when the ledger actually moved.
+  if [ ! -e "$STATE/.board-refresh-failed-at" ] \
+     || [ "$(age_of "$STATE/.board-refresh-failed-at")" -ge "$BOARD_REFRESH_RETRY_SECS" ]; then
+    fm_board_refresh
+  fi
+  _wphase board_refresh
 
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.

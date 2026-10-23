@@ -1,1 +1,0 @@
-blocked: report is ready, but the required decision-hold completion gate would modify task metadata/backlog outside the only permitted write paths (report and status); captain-facing product-authority inputs remain unresolved

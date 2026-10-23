@@ -1,6 +1,0 @@
-working [at=1790142696]: worktree confirmed; branch fm/herdr-pane-board-context created
-working [at=1790142914]: inspection done; writing failing regression tests next
-working [at=1790143071]: regression tests written and demonstrated failing for matching/absent/mismatch Herdr scenarios
-working [at=1790143294]: all 6 new regressions pass; now running existing snapshot/bearings suites
-done [at=1790144681]: ready in branch fm/herdr-pane-board-context
-done [at=1790144739]: ready in branch fm/herdr-pane-board-context (changes preserved uncommitted per revised contract)

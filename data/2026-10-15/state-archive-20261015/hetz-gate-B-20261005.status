@@ -1,4 +1,0 @@
-received [corr=2026-10-05-hetz-gates] [at=1791168762]: Captain overnight GO dispatched Gate B (hetz-gate-B-20261005). Scout lane, gpt-6-luna med, M3.1 review. READ-ONLY. Sanitized redacted-N placeholders. No mutations, no client site crawls, Core untouched.
-done [at=1791170736]: Gate B blocked: no verified evidence for any of four Namecheap targets; reports document gaps.
-working [at=1791794714]: reading Namecheap 4-target classification brief, starting discovery
-done [at=1791795002]: PARTIAL — 2/4 Namecheap targets confirmed (core-distro.com bdn-dr-core-01, cbd-data.com bdn-dr-cbddata-01); elevatesci.com uses Hostinger+Cloudflare; whooshperformance.com is parked, no Namecheap service
