@@ -557,13 +557,23 @@ status_verb_of_line() {
 #   3. the backend target still EXISTS - a gone endpoint is NEVER working
 #   4. the task status log <state-dir>/<endpoint_task_id>.status exists and its
 #      last non-empty line's verb is non-empty and NOT a terminal verb
+#   5. FALLBACK, only when there is no status line to read: the pane's own
+#      foreground process is alive (see fm_pane_foreground_harness_alive)
 #
 # No CPU time, process sleep state, marker mtime, or rendered-UI regex is read
 # here: bin/fm-busy-lib.sh explicitly forbids those as liveness signals, so
-# this rule stays inside the repository's busy contract.
+# this rule stays inside the repository's busy contract.  The pane foreground
+# process is a spawn-verification signal - the same oracle bin/fm-spawn.sh
+# already uses - not a busy-contract heuristic.
+#
+# Why the fallback exists: the MiniMax harness writes NO .status file at all
+# (only .meta and .planning-id), so rule 4 alone can never see a MiniMax lane
+# and the MiniMax half of the fleet read as one active lane while six were
+# live.  A lane that has not yet written its first status line is working, not
+# dead.
 worker_task_is_working() {
   local meta=$1 id=$2 state_dir=$3
-  local backend target log last verb
+  local backend target log last verb harness
 
   [ -f "$meta" ] || return 1
 
@@ -571,6 +581,14 @@ worker_task_is_working() {
     id=$(grep '^endpoint_task_id=' "$meta" 2>/dev/null | cut -d= -f2- || true)
   fi
   [ -n "$id" ] || return 1
+
+  # The id must belong to THIS meta.  Without this, the fallback below would
+  # answer about the meta's pane while the caller asked about another task.
+  local meta_id
+  meta_id=$(grep '^endpoint_task_id=' "$meta" 2>/dev/null | cut -d= -f2- || true)
+  if [ -n "$meta_id" ] && [ "$meta_id" != "$id" ]; then
+    return 1
+  fi
 
   target=$(grep '^window=' "$meta" 2>/dev/null | cut -d= -f2- || true)
   [ -n "$target" ] || return 1
@@ -582,16 +600,70 @@ worker_task_is_working() {
   fm_backend_target_exists "$backend" "$target" "fm-$id" >/dev/null 2>&1 || return 1
 
   log="$state_dir/$id.status"
-  [ -f "$log" ] || return 1
-  last=$(last_status_line "$log" 2>/dev/null || true)
-  [ -n "$last" ] || return 1
-  verb=$(status_verb_of_line "$last")
-  [ -n "$verb" ] || return 1
-  if is_terminal_verb "$verb"; then
-    return 1
+  if [ -f "$log" ]; then
+    last=$(last_status_line "$log" 2>/dev/null || true)
+    if [ -n "$last" ]; then
+      verb=$(status_verb_of_line "$last")
+      if [ -n "$verb" ]; then
+        if is_terminal_verb "$verb"; then
+          return 1
+        fi
+        return 0
+      fi
+    fi
   fi
 
-  return 0
+  # No status line to read (missing, empty, or unparseable).  Fall back to the
+  # pane's foreground process, which is the ONLY oracle that exists for a
+  # harness the backend has no adapter for: herdr ships no MCode adapter, so
+  # `herdr agent get` answers agent_not_found for every MCode pane and reads
+  # a live worker as dead.
+  harness=$(fm_meta_get "$meta" harness 2>/dev/null || true)
+  [ -n "$harness" ] || harness="${FM_ALWAYS_FOUR_HARNESS:-}"
+  [ -n "$harness" ] || return 1
+  fm_pane_foreground_harness_alive "$backend" "$target" "$harness" && return 0
+
+  return 1
+}
+
+# Return 0 if the pane's foreground process belongs to <harness>.
+# Arguments: <backend> <target> <harness>
+#
+# This is a SPAWN-VERIFICATION signal, exactly like bin/fm-spawn.sh's
+# fm_spawn_harness_process_alive: it answers "is the worker this pane was
+# started for still running?", and it reads nothing about CPU, sleep state,
+# mtime or rendered UI.  It is never used to decide that a lane is BUSY.
+fm_pane_foreground_harness_alive() {  # <backend> <target> <harness>
+  local backend=$1 target=$2 harness=$3
+  local session pane out
+
+  [ "$backend" = herdr ] || return 1
+  [ -n "$target" ] || return 1
+  [ -n "$harness" ] || return 1
+  command -v herdr >/dev/null 2>&1 || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+
+  # The target shape is "<session>:<pane>", the same split that
+  # bin/backends/herdr.sh's fm_backend_herdr_parse_target owns.
+  session=${target%%:*}
+  pane=${target#*:}
+  [ "$pane" != "$target" ] || session=""
+  [ -n "$pane" ] || return 1
+
+  if [ -n "$session" ]; then
+    out=$(HERDR_SESSION="$session" herdr pane process-info --pane "$pane" --session "$session" 2>/dev/null) || return 1
+  else
+    out=$(herdr pane process-info --pane "$pane" 2>/dev/null) || return 1
+  fi
+
+  printf '%s' "$out" | jq -e --arg h "$harness" '
+    [ (.result.process_info.foreground_processes // [])[]
+      | select(
+          ((.name // "") | contains($h))
+          or ( ((.argv // []) | join(" ")) | contains($h) )
+        )
+    ] | length > 0
+  ' >/dev/null 2>&1
 }
 
 # Return 0 if the given lane is provably working (active).
@@ -1669,9 +1741,27 @@ cmd_cycle() {
         continue
       fi
 
-      # Update backlog state
+      # Update backlog state.
+      #
+      # The installed tasks-axi has NO --to-section flag.  Its `mv` moves a
+      # task to another backlog FILE (--to <path-or-dir>) and refuses this call
+      # with "--to <path-or-dir> is required".  The same-file transition the
+      # scheduler actually wants is `tasks-axi start <id>`: it moves the row to
+      # the "In flight" section of its own file and is idempotent ("already:
+      # true" on a second run).
+      #
+      # The old call failed silently, so a dispatched row never left "Queued"
+      # and the same row could be dispatched twice.  This is the tool moving
+      # exactly the row it just dispatched - the shared queue file is never
+      # rebuilt from a filtered list of its rows - and a failure is recorded
+      # rather than swallowed.
       if command -v tasks-axi >/dev/null 2>&1; then
-        tasks-axi mv "$eligible" --file "$DATA/backlog.md" --to-section "In flight" 2>/dev/null || true
+        local row_move_err="${FM_STATE_OVERRIDE:-$STATE}/row-move.err"
+        if ! tasks-axi start "$eligible" --file "$DATA/backlog.md" >/dev/null 2>"$row_move_err"; then
+          printf '%s\trow-move-failed\t%s\t%s\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$eligible" "$(tr '\n' ' ' < "$row_move_err" 2>/dev/null)" \
+            >> "${FM_STATE_OVERRIDE:-$STATE}/row-move-failures.log"
+        fi
       fi
 
       local slot_model

@@ -1071,6 +1071,75 @@ BACKLOG
   pass "next_eligible_task skips rows whose project is not a checkout"
 }
 
+test_pane_foreground_harness_alive_matches_only_the_running_harness() {
+  # The census fallback: a lane with no .status file (the MiniMax harness
+  # writes none) is judged by its pane's foreground process.  That oracle must
+  # match the harness that is actually running, and nothing else.
+  local dir fakebin
+  dir=$(mktemp -d)
+  fakebin="$dir/bin"; mkdir -p "$fakebin"
+  cat > "$fakebin/herdr" <<'STUB'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"result":{"process_info":{"foreground_processes":[{"name":"minimax-code","argv":["minimax-code","--model","minimax/MiniMax-M3.1-Flash"]}]}}}
+JSON
+STUB
+  chmod +x "$fakebin/herdr"
+
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_alive herdr default:w99:p1 minimax-code )
+  [ $? -eq 0 ] || fail "a pane running minimax-code must read as alive"
+
+  if ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_alive herdr default:w99:p1 codex ) >/dev/null 2>&1; then
+    fail "a pane running minimax-code must NOT read as a codex pane"
+  fi
+
+  # A non-herdr backend has no such oracle and must never claim to be alive.
+  if ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_alive tmux default:w99:p1 minimax-code ) >/dev/null 2>&1; then
+    fail "a tmux target must not use the herdr foreground-process oracle"
+  fi
+
+  pass "the pane foreground-process oracle matches the running harness and nothing else"
+}
+
+test_scheduler_moves_a_dispatched_row_with_tasks_axi_start() {
+  # The installed tasks-axi has NO --to-section: its `mv` moves a task to
+  # another backlog FILE and refuses the call.  The same-file transition the
+  # scheduler wants is `tasks-axi start <id>`, which is idempotent.
+  grep -q 'tasks-axi start' "$ALWAYS_FOUR" \
+    || fail "the scheduler must move a dispatched row with 'tasks-axi start'"
+  # Look at CODE lines only: the fix explains the retired API in a comment, and
+  # the comment must not be mistaken for a call.
+  if grep -vE '^[[:space:]]*#' "$ALWAYS_FOUR" | grep -q -- '--to-section'; then
+    fail "the scheduler still calls the tasks-axi API that no longer exists (--to-section)"
+  fi
+  if grep -vE '^[[:space:]]*#' "$ALWAYS_FOUR" | grep -q 'tasks-axi mv'; then
+    fail "the scheduler still uses 'tasks-axi mv', which moves a row to another backlog FILE"
+  fi
+  pass "a dispatched row is moved with tasks-axi start, not the API that no longer exists"
+}
+
+test_tasks_axi_start_moves_the_row_and_is_idempotent() {
+  command -v tasks-axi >/dev/null 2>&1 || {
+    pass "tasks-axi is not installed here; the contract test was skipped"
+    return 0
+  }
+  local f
+  f=$(mktemp)
+  printf '# Scratch\n\n## Queued\n\n- [ ] demo-row-one - a scratch row\n\n## In flight\n\n## Done\n' > "$f"
+  tasks-axi start demo-row-one --file "$f" >/dev/null 2>&1 \
+    || fail "tasks-axi start failed on a scratch backlog"
+  [ "$(grep -c 'demo-row-one' "$f")" = "1" ] \
+    || fail "the row must exist exactly once after the move"
+  awk '/^## In flight/{f=1;next} /^## /{f=0} f&&/demo-row-one/{found=1} END{exit found?0:1}' "$f" \
+    || fail "the row must sit under the In flight section"
+  tasks-axi start demo-row-one --file "$f" >/dev/null 2>&1 \
+    || fail "a second tasks-axi start must be idempotent, not an error"
+  [ "$(grep -c 'demo-row-one' "$f")" = "1" ] \
+    || fail "the row must still exist exactly once after a second start"
+  rm -f "$f"
+  pass "tasks-axi start moves the row to In flight and is idempotent"
+}
+
 for _t in \
   test_slot_model_worker_lanes \
   test_slot_model_checker_lane \
@@ -1111,7 +1180,10 @@ for _t in \
   test_lane_is_active_reads_the_task_status_log \
   test_next_eligible_task_skips_captain_call_rows \
   test_lane_key_for_task_never_doubles_the_prefix \
-  test_next_eligible_task_skips_unroutable_project_rows; do
+  test_next_eligible_task_skips_unroutable_project_rows \
+  test_pane_foreground_harness_alive_matches_only_the_running_harness \
+  test_scheduler_moves_a_dispatched_row_with_tasks_axi_start \
+  test_tasks_axi_start_moves_the_row_and_is_idempotent; do
   "$_t" || { echo "FAIL: $_t"; exit 1; }
 done
 echo "# fm-always-four.test.sh: all assertions passed"
