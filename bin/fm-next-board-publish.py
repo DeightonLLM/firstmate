@@ -32,7 +32,7 @@ read-only except the two files it owns:
   5. PUBLISH atomically into the directory the tracker server already serves, and mirror
      the raw NEXT-BOARD.md and next-board.json next to it.
 
-On top of that it renders three sections the Captain asked for, each built from a source
+On top of that it renders four sections the Captain asked for, each built from a source
 this file does not own:
 
   * the TOKEN BAND - the weekly total, the daily heat map across every account, the live
@@ -43,9 +43,14 @@ this file does not own:
     contract's rule (OPEN-WORKABLE only, lowest priority number, oldest received, then
     sequence), and never invented;
   * the CHAT CARD - the Lavish session link when there is one, the form that posts to
-    /next-board/feedback, and the recent conversation.
+    /next-board/feedback, and the recent conversation;
+  * the DISK CAPACITY VERDICT - the live root-disk percent and the dispatch verdict,
+    read from the one owner of the capacity ladder, bin/fm-capacity-gate.sh. The
+    Captain's ceiling was enforced but invisible; this card makes it visible. The
+    board holds no threshold of its own: it measures the percent and asks the owner
+    for the token, the same way bin/controller-resource-audit.sh delegates to it.
 
-Every one of the three degrades to a truthful note when its source is missing, stale or
+Every one of the four degrades to a truthful note when its source is missing, stale or
 malformed. The publisher runs on a timer and never crashes it.
 
 usage: fm-next-board-publish.py --repo PATH [--out DIR] [--serve-root DIR] [--now ISO]
@@ -1502,6 +1507,239 @@ def render_token_band(state):
     return "".join(blocks)
 
 
+# ------------------------------------------------------------- the disk capacity
+#
+# THE LADDER IS OWNED BY bin/fm-capacity-gate.sh AND BY NOTHING ELSE.
+#
+# The Captain's standing order is "lets reclaim but refuse", with a ceiling he does
+# not want passed. The ceiling was ENFORCED by the dispatch gate, but it was
+# INVISIBLE: this board showed tokens, backlog rows and a next-work suggestion,
+# and nothing at all that said the host was sitting in the review band. A ceiling
+# nobody can see is a ceiling nobody acts on.
+#
+# So the board READS the verdict from the one owner, exactly the way
+# bin/controller-resource-audit.sh already delegates to it: measure the percent,
+# then ask the owner for the token. The board NEVER re-derives a threshold, and
+# it NEVER parses a prose audit file for a verdict. The host's markdown audit is
+# written on a six-hour cadence by a script outside this repo; its wording is not
+# a contract, and this board's own staleness check was once burned by comparing a
+# schema string instead of the data.
+#
+# When the disk or the owner cannot be read, the board says so. It never prints a
+# verdict it did not receive, and it never prints a zero for a disk it could not
+# measure.
+CAPACITY_GATE_REL = "bin/fm-capacity-gate.sh"
+# How long the board waits for the owner. A board that hangs is worse than a board
+# that says it could not read the disk.
+CAPACITY_TIMEOUT_S = 15
+# What each verdict token MEANS for dispatch.
+#
+# This map carries no threshold and no comparison, so it is not a second ladder:
+# it explains the tokens the owner emits and never decides one. A token the owner
+# invents that this map does not know is rendered as "meaning unknown" rather
+# than guessed at.
+CAPACITY_MEANING = {
+    "CAPACITY_OK": (
+        "admit",
+        "The host has room. New placements are admitted and no capacity action is needed.",
+    ),
+    "CAPACITY_EARLY_WARNING": (
+        "admit",
+        "Still admitted. Reclaim now, while there is headroom left to reclaim into.",
+    ),
+    "CAPACITY_REVIEW_REQUIRED": (
+        "admit",
+        "Still admitted by the dispatch gate, but review the disk before placing anything new.",
+    ),
+    "CAPACITY_BLOCK_NEW_PLACEMENT": (
+        "reclaim-then-refuse",
+        "The dispatch gate reclaims first; the placement is refused unless the disk comes back under the ceiling.",
+    ),
+}
+CAPACITY_UNKNOWN_MEANING = (
+    "meaning unknown",
+    "The ladder owner reported a verdict this board does not know how to explain. "
+    "The token is shown exactly as the owner returned it.",
+)
+# The colour a token is drawn in. Presentation only, like the meaning map.
+CAPACITY_TONE = {
+    "CAPACITY_OK": "p2",
+    "CAPACITY_EARLY_WARNING": "p1",
+    "CAPACITY_REVIEW_REQUIRED": "p1",
+    "CAPACITY_BLOCK_NEW_PLACEMENT": "p0",
+}
+
+
+def capacity_gate_path(repo):
+    """Where the ONE owner of the capacity ladder lives.
+
+    The publisher runs from its installed copy in the runtime directory, but the
+    owner stays in the repository's bin/. The --repo the unit already passes is
+    what resolves it. Reading a file under bin/ is allowed under the unit's
+    ProtectSystem=strict: that boundary restricts WRITES, and this path writes
+    nothing - the owner's verdict subcommand only prints.
+
+    The owner is never copied into the runtime directory. A second copy of the
+    ladder on disk is exactly the drift this lane exists to remove.
+    """
+    override = os.environ.get("FM_CAPACITY_GATE")
+    if override:
+        return pathlib.Path(override)
+    candidates = [
+        pathlib.Path(repo) / CAPACITY_GATE_REL,
+        pathlib.Path(__file__).resolve().parent / "fm-capacity-gate.sh",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[0]
+
+
+def measure_root_percent():
+    """The root filesystem usage as a whole percent, or None when it cannot be read.
+
+    The measurement mirrors the owner's own: df -P /, the percent column, a whole
+    number in 0-100. An unusable reading is None and never a zero - a disk that
+    could not be measured must not look like an empty one.
+    """
+    for df in ("/usr/bin/df", "/bin/df", "df"):
+        try:
+            proc = subprocess.run([df, "-P", "/"], capture_output=True,
+                                  text=True, timeout=CAPACITY_TIMEOUT_S)
+        except Exception:
+            continue
+        if proc.returncode != 0:
+            continue
+        lines = (proc.stdout or "").strip().splitlines()
+        if len(lines) < 2:
+            continue
+        fields = lines[1].split()
+        if len(fields) < 5:
+            continue
+        raw = fields[4].strip().rstrip("%")
+        if not raw.isdigit():
+            continue
+        percent = int(raw)
+        if percent > 100:
+            continue
+        return percent
+    return None
+
+
+def read_capacity_verdict(repo):
+    """The live disk verdict, read from the one owner of the ladder.
+
+    Returns a dict carrying:
+      percent  - the measured root usage, or None
+      verdict  - the owner's token, or None
+      gate     - the owner that was asked
+      problem  - why it could not be read, or None
+
+    It never fabricates a verdict and never invents a number.
+    """
+    state = {"percent": None, "verdict": None, "gate": None, "problem": None}
+    percent = measure_root_percent()
+    if percent is None:
+        state["problem"] = "the root filesystem usage could not be measured"
+        return state
+    state["percent"] = percent
+
+    gate = capacity_gate_path(repo)
+    state["gate"] = str(gate)
+    if not gate.is_file():
+        state["problem"] = "the capacity ladder owner (%s) is not there" % gate
+        return state
+    if not os.access(str(gate), os.X_OK):
+        state["problem"] = "the capacity ladder owner (%s) is not executable" % gate
+        return state
+
+    for bash in ("/bin/bash", "/usr/bin/bash", "bash"):
+        if bash.startswith("/") and not os.path.isfile(bash):
+            continue
+        try:
+            proc = subprocess.run([bash, str(gate), "verdict", str(percent)],
+                                  capture_output=True, text=True, timeout=CAPACITY_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            state["problem"] = ("the capacity ladder owner did not answer within %ds"
+                                % CAPACITY_TIMEOUT_S)
+            return state
+        except Exception:
+            continue
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+            state["problem"] = ("the capacity ladder owner returned exit %d%s" % (
+                proc.returncode, (": " + detail[-1]) if detail else ""))
+            return state
+        verdict = (proc.stdout or "").strip()
+        if not verdict:
+            state["problem"] = "the capacity ladder owner said nothing"
+            return state
+        state["verdict"] = verdict
+        return state
+
+    state["problem"] = "the capacity ladder owner could not be run"
+    return state
+
+
+def render_capacity(state):
+    """The disk capacity card: the percent, the owner's verdict, what it means.
+
+    The Captain has to be able to act on this without reading code, so the card
+    names all three: the number, the token, and the dispatch consequence.
+    """
+    state = state or {}
+    verdict = state.get("verdict")
+    percent = state.get("percent")
+    problem = state.get("problem")
+    gate = state.get("gate")
+
+    blocks = ['<section class="card wide" id="capacity">']
+    blocks.append("<h2>Root disk capacity — the dispatch ceiling, live</h2>")
+
+    if not verdict:
+        # The honest answer when the source cannot be read: say so, and show no
+        # verdict that was not returned. The dispatch gate refuses a placement
+        # when it cannot measure the disk either, so an unreadable disk is not a
+        # safe disk and this card must not look like one.
+        blocks.append('<p class="empty">The disk capacity verdict could not be read: %s.</p>' % esc(
+            problem or "the reason was not reported"))
+        blocks.append('<dl class="kv">')
+        if percent is None:
+            blocks.append('<dt>Root disk</dt><dd>not measured</dd>')
+        else:
+            blocks.append('<dt>Root disk</dt><dd>%s%% used</dd>' % esc(percent))
+        blocks.append('<dt>Verdict</dt><dd>not available — the ladder owner did not return one</dd>')
+        if gate:
+            blocks.append('<dt>Owner asked</dt><dd><code>%s</code></dd>' % esc(gate))
+        blocks.append("</dl>")
+        blocks.append('<p class="note">No verdict is shown, because none was returned: this board never '
+                      'invents one, and it never prints a percentage for a disk it could not measure. '
+                      'The dispatch gate refuses a placement when it cannot measure the disk either, so an '
+                      'unreadable disk is not a safe disk.</p>')
+        blocks.append("</section>")
+        return "".join(blocks)
+
+    dispatch, advice = CAPACITY_MEANING.get(verdict, CAPACITY_UNKNOWN_MEANING)
+    tone = CAPACITY_TONE.get(verdict, "p1")
+    # A percent that was never measured is never rendered as a number.
+    percent_text = ("%s%% used" % percent) if percent is not None else "not measured"
+    blocks.append('<div class="selhead"><span class="pill %s">%s</span><code>%s</code>'
+                  '<span class="muted">dispatch: <strong>%s</strong></span></div>' % (
+                      esc(tone), esc(percent_text), esc(verdict), esc(dispatch)))
+    blocks.append('<dl class="kv">')
+    blocks.append('<dt>Root disk</dt><dd>%s</dd>' % esc(percent_text))
+    blocks.append('<dt>Verdict</dt><dd><code>%s</code></dd>' % esc(verdict))
+    blocks.append('<dt>What it means for dispatch</dt><dd><strong>%s</strong> — %s</dd>' % (
+        esc(dispatch), esc(advice)))
+    if gate:
+        blocks.append('<dt>Read from</dt><dd><code>%s</code> — the one owner of the ladder</dd>' % esc(gate))
+    blocks.append("</dl>")
+    blocks.append('<p class="note">The board asks that owner for the verdict of the measured percent; it '
+                  'holds no threshold of its own and never parses a prose audit file for a verdict.</p>')
+    blocks.append("</section>")
+    return "".join(blocks)
+
+
 # --------------------------------------------------------- the selected next work
 
 def select_next_work(queue, tracker_rows):
@@ -1805,7 +2043,8 @@ def safe_render(renderer, args, section_id):
 
 
 def render_page(now, delivery, queue, tracker_rows, board_json, board_age,
-                band_state=None, chat_state=None, selection=None, counts=None):
+                band_state=None, chat_state=None, selection=None, counts=None,
+                capacity_state=None):
     title = "Fleet live board"
     return """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -1835,9 +2074,11 @@ def render_page(now, delivery, queue, tracker_rows, board_json, board_age,
 %s
 %s
 %s
+%s
 </main>
 </body></html>
 """ % (esc(title), CSS, esc(now), freshness_banner(board_age),
+       safe_render(render_capacity, (capacity_state or {},), "capacity"),
        safe_render(render_next_work, (selection, counts or {}), "next-work"),
        safe_render(render_token_band, (band_state or {},), "tokens"),
        safe_render(render_talk, (chat_state or {},), "talk"),
@@ -1949,8 +2190,17 @@ def main():
     except Exception as exc:
         selection, state_counts = None, {}
         sys.stderr.write("fm-next-board-publish: WARNING next work not selected: %s\n" % exc)
+
+    # 4c. the disk capacity verdict, read from the one owner of the ladder. When it
+    # cannot be read the board says so: it never prints a verdict it did not receive
+    # and never prints a zero for a disk it could not measure.
+    try:
+        capacity_state = read_capacity_verdict(repo)
+    except Exception as exc:
+        capacity_state = {"percent": None, "verdict": None, "gate": None,
+                          "problem": "the disk capacity could not be read: %s" % exc}
     page = render_page(now, delivery, queue, tracker_rows, board_json, board_age,
-                        band_state, chat_state, selection, state_counts)
+                        band_state, chat_state, selection, state_counts, capacity_state)
 
     # 5. publish atomically.
     out.mkdir(parents=True, exist_ok=True)
@@ -1969,6 +2219,12 @@ def main():
                        "detail": band_state["detail"]},
         "next_work": ("%s-%s" % (selection["sequence"], selection["slug"])) if selection else None,
         "talk_entries": len(chat_state.get("entries") or []),
+        "disk_capacity": {
+            "percent": capacity_state.get("percent"),
+            "verdict": capacity_state.get("verdict"),
+            "gate": capacity_state.get("gate"),
+            "problem": capacity_state.get("problem"),
+        },
     }, indent=2) + "\n")
     if serve_root is not None:
         link = serve_root / "next-board"
@@ -1993,6 +2249,10 @@ def main():
         band_state["state"],
         ("%s-%s" % (selection["sequence"], selection["slug"])) if selection else "none",
         len(chat_state.get("entries") or [])))
+    print("fm-next-board-publish: disk pct=%s verdict=%s%s" % (
+        capacity_state.get("percent"),
+        capacity_state.get("verdict") or "unreadable",
+        (" (%s)" % capacity_state["problem"]) if capacity_state.get("problem") else ""))
     return 0
 
 

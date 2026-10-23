@@ -96,7 +96,32 @@ If any of that cannot be read, the board says **unknown** rather than guessing.
 
 ---
 
-## 5. The regression check
+## 5. What the disk-capacity card says
+
+The board carries the **live root-disk verdict**, because the Captain's ceiling was enforced
+but invisible: the dispatch gate refused a placement above it, and the board showed nothing
+at all that said where the host stood.
+
+The card names three things, so the Captain can act on it without reading code:
+
+- the **root-disk percent**, measured with `df -P /` at publish time;
+- the **verdict token** — `CAPACITY_OK`, `CAPACITY_EARLY_WARNING`, `CAPACITY_REVIEW_REQUIRED`
+  or `CAPACITY_BLOCK_NEW_PLACEMENT`;
+- **what that verdict means for dispatch** — `admit`, or `reclaim-then-refuse`.
+
+The verdict is **asked for, not derived**. `bin/fm-capacity-gate.sh` is the one owner of the
+capacity ladder; the publisher measures the percent and then calls that owner's `verdict`
+subcommand, the same way `bin/controller-resource-audit.sh` already delegates to it. The board
+holds no threshold of its own, and it never parses the host's prose audit file for a verdict.
+
+If the disk or the owner cannot be read, the card says so and names the reason. It never prints
+a verdict it did not receive, and it never prints a zero for a disk it could not measure — the
+dispatch gate refuses a placement when it cannot measure the disk either, so an unreadable disk
+is not a safe disk.
+
+---
+
+## 6. The regression check
 
 ```bash
 python3 tests/test-next-board-publish.py --repo /root/agent-work/deightonllm-firstmate
@@ -105,12 +130,13 @@ python3 tests/test-next-board-publish.py --repo /root/agent-work/deightonllm-fir
 Non-interactive, exits 0 or 1, safe to run repeatedly, and it only reads. It fails when the
 board is missing or stale, when a queue ticket is absent from the board, when the delivery
 block is missing or disagrees with the listener state measured at that moment, when the NEXT
-contract is broken, when the board is not served over HTTP, or when the dashboard page does
-not carry the one-click link.
+contract is broken, when the board is not served over HTTP, when the dashboard page does
+not carry the one-click link, or when the disk-capacity card is missing, or shows a verdict
+that the publish record does not carry.
 
 ---
 
-## 6. After a change to the tracked source
+## 7. After a change to the tracked source
 
 The systemd units run the copies in the runtime directory, so re-install after editing
 anything in `bin/`:

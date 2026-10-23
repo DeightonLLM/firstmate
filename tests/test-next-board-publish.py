@@ -52,6 +52,11 @@ CHECKS = []
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PUBLISHER_PATH = REPO_ROOT / "bin" / "fm-next-board-publish.py"
 
+# The ladder owner's vocabulary. The board must never print one of these unless
+# the owner returned it.
+CAPACITY_TOKENS = ("CAPACITY_OK", "CAPACITY_EARLY_WARNING", "CAPACITY_REVIEW_REQUIRED",
+                   "CAPACITY_BLOCK_NEW_PLACEMENT")
+
 
 def scratch_dir():
     """A scratch directory inside this checkout, removed when the block ends."""
@@ -414,6 +419,101 @@ def run_render_checks():
         check("a feedback path that is not a directory does not crash the card",
               'id="talk"' in publisher.render_talk(odd_talk))
 
+        # 7. the disk capacity verdict is READ FROM THE ONE OWNER, and it degrades honestly
+        #
+        # The Captain's ceiling was enforced but invisible: the board showed no disk
+        # verdict at all. The board now asks bin/fm-capacity-gate.sh for the verdict of
+        # the measured percent. These checks PROVE that, rather than claiming it: a
+        # stand-in owner decides the verdict, and a broken owner proves the card says
+        # so instead of inventing one.
+        saved_gate = os.environ.get("FM_CAPACITY_GATE")
+        try:
+            # 7a. a stand-in owner decides the verdict: the board renders ITS token
+            stand_in = root / "stand-in-gate.sh"
+            stand_in.write_text("#!/bin/bash\necho CAPACITY_OK\n", encoding="utf-8")
+            stand_in.chmod(0o755)
+            os.environ["FM_CAPACITY_GATE"] = str(stand_in)
+            stand_in_state = publisher.read_capacity_verdict(REPO_ROOT)
+            stand_in_html = publisher.render_capacity(stand_in_state)
+            check("the board takes the verdict from the ladder owner",
+                  stand_in_state.get("verdict") == "CAPACITY_OK"
+                  and "CAPACITY_OK" in stand_in_html,
+                  "the stand-in owner returned %s" % stand_in_state.get("verdict"))
+
+            # 7b. the card names the percent, the token and what it means for dispatch
+            check("the capacity card names the disk percent",
+                  re.search(r"\d+% used", stand_in_html) is not None,
+                  "percent in the card")
+            check("the capacity card names the verdict and its dispatch meaning",
+                  "What it means for dispatch" in stand_in_html
+                  and re.search(r"dispatch:\s*<strong>", stand_in_html) is not None)
+            check("the capacity card says which owner was asked",
+                  str(stand_in) in stand_in_html)
+
+            # 7c. an owner that fails produces no verdict and no invented number
+            broken_gate = root / "broken-gate.sh"
+            broken_gate.write_text("#!/bin/bash\necho 'owner is broken' >&2\nexit 3\n",
+                                   encoding="utf-8")
+            broken_gate.chmod(0o755)
+            os.environ["FM_CAPACITY_GATE"] = str(broken_gate)
+            broken_state = publisher.read_capacity_verdict(REPO_ROOT)
+            broken_html = publisher.render_capacity(broken_state)
+            check("an unreadable ladder owner produces no verdict",
+                  broken_state.get("verdict") is None
+                  and not any(token in broken_html for token in CAPACITY_TOKENS),
+                  "verdict=%s" % broken_state.get("verdict"))
+            check("an unreadable ladder owner never prints a zero",
+                  "0%" not in broken_html)
+            check("an unreadable ladder owner says why, in its own words",
+                  "could not be read" in broken_html and "owner is broken" in broken_html)
+
+            # 7d. an owner that is not there at all
+            os.environ["FM_CAPACITY_GATE"] = str(root / "no-such-gate.sh")
+            absent_state = publisher.read_capacity_verdict(REPO_ROOT)
+            absent_html = publisher.render_capacity(absent_state)
+            check("a missing ladder owner produces no verdict and no zero",
+                  absent_state.get("verdict") is None and "0%" not in absent_html
+                  and not any(token in absent_html for token in CAPACITY_TOKENS))
+
+            # 7e. an unmeasurable disk: no percent, no verdict, no zero
+            real_subprocess = publisher.subprocess
+
+            class _NoDf(object):
+                TimeoutExpired = real_subprocess.TimeoutExpired
+
+                def run(self, cmd, *args, **kwargs):
+                    if cmd and cmd[0] in ("/usr/bin/df", "/bin/df", "df"):
+                        raise OSError("df is not available here")
+                    return real_subprocess.run(cmd, *args, **kwargs)
+
+            publisher.subprocess = _NoDf()
+            try:
+                unmeasurable = publisher.read_capacity_verdict(REPO_ROOT)
+                unmeasurable_html = publisher.render_capacity(unmeasurable)
+                check("an unmeasurable disk produces no percent and no verdict",
+                      unmeasurable.get("percent") is None and unmeasurable.get("verdict") is None
+                      and "not measured" in unmeasurable_html,
+                      "percent=%s verdict=%s" % (unmeasurable.get("percent"),
+                                                 unmeasurable.get("verdict")))
+                check("an unmeasurable disk never prints a zero",
+                      "0%" not in unmeasurable_html)
+            finally:
+                publisher.subprocess = real_subprocess
+
+            # 7f. the board holds no ladder of its own
+            source = PUBLISHER_PATH.read_text(encoding="utf-8")
+            comparisons = re.findall(r"(?:>=|<=|>|<)\s*(?:80|75|70)\b", source)
+            check("the board carries no capacity threshold of its own", not comparisons,
+                  "comparisons found: %s" % comparisons[:5])
+            meaning = json.dumps(publisher.CAPACITY_MEANING)
+            check("the dispatch-meaning map carries no threshold",
+                  not re.search(r"\b(?:80|75|70)\b", meaning))
+        finally:
+            if saved_gate is None:
+                os.environ.pop("FM_CAPACITY_GATE", None)
+            else:
+                os.environ["FM_CAPACITY_GATE"] = saved_gate
+
 
 def run_live_checks(args):
     """The published board itself: is it there, is it fresh, and does it tell the truth."""
@@ -489,6 +589,27 @@ def run_live_checks(args):
     check("board has a RESIDUALS section", "RESIDUALS" in html)
     check("board names what only the Captain can decide",
           "ONLY YOU CAN UNBLOCK" in html or "ONLY THE CAPTAIN CAN UNBLOCK" in html)
+
+    # 5d. the disk capacity verdict is ON THE BOARD, and it is the verdict the
+    # publish recorded. A board that carries the card but shows a different verdict
+    # than the publish recorded is a board that disagrees with itself.
+    check("board carries the disk capacity section", 'id="capacity"' in html)
+    published_path = publish / "published.json"
+    if check("published.json exists", published_path.is_file()):
+        published = json.loads(published_path.read_text(encoding="utf-8"))
+        capacity = published.get("disk_capacity") or {}
+        check("the publish record carries the disk verdict",
+              capacity.get("verdict") is not None and capacity.get("percent") is not None,
+              "percent=%s verdict=%s" % (capacity.get("percent"), capacity.get("verdict")))
+        check("the board shows the verdict the publish recorded",
+              bool(capacity.get("verdict")) and capacity["verdict"] in html,
+              "verdict=%s" % capacity.get("verdict"))
+        if capacity.get("percent") is not None:
+            check("the board shows the disk percent the publish recorded",
+                  ("%s%% used" % capacity["percent"]) in html,
+                  "percent=%s" % capacity["percent"])
+        check("the board says what the verdict means for dispatch",
+              "What it means for dispatch" in html)
 
     # 5b. the page opens on the signposts, not on a wall of rows
     #
