@@ -240,4 +240,63 @@ else
   fail "an unresolvable self pane silently disabled the crew check: $queue"
 fi
 
+# --- 5: the WEDGE timer, the other check that measured the primary's own pane.
+# The wedge timer asks "this pane has not changed for a long time - is the run
+# frozen?". For the primary's own pane that is always true and always
+# meaningless: the Captain's conversation pane sits unchanged whenever the
+# Captain is reading or away. It demanded a Captain turn five times between
+# 2026-10-22 and 2026-10-23 for no fault at all.
+#
+# The wedge timer is driven directly here, because it is a pure function of the
+# elapsed time since its marker: ageing the marker past the bound is exactly
+# what the timer measures.
+wedge_case() {  # <case-name> <self-pane> <window>
+  local name=$1 selfpane=$2 win=$3
+  local dir state key since
+  dir=$(make_case "$name")
+  state="$dir/state"
+  key=$(printf '%s' "$win" | tr ':/.' '___')
+  # The timer's marker: the epoch at which the pane was first seen unchanged.
+  since=$(( $(date +%s) - 100000 ))
+  printf '%s' "$since" > "$state/.stale-since-$key"
+  # FM_STATE_OVERRIDE and FM_WAKE_QUEUE pin the case to its OWN state dir and
+  # its OWN queue. Without them the timer would append to the LIVE fleet queue,
+  # which both pollutes real supervision state and makes the case's own
+  # verdict depend on whatever else is queued.
+  FM_WATCH_SELF_PANE="$selfpane" \
+  FM_STATE_OVERRIDE="$state" \
+  FM_WAKE_QUEUE="$state/.wake-queue" \
+  FM_WAKE_QUEUE_LOCK="$state/.wake-queue.lock" \
+  bash -c '. "$1"; . "$2"; wedge_timer_check "$3" "$4" "non-terminal stale" "$5"; echo "rc=$?"' \
+    "$0" "$ROOT/bin/fm-self-pane-lib.sh" "$ROOT/bin/fm-watch.sh" \
+    "$win" "$state/.stale-since-$key" "$state/.wedge-escalations-$key" \
+    > "$dir/wedge.out" 2>&1
+  printf '%s' "$dir"
+}
+
+# The primary's own pane: no escalation, and nothing queued.
+dir=$(wedge_case wedge-primary-own-pane "firstmate:fm-m3.1f-firstmate-boardland" "firstmate:fm-m3.1f-firstmate-boardland")
+if grep -q "possible wedge" "$dir/wedge.out"; then
+  fail "the wedge timer escalated the primary's own pane: $(cat "$dir/wedge.out")"
+else
+  pass "the wedge timer does not escalate the primary's own pane"
+fi
+
+# The disconfirming case: a real crew whose pane has not changed still
+# escalates. The exclusion is the primary's own pane and nothing else.
+dir=$(wedge_case wedge-real-crew "firstmate:fm-m3.1f-firstmate-boardland" "firstmate:fm-mcode-m3.1f-controller-somecrew")
+if grep -q "possible wedge" "$dir/wedge.out"; then
+  pass "a real crew whose pane has not changed still escalates as a possible wedge"
+else
+  fail "the wedge exclusion silenced a real crew: $(cat "$dir/wedge.out")"
+fi
+
+# An unresolvable self pane leaves the wedge timer exactly as it was.
+dir=$(wedge_case wedge-unresolvable-self "" "firstmate:fm-m3.1f-firstmate-boardland")
+if grep -q "possible wedge" "$dir/wedge.out"; then
+  pass "an unresolvable self pane leaves the wedge timer running"
+else
+  fail "an unresolvable self pane silently disabled the wedge timer: $(cat "$dir/wedge.out")"
+fi
+
 printf 'ALL TESTS PASSED\n'

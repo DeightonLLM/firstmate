@@ -57,3 +57,14 @@ fm_self_pane_resolve() {
   fi
   return 0
 }
+
+# fm_self_pane_is_self: true when <window-target> is the watcher's own pane.
+# Fails closed: an unidentifiable self pane matches NOTHING, so no check is
+# skipped on a guess. The value compared against is FM_WATCH_SELF_PANE, which
+# the watcher resolves once at startup from fm_self_pane_resolve.
+fm_self_pane_is_self() {  # <window-target>
+  local win=${1:-} self=${FM_WATCH_SELF_PANE:-}
+  [ -n "$win" ] || return 1
+  [ -n "$self" ] || return 1
+  [ "$win" = "$self" ]
+}

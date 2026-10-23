@@ -409,6 +409,20 @@ FM_WEDGE_DEMAND_INSPECT_COUNT=${FM_WEDGE_DEMAND_INSPECT_COUNT:-3}
 # line that an active run/busy pane outranked).
 wedge_timer_check() {  # <window> <since-file> <triage-label> <escalation-count-file>
   local win=$1 since_file=$2 label=$3 escalation_file=$4 since age n reason
+  # THE WATCHER'S OWN PANE IS NOT A CREW. The wedge timer asks "this pane has
+  # not changed for a long time - is the run frozen?". That question is only
+  # meaningful for a CREW lane. For the primary's own pane it is always true
+  # and always meaningless: the Captain's conversation pane sits unchanged
+  # whenever the Captain is reading, thinking, or away, which is not a wedged
+  # run. Escalating it demanded a Captain turn five times between 2026-10-22
+  # and 2026-10-23 for no fault at all - the same treadmill the crew-silent
+  # breach belonged to, and it was masked for a while only because the
+  # crew-silent wake for the same window happened to still be queued, which
+  # suppresses a repeated wedge escalation. The Captain can see their own pane.
+  if fm_self_pane_is_self "$win"; then
+    triage_log "absorbed $label: the watcher's own pane, not a crew: $win"
+    return 0
+  fi
   since=$(cat "$since_file" 2>/dev/null || true)
   case "$since" in
     ''|*[!0-9]*)
@@ -1409,7 +1423,7 @@ EOF
     # the 1800s heartbeat bound" against the primary's own window wDB:p2.
     # A real crew that has gone quiet still breaches: the exclusion is the
     # primary's own pane and nothing else.
-    if [ -n "${FM_WATCH_SELF_PANE:-}" ] && [ "$w" = "$FM_WATCH_SELF_PANE" ]; then
+    if fm_self_pane_is_self "$w"; then
       rm -f "$STATE/.vis-$viskey" 2>/dev/null || true
       vline=""
     else
