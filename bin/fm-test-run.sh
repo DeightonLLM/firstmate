@@ -62,6 +62,16 @@
 # duration-balanced partition of that exact set (see docs/fm-test-portable-shards.md).
 # --changed is conservative: it over-selects related families rather than
 # under-selecting, and never expands to the complete suite unless --all.
+#
+# --changed change sources, and what an unmapped path means for each:
+#   tracked   (git diff base...HEAD, git diff HEAD) - source this repo owns.
+#             No test mapping is a coverage gap and fails the run (exit 2).
+#   untracked (git ls-files --others --exclude-standard) - stray files in the
+#             working tree: a backup copy, a scratch note, another lane's
+#             leftover. These are not source changes, so an unmapped untracked
+#             path is skipped and counted (FM_TEST_SKIPPED_UNMAPPED_UNTRACKED)
+#             instead of failing the run. An untracked path that does map still
+#             selects its suites.
 set -eu
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -543,6 +553,18 @@ all_repo_tests() {
   done | LC_ALL=C sort
 }
 
+all_repo_bin_tests() {
+  # Test scripts that live outside tests/. They are not part of the runnable
+  # suite set (all_repo_tests owns that), but a source that only such a script
+  # reads still has a consuming test, so the reference scan must see them.
+  local f
+  # shellcheck disable=SC2035
+  for f in bin/*.test.sh; do
+    [ -f "$f" ] || continue
+    printf '%s\n' "$f"
+  done | LC_ALL=C sort
+}
+
 normalize_script_path() {
   local p=$1
   case "$p" in
@@ -606,7 +628,7 @@ families_for_test_reference() {
       family_for_basename "$(basename "$s")"
       found=1
     fi
-  done < <(all_repo_tests)
+  done < <(all_repo_tests; all_repo_bin_tests)
   [ "$found" -eq 1 ]
 }
 
@@ -745,6 +767,12 @@ families_for_changed_path() {
           || printf '%s\n' "__unmapped__:$path"
       fi
       ;;
+    bin/*.test.sh)
+      # A test script outside tests/ has no runnable suite in this runner:
+      # all_repo_tests owns the runnable set and it enumerates tests/*.test.sh
+      # only. Nothing to select, the same rule the deleted-script case below
+      # applies.
+      ;;
     bin/*)
       # A deleted script has no consuming suite left to select, the same rule
       # the fixture case above applies. Refusing on its absent mapping would
@@ -760,8 +788,22 @@ families_for_changed_path() {
     README.md|LICENSE|assets/*|docs/*|.gitignore)
       ;;
     *)
-      families_for_test_reference "$path" \
-        || printf '%s\n' "__unmapped__:$path"
+      # A path with no consuming suite is a coverage gap and stays a hard
+      # failure. Documentation and the gitignored data/ tree are the two
+      # categories the map already exempts elsewhere (README.md, LICENSE,
+      # assets/*, docs/* select nothing); root-level Markdown files and
+      # data/ paths were simply missing from that list. They select nothing
+      # too, instead of failing the whole run. A path that a test does read
+      # keeps its mapped families either way.
+      if families_for_test_reference "$path"; then
+        :
+      elif [ "${path%/*}" = "$path" ] && [ "${path##*.}" = "md" ]; then
+        : # root-level documentation
+      elif [ "${path#data/}" != "$path" ]; then
+        : # gitignored working-data tree
+      else
+        printf '%s\n' "__unmapped__:$path"
+      fi
       ;;
   esac
 }
@@ -770,11 +812,15 @@ select_changed() {
   local base=$1 path entry fam script_name s
   local -a wanted_families=()
   local -a wanted_scripts=()
+  local -a skipped_untracked=()
 
   if ! git -C "$ROOT" rev-parse --verify "$base" >/dev/null 2>&1; then
     die "changed-file base ref not found: $base (pass --base <ref>)"
   fi
 
+  # Tracked source paths (committed range against the base, then the worktree
+  # against HEAD). A tracked path that no suite reads is a coverage gap and
+  # stays a hard failure.
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     while IFS= read -r entry; do
@@ -793,8 +839,39 @@ select_changed() {
       esac
     done < <(families_for_changed_path "$path")
   done < <(git -C "$ROOT" diff --name-only "${base}...HEAD" 2>/dev/null; \
-           git -C "$ROOT" diff --name-only HEAD 2>/dev/null; \
-           git -C "$ROOT" ls-files --others --exclude-standard 2>/dev/null)
+           git -C "$ROOT" diff --name-only HEAD 2>/dev/null)
+
+  # Untracked paths are stray files in the working tree, not lane source
+  # changes: a backup copy, a scratch note, a leftover from another lane.
+  # An untracked path with no test mapping is therefore skipped and counted,
+  # never a hard failure. An untracked path that does map still selects its
+  # suites exactly like a tracked one.
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    while IFS= read -r entry; do
+      [ -n "$entry" ] || continue
+      case "$entry" in
+        __script__:*)
+          script_name=${entry#__script__:}
+          wanted_scripts+=("$script_name")
+          ;;
+        __unmapped__:*)
+          skipped_untracked+=("${entry#__unmapped__:}")
+          ;;
+        *)
+          wanted_families+=("$entry")
+          ;;
+      esac
+    done < <(families_for_changed_path "$path")
+  done < <(git -C "$ROOT" ls-files --others --exclude-standard 2>/dev/null)
+
+  if [ "${#skipped_untracked[@]}" -gt 0 ]; then
+    printf 'FM_TEST_SKIPPED_UNMAPPED_UNTRACKED count=%s\n' "${#skipped_untracked[@]}"
+    log "skipped ${#skipped_untracked[@]} untracked path(s) with no test mapping (see FM_TEST_SKIPPED_UNMAPPED_UNTRACKED)"
+    for s in "${skipped_untracked[@]+"${skipped_untracked[@]}"}"; do
+      log "skipped unmapped untracked path: $s"
+    done
+  fi
 
   # Dedup families
   local f seen_f

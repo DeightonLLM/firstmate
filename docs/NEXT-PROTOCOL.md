@@ -74,9 +74,52 @@ honest reading, and the one this contract enforces:
 What is not acceptable is the fifth option — the item that is simply forgotten, sitting at "await
 dispatch" with nobody holding it. That is the state this board makes impossible to hide.
 
+## 6. The to-do list is generated, never hand-written
+
+**The rule.** The to-do list is **generated from the machine lane ledger**
+(`ops/lane-ledger.tsv`), never hand-written and never edited. The ledger is the source of truth:
+`lane_id`, `state` (`ACTIVE` | `DONE` | `BLOCKED` | `RELEASED`), `owner`, `opened`, `updated`,
+`expires`, `next`, `artifact`, `branch`. The claims board (`ops/LANE-CLAIMS.md`) is the human view
+of the same thing and is **secondary**; where the two disagree, the ledger wins and the board says
+so out loud in **DRIFT**.
+
+```bash
+# regenerate the list from machine state (this is what a lane does at the end of its cycle)
+bin/fm-next-board.sh --repo <repo> --out <out> --ledger <ledger>
+# print the canonical list, in the one vocabulary the fleet uses
+python3 bin/build-next-board.py --repo <repo> --out <out> --todo-list
+```
+
+The board records the digest of the ledger it was built from:
+
+```
+**Ledger digest:** sha256:<64-hex>
+```
+
+so a third party can tell whether the board is still in step with the machine state, and
+`next-board.json` carries the same value in `ledger_digest`.
+
+**A stale list blocks closure.** `bin/fm-todo-gate.sh` refuses a board whose digest no longer
+matches the ledger, and `bin/fm-lane-closure-gate.sh` runs that gate as a precondition of closure
+for every lane whose artifact claims PASS/DONE/ACCEPTED. **A lane may not close while the to-do
+list is stale** — closing on a stale list is how a lane lands with nobody holding the next step, and
+that is the rot this contract exists to stop. A missing drift checker is a violation too, never a
+silent pass.
+
+**One source of truth.** The visible session list, the lane board and the claims board are
+**projections of the generated list**, not a second source of truth. If they disagree with the
+ledger, the ledger is right and the projection is stale. A human must never have to ask for the
+list twice: it is regenerated from machine state on every lane cycle, and the gate says so when it
+is not.
+
 ---
 
 **VERDICT: PASS** — the NEXT contract is defined, the board generator is written and running
 (`build-next-board.py`, which measures the current rot at 34/34 contract gaps and 41 artifacts
 without a NEXT line), and the rule is now written down where the lanes that will inherit it can
-read it. The board regenerates from live sources on every lane cycle.
+read it. The board regenerates from live sources on every lane cycle. The to-do list on that board
+is generated from the machine lane ledger and carries that ledger's digest; a lane claiming
+PASS/DONE/ACCEPTED cannot close while the list is stale (`bin/fm-todo-gate.sh`, wired into
+`bin/fm-lane-closure-gate.sh` as the third precondition of closure, proven by
+`tests/fm-todo-gate.test.sh`); and the visible session list is a projection of the board, not a
+second source of truth.

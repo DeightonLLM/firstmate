@@ -1,8 +1,0 @@
-# no-mistakes test fix_review gate findings (run 01M3978W5AQNG1VV6J02GEN)
-
-## Finding 1: test-1
-- ID: test-1
-- Severity: warning
-- File: (none)
-- Action: ask-user
-- Description: live validation verdict: inconclusive (0 of 3 scenarios were driven live against the product); untested: Complete a manual-backend task and see its ID in the completion output, its entry under Done, and a queued completion wake., Complete a task when Done already has more than ten entries and see only the ten latest entries under Done., Make wake enqueue fail during manual-backend teardown and see the warning name the completed task.

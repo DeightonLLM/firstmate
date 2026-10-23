@@ -1,2 +1,0 @@
-working: completing required preflight and scoping permitted evidence
-blocked: required decision-hold completion attestation would write task metadata outside the authorized three-file scope; Controller must authorize or perform that attestation

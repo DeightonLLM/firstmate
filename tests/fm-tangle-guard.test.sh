@@ -170,6 +170,19 @@ exit 0
 SH
   chmod +x "$fakebin/tmux"
   fm_fake_exit0 "$fakebin" treehouse
+  # A hermetic quota-axi stub (the gate's documented test seam,
+  # FM_QUOTA_AXI_BIN): a live quota cache that is stale or unauthenticated
+  # would refuse the spawn for a reason that has nothing to do with the
+  # worktree-tangle abort under test.
+  cat > "$fakebin/quota-axi" <<'SH'
+#!/usr/bin/env bash
+set -u
+[ "${1:-}" = "--json" ] || exit 1
+cat <<'JSON'
+{"providers":[{"provider":"codex","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":80,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]}]}
+JSON
+SH
+  chmod +x "$fakebin/quota-axi"
   printf '%s\n' "$fakebin"
 }
 
@@ -181,8 +194,9 @@ run_spawn() {
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" TMUX="fake,1,0" \
+    FM_QUOTA_AXI_BIN="$fakebin/quota-axi" \
     PATH="$fakebin:$PATH" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" codex 2>&1
+    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" codex --model gpt-6-luna 2>&1
 }
 
 test_spawn_isolation_abort() {
@@ -196,20 +210,20 @@ test_spawn_isolation_abort() {
   mkdir -p "$TMP_ROOT/spawn-notgit" "$proj/sub"
 
   # Abort: the pane resolves to a plain non-git directory (not a worktree at all).
-  out=$(run_spawn "$home" abort-notgit-dd4 "$proj" "$TMP_ROOT/spawn-notgit" "$fakebin"); status=$?
+  out=$(run_spawn "$home" luna6-hd2-abort-notgit-dd4 "$proj" "$TMP_ROOT/spawn-notgit" "$fakebin"); status=$?
   expect_code 1 "$status" "spawn into a non-worktree dir should abort"
   assert_contains "$out" "did not yield an isolated worktree" "non-worktree spawn lacked the isolation error"
-  assert_absent "$home/state/abort-notgit-dd4.meta" "aborted spawn must not record meta"
+  assert_absent "$home/state/luna6-hd2-abort-notgit-dd4.meta" "aborted spawn must not record meta"
 
   # Abort: the pane resolves INTO the primary checkout (a subdir of PROJ_ABS).
-  out=$(run_spawn "$home" abort-primary-ee5 "$proj" "$proj/sub" "$fakebin"); status=$?
+  out=$(run_spawn "$home" luna6-hd2-abort-primary-ee5 "$proj" "$proj/sub" "$fakebin"); status=$?
   expect_code 1 "$status" "spawn landing inside the primary checkout should abort"
   assert_contains "$out" "did not yield an isolated worktree" "primary-checkout spawn lacked the isolation error"
 
   # Proceed: the pane resolves to a genuine, isolated worktree.
-  out=$(run_spawn "$home" ok-isolated-ff6 "$proj" "$TMP_ROOT/spawn-wt" "$fakebin"); status=$?
+  out=$(run_spawn "$home" luna6-hd2-ok-isolated-ff6 "$proj" "$TMP_ROOT/spawn-wt" "$fakebin"); status=$?
   expect_code 0 "$status" "spawn into a genuine isolated worktree should succeed"
-  assert_contains "$out" "spawned ok-isolated-ff6" "isolated spawn did not report success"
+  assert_contains "$out" "spawned luna6-hd2-ok-isolated-ff6" "isolated spawn did not report success"
   assert_not_contains "$out" "did not yield an isolated worktree" "isolated spawn wrongly tripped the guard"
   pass "fm-spawn: aborts unless the resolved worktree is a genuine, isolated worktree"
 }
@@ -249,6 +263,19 @@ exit 0
 SH
   chmod +x "$fakebin/tmux"
   fm_fake_exit0 "$fakebin" treehouse
+  # A hermetic quota-axi stub (the gate's documented test seam,
+  # FM_QUOTA_AXI_BIN): a live quota cache that is stale or unauthenticated
+  # would refuse the spawn for a reason that has nothing to do with the
+  # tmux window construction under test.
+  cat > "$fakebin/quota-axi" <<'SH'
+#!/usr/bin/env bash
+set -u
+[ "${1:-}" = "--json" ] || exit 1
+cat <<'JSON'
+{"providers":[{"provider":"codex","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":80,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]}]}
+JSON
+SH
+  chmod +x "$fakebin/quota-axi"
   printf '%s\n' "$fakebin"
 }
 
@@ -261,8 +288,9 @@ run_spawn_record() {
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" TMUX="fake,1,0" \
     FM_TMUX_REC="$rec" \
+    FM_QUOTA_AXI_BIN="$fakebin/quota-axi" \
     PATH="$fakebin:$PATH" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" codex 2>&1
+    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" codex --model gpt-6-luna 2>&1
 }
 
 test_spawn_tmux_window_construction() {
@@ -276,12 +304,12 @@ test_spawn_tmux_window_construction() {
   wt="$TMP_ROOT/spawn-rec-wt"
   git -C "$proj" worktree add -q --detach "$wt" >/dev/null 2>&1
 
-  out=$(run_spawn_record "$home" rec-win-gg7 "$proj" "$wt" "$fakebin" "$rec"); status=$?
+  out=$(run_spawn_record "$home" luna6-hd2-rec-win-gg7 "$proj" "$wt" "$fakebin" "$rec"); status=$?
   expect_code 0 "$status" "spawn into a genuine worktree should succeed"
-  assert_contains "$out" "spawned rec-win-gg7" "recording spawn did not report success"
+  assert_contains "$out" "spawned luna6-hd2-rec-win-gg7" "recording spawn did not report success"
 
   # Bug 1 fix: append-form window creation (trailing colon on the session target).
-  assert_grep "new-window -dP -F #{window_id} -t firstmate: -n fm-rec-win-gg7" "$rec" \
+  assert_grep "new-window -dP -F #{window_id} -t firstmate: -n fm-luna6-hd2-rec-win-gg7" "$rec" \
     "new-window must append at the session (trailing colon) and capture the window id"
   assert_no_grep "new-window -dP -F #{window_id} -t firstmate -n" "$rec" \
     "new-window must not target the bare session name (collides under base-index 1)"

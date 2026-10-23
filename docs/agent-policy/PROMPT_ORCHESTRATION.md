@@ -64,8 +64,8 @@ Use this precedence:
 
 1. GLM 5.3 Flash first for substantive review, checking, and high-impact non-browser work.
 2. AGY Gemini 3.8 Flash Medium second for fast bounded implementation or review. Gemini 3.6 and all Gemini 3.7 routes are retired and refused (superseded by the 2026-09-02 route migration; see `HERDR_AGENT_ROUTING.md`).
-3. MiniMax M3/M2.7 for basic work; M2.7 is the browser tier and M3 is non-browser only.
-4. Queue browser work when no verified MiniMax M2.7 lane is available; never downgrade to a retired route.
+3. MiniMax M3/M3.1 Flash Preview for basic work; M3.1 Flash Preview is the browser tier and M3 is non-browser only.
+4. Queue browser work when no verified MiniMax M3.1 Flash Preview lane is available; never downgrade to a retired route.
 
 If no eligible model is available, queue the lane instead of silently routing it to an ineligible tier. Parallelize only independent work with separate write targets, browser profiles, live resources, and rollback boundaries.
 
@@ -101,7 +101,7 @@ The **first non-empty line** of every agent prompt must be exactly one of these 
 
 This banner must appear before the role/host header and before the opening code fence when the prompt is presented to the operator. Do not rely on a field buried inside the prompt. Gemini is never an eligible executor for browser work.
 
-The launcher derives this banner automatically from the explicit `BROWSER_WORK` field when the prompt omits it (`validate-agent-prompt-routing --banner-for YES|NO` is the canonical decision source), so lane authors do not hand-type model banners. A banner that is explicitly typed must match the capability — a contradicting banner is refused — and the browser refusal itself remains machine-checkable: browser work is eligible only on MiniMax M2.7, retired routes are refused unconditionally, and ineligible lanes are queued rather than downgraded.
+The launcher derives this banner automatically from the explicit `BROWSER_WORK` field when the prompt omits it (`validate-agent-prompt-routing --banner-for YES|NO` is the canonical decision source), so lane authors do not hand-type model banners. A banner that is explicitly typed must match the capability — a contradicting banner is refused — and the browser refusal itself remains machine-checkable: browser work is eligible only on MiniMax M3.1 Flash Preview, retired routes are refused unconditionally, and ineligible lanes are queued rather than downgraded.
 
 Every agent prompt must also include one prominent field:
 

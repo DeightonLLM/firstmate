@@ -1,4 +1,0 @@
-version=9:secondmate
-offset=48817
-ident=strong:2306:27691324:2026-09-23 09:09:06.591032628 +0100
-default	blocked	Task books disagree on pooled worktree ownership. tasks-axi shows system-stale-wake-loop-0924 in flight and controller diagnosis/pi-live-todo-validate Done; however controller and pi-live-todo-validate metadata both name /6, its owner marker names controller, while git at /6 is on fm/system-stale-wake-loop-0924. The active task metadata instead names /7. I made no changes because cleanup or metadata edits could touch active unlanded work; main reconciliation is needed. (via-helper)

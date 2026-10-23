@@ -73,7 +73,7 @@ Synced and at `4332670` on: Controller, HD2 (`root@100.71.95.76`), Brandon
 
 1. **Quota-fallback routing** — attempted twice, lost twice (once to the reap-gate bug,
    once to the Gemini quota wall). Extend `bin/fm-dispatch-guard.sh` Rule 4 from
-   *refuse* to *fallback*: Gemini first for Hetz hard work, MiniMax M2.7 light-only,
+   *refuse* to *fallback*: Gemini first for Hetz hard work, MiniMax M3.1 Flash light-only,
    cross-host quota only once a model is genuinely empty. **Never weaken a threshold;
    never add a bypass.** Full brief survived at
    `data/quota-fallback-routing-20261012/brief.md` on HD2.

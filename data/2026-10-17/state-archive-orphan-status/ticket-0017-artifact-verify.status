@@ -1,1 +1,0 @@
-blocked: [key=decision-gate-write-boundary] shared completion gate requires tasks-axi-backed completion state, prohibited by ticket; captain must resolve the boundary before closeout

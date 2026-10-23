@@ -56,6 +56,35 @@ export FM_DISPATCH_GUARD_LOG="$LOGDIR/guard.log"
 export FM_HOME="$LOGDIR/basehome"
 mkdir -p "$FM_HOME/state"
 
+# --- quota evidence for the WHOLE suite --------------------------------------
+#
+# QUOTA_AXI_SNAPSHOT must point at a REAL quota-axi cache file - a hand-written
+# JSON fixture is rejected with VALIDATION_ERROR, which made an earlier version
+# of this test assert against a fixture the tool never read. So the fixture is
+# derived from the real cache, with every window's percentRemaining NORMALISED
+# to a healthy value.
+#
+# The live cache is not a fixture: on a host where any window has actually run
+# out, the unmodified cache is not healthy, and every assertion in this suite
+# that is about a different rule then failed for a reason that had nothing to
+# do with that rule. Normalising the readings keeps the schema real - which is
+# the part quota-axi validates - while making the evidence mean what it says.
+#
+# The snapshot is exported for every assertion so the suite is deterministic on
+# any host. Rule 4 below overrides it per assertion with its own fixtures.
+CACHE="${QUOTA_AXI_CACHE:-$HOME/.cache/quota-axi/quotas.json}"
+SNAP=""
+DEAD=""
+if [ ! -r "$CACHE" ]; then
+  bad "quota-axi cache not readable at $CACHE (Rule 4 left unverified)"
+else
+  SNAP="$LOGDIR/quota.healthy.cache"
+  jq '(.providers[]?.windows[]?) |= (.percentRemaining = 100)' "$CACHE" > "$SNAP" 2>/dev/null
+  DEAD="$LOGDIR/quota.dead.cache"
+  jq '(.providers[]?.windows[]?) |= (.percentRemaining = 0)' "$SNAP" > "$DEAD" 2>/dev/null
+  export QUOTA_AXI_SNAPSHOT="$SNAP"
+fi
+
 echo "== Rule 1: gpt-6.1-sol ban (no bypass) =="
 assert_refuse "sol is refused" 64 codex gpt-6.1-sol
 assert_refuse "sol variant is refused" 64 codex openai-codex/gpt-6.1-sol
@@ -227,20 +256,9 @@ else
 fi
 
 echo "== Rule 4: quota ceiling =="
-# QUOTA_AXI_SNAPSHOT must point at a REAL quota-axi cache file - a hand-written
-# JSON fixture is rejected with VALIDATION_ERROR, which made an earlier version
-# of this test assert against a fixture the tool never read. So the fixtures are
-# derived from the real cache: one unmodified, one with every window zeroed.
-CACHE="${QUOTA_AXI_CACHE:-$HOME/.cache/quota-axi/quotas.json}"
-if [ ! -r "$CACHE" ]; then
-  bad "quota-axi cache not readable at $CACHE (Rule 4 left unverified)"
-  SNAP=""
-else
-  SNAP="$LOGDIR/quota.live.cache"
-  cp "$CACHE" "$SNAP"
-  DEAD="$LOGDIR/quota.dead.cache"
-  jq '(.providers[]?.windows[]?) |= (.percentRemaining = 0)' "$SNAP" > "$DEAD" 2>/dev/null
-fi
+# The healthy and the dead fixtures are built at the top of this suite, so
+# every assertion here inherits a deterministic healthy snapshot and varies
+# it explicitly for the rule under test.
 
 if [ -n "$SNAP" ]; then
   assert_refuse "exhausted provider is refused" 64 pi minimax/MiniMax-M2.7 QUOTA_AXI_SNAPSHOT="$DEAD"
@@ -268,13 +286,14 @@ DEADGEM="$LOGDIR/quota.deadgemini.cache"
 if [ -r "$CACHE" ]; then
   # Derive from the REAL cache - quota-axi rejects hand-written snapshots with
   # VALIDATION_ERROR, which would make the guard fail open and turn every
-  # "allow" assertion into a false pass.
+  # "allow" assertion into a false pass - and normalise the readings, so the
+  # fixture does not inherit an exhausted window from the live host state.
   jq '(.providers[]? | select(.provider=="agy") | .windows[]?
         | select((.id // "") | test("claude_gpt"))) |= (.percentRemaining = 0)' \
-    "$CACHE" > "$SCOPED" 2>/dev/null
+    "$SNAP" > "$SCOPED" 2>/dev/null
   jq '(.providers[]? | select(.provider=="agy") | .windows[]?
         | select((.id // "") | test("gemini"))) |= (.percentRemaining = 0)' \
-    "$CACHE" > "$DEADGEM" 2>/dev/null
+    "$SNAP" > "$DEADGEM" 2>/dev/null
 fi
 
 if [ -s "$SCOPED" ] && [ -s "$DEADGEM" ]; then

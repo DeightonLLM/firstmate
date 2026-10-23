@@ -8,6 +8,14 @@ set -u
 GUARD="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/fm-warehouse-guard.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WAREHOUSE="${FM_WAREHOUSE_ROOT:-$ROOT/warehouse}"
+# The guard resolves the Controller-owned warehouse root from FM_WAREHOUSE_ROOT
+# (default: /home/hd2admin/kun-agent-workspace/warehouse). This suite exercises a
+# repo-local root instead, so the root it tests MUST be handed to the guard too:
+# otherwise the guard compares against its own default root and every path under
+# $WAREHOUSE is classified as "not the warehouse" and wrongly allowed. The
+# guard is still the thing under test - this only names the root it is asked
+# to protect.
+export FM_WAREHOUSE_ROOT="$WAREHOUSE"
 PASS=0
 FAIL=0
 

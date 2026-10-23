@@ -153,6 +153,21 @@ exit 0
 SH
   chmod +x "$fakebin/tmux"
   fm_fake_exit0 "$fakebin" treehouse
+  # A hermetic quota-axi stub. fm-spawn.sh runs the quota gate (exit 4 on
+  # missing/stale spend evidence) before it spawns, so a live quota cache that
+  # is stale or unauthenticated would refuse the spawn for a reason that has
+  # nothing to do with the gate-refusal behaviour under test. The stub reports
+  # one fresh provider with known semantics and healthy headroom, so the quota
+  # gate passes and the spawn reaches the gate checks.
+  cat > "$fakebin/quota-axi" <<'SH'
+#!/usr/bin/env bash
+set -u
+[ "${1:-}" = "--json" ] || exit 1
+cat <<'JSON'
+{"providers":[{"provider":"codex","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"all_models","status":"known","effectivePercentRemaining":80,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]}]}
+JSON
+SH
+  chmod +x "$fakebin/quota-axi"
   printf '%s\n' "$fakebin"
 }
 
@@ -166,8 +181,9 @@ run_spawn() {
       "FM_STATE_OVERRIDE=$home/state" "FM_DATA_OVERRIDE=$home/data" \
       "FM_PROJECTS_OVERRIDE=$home/projects" "FM_CONFIG_OVERRIDE=$home/config" \
       "FM_SPAWN_NO_GUARD=1" "FM_FAKE_PANE_PATH=$pane" "TMUX=fake,1,0" \
+      "FM_QUOTA_AXI_BIN=$fakebin/quota-axi" \
       "PATH=$fakebin:$PATH" "$@" \
-      "$SPAWN" "$id" "$proj" codex ) 2>&1
+      "$SPAWN" "$id" "$proj" codex --model gpt-6-luna ) 2>&1
 }
 
 test_spawn_refuses_and_admits() {
@@ -178,25 +194,29 @@ test_spawn_refuses_and_admits() {
   wt="$TMP/spawn-wt"
   git -C "$proj" worktree add -q --detach "$wt" >/dev/null 2>&1
 
+  # The task ID IS the lane key, and fm-spawn.sh validates it against the
+  # <harness>-<model>-<surface>-<task> convention before any mutation (exit 5),
+  # so these IDs must be valid lane keys or the spawn is refused by the naming
+  # gate and never reaches the gate-refusal behaviour under test.
   # env-marker refuse: neutral cwd, marker set.
-  out=$(run_spawn "$NORMAL_CWD" "$home" spawn-envmark "$proj" "$wt" "$fakebin" NO_MISTAKES_GATE=1); rc=$?
+  out=$(run_spawn "$NORMAL_CWD" "$home" luna6-hd2-spawn-envmark "$proj" "$wt" "$fakebin" NO_MISTAKES_GATE=1); rc=$?
   expect_code 3 "$rc" "spawn: NO_MISTAKES_GATE must refuse"
   assert_contains "$out" "$ENV_MSG" "spawn: env-marker refusal message"
-  assert_absent "$home/state/spawn-envmark.meta" "spawn: refused env-marker launch must not record meta"
+  assert_absent "$home/state/luna6-hd2-spawn-envmark.meta" "spawn: refused env-marker launch must not record meta"
 
   # path-backstop refuse: gate-worktree cwd, marker UNSET.
-  out=$(run_spawn "$GATE_WT" "$home" spawn-backstop "$proj" "$wt" "$fakebin"); rc=$?
+  out=$(run_spawn "$GATE_WT" "$home" luna6-hd2-spawn-backstop "$proj" "$wt" "$fakebin"); rc=$?
   expect_code 3 "$rc" "spawn: gate-worktree cwd must refuse with the marker unset"
   assert_contains "$out" "$PATH_MSG" "spawn: path-backstop refusal message"
-  assert_absent "$home/state/spawn-backstop.meta" "spawn: refused backstop launch must not record meta"
+  assert_absent "$home/state/luna6-hd2-spawn-backstop.meta" "spawn: refused backstop launch must not record meta"
 
   # no-regression: neutral cwd, marker UNSET, genuine isolated worktree.
-  out=$(run_spawn "$NORMAL_CWD" "$home" spawn-ok "$proj" "$wt" "$fakebin"); rc=$?
+  out=$(run_spawn "$NORMAL_CWD" "$home" luna6-hd2-spawn-ok "$proj" "$wt" "$fakebin"); rc=$?
   expect_code 0 "$rc" "spawn: a normal session must still spawn"
-  assert_contains "$out" "spawned spawn-ok" "spawn: normal launch should report success"
+  assert_contains "$out" "spawned luna6-hd2-spawn-ok" "spawn: normal launch should report success"
   assert_not_contains "$out" "$ENV_MSG" "spawn: normal launch must not print the gate refusal"
   assert_not_contains "$out" "$PATH_MSG" "spawn: normal launch must not print the backstop refusal"
-  assert_present "$home/state/spawn-ok.meta" "spawn: normal launch should record meta"
+  assert_present "$home/state/luna6-hd2-spawn-ok.meta" "spawn: normal launch should record meta"
   pass "fm-spawn: refuses on marker and gate-worktree backstop; a normal crew spawn is unaffected"
 }
 

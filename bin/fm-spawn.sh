@@ -70,7 +70,7 @@
 #   profile consultation. A --secondmate spawn is exempt and resolves the SECONDMATE
 #   harness (config/secondmate-harness -> config/crew-harness -> own), so the
 #   secondmate-vs-crewmate split is DURABLE across every respawn (recovery,
-#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|agy)
+#   /updatefirstmate, restart). A bare adapter name (claude|codex|opencode|pi|pi-signed|grok|kimi|agy|minimax-code)
 #   overrides it for this spawn (either kind). A non-flag string containing
 #   whitespace is treated as a RAW launch command - the escape hatch for verifying
 #   new adapters. pi-signed launches that exact executable name from PATH and
@@ -114,6 +114,8 @@
 #     __PIWATCH__   absolute path to .pi/extensions/fm-primary-pi-watch.ts in a pi secondmate home
 #     __MCODEDIR__  absolute path to /tmp/fm-<task-id>/mcode (isolated runtime config
 #                   dir with permissionMode: bypassPermissions so mcode never parks on gates)
+#     __MCODEDATADIR__  absolute path to the mcode data dir, which stays the real one
+#                   because mcode keys its OAuth credential on the literal auth-home path
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
 # Kimi uses one surgically installed Firstmate region in $HOME/.kimi-code/config.toml,
@@ -447,7 +449,7 @@ FIRSTMATE_HOME=
 
 if [ "$KIND" = secondmate ]; then
   case "${POS[1]:-}" in
-    ''|claude|codex|opencode|pi|pi-signed|grok|kimi|agy)
+    ''|claude|codex|opencode|pi|pi-signed|grok|kimi|agy|minimax-code)
       ARG3=${POS[1]:-}
       ;;
     *' '*)
@@ -526,7 +528,7 @@ launch_template() {
     # so permissions are structurally disabled by launching with a per-task config
     # directory (__MCODEDIR__) where permissionMode is set to bypassPermissions.
     # It exposes no effort axis, so __EFFORTFLAG__ is omitted.
-    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MINIMAXBASE__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MCODEDATADIR__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -549,14 +551,14 @@ case "$ARG3" in
     # The launch_template lookup below is the unverified-adapter guard for both
     # kinds: a harness with no template aborts the spawn.
     if [ "$KIND" = secondmate ]; then
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" secondmate)
+      HARNESS=$("$SCRIPT_DIR/fm-harness.sh" secondmate)
       harness_src='config/secondmate-harness (falling back to config/crew-harness)'
     else
       if [ -f "$CONFIG/crew-dispatch.json" ]; then
         echo "error: config/crew-dispatch.json is active - pass an explicit harness resolved from the dispatch rules (the consultation backstop, so the rules are never silently skipped)." >&2
         exit 1
       fi
-      HARNESS=$("$FM_ROOT/bin/fm-harness.sh" crew)
+      HARNESS=$("$SCRIPT_DIR/fm-harness.sh" crew)
       harness_src='config/crew-harness'
     fi
     LAUNCH=$(launch_template "$HARNESS" "$KIND") || { echo "error: no launch template for harness '$HARNESS' (from $harness_src or detection); pass a raw launch command to use an unverified adapter" >&2; exit 1; }
@@ -658,7 +660,16 @@ fi
 # any non-zero exit aborts the spawn and the guard's own stderr reason is the
 # captain-facing message. See bin/fm-dispatch-guard.sh for the four rules and
 # their narrow, logged bypasses.
-if ! "$FM_ROOT/bin/fm-dispatch-guard.sh" "$HARNESS" "$GUARD_MODEL"; then
+#
+# The guard is resolved from THIS SCRIPT'S OWN CODE ROOT, never from FM_ROOT.
+# FM_ROOT_OVERRIDE names the firstmate repo root a spawn READS STATE FROM (the
+# primary checkout whose HEAD a secondmate home is fast-forwarded to), and it is
+# allowed to point at a checkout that does not carry this tool's bin/ tree at
+# all. A mandatory policy gate must be the gate the RUNNING firstmate ships:
+# resolving it from a root that need not carry it made a missing gate exit 127
+# on a raw "No such file or directory", which killed the spawn before it could
+# do its job and said nothing about which gate was missing.
+if ! "$SCRIPT_DIR/fm-dispatch-guard.sh" "$HARNESS" "$GUARD_MODEL"; then
   exit 64
 fi
 
@@ -680,6 +691,27 @@ fi
 if ! "$FM_ROOT/bin/fm-capacity-gate.sh" check; then
   exit 64
 fi
+# Leave-refused binding gate (captain ruling 2026-10-21, board question
+# "quota-provider-binding", answer "leave-refused"): the claude, grok, kimi
+# and opencode harness FAMILIES have no provider account binding on this
+# fleet, so quota-axi cannot measure their spend surface and no dispatch may
+# spend it. This runs HERE - after the harness, the concrete model and the
+# launch command are resolved, and BEFORE any worktree, endpoint, backend, or
+# state mutation - so a refused dispatch leaves absolutely nothing behind.
+#
+# It runs for EVERY spawn kind, including --secondmate. A secondmate launch
+# carries no quota measurement (it stands up its own home rather than acting
+# as a fresh worker dispatch), but the binding refusal is a property of the
+# HARNESS FAMILY, not of the spawn kind: the refused families are refused on
+# every dispatch path.
+#
+# The WHOLE launch command is handed over as well, not only the harness name
+# derived from it. A raw launch derives that name from the FIRST word of the
+# command, so a refused harness hidden behind another word ("env opencode
+# ...", "sh -c 'grok ...'") would otherwise reach the gate under a name it
+# does not recognise, be measured against a bound provider's quota, and pass.
+"$SCRIPT_DIR/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" \
+  --launch-command "$LAUNCH" --binding-only || exit $?
 
 secondmate_registry_value() {
   secondmate_registry_field "$DATA/secondmates.md" "$1" "$2"
@@ -1016,7 +1048,7 @@ fi
 # Grandfather clause: if state/<id>.meta already exists, the task is an existing
 # recovery case and the naming rule does not apply (would strand unlanded work).
 if [ "$KIND" != secondmate ] && [ ! -f "$STATE/$ID.meta" ]; then
-  if ! "$FM_ROOT/bin/fm-lane-naming-check.sh" "$ID" 2>&1; then
+  if ! "$SCRIPT_DIR/fm-lane-naming-check.sh" "$ID" 2>&1; then
     echo "error: lane key '$ID' violates the canonical <harness>-<model>-<host>-<task> naming convention; fix the task ID before spawning" >&2
     exit 5
   fi
@@ -1743,6 +1775,24 @@ setup_mcode_task_dir() {  # <task-dir> <base-runtime-data-dir>
 if [ "$HARNESS" = minimax-code ]; then
   MCODE_TASK_DIR="$TASK_TMP/mcode"
   setup_mcode_task_dir "$MCODE_TASK_DIR" "${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}"
+
+  # The local package must be ENABLED in the per-task runtime dir, so the lane
+  # that runs against this dir loads the package with its hooks active.
+  # `mcode plugin add` refuses a local package with
+  # LOCAL_PLUGIN_INSTALL_UNSUPPORTED, so the supported verb is
+  # `mcode plugin enable`.
+  #
+  # Cost, measured: about a second of wall clock, and the CLI materialises its
+  # own builtin skills and state database into the task dir, so the task dir
+  # grows from a few kilobytes to a few tens of megabytes. That is disk inside
+  # the task temp root, which teardown removes with the rest of the task. The
+  # enable runs against the per-task dir alone, so the base runtime's
+  # marketplace and its enabled state are never touched by a spawn.
+  if [ -d "$MCODE_TASK_DIR/plugins/mcode-herdr-agent" ] && command -v mcode >/dev/null 2>&1; then
+    if ! timeout 60 env MINIMAX_DATA_DIR="$MCODE_TASK_DIR" mcode plugin enable mcode-herdr-agent@local >/dev/null 2>&1; then
+      printf 'warn: mcode plugin enable mcode-herdr-agent@local failed in the per-task runtime dir %s; the local package may not load for this lane\n' "$MCODE_TASK_DIR" >&2
+    fi
+  fi
 fi
 
 # Per-harness turn-end hook where enabled: a file that touches
@@ -2136,8 +2186,12 @@ fi
 # worker dispatch. Refusal here is terminal for this spawn attempt: exit 3 =
 # measured exhaustion, exit 4 = spend surface unmeasurable. There is no bypass
 # flag by design; the thresholds live in the gate's own header contract.
+# Resolved from this script's own code root for the same reason as the dispatch
+# guard above: a mandatory gate must never be missing just because FM_ROOT
+# points at a checkout that does not carry it.
 if [ "$KIND" != secondmate ]; then
-  "$FM_ROOT/bin/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" || exit $?
+  "$SCRIPT_DIR/fm-quota-gate.sh" check --harness "$HARNESS" --model "${MODEL:-}" \
+    --launch-command "$LAUNCH" || exit $?
 fi
 
 META_WINDOW=$T
@@ -2213,13 +2267,11 @@ LAUNCH=${LAUNCH//__PIWATCH__/$sq_piwatch}
 LAUNCH=${LAUNCH//__OPINPUT__/$sq_opinput}
 sq_mcodedir=$(shell_quote "$TASK_TMP/mcode")
 LAUNCH=${LAUNCH//__MCODEDIR__/$sq_mcodedir}
-# mcode must run against the REAL runtime data dir: its MiniMax credential lives
-# there, and an isolated mirror cannot authenticate ("Sign in to MiniMax to use
-# Agent features"). The per-task dir stays the CONFIG dir, where the
-# permissionMode override belongs. Proven by running the same model against
-# the mirror (failed) and against the real dir (worked).
-sq_minimaxbase=$(shell_quote "${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}")
-LAUNCH=${LAUNCH//__MINIMAXBASE__/$sq_minimaxbase}
+# The mcode data dir stays the real one: mcode keys its OAuth credential on the
+# literal auth-home path, so a per-task data dir makes every spawned agent ask
+# for a login. Only the config dir is per-task.
+sq_mcodedatadir=$(shell_quote "${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}")
+LAUNCH=${LAUNCH//__MCODEDATADIR__/$sq_mcodedatadir}
 # Crewmate panes are created by a long-lived tmux/herdr daemon that does not
 # inherit firstmate's current environment, so a bare `claude` in the pane falls
 # back to the default ~/.claude store even when firstmate itself runs under a
@@ -2240,7 +2292,9 @@ fi
 # the env is set when the agent starts; the brief sleep lets the export land.
 spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 if [ "$HARNESS" = minimax-code ]; then
-  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_minimaxbase MCODE_CONFIG_DIR=$sq_mcodedir"
+  # The data dir is the real one so mcode finds its OAuth credential, and the
+  # config dir is the per-task one so permissionMode is bypassPermissions.
+  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_mcodedatadir MCODE_CONFIG_DIR=$sq_mcodedir"
 fi
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"

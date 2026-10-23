@@ -1,2 +1,0 @@
-working: starting preflight and test-sweep setup
-blocked: suite execution is prevented by lean-ctx command allowlist (python3 heredoc and mktemp); recovery requires an approved permitted runner or allowlisting

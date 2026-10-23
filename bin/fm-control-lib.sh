@@ -105,17 +105,28 @@ fm_control_harness_family() {  # <recorded-harness>
   esac
 }
 
-# Which task kinds an adapter is verified to run. muse, gemini, rovo, agy, and devin
-# are crewmate/scout adapters only: none has a primary supervision protocol,
-# and bin/fm-spawn.sh refuses a --secondmate launch on any of them. The control
-# plane asks this BEFORE it stops anything, so an incompatible relaunch target is
-# refused while the current agent is still running rather than after it has
-# been stopped.
+# Which task kinds an adapter is verified to run.
+# A second mate runs as a primary in its own home, so its harness needs a
+# primary supervision protocol, and bin/fm-spawn.sh must accept a --secondmate
+# launch on it.
+# muse, gemini, rovo, and devin are crewmate and scout adapters only: none has
+# a primary supervision protocol, and bin/fm-spawn.sh refuses a --secondmate
+# launch on every one of them.
+# agy is barred on the supervision half alone: it has no primary supervision
+# protocol, so a second mate launched on it would have no verified primary
+# contract to supervise it, even though bin/fm-spawn.sh does accept a
+# --secondmate launch on agy.
+# minimax-code is not barred: docs/supervision-protocols/minimax-code.md is its
+# primary supervision contract, and bin/fm-spawn.sh accepts a --secondmate
+# launch on it.
+# The control plane asks this BEFORE it stops anything, so an incompatible
+# relaunch target is refused while the current agent is still running rather
+# than after it has been stopped.
 fm_control_harness_supports_kind() {  # <harness> <kind>
   local harness=${1-} kind=${2-}
   fm_control_harness_supported "$harness" || return 1
   case "$harness" in
-    muse|gemini|rovo|agy|devin|minimax-code) [ "$kind" != secondmate ] || return 1 ;;
+    muse|gemini|rovo|agy|devin) [ "$kind" != secondmate ] || return 1 ;;
   esac
   return 0
 }

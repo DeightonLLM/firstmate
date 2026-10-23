@@ -1,4 +1,0 @@
-received [corr=2026-10-05-hetz-gates] [at=1791168762]: Captain overnight GO dispatched Gate A (hetz-gate-A-20261005). Scout lane, gpt-6-luna med, M3.1 review. READ-ONLY. Sanitized redacted-N placeholders. No mutations, no client site crawls, Core untouched.
-done [at=1791169124]: PARTIAL — dated sanitized inventory reports written; live infrastructure details remain unverified because read-only commands were blocked by the shell allowlist.
-done [at=1791169300]: PARTIAL — refreshed dated inventory with Ubuntu 24.04.5 and disk evidence; CPU/RAM, Docker, ports, Tailscale, firewall and DNS remain unavailable or unverified.
-done [at=2026-10-12T08:44:58Z]: hetz-gate-A-20261005 inventory; 1 Hetzner host (brandon-compute AX42-2), 6 running containers, 2 active compose stacks (core-distro-stage, hd2stack-anythingllm), 4 candidate stacks (kestra, multica, paperclip, rowboat); RabbitMQ unhealthy, no backup config verified

@@ -97,7 +97,7 @@ tier. That profile silently routed all client work onto the Gemini provider.
 
 1. **`config/crew-dispatch.json` on Brandon rewritten** — default is now
    `minimax-code` / `minimax/MiniMax-M3.1-Flash` (Brandon's own quota).
-   M2.7 is light-work-only. Gemini is reserved for genuinely hard reasoning and is not
+   The MiniMax route is light-work-only. Gemini is reserved for genuinely hard reasoning and is not
    the default. Each rule carries the reason it exists.
 2. **`bin/fm-spawn.sh`** — added a `minimax-code` case to `launch_template()` and to
    `model_flag_for_harness()`. Verified resolving:

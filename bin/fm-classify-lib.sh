@@ -356,9 +356,17 @@ crew_absorb_class() {  # <id>
 
 # Ask the recorded backend whether the pane is currently busy. Never mutates.
 crew_live_pane_working() {  # <id>
-  local id=$1 meta status
+  local id=$1 meta status state_dir
   [ -n "$id" ] || return 1
-  meta="$FM_HOME/state/$id.meta"
+  # Resolve the state dir the same way window_to_task does: the caller's STATE,
+  # then FM_STATE_OVERRIDE, then FM_HOME/state. This library is sourced by
+  # scripts that each define FM_HOME, but it is also sourced directly by tests
+  # that do not, so FM_HOME cannot be read unguarded under `set -u` - an
+  # unbound variable there aborts the whole classification instead of merely
+  # failing to find a meta.
+  state_dir="${STATE:-${FM_STATE_OVERRIDE:-${FM_HOME:-}/state}}"
+  [ -n "$state_dir" ] && [ "$state_dir" != "/state" ] || return 1
+  meta="$state_dir/$id.meta"
   [ -r "$meta" ] || return 1
   grep -q '^backend=herdr$' "$meta" 2>/dev/null || return 1
   local pane

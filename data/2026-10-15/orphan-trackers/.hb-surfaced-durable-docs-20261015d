@@ -1,1 +1,0 @@
-blocked: authorized live-home paths are inaccessible from this isolated worktree via ctx_read (root restriction); cannot safely continue within the specified location

@@ -17,8 +17,12 @@
 #   https://api.typesafe.ai/v1/systemone with the project name and the brief's
 #   `## Captain's intent` and `## Firstmate spec` sections, tagged when it is a
 #   scout brief (the whole brief when it has neither section), as state and
-#   ONE Choice question whose options are every rule's `when` from
-#   config/crew-dispatch.json plus one fixed generic none option. Jev returns
+#   ONE Choice question whose options are every rule's `when` from the routing
+#   rules plus one fixed generic none option. The rules live in
+#   config/dispatch.json under "route"; the legacy config/crew-dispatch.json
+#   stays the fallback and is read by path, never re-serialised, so a
+#   malformed or unreadable legacy file still fails with its own message.
+#   Jev returns
 #   the matched rule, a probability per option, and a confidence. Everything
 #   after that is jq: the confidence floor (0.6 on the answer confidence, or a
 #   rule's declared `min_confidence` on that rule's probability, falling to the
@@ -130,7 +134,7 @@ usage() {
   ' "$0"
 }
 
-BRIEF='' PROJECT='' RULES_PATH="$CONFIG/crew-dispatch.json" RULES=''
+BRIEF='' PROJECT='' RULES_PATH="$CONFIG/crew-dispatch.json" RULES='' RULES_LABEL="$CONFIG/crew-dispatch.json"
 NEVER_SEND_PATH="$CONFIG/dispatch-never-send"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -190,12 +194,36 @@ fi
 # ---- inputs --------------------------------------------------------------------
 [ -n "$BRIEF" ] || die "brief file required (see --help)"
 [ -r "$BRIEF" ] || die "brief file not readable: $BRIEF"
+# The routing rules live in config/dispatch.json under "route"; the legacy
+# config/crew-dispatch.json stays the fallback. The legacy file is read by
+# path and never re-serialised, so a malformed or unreadable legacy file still
+# fails with its own actionable message instead of degrading into "no rules".
+if [ -f "$CONFIG/dispatch.json" ]; then
+  command -v jq >/dev/null 2>&1 || die "jq required"
+fi
+ROUTE_SOURCE=$("$SCRIPT_DIR/fm-harness.sh" dispatch-route-source 2>/dev/null || true)
+case "$ROUTE_SOURCE" in
+  'config/dispatch.json')
+    RULES_PATH="$CONFIG/dispatch.json"
+    RULES_LABEL="config/dispatch.json route"
+    ;;
+  *)
+    RULES_PATH="$CONFIG/crew-dispatch.json"
+    RULES_LABEL="$CONFIG/crew-dispatch.json"
+    ;;
+esac
 [ -e "$RULES_PATH" ] || [ -L "$RULES_PATH" ] || no_rules
 [ -r "$RULES_PATH" ] || die "rules file not readable: $RULES_PATH"
 command -v jq >/dev/null 2>&1 || die "jq required"
 RULES=$(mktemp) || die "mktemp failed"
 trap 'rm -f "$RULES"' EXIT
-cp "$RULES_PATH" "$RULES" || die "could not snapshot rules file: $RULES_PATH"
+if [ "$RULES_LABEL" = "config/dispatch.json route" ]; then
+  "$SCRIPT_DIR/fm-harness.sh" dispatch-route-json > "$RULES" \
+    || die "could not read the routing rules out of config/dispatch.json"
+  [ -s "$RULES" ] || die "malformed rules file: config/dispatch.json route (config/dispatch.json is not valid JSON)"
+else
+  cp "$RULES_PATH" "$RULES" || die "could not snapshot rules file: $RULES_PATH"
+fi
 chmod 400 "$RULES" || die "could not protect rules snapshot"
 VERIFIED_HARNESSES=$(fm_control_harnesses | jq -Rsc 'split("\n") | map(select(length > 0))')
 
@@ -255,8 +283,8 @@ rules_err=$(jq -r --argjson verified_harnesses "$VERIFIED_HARNESSES" --arg provi
   elif has("default") and any(profiles(.default)[]; (verified(.harness) | not)) then "each default profile must name a verified harness"
   elif has("default") and any(profiles(.default)[]; (effort_ok(.harness; .model; .effort) | not)) then "each default profile effort must be supported by its harness and model"
   else empty end
-' "$RULES" 2>/dev/null) || die "malformed rules file: $RULES_PATH (not JSON)"
-[ -z "$rules_err" ] || die "malformed rules file: $RULES_PATH - $rules_err"
+' "$RULES" 2>/dev/null) || die "malformed rules file: $RULES_LABEL (not JSON)"
+[ -z "$rules_err" ] || die "malformed rules file: $RULES_LABEL - $rules_err"
 
 missing_provider=$(jq -r '
   def profiles($v): if ($v | type) == "array" then $v elif ($v | type) == "object" then [$v] else [] end;
@@ -272,7 +300,7 @@ if [ -n "$missing_provider" ]; then
   while IFS=$'\t' read -r location harness; do
     missing_provider_detail="${missing_provider_detail:+$missing_provider_detail; }$location profiles whose harness lacks one authoritative provider family require provider: $harness"
   done <<< "$missing_provider"
-  die "malformed rules file: $RULES_PATH - $missing_provider_detail"
+  die "malformed rules file: $RULES_LABEL - $missing_provider_detail"
 fi
 
 # ---- harness -> provider map, from the single owner in fm-quota-axi-lib.sh -----

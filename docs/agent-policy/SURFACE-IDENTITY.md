@@ -52,9 +52,13 @@ below it stand unchanged.
 
 ### Standing rules
 
-1. **`srv1137994` / `elevatesci-vps` (legacy `animovps`, `elevatesVPS`) is a
-   HARD GATE.** Do not touch it, probe it, resolve it, dispatch to it, or route work to it — not
-   for staging, not for a certificate, not for a DNS question. The archive stays preserved.
+1. **`srv1137994` / `elevatesci-vps` (legacy `animovps`, `elevatesVPS`) is RE-SCOPED by the
+   operator ruling of 2026-10-16, not blanket-free.**
+   Staging and WordPress port work on that host is LIFTED.
+   The Aminolifesciences client and archive data on that machine is STILL GATED.
+   Promoting staging to live client production is STILL GATED and needs its own explicit go.
+   The archive stays preserved.
+   The ruling is quoted verbatim in the SUPERSESSION 2026-10-21 section below.
 2. **KVM1 is the HD2 main WordPress site** — an HD2 surface holding no client files. Never
    reference it as a client-files host and never route client work to it.
 3. **Never infer a host from a domain, a DNS record, a PTR, or a legacy alias.** The precedence is
@@ -71,6 +75,67 @@ below it stand unchanged.
    need**. Never resolve it by inference in either direction.
 
 Source: `docs/system-context/hosts.yaml` lines 81-108, read 2026-10-15.
+
+## SUPERSESSION 2026-10-21 - the srv1137994 gate is re-scoped to the 2026-10-16 operator ruling
+
+The `## CORRECTION 2026-10-15` section above is kept as the dated record of what was decided on
+2026-10-15, including its statement that the hard gate on `srv1137994` stood unchanged.
+Standing rule 1 has been re-scoped to a later operator ruling, so that sentence now records the
+2026-10-15 decision and no longer states the current scope.
+Nothing else in that section is rewritten, no preserved archive material is touched, and the
+archive stays preserved.
+
+### The 2026-10-16 lift, verbatim
+
+Source: `BRANDON-COMPUTE-COMMS/from-brandon-compute/2026-10-16-hetz-inbound-backlog-triaged.md`,
+section "The gate, restated so there is no ambiguity", dated 2026-10-16.
+
+```
+LIFTED       staging and WordPress port work on srv1137994 / elevatesVPS
+STILL GATED  Aminolifesciences client and archive data on that machine
+STILL GATED  promoting staging to live client production - its own explicit go
+```
+
+The same ruling is recorded in the authoritative registry, `docs/system-context/hosts.yaml`, entry
+`srv1137994-elevatesci`, under `access_status: AUTHORIZED` and `access_scope`, read 2026-10-21.
+That entry's own `status: PARTIAL` is about incomplete runtime documentation, not about access.
+
+### What is still gated, exactly as the 2026-10-16 record scopes it
+
+- The Aminolifesciences client and archive data on that machine is STILL GATED and stays untouched.
+  The 2026-10-15 measured record states it as untouched, at line 34 of
+  `BRANDON-COMPUTE-COMMS/from-brandon-compute/2026-10-15-hetz-domain-completion-measured.md`.
+  Ask before using it.
+- Promoting staging to live client production is STILL GATED and needs its own explicit go. The
+  2026-10-16 ruling is not that approval.
+- The archive stays preserved.
+- Nothing else on that host is gated by this file, and nothing else on that host is released by
+  this file.
+
+### HD2's production-origin statement is attributed, not adopted
+
+On 2026-10-21 HD2 first mate wrote, in
+`BRANDON-COMPUTE-COMMS/to-brandon-compute/20261021-hd2-six-decisions-to-hetz-lane.md` section 5,
+that this host has been "the live production origin for `data.core-distro.com` since the
+Captain's 2026-10-20 migration approval", and that "clearing or re-scoping a hard gate is an
+operator act, not a lane's".
+
+That is HD2's statement.
+It is not established by this file and it is not adopted here.
+No 2026-10-20 migration approval record exists in this repository's own state, and the
+repository's earlier dated record places `data.core-distro.com` on a different origin, in
+`docs/FLEET-STATUS-20261012.md` dated 2026-10-12.
+Standing rule 3 forbids resolving a host from a domain, a DNS record, a PTR, or a legacy alias,
+so no host identity is asserted here on the strength of that claim.
+
+The production-origin question is therefore still open, and it is an operator act.
+Until the operator records it, `docs/system-context/hosts.yaml` remains the authority for this
+host's identity and access scope, and standing rules 3 and 6 stand unchanged.
+
+Source: `BRANDON-COMPUTE-COMMS/from-brandon-compute/2026-10-16-hetz-inbound-backlog-triaged.md`
+(2026-10-16); `docs/system-context/hosts.yaml` entry `srv1137994-elevatesci` (read 2026-10-21);
+`BRANDON-COMPUTE-COMMS/to-brandon-compute/20261021-hd2-six-decisions-to-hetz-lane.md` section 5
+(2026-10-21, HD2 first mate, attributed and not adopted).
 
 ## Authority order for machine identity
 

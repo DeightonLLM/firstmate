@@ -17,7 +17,7 @@ If the displayed model contradicts the workspace name, the displayed runtime win
 
 ### Model vs CLI adapter distinction (MiniMax and mcode)
 
-MiniMax M2.7 and MiniMax M3 are **model routes**, not CLI harnesses or binary commands. Conversely, **`mcode`** is the MiniMax Code CLI execution adapter (analogous to `pi`, `omp`, or `claude`). Do not conflate the model name with the CLI command. Runtime availability (including whether `mcode` or the candidate client harness is installed and executable in PATH), provider authentication/quota, and interactive capability must still be verified in the live pane before dispatch. Dispatching a MiniMax task requires both a verified runtime model and an available, verified live adapter.
+MiniMax M3.1 Flash and MiniMax M3 are **model routes**, not CLI harnesses or binary commands. Conversely, **`mcode`** is the MiniMax Code CLI execution adapter (analogous to `pi`, `omp`, or `claude`). Do not conflate the model name with the CLI command. Runtime availability (including whether `mcode` or the candidate client harness is installed and executable in PATH), provider authentication/quota, and interactive capability must still be verified in the live pane before dispatch. Dispatching a MiniMax task requires both a verified runtime model and an available, verified live adapter.
 
 ## Current controller route (2026-09-22)
 
@@ -35,7 +35,7 @@ MiniMax M2.7 and MiniMax M3 are **model routes**, not CLI harnesses or binary co
 
 The latest direct operator selection for the current task takes precedence over this static route map. This map is a maintained capability guide and may lag current operator direction; a missing or stale route row alone is not evidence that a model is unavailable. Before dispatch, verify the intended runtime model visibly in the live pane and follow the current operator direction when that model is present and the lane is otherwise eligible. If the map conflicts with current direction or verified runtime evidence, record the drift for repair instead of asking the operator to repeat a known selection. Never claim a runtime was verified without live pane evidence.
 
-### Current operator routing override — Gemini on HD2 (2026-10-15)
+### Current operator routing override - Gemini on HD2 (2026-10-15)
 
 Until the operator says otherwise, all new worker implementation, research, and maintenance lanes route to **AGY Gemini 3.8 on HD2**. Do not dispatch Luna 6 agents during this override. Do not silently substitute another model or surface if Gemini on HD2 is unavailable; hold the ticket and report the blocker.
 
@@ -52,7 +52,7 @@ each**, while Pi workers were roughly **160–200 MiB RSS each**. OMP also carri
 a substantially larger plugin tree (about 221 MiB on disk versus about 5 MiB
 for Pi context-mode support). Treat this as client overhead, not proof of
 better model output. OMP is therefore **task-specific opt-in**; generic
-four-lane campaigns should use Pi-compatible MiniMax M2.7 panes. Before using
+four-lane campaigns should use Pi-compatible MiniMax M3.1 Flash panes. Before using
 OMP, record the extension benefit and available memory headroom. If that
 benefit is absent, select Pi.
 
@@ -60,7 +60,7 @@ benefit is absent, select Pi.
 
 | Runtime model | Primary role | Browser work | Routing priority | Constraints |
 |---|---|---:|---:|---|
-| MiniMax M2.7 | Token-efficient browser QA, functional QA, visual verification, bounded browser investigation | Yes | 1 | Primary browser tier. Use isolated profiles/process ownership and exact URLs/viewports. |
+| MiniMax M3.1 Flash | Token-efficient browser QA, functional QA, visual verification, bounded browser investigation | Yes | 1 | Primary browser tier. Dispatch only through the `mcode` adapter (`mcode-launch --model minimax/MiniMax-M3.1-Flash`); use isolated profiles/process ownership and exact URLs/viewports. |
 | MiniMax M3 | High-level, deeper coding and source implementation/review | No | 2 | Second choice for non-browser work. Do not assign browser QA. Prefer complex coding, refactors, and deep source analysis. |
 | GLM 5.3 Flash (`zai/glm-5.3-flash`) | Independent checking and substantive non-browser work | No | Default for these roles, subject to current operator direction | Current default for independent checking and substantive non-browser work. Verify the runtime model visibly in the live pane before dispatch. |
 | GLM 5.2 | Independent read-only checking and decision analysis | No | Operator-directed only | Retained capability route, not the default for checking or planning. Use only when the current operator direction selects it; verify the runtime model visibly in the live pane before dispatch. |
@@ -74,15 +74,15 @@ Locally hosted GGUF models on client compute hosts (such as `brandon-compute`) a
 
 ## Browser routing
 
-- Assign browser work to an idle, runtime-verified MiniMax M2.7 pane first.
-- Treat MiniMax M2.7 identically whether it is hosted by OMP, Claude, Pi, or another compatible client.
+- Assign browser work to an idle, runtime-verified MiniMax M3.1 Flash pane first.
+- Dispatch MiniMax M3.1 Flash only through the `mcode` adapter (`mcode-launch --model minimax/MiniMax-M3.1-Flash`); while the provider exposes it only through mcode it is not available via OMP, Claude or Pi.
 - Never send browser work to MiniMax M3, GLM 5.2, GLM 5.3 Flash, or GLM 5 Turbo.
 - Gemini remains ineligible for browser work under `PROMPT_ORCHESTRATION.md`.
 - If no eligible browser pane is available, queue the work. Do not silently downgrade the routing boundary.
 
 ## Non-browser routing
 
-- Assign eligible general or lightweight non-browser work to runtime-verified MiniMax M2.7 first.
+- Assign eligible general or lightweight non-browser work to runtime-verified MiniMax M3.1 Flash first.
 - Assign deeper coding, source implementation, or source review to runtime-verified MiniMax M3 next.
 - Use GLM 5.3 Flash as the current default for independent checking and substantive non-browser work, subject to the latest direct operator direction and visible live-pane runtime verification.
 - Use GLM 5.2 for checking or planning only when the current operator direction explicitly selects it; it is not the default route.
@@ -110,7 +110,7 @@ More terminals are useful only for genuinely independent lanes. Before concurren
 
 Use one coordinator-owned reconciliation pass for shared documentation and final classification. The coordinator must poll, review, and reply directly in each pane until every required lane is accepted or terminally blocked.
 
-## M3-Lane Persistent Protection Rule — RETIRED 2026-10-03 (operator order)
+## M3-Lane Persistent Protection Rule - RETIRED 2026-10-03 (operator order)
 
 The MiniMax M3 pane-protection regime is retired. MiniMax M3 is an ordinary
 model route: its panes may be closed, compacted, restarted, repurposed, or
@@ -132,12 +132,12 @@ Workspace names are operational hints, not authority. They must stay aligned wit
 
 | Role label | Intended runtime | Protected? |
 |---|---|---|
-| `browser-primary-minimax27-*` | MiniMax M2.7 | No |
+| `browser-primary-minimax27-*` | MiniMax M3.1 Flash | No |
 | `checker-glm53` | GLM 5.3 Flash | No |
 | `planner-glm53` | GLM 5.3 Flash | No |
 | `longrun-light-glm5-turbo` | GLM 5 Turbo | No |
 | `codex-coordinator` | Codex | No |
-| `deep-code-m3` (or unlabelled M3 pane) | MiniMax M3 | No — M3 protection retired 2026-10-03 |
+| `deep-code-m3` (or unlabelled M3 pane) | MiniMax M3 | No - M3 protection retired 2026-10-03 |
 
 The live model check remains mandatory even when the label appears correct.
 

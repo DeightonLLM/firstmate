@@ -1,3 +1,0 @@
-working: starting read-only worktree inventory
-blocked: report is written, but the required decision-hold completion gate invokes tasks-axi, which this task explicitly forbids; no done event sent
-blocked: fm-decision-hold completion failed: origin core-branch-inventory-20261015 is not owned by the active home /home/hd2admin/.treehouse/kun-agent-workspace-46aafc/20/kun-agent-workspace

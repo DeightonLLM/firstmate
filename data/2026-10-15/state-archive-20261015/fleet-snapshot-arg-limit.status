@@ -1,3 +1,0 @@
-working: reproduced the oversized backlog failure and moved bulk fleet JSON inputs off jq argument vectors
-working: scale regression, output-compatibility comparison, targeted lint, and both fleet suites passed; closing out locally
-done: ready in branch fm/fleet-snapshot-arg-limit

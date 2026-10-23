@@ -15,6 +15,31 @@
 # submit or reports an inconclusive send. If a swallowed Enter is positively
 # confirmed, fm-send exits NON-ZERO so the caller knows the steer did not land
 # instead of silently leaving an unsubmitted instruction.
+#
+# DELIVERY OUTCOMES AND EXIT CODES. Delivery and confirmation are two
+# separate facts, and this script never collapses them into one non-zero code:
+#   0  delivered and confirmed - the backend positively acknowledged the
+#      submit (the proof-carrying verdict was exactly `empty`).
+#   1  not delivered - the text never reached the target: the backend send
+#      itself failed (verdict `send-failed`, or the backend refused the send
+#      outright). Nothing was typed, so a caller may safely retry.
+#   2  delivered, not fully confirmed - the text reached the target, but the
+#      outcome could not be closed out on the parent side: either the submit
+#      could not be positively confirmed (the verdict was `pending`,
+#      `pending-unproven` or `unknown`), or the parent's durable delivery
+#      record could not be committed (a recovery marker was stored and the
+#      watcher will reconcile it). The text MAY have landed, and in the
+#      commit-failure case it demonstrably did; a blind re-send would
+#      duplicate it. A caller MUST NOT retry on this code: it must treat the
+#      delivery as made and keep its own durable expectation, so a target that
+#      never acknowledges is still surfaced. A confirmed swallow still fails
+#      loudly here - this code is non-zero.
+# The distinction matters because an empty-composer proof has known
+# false-negative classes (dim suggestion text, ghost rows, a stale read), so
+# an inconclusive confirmation is not evidence of a non-delivery. The repo's
+# own precedent is bin/fm-task-inbox-lib.sh's fm_task_inbox_ring, where only
+# `send-failed` counts as a failed keystroke and every other verdict is
+# deliberately "never proof".
 # Submission dispatches through the target's recorded backend; the tmux adapter
 # shares its composer/submit core with the away-mode daemon via bin/fm-tmux-lib.sh.
 # Tune with FM_SEND_RETRIES (default 3) / FM_SEND_SLEEP (0.4).
@@ -44,6 +69,13 @@
 # The pause is fm-send-only; the shared submit core (used by the away-mode daemon,
 # which only needs "submitted") does not pay it, and the --key path is unaffected.
 set -eu
+
+# Delivery-outcome exit codes. Documented in the header block above; the
+# numbers are part of the caller contract, so they are named here and never
+# change silently.
+FM_SEND_EXIT_DELIVERED=0
+FM_SEND_EXIT_NOT_DELIVERED=1
+FM_SEND_EXIT_DELIVERED_UNCONFIRMED=2
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
@@ -242,9 +274,9 @@ fi
 if [ "${1:-}" = "--key" ]; then
   if ! fm_backend_send_key "$TARGET_BACKEND" "$T" "$2" "$EXPECTED_LABEL"; then
     echo "error: key '$2' not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
-    exit 1
+    exit "$FM_SEND_EXIT_NOT_DELIVERED"
   fi
-  fm_send_record_interrupt "$2" || exit 1
+  fm_send_record_interrupt "$2" || exit "$FM_SEND_EXIT_DELIVERED_UNCONFIRMED"
 else
   MESSAGE=$*
   if [ "$MARK_FROM_FIRSTMATE" = 1 ]; then
@@ -289,31 +321,45 @@ else
   esac
   retries=${FM_SEND_RETRIES:-3}
   sleep_s=${FM_SEND_SLEEP:-0.4}
-  # Type once, submit, verify. Only exact empty confirms delivery; every other
-  # verdict preserves the loud refusal boundary.
+  # Type once, submit, verify. Three distinct delivery outcomes, never
+  # collapsed into one non-zero code (see the header's exit-code contract).
   if ! verdict=$(fm_backend_send_text_submit "$TARGET_BACKEND" "$T" "$MESSAGE" "$retries" "$sleep_s" "$settle" "$EXPECTED_LABEL"); then
+    # The backend refused the send outright: nothing was typed anywhere.
     if [ "$PENDING_REPLY_CREATED" = 1 ] && [ -n "$PENDING_REPLY_CORR" ]; then
       fm_pending_reply_discard_undelivered "$STATE" "$PENDING_REPLY_CORR" || true
     fi
     echo "error: text not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
-    exit 1
+    exit "$FM_SEND_EXIT_NOT_DELIVERED"
   fi
   case "$verdict" in
     empty)
+      # Delivered and confirmed.
       ;;
     send-failed)
+      # Not delivered: the literal never reached the target.
       if [ "$PENDING_REPLY_CREATED" = 1 ] && [ -n "$PENDING_REPLY_CORR" ]; then
         fm_pending_reply_discard_undelivered "$STATE" "$PENDING_REPLY_CORR" || true
       fi
       echo "error: text not sent to $T ($TARGET_BACKEND send failed; tried $RESOLUTION_TRIED)" >&2
-      exit 1
+      exit "$FM_SEND_EXIT_NOT_DELIVERED"
       ;;
     *)
-      if [ "$PENDING_REPLY_CREATED" = 1 ] && [ -n "$PENDING_REPLY_CORR" ]; then
-        fm_pending_reply_discard_undelivered "$STATE" "$PENDING_REPLY_CORR" || true
+      # Delivered but unconfirmed. The text was handed to the target; only the
+      # submit acknowledgement is missing. An inconclusive confirmation is not
+      # proof of a non-delivery, so this must NOT be reported as a plain
+      # failure the caller re-sends on: that is what produced the endless
+      # CONFIG_REREAD re-delivery loop.
+      #
+      # The parent-owned expectation is deliberately KEPT (not discarded): the
+      # record stays in its attempted-but-unconfirmed state so the watcher can
+      # promote it to delivery_unknown and escalate if the target never
+      # acknowledges. That keeps the visibility rule intact - a target that
+      # never saw the steer is still surfaced - without duplicating the steer.
+      if [ -n "$PENDING_REPLY_CORR" ]; then
+        fm_pending_reply_prepare_delivery "$STATE" "$PENDING_REPLY_CORR" || true
       fi
-      echo "error: text not submitted to $T (delivery unconfirmed; verdict=${verdict:-unknown}; tried $RESOLUTION_TRIED)" >&2
-      exit 1
+      echo "error: text not submitted to $T (delivered but unconfirmed; verdict=${verdict:-unknown}; exit=$FM_SEND_EXIT_DELIVERED_UNCONFIRMED; tried $RESOLUTION_TRIED)" >&2
+      exit "$FM_SEND_EXIT_DELIVERED_UNCONFIRMED"
       ;;
   esac
   # Delivery confirmed. Mark the pending expectation delivered without resolving
@@ -328,7 +374,9 @@ else
       else
         echo "error: text was delivered to $T, but its pending-reply delivery commit and recovery marker both failed. Do not resend; inspect $STATE manually." >&2
       fi
-      exit 1
+      # The text DID reach the target, so this is not a non-delivery: report it
+      # in the do-not-resend bucket, never as exit 1.
+      exit "$FM_SEND_EXIT_DELIVERED_UNCONFIRMED"
     fi
   fi
   # Submit landed with exact empty. Confirmation only proves the text was
@@ -338,3 +386,6 @@ else
   # disables it. Scoped to this path only, never the shared submit core.
   [ "${FM_SEND_SETTLE:-1}" = 0 ] || sleep "${FM_SEND_SETTLE:-1}"
 fi
+
+# Delivered and confirmed (or, on the --key path, the key was sent).
+exit "$FM_SEND_EXIT_DELIVERED"

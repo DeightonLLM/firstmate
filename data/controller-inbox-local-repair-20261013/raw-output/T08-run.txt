@@ -1,2 +1,0 @@
-PASS: poll silent — handled ledger correctly suppressed re-report
-EXIT: 0
