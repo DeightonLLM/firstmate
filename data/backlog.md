@@ -42,6 +42,112 @@
   SO: (1) brandon-compute must build its own ledger from its 680 trace files then publish - the request and both tools are already in its inbox, no Captain action needed; (2) elevatesVPS has 262 trace files, no route and no running agent - NEEDS THE CAPTAIN to open a channel or authorise the Controller to run the surface's own publisher there and collect the finished document; (3) agy is not a surface question.
   NOT DECIDED BY A LANE: every `*-local-unmapped` account still carries `identity_status: unknown_local_subset`. The quota half already knows two codex account keys (`codex-home`, `openai-codex`); the usage half cannot yet join them, and inventing account names is forbidden.
 
+  ## CORRECTION 2026-10-23 by the firstmate: the "mcode carries no numeric counters" claim is FALSE
+  The row above says agy "is not a surface question" because the only related entry is
+  `vmi3238503:mcode` - "local mcode observability carries no numeric token counters". **That entry
+  is factually wrong, and it was wrong because nobody looked.** The firstmate measured the real
+  answer before commissioning the fix.
+
+  mcode session records at `/root/.minimax/v2/sessions/YYYY/MM/DD/<HH-MM-SS>-session_<id>/messages.jsonl`
+  carry a FULL numeric usage object. The counters are at `record["message"]["usage"]` - NESTED, not
+  at the top level of the record. A scan for a top-level `usage` key returns **zero** hits across
+  all 139 October session files on the Controller, which is very likely how the original "no
+  counters" claim was arrived at.
+
+  The object is exactly:
+  `{"input": N, "output": N, "cacheRead": N, "cacheWrite": N, "totalTokens": N, "cost": {...}}`,
+  alongside `provider`, `model`, `api` and a millisecond `timestamp` on the same `message` object.
+
+  **MEASURED ON THE CONTROLLER: 7,260 usage-bearing records across 139 files. October total
+  882,285,012 tokens** (2026-10-21 alone: 431,551,536). By provider: `minimax` 7,187 plus
+  `custom_provider:provider-a4512f` 74 (model `glm-5.3-flash` - a real second provider hiding
+  behind mcode, which must be reported as distinct rather than folded into minimax).
+  **MEASURED ON ELEVATESVPS OVER SSH: 231 usage-bearing records across 12 files, 23,420,825 tokens
+  on 2026-10-21.** So elevatesVPS is NOT a zero and NOT a mystery - it has real mcode usage that
+  nobody was reading.
+
+  **WHAT THIS CHANGES:** the minimax column stops being unmeasurable for every mcode surface, and
+  the minimax rows currently on the board stop being operator-reported-only. This is the single
+  largest unmeasured quantity in the fleet. It also means **the agy column is the only genuinely
+  source-less provider left** - agy (GEMINI/ANTIGRAVITY) has no usage source on ANY surface and no
+  amount of asking will create one; it needs a provider-side or Antigravity-side counter, not a
+  request. That conclusion is now sound, because the mcode column has been ruled in by measurement
+  rather than ruled out by assumption.
+
+  The fix is dispatched as lane `mcode-m3.1f-controller-tokenmeter` (a `scan_mcode` in the ledger
+  builder, mirroring the existing `scan_codex` / `scan_pi`, with a `--mcode-root` seam so every
+  surface can point it at its own root). It also carries the Captain's account-identity ruling:
+  the usage-side accounts stay SEPARATE from the quota-side codex keys (`codex-home`,
+  `openai-codex`) and stay marked `unknown_local_subset`.
+
+  **ELEVATESVPS IS NO LONGER BLOCKED.** The Captain authorised the Controller to run that surface's
+  own publisher over ssh and collect the finished document. It is not blocked on a route - it was
+  never blocked on a route, only on the collector being unable to read mcode. That changes once the
+  scanner lands, and the measured ground truth above is what the published document is checked
+  against. The three surfaces' copies of `usage_ledger.py` are STALE and need re-delivery once the
+  scanner lands.
+
+  ## CLOSING SECTION 2026-10-23 by the firstmate: 4 of 4 surfaces report, and two of the row's own conclusions were wrong
+
+  **THE BAND NOW READS "at least 5,428,176,275 tokens, 7 of 7 days measured, 4 of 4 surface(s)
+  reporting"** (live board, verified). It read "at least 949,555,924 tokens, 5 of 7 days, 3 of 4
+  surfaces" when this session began. Four separate causes, each measured rather than assumed:
+
+  **1. A SILENT UNDER-COUNT IN THE PI SCANNER, WORTH 70,517,205 TOKENS ON ONE DAY.**
+  `scan_pi` built each row's `request_id` from the file's BASENAME. The pi store holds **228
+  different files all called `session.jsonl`**, one per worktree directory, so those ids collided
+  across directories - and the ledger's per-request-id dedup kept one of the collided readings and
+  dropped the rest. On 2026-10-20 that silently discarded 70,517,205 real tokens (451,194,904 read,
+  380,677,699 kept). Fixed: the id now names the path RELATIVE TO THE ROOT, and the event-identity
+  set is scan-wide rather than per-file. Loss is now **0**, verified against an uncapped independent
+  recomputation on every day. The same class of bug had already been fixed in `scan_mcode`, which is
+  why the new scanner was right and the old one was not.
+
+  **2. THE AGY COLUMN IS NOT SOURCE-LESS. THAT CONCLUSION WAS WRONG.**
+  This row said agy "has no usage source on ANY surface and no amount of asking will create one; it
+  needs a provider-side or Antigravity-side counter, not a request." It needed the Antigravity-side
+  counter, and the Antigravity-side counter EXISTS: `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl`
+  carries `input_tokens`, `cache_read_tokens` and `output_tokens` numerically. Nobody had looked at
+  the data the surfaces already had.
+  - **Controller: 4,319 events, 453,520,547 tokens over 10 days.** **HD2Stack: 12,694 events,
+    1,572,045,733 tokens over 13 days.** **brandon-compute: 1,036 events, 82,280,573 tokens over 3
+    days.** elevatesVPS has no Antigravity at all (0 brain sessions), so its agy slot honestly stays
+    unknown.
+  - **THE NAIVE SCAN OVERCOUNTS x2.97.** The same events are kept in `chunks/transcript/`,
+    `chunks/transcript_full/` and `logs/transcript.jsonl`. Measured: 489 brain sessions carry the
+    canonical transcript and **ZERO events exist outside it**, so the canonical file alone is
+    complete. The event identity is `(step_index, source, type, created_at)` because the record
+    carries no id of its own. A day's total is `input + output + cache_read`, counted once.
+  - The scanner is verified against an independent recomputation that does not import the ledger:
+    **all 10 days match exactly**.
+
+  **3. A DOUBLE COUNT AGAINST THE CAPTAIN'S OWN REPORTED NUMBER, WORTH 95,755,315 TOKENS.**
+  The ledger applies "a reported total covers the measured subset of the same provider on the same
+  day" INSIDE one store, routing the subset to `unmapped` so it is never added. The same reading can
+  arrive from another surface's own published document, and then it WAS added: on 2026-10-19 the
+  reported MiniMax 287,560,000 was carried alongside hd2stack's measured MiniMax 95,755,315, so the
+  day read 914,700,542 instead of 818,945,227. Fixed in the collector, and the demoted reading is now
+  REPORTED under `ledger.covered_by_reported` with its total and the reason - held back, not hidden.
+
+  **4. THREE SURFACES NOW PUBLISH THEIR OWN DOCUMENT.** The Controller ran each surface's own
+  publisher on that surface over ssh and collected the finished document. Each surface's own reading
+  now outranks the Controller's stale snapshot of it, and the shadowed reading is reported in
+  `ledger.conflicts` rather than dropped. HD2Stack's published 2026-10-13/14/17 figures match the
+  Controller's independent snapshot EXACTLY (158,656,541 / 188,772,598 / 5,014,524) - two
+  independent measurements agreeing to the token.
+
+  **WHAT IS LEFT ON THIS ROW:** one cell - elevatesVPS's agy slot, which is unknown because that
+  surface runs no Antigravity. That is a fact about the surface, not a missing source, and the board
+  says so.
+
+  **A QUESTION FOR THE CAPTAIN, NOT A DECISION THE FIRSTMATE TOOK.** The reported MiniMax total for
+  2026-10-19 (287,560,000, observed at 07:32 local ON that day) is SMALLER than the fleet's measured
+  MiniMax traffic for the same day (423,744,639). A number observed at 07:32 cannot be that day's
+  full total, so the reported figure is either a mid-day snapshot or a narrower account scope. The
+  ledger's written rule is that the reported number covers the measured subset, so that is what the
+  band does today - it never inflates - and the suppressed amount is visible. If the reported figure
+  is only a snapshot, the rule should change to keep both, labelled. That is the Captain's call.
+
 
 - [ ] m3.1f-firstmate-teardownsuitenotblind - The teardown safety suite dies at its first failure, so 37 of its assertions never run; one of them asserts a string no code path emits (repo: firstmate) (kind: ship) (since 2026-10-21)
   MEASURED 2026-10-21 by the firstmate, while landing the teardown row-closing fix (`3ad3c4b`).
@@ -66,6 +172,59 @@
 
   ## State at handover
   Root filesystem at 80% (57G used, 15G free) at 07:45 local. Brief with the full acceptance contract: `data/m3.1f-firstmate-diskceiling/brief.md`. A direct steer to the secondmate's endpoint did not confirm as submitted while that pane was mid-turn, so this backlog row is the durable routing record.
+
+  ## RE-MEASURED 2026-10-23 by the firstmate: claims 1 and 2 are RESOLVED, claims 3 and 4 are STILL OPEN
+  Three of the four original complaints in this row no longer hold. The row stays OPEN because the
+  remaining two are real, but it is now a two-item row, not a four-item one.
+
+  **CLAIM 1 (the audit blocks at 85%, not 80%) - RESOLVED, and by a better design than the row
+  asked for.** The ladder is now `>=80% CAPACITY_BLOCK_NEW_PLACEMENT`, `>=75% CAPACITY_REVIEW_REQUIRED`,
+  `>=70% CAPACITY_EARLY_WARNING`, `<70% CAPACITY_OK`, and it lives in ONE owner:
+  `bin/fm-capacity-gate.sh` (`fm_capacity_verdict`, line 89). The tracked
+  `bin/controller-resource-audit.sh` no longer implements thresholds at all - it DELEGATES to that
+  owner, so no surface can drift from another. Verified live:
+  `bin/fm-capacity-gate.sh verdict 74` -> `CAPACITY_EARLY_WARNING`;
+  `verdict 80` -> `CAPACITY_BLOCK_NEW_PLACEMENT`; `verdict 85` -> `CAPACITY_BLOCK_NEW_PLACEMENT`.
+  The `CAPACITY_WARN` tier is retired and the review tier moved down to 75%, so the block boundary
+  is exactly the 80% the Captain named.
+
+  **CLAIM 2 (nothing reads the verdict to gate placement) - RESOLVED, and the enforcement is
+  reclaim-then-refuse as the Captain's order says.** `bin/fm-spawn.sh` line 680 is the ONE reader:
+  `if ! "$FM_ROOT/bin/fm-capacity-gate.sh" check; then exit 64; fi`. The gate measures the disk
+  itself, reclaims when over the ceiling, RE-MEASURES (it never trusts the reclaimer's own claim),
+  and refuses only if the disk is still at or over the ceiling. `bin/fm-capacity-gate.sh` is also
+  the one place the thresholds exist - `bin/fm-project-capacity-lib.sh` stays on the separate
+  project-capacity axis and is deliberately not widened to mean disk.
+  **The whole contract is proven by `tests/fm-capacity-refuse.test.sh`, which the firstmate ran
+  live on 2026-10-23: PASS=35 FAIL=0**, including "fm-spawn refuses a placement over the capacity
+  ceiling", "a capacity-refused spawn leaves no task record behind", "the capacity bypass does NOT
+  bypass the load ceiling (narrow bypass)", and "the refusal names the load ceiling, not the
+  capacity ceiling". Landed in `cda1fe5` / `7700662`.
+
+  **CLAIM 3 (the installed copy has drifted from the tracked source) - STILL OPEN, but the drift
+  is now benign in direction and dangerous in kind.** `/root/bin/controller-resource-audit.sh` still
+  carries its OWN `verdict_for_percent()` implementation (0 references to `fm-capacity-gate.sh`),
+  where the tracked repo copy delegates. The thresholds currently AGREE (both are 80/75/70), so the
+  host's verdicts are right today - but that agreement is coincidence, not a shared owner. The next
+  change to either copy silently diverges them, and the host copy is the one that runs. This is a
+  HOST-SCRIPT change outside this repo, so it needs the Captain's word (same boundary question as
+  the safety net's `/root/bin/factory-safetynet.sh`).
+
+  **CLAIM 4 (the warning never reaches the Captain) - STILL OPEN.** The live board
+  (`http://100.117.47.27:8477/`, 100,582 bytes) carries NO disk verdict: a grep for
+  `capacity_early_warning|capacity_ok|capacity_review_required|capacity_block_new_placement` over
+  the rendered HTML returns nothing, and neither `bin/fm-next-board-publish.py` nor
+  `bin/build-next-board.py` reads a disk source at all. `/root/agent-work/resource-audit/latest.md`
+  is live and honest (last sampled 2026-10-22T23:00:00Z, root used 73%, verdict
+  `CAPACITY_EARLY_WARNING`, next run 2026-10-23T00:00:00Z) - it is simply not wired to the board.
+  The Captain's standing order was "lets reclaim but refuse"; the refusal now works, so what is
+  missing is the CAPTAIN-VISIBLE HALF: the live verdict on the board he actually looks at.
+
+  **WHAT REMAINS, PRECISELY:** (a) make the host's installed audit script delegate to the shared
+  owner so there is one ladder, not two that happen to agree - HOST SCRIPT, outside the repo, needs
+  the Captain's word; (b) put the live disk verdict on the board - repo work, inside the boundary,
+  and the natural place is the board publisher reading the same shared owner rather than parsing
+  `latest.md` as prose.
 
 - [ ] core-completion-20261020 - Verify Core end to end and close evidenced completion gaps; reconcile conflicting skill instructions (repo: core-distro-saas-clean) (kind: scout) (since 2026-10-20)
   # Core completion evidence reconciliation - 2026-10-20
