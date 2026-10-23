@@ -112,6 +112,8 @@ SUB_HOME_MARKER=".fm-secondmate-home"
 . "$SCRIPT_DIR/fm-secondmate-registry-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
+# shellcheck source=bin/fm-lane-registry-lib.sh
+. "$SCRIPT_DIR/fm-lane-registry-lib.sh"
 if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
   echo "error: invalid teardown request" >&2
   exit 2
@@ -1766,6 +1768,18 @@ retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 rm -f "$STATE/$ID.status" "$STATE/$ID.turn-ended" "$STATE/$ID.meta" \
   "$STATE/$ID.pi-ext.ts" "$STATE/$ID.grok-turnend-token" \
   "$STATE/$ID.kimi-turnend-token"
+# --- lane registry retirement ------------------------------------------------
+# The lane is gone, so its registration goes with it. This is the RIGHT REASON
+# for a lane to stop counting as live work: the host safety net's other exit
+# (an artifact that carries VERDICT:) is a proxy for "this lane finished", and
+# it excludes a lane that is still running and not yet reaped. The registration
+# and its live work list are archived under state/lanes/archived/, which no
+# reader globs into, so the history survives without counting as live work.
+# A no-op when the lane was never registered (a non-herdr backend, or a lane
+# whose spawn failed before the agent came alive).
+if ! fm_lane_registry_retire "$STATE" "$ID"; then
+  echo "warning: lane registry retirement failed for $ID; a stale registration may remain" >&2
+fi
 if [ "$KIND" != scout ] && [ "$KIND" != secondmate ] && [ "$MODE" != local-only ]; then
   "$FM_ROOT/bin/fm-fleet-sync.sh" "$PROJ" || true
 fi
