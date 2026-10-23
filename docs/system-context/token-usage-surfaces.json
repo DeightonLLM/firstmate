@@ -61,6 +61,6 @@
     "minimax": "MiniMax"
   },
   "provider_notes": {
-    "agy": "no local usage metadata surface exposes Gemini/Antigravity token counts, so this provider has no usage source on any surface; quota-axi reports its windows, which is a different field"
+    "agy": "Measured from the canonical Antigravity brain transcript on the surface that runs it: input_tokens + output_tokens + cache_read_tokens, counted once per event. A surface with no such transcript has no local Gemini/Antigravity token source, so its agy slot stays unknown; quota-axi reports the Gemini windows, which is a different field."
   }
 }

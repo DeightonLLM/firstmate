@@ -122,10 +122,10 @@ Field rules:
 Two kinds of unknown are carried, and they are different facts:
 
 * **A surface that reported nothing.** Its reason is the absence of a usage source for that surface.
-* **A provider no surface can measure.** Gemini/Antigravity has no local usage metadata surface anywhere in the fleet, so `quota-axi` reports its windows and nothing reports its token counts.
-  The roster's `provider_notes` carries that standing reason, so the board says why rather than only that the number is missing.
+* **A provider this surface cannot measure.** Gemini/Antigravity is measured from the Antigravity brain transcript on the surface that runs it (section 4.2).
+  A surface with no such transcript reports its agy slot as unknown, and the roster's `provider_notes` carries that standing reason, so the board says why rather than only that the number is missing.
 
-Quota is a different field and stays where it belongs: `quota-axi` reports the Gemini windows, and the usage half of the band reports that Gemini's token counts are unknown.
+Quota is a different field and stays where it belongs: `quota-axi` reports the Gemini windows, and the usage half of the band reports what each surface actually measured.
 
 ### 4.1 Account identity: the usage side and the quota side stay separate
 
@@ -141,6 +141,25 @@ A local account id such as `codex-local-unmapped` names what was measured, not w
 Its label says the same thing in words, so a reader of the ledger sees `local (unmapped)` rather than a bare account name.
 Joining a usage account to a quota identity later requires evidence, not similarity of name.
 Until that evidence exists, the two sets are separate and unknown, and guessing between them is not the way to close the gap.
+
+### 4.2 The Antigravity (Gemini) source
+
+The band used to carry a standing reason that Gemini/Antigravity had **no local usage metadata surface anywhere in the fleet**, so `agy` was unknown on every surface.
+That was wrong, and it was wrong because nobody looked at the data the surfaces already had.
+
+Antigravity keeps one **canonical** transcript per brain session at `~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript_full.jsonl`.
+Each record carries `input_tokens`, `cache_read_tokens` and `output_tokens` numerically, plus `step_index`, `source`, `type` and `created_at`.
+
+Three rules make the reading correct, and each one is a trap the naive scan falls into:
+
+1. **Read the canonical transcript only.** The same events are kept again in `chunks/transcript/`, `chunks/transcript_full/` and `logs/transcript.jsonl`.
+   Counting every file counts one event up to four times: the measured overcount on this fleet is **x2.97**.
+   Measured on the Controller: 489 brain sessions carry a canonical transcript, and **zero** events exist outside it, so reading it alone loses nothing.
+2. **The event identity is `(step_index, source, type, created_at)`.** The record carries no id of its own, so there is nothing else to dedup on.
+3. **A day's total is `input_tokens + output_tokens + cache_read_tokens`.** The cache read is a real component of Antigravity's bill and is reported separately, so it is counted once and never added on top.
+
+The provider is Antigravity itself, so it is `agy` — the id this roster already uses for Gemini/Antigravity.
+A surface that runs no Antigravity has no agy source, and says so.
 
 ## 5. Adding a surface
 
