@@ -65,7 +65,11 @@
 #                          a LIVE lane that has gone silent past its reporting
 #                          bound, so the captain cannot see it working. Surfaced on
 #                          a bounded re-reminder cadence, never per poll; cleared
-#                          the moment the crew reports again.
+#                          the moment the crew reports again. The watcher's OWN
+#                          pane is never measured this way: the watcher runs
+#                          inside the primary's pane and the primary does not
+#                          write heartbeats to its own record, so counting it
+#                          would escalate the primary as an invisible crew.
 # For normal supervision, resume the session-start primary-harness protocol
 # after each printed reason. Direct duplicate invocations of this script still
 # no-op through the watcher singleton lock.
@@ -76,6 +80,25 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 mkdir -p "$STATE"
+
+# THE WATCHER'S OWN PANE. The watcher runs INSIDE the primary's pane, and the
+# primary is not a crewmate: it does not write heartbeat lines to its OWN task
+# record the way a crewmate writes to its report file. The crew-visibility
+# check must therefore never measure the primary's own task record as if it
+# were a crew - otherwise the watcher accuses the agent that is doing the
+# watching of being invisible, forever, and escalates that to the Captain on
+# every cycle. Measured on 2026-10-23: "crew-silent: m3.1f-firstmate-boardland
+# silent 120645s past the 1800s heartbeat bound" against the primary's own
+# window default:wDB:p2.
+#
+# The resolution itself - and its fail-closed behaviour when the pane cannot
+# be identified - belongs to bin/fm-self-pane-lib.sh, the single owner. An
+# unresolvable pane leaves FM_WATCH_SELF_PANE empty and the check behaves
+# exactly as it did before: no silent assumption, no new skip. It is resolved
+# in the main entry below, not here, so that sourcing this file for a unit
+# test never shells out to a backend.
+# shellcheck source=bin/fm-self-pane-lib.sh
+. "$SCRIPT_DIR/fm-self-pane-lib.sh"
 
 # The native event fast-path and only its true dependencies have one narrow
 # production owner. The Herdr event-wait smoke test consumes this same owner
@@ -876,6 +899,17 @@ if [ "${BASH_SOURCE[0]}" != "$0" ]; then
   return 0
 fi
 
+# Resolve the watcher's own pane target once, here, so the crew-visibility
+# check can exclude the primary's own task record (the watcher runs inside the
+# primary's pane, and the primary does not write heartbeats to its own
+# record). Resolved in the main entry rather than at source time so that
+# sourcing this file for a unit test never shells out to a backend.
+# bin/fm-self-pane-lib.sh owns the resolution and fails closed: an
+# unidentifiable pane leaves this empty and the check then behaves exactly as
+# it did before.
+FM_WATCH_SELF_PANE="$(fm_self_pane_resolve)"
+export FM_WATCH_SELF_PANE
+
 # Before acquiring the watcher lock or enumerating any runnable check, replace
 # or quarantine checks created by older versions. The migration compares bytes
 # and reads data only; it never invokes legacy check files through Bash.
@@ -1364,7 +1398,23 @@ EOF
     # cannot fall outside it. Bounds: FM_CREW_VISIBILITY_GRACE_SEC (no report at
     # all since spawn) and FM_CREW_VISIBILITY_STALE_SEC (heartbeat after a report).
     viskey=$(printf '%s' "$w" | tr ':/.' '___')
-    vline=$("$SCRIPT_DIR/fm-crew-visibility.sh" "$task" "$STATE" 2>/dev/null || true)
+    # THE PRIMARY'S OWN PANE IS NOT A CREW. The watcher runs INSIDE the
+    # primary's pane, and the primary's own task record is the one whose window
+    # target matches this process's own backend pane id. The primary does not
+    # write heartbeat lines to its OWN record the way a crewmate writes to its
+    # report file, so without this exclusion the primary is permanently
+    # "silent" and is escalated to the Captain as an invisible crew - the
+    # watcher accusing the agent that is doing the watching. Measured on
+    # 2026-10-23: "crew-silent: m3.1f-firstmate-boardland silent 120645s past
+    # the 1800s heartbeat bound" against the primary's own window wDB:p2.
+    # A real crew that has gone quiet still breaches: the exclusion is the
+    # primary's own pane and nothing else.
+    if [ -n "${FM_WATCH_SELF_PANE:-}" ] && [ "$w" = "$FM_WATCH_SELF_PANE" ]; then
+      rm -f "$STATE/.vis-$viskey" 2>/dev/null || true
+      vline=""
+    else
+      vline=$("$SCRIPT_DIR/fm-crew-visibility.sh" "$task" "$STATE" 2>/dev/null || true)
+    fi
     if [ -n "$vline" ]; then
       visnow=$(printf '%s\n' "$vline" | sed -n 's/.*silent \([0-9][0-9]*\)s.*/\1/p')
       case "$visnow" in ''|*[!0-9]*) visnow=0 ;; esac
