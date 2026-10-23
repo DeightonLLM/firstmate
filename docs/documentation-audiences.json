@@ -374,6 +374,34 @@
     {
       "path": "docs/token-usage-surface-contract.md",
       "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/FLEET-SOP-2026-10-23.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/fan-out-kit/README.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/fan-out-kit/new-surface-checklist.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/fan-out-kit/lane-brief-template.md",
+      "audience": "operator-example"
+    },
+    {
+      "path": "docs/fan-out-kit/traps.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "docs/handoff/README.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "docs/handoff/message-template.md",
+      "audience": "operator-example"
     }
   ]
 }
