@@ -72,6 +72,12 @@ STATE="${FM_STATE_OVERRIDE:-${STATE:-$FM_HOME/state}}"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
 
+# The ceiling on how long this command waits for the receipt lock. A scan of a
+# handful of files takes seconds, so 120 s is generous for a healthy holder and
+# far too short to let a stuck holder accumulate waiters. Losing the race is a
+# normal outcome that exits non-zero with a clear message.
+FM_COMMS_LOCK_TIMEOUT="${FM_COMMS_LOCK_TIMEOUT:-120}"
+
 usage() {
   sed -n '2,64p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 2
@@ -150,6 +156,7 @@ cmd_scan() {
   local status_file lock receipts handled ingested=0 file name sha corr short_sha
   local summary bytes corr_part line
   local max_bytes=1048576
+  local rc=0
   base=$(receipts_dir "$id") || exit 1
   status_file="$STATE/$id.status"
   receipts="$base/receipts.tsv"
@@ -157,7 +164,19 @@ cmd_scan() {
   mkdir -p "$base"
   lock="$base/.lock"
 
-  fm_lock_acquire_wait "$lock" || die "cannot acquire the comms receipt lock for $id"
+  # R5: a scan that already holds this lock must not re-enter the scan it
+  # holds the lock for. Re-entering is what made the lock un-releasable, and
+  # every other caller then waited on it forever.
+  if fm_lock_held_by_ancestor "$lock"; then
+    die "refusing to re-enter the scan: an ancestor already holds the comms receipt lock for $id"
+  fi
+
+  # R1: the wait is bounded. Losing the race exits non-zero with a clear
+  # message instead of parking a process forever.
+  fm_lock_acquire_wait "$lock" "$FM_COMMS_LOCK_TIMEOUT" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    die "the comms receipt lock for $id is still held by pid ${FM_LOCK_HELD_PID:-unknown} after ${FM_COMMS_LOCK_TIMEOUT}s; giving up without scanning"
+  fi
   fm_comms_lock_release_on_exit "$lock"
 
   # One pass per source folder, in the order given, against the SAME receipts
@@ -246,7 +265,14 @@ cmd_handled() {
   [ -d "$base" ] || die "not-received: $name (no receipt for $id)"
   lock="$base/.lock"
 
-  fm_lock_acquire_wait "$lock" || die "cannot acquire the comms receipt lock for $id"
+  # R1: the wait is bounded, and R4: the EXIT trap below owns the release, so
+  # every error path after this point still gives the lock back.
+  local rc=0
+  fm_lock_acquire_wait "$lock" "$FM_COMMS_LOCK_TIMEOUT" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    die "the comms receipt lock for $id is still held by pid ${FM_LOCK_HELD_PID:-unknown} after ${FM_COMMS_LOCK_TIMEOUT}s; giving up"
+  fi
+  fm_comms_lock_release_on_exit "$lock"
 
   sha=$(grep -F "$name" "$receipts" 2>/dev/null | tail -1 | cut -f1)
   if [ -z "$sha" ]; then

@@ -9,6 +9,11 @@ STATE="${FM_STATE_OVERRIDE:-${STATE:-$FM_HOME/state}}"
 FM_WAKE_QUEUE="${FM_WAKE_QUEUE:-$STATE/.wake-queue}"
 FM_WAKE_QUEUE_LOCK="${FM_WAKE_QUEUE_LOCK:-$STATE/.wake-queue.lock}"
 FM_LOCK_STALE_AFTER="${FM_LOCK_STALE_AFTER:-2}"
+# The default ceiling for a BOUNDED lock wait, in seconds. A scan of a handful
+# of files takes seconds, so 120 s is generous for a healthy holder while
+# being far too short to let a stuck holder accumulate waiters. A caller that
+# needs a different ceiling passes it explicitly or sets FM_LOCK_WAIT_TIMEOUT.
+FM_LOCK_WAIT_TIMEOUT="${FM_LOCK_WAIT_TIMEOUT:-120}"
 # Resolved once at source time: fm_pid_identity and fm_path_mtime run inside 0.2s
 # confirm and 0.5s attach polls, and forking uname per call is a measurable cost on
 # the platform (Git Bash/MSYS) that already pays the highest fork price.
@@ -156,10 +161,17 @@ fm_lock_points_to_owner() {
 }
 
 fm_lock_discard_owner() {
-  local ownerdir=$1
+  local ownerdir=$1 attempt
   [ -n "$ownerdir" ] || return 0
   fm_lock_clean_known_files "$ownerdir"
-  rmdir "$ownerdir" 2>/dev/null || true
+  # One silently failing rmdir left the owner directory behind for good, and
+  # hundreds of those accumulated. Retry a bounded number of times.
+  # shellcheck disable=SC2034 # Retry counter; only its iteration count matters.
+  for attempt in 1 2 3; do
+    rmdir "$ownerdir" 2>/dev/null && return 0
+    sleep 0.05
+  done
+  return 0
 }
 
 fm_lock_remove_stray_owner_link() {
@@ -209,6 +221,12 @@ fm_lock_claim() {
 fm_lock_try_create() {
   local lockdir=$1 allowed_steal_owner=${2:-} ownerdir
   FM_LOCK_OWNER_DIR=
+  # Test for the lock BEFORE creating an owner directory. Creating one per
+  # contended attempt is what leaked hundreds of .lock.owner.* directories and
+  # drove the filesystem metadata path into D state under contention.
+  if [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
+    return 1
+  fi
   ownerdir=$(fm_lock_owner_dir "$lockdir") || return 1
   if [ -e "$lockdir" ] || [ -L "$lockdir" ]; then
     fm_lock_discard_owner "$ownerdir"
@@ -349,11 +367,81 @@ fm_lock_try_acquire() {
   return "$rc"
 }
 
+# fm_lock_acquire_wait_bounded <lockdir> [timeout_seconds]
+# Wait for <lockdir> for at most <timeout_seconds> (default
+# $FM_LOCK_WAIT_TIMEOUT). Returns 0 when the lock is acquired, 124 when the
+# wait expired while a live holder still owned the lock (FM_LOCK_HELD_PID
+# names that holder), and 1 on any other failure. It NEVER waits forever: a
+# caller that loses the race must give up and exit, not park (R1 in
+# docs/agent-policy/WATCHERS_AND_POLLS.md).
+fm_lock_acquire_wait_bounded() {
+  local lockdir=$1 timeout=${2:-$FM_LOCK_WAIT_TIMEOUT} deadline held
+  case "$timeout" in
+    ''|*[!0-9]*) timeout=$FM_LOCK_WAIT_TIMEOUT ;;
+  esac
+  deadline=$((EPOCHSECONDS + timeout))
+  while ! fm_lock_try_acquire "$lockdir"; do
+    held=${FM_LOCK_HELD_PID:-}
+    if [ "$EPOCHSECONDS" -ge "$deadline" ]; then
+      # shellcheck disable=SC2034 # Read by callers after a refused acquire.
+      FM_LOCK_HELD_PID=$held
+      return 124
+    fi
+    sleep 0.1
+  done
+  return 0
+}
+
+# fm_lock_acquire_wait <lockdir> [timeout_seconds]
+# WITHOUT a timeout argument this keeps the historical unbounded behaviour, for
+# callers that legitimately wait a long time for a lock. WITH a timeout
+# argument the wait is bounded and returns 124 when it expires, so the caller
+# can fail cleanly instead of parking forever. Bounding is opt-in so no
+# existing caller is silently changed.
 fm_lock_acquire_wait() {
-  local lockdir=$1
+  local lockdir=$1 timeout=${2-}
+  if [ -n "$timeout" ]; then
+    fm_lock_acquire_wait_bounded "$lockdir" "$timeout"
+    return $?
+  fi
   while ! fm_lock_try_acquire "$lockdir"; do
     sleep 0.1
   done
+}
+
+fm_proc_ppid() {
+  local pid=$1 stat_line out proc_root
+  local -a stat_fields
+  proc_root=${FM_PROC_ROOT_OVERRIDE:-/proc}
+  if [ -r "$proc_root/$pid/stat" ]; then
+    stat_line=$(cat "$proc_root/$pid/stat" 2>/dev/null) || return 1
+    read -r -a stat_fields <<< "${stat_line##*)}"
+    [ "${#stat_fields[@]}" -ge 2 ] || return 1
+    printf '%s\n' "${stat_fields[1]}"
+    return 0
+  fi
+  out=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d '[:space:]')
+  case "$out" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s\n' "$out"
+}
+
+# fm_lock_held_by_ancestor <lockdir>
+# Succeeds when the lock's recorded owner pid is this process or one of its
+# ancestors. A process that already holds a lock must not re-enter the work
+# that lock protects: re-entering is what makes the lock un-releasable and
+# turns every other caller into a permanent waiter (R5).
+fm_lock_held_by_ancestor() {
+  local lockdir=$1 pid up current depth=0
+  pid=$(cat "$lockdir/pid" 2>/dev/null || true)
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  current=${BASHPID:-$$}
+  up=$current
+  while [ -n "$up" ] && [ "$up" != "0" ] && [ "$up" != "1" ] && [ "$depth" -lt 64 ]; do
+    [ "$up" = "$pid" ] && return 0
+    up=$(fm_proc_ppid "$up") || return 1
+    depth=$((depth + 1))
+  done
+  return 1
 }
 
 fm_lock_release() {
