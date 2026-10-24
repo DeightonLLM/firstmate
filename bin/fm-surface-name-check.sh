@@ -118,6 +118,7 @@ scope_map_scope() {  # <workspace-id>
   local id=$1 out
   out=$(awk -F'[\037\t]' -v w="$id" '$1 == w { print $2; exit }' "$SCOPE_MAP" 2>/dev/null) || return 1
   [ -n "$out" ] || return 1
+  fm_surface_name_scope_valid "$out" || return 1
   printf '%s' "$out"
 }
 
@@ -201,12 +202,22 @@ target_label() {  # <workspace-id> <current-label>
 
 # target_projection_label <current-label>
 target_projection_label() {  # <current-label>
-  local label=$1 token lane scope
-  token=${label##*' · p:'}
-  lane=${label%" · p:$token"}
-  lane=${lane#'└ '}
-  [ -n "$token" ] && [ -n "$lane" ] || return 1
-  scope=$(fm_surface_name_scope "$HOME_ARG")
+  local label=$1 rest scope remainder lane suffix token
+  case "$label" in
+    "$FM_SURFACE_NAME_PROJECTION_MARK"*) rest=${label#"$FM_SURFACE_NAME_PROJECTION_MARK"} ;;
+    *) return 1 ;;
+  esac
+  scope=${rest%%"$FM_SURFACE_NAME_SEP"*}
+  [ "$scope" != "$rest" ] || return 1
+  fm_surface_name_scope_valid "$scope" || return 1
+  remainder=${rest#"$scope$FM_SURFACE_NAME_SEP"}
+  lane=${remainder%%"$FM_SURFACE_NAME_SEP"*}
+  [ "$lane" != "$remainder" ] || return 1
+  fm_surface_name_lane_id_valid "$lane" || return 1
+  suffix=${remainder#"$lane$FM_SURFACE_NAME_SEP"}
+  case "$suffix" in p:*) token=${suffix#p:} ;; *) return 1 ;; esac
+  [ "${#token}" -eq 22 ] || return 1
+  case "$token" in *[!A-Za-z0-9_-]*) return 1 ;; esac
   printf '%s' "$(fm_surface_name_projection_label "$scope" "$lane" "$token")"
 }
 

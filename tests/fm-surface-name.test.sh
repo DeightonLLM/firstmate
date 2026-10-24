@@ -63,10 +63,13 @@ pass "fm_surface_name_scope: host, home and optional role"
 
 fm_surface_name_scope_valid "testhost/primary" || fail "a two-segment scope must be valid"
 fm_surface_name_scope_valid "testhost/primary/afk" || fail "a three-segment scope must be valid"
+fm_surface_name_scope_valid "testhost/2ndmate-runner" || fail "a secondmate scope must be valid"
 fm_surface_name_scope_valid "testhost" && fail "a scope without a home must be refused"
 fm_surface_name_scope_valid "testhost/" && fail "a scope with an empty segment must be refused"
 fm_surface_name_scope_valid "/primary" && fail "a scope with an empty host must be refused"
 fm_surface_name_scope_valid "a/b/c/d" && fail "a scope with four segments must be refused"
+fm_surface_name_scope_valid "testhost/rogue" && fail "an unknown home must be refused"
+fm_surface_name_scope_valid "testhost/2ndmate-" && fail "an empty secondmate id must be refused"
 fm_surface_name_scope_valid "TESTHOST/Primary" && fail "a scope with capitals must be refused"
 pass "fm_surface_name_scope_valid: only host/home[/role] with lowercase tokens passes"
 
@@ -169,6 +172,25 @@ IFS=$'\037' read -r f1 f2 f3 <<< "$row"
   || fail "an empty middle field must survive the census separator"
 pass "fm-surface-census-lib.sh: the census separator preserves empty fields"
 
+CENSUS_BIN="$TMP_ROOT/census-bin"
+CENSUS_STATE="$TMP_ROOT/census-state"
+mkdir -p "$CENSUS_BIN" "$CENSUS_STATE"
+cat > "$CENSUS_BIN/herdr" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' '{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"t1","workspace_id":"w1","agent":"codex","agent_status":"working"}]}}'
+STUB
+chmod +x "$CENSUS_BIN/herdr"
+printf 'endpoint_task_id=codex-task\nwindow=default:w1:p1\nharness=codex\nmodel=MiniMax-M3.1-Flash\nkind=ship\nherdr_tab_id=t1\n' \
+  > "$CENSUS_STATE/codex-task.meta"
+printf 'endpoint_task_id=codex-task\nwindow=default:w1:p1\nharness=codex\nmodel=MiniMax-M3.1-Flash\nkind=ship\nherdr_tab_id=t1\n' \
+  > "$CENSUS_STATE/lane-001.meta"
+census_rows=$(PATH="$CENSUS_BIN:$PATH" fm_surface_census_lanes "$CENSUS_STATE" default)
+[ "$(printf '%s\n' "$census_rows" | awk 'NF { n++ } END { print n + 0 }')" = 1 ] \
+  || fail "slot and task metadata for one endpoint must produce one census row"
+[ "$(printf '%s\n' "$census_rows" | awk -F"$FM_SURFACE_CENSUS_FS" 'NF { print $1 }')" = "codex-task" ] \
+  || fail "the census must prefer the canonical task metadata row"
+pass "fm-surface-census-lanes: endpoint identity is deduplicated"
+
 # --- the view answers the Captain's question ---------------------------------
 
 out=$(bash "$ROOT/bin/fm-surface-view.sh" --help 2>&1)
@@ -190,6 +212,7 @@ SNAPSHOT="$TMP_ROOT/snapshot.tsv"
   printf 'workspace\tw4\tfirstmate-afk-daemon-659043-363-1792753227\n'
   printf 'workspace\tw5\t└ my-lane · p:AbCdEfGhIjKlMnOpQrStUv\n'
   printf 'workspace\tw6\t└ testhost/primary · my-lane · p:AbCdEfGhIjKlMnOpQrStUv\n'
+  printf 'workspace\tw7\t└ testhost/primary · my-lane · p:short\n'
   printf 'tab\tw1:t1\tfm-good-lane\n'
   printf 'tab\tw1:t2\tbad-lane-label\n'
 } > "$SNAPSHOT"
@@ -204,6 +227,7 @@ printf '%s' "$out" | grep -q "workspace w5" || fail "a scope-less projection lab
 printf '%s' "$out" | grep -q "should read" || fail "every violation must carry the label it should read"
 printf '%s' "$out" | grep -q "workspace w1" && fail "a conforming container must NOT be reported"
 printf '%s' "$out" | grep -q "workspace w6" && fail "a conforming projection must NOT be reported"
+printf '%s' "$out" | grep -q "workspace w7 should read" && fail "an invalid projection must not receive an invalid replacement"
 pass "fm-surface-name-check.sh: a misnamed snapshot fails and names every violation"
 
 out=$(bash "$ROOT/bin/fm-surface-name-check.sh" --from-file "$SNAPSHOT" 2>&1)
@@ -222,6 +246,16 @@ rc=$?
 [ "$rc" -eq 0 ] || fail "a conforming snapshot must pass the check, got rc=$rc: $out"
 printf '%s' "$out" | grep -q "OK" || fail "a clean snapshot must report OK"
 pass "fm-surface-name-check.sh: a conforming snapshot passes"
+
+SCOPE_MAP="$TMP_ROOT/scope-map.tsv"
+printf 'w8\ttesthost/rogue\n' > "$SCOPE_MAP"
+MAP_SNAPSHOT="$TMP_ROOT/map-snapshot.tsv"
+printf 'workspace\tw8\tfirstmate\n' > "$MAP_SNAPSHOT"
+out=$(bash "$ROOT/bin/fm-surface-name-check.sh" --from-file "$MAP_SNAPSHOT" --scope-map "$SCOPE_MAP" 2>&1)
+rc=$?
+[ "$rc" -eq 1 ] || fail "a legacy label with an invalid scope-map value must remain a violation"
+printf '%s' "$out" | grep -q "testhost/rogue" && fail "an invalid scope-map value must not be used in a replacement"
+pass "fm-surface-name-check.sh: scope-map values use the constrained scope grammar"
 
 out=$(bash "$ROOT/bin/fm-surface-name-check.sh" --from-file /nonexistent/snapshot.tsv 2>&1)
 rc=$?

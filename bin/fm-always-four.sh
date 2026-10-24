@@ -348,7 +348,7 @@ backlog_row_text() {
 
 start_task_inflight() {
   local task_id=$1 state_dir row_move_err data_dir
-  command -v tasks-axi >/dev/null 2>&1 || return 0
+  command -v tasks-axi >/dev/null 2>&1 || return 1
   state_dir="${FM_STATE_OVERRIDE:-$STATE}"
   data_dir="${FM_DATA_OVERRIDE:-$DATA}"
   row_move_err="$state_dir/row-move.err"
@@ -449,8 +449,9 @@ prepare_lane_key_brief() {
 # backlog task could be dispatched twice.
 record_lane_key_origin() {
   local lane_key=$1 planning_id=$2
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
   [ -n "$lane_key" ] && [ -n "$planning_id" ] || return 1
-  printf '%s\n' "$planning_id" > "$STATE/$lane_key.planning-id" 2>/dev/null || return 1
+  printf '%s\n' "$planning_id" > "$state_dir/$lane_key.planning-id" 2>/dev/null || return 1
 }
 
 # record_lane_slot_binding <lane-id> <lane-key>: point the lane slot at the
@@ -462,9 +463,10 @@ record_lane_key_origin() {
 # copied from the task's own meta, which fm-spawn.sh just wrote.
 record_lane_slot_binding() {
   local lane_id=$1 lane_key=$2
-  local task_meta="$STATE/$lane_key.meta"
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  local task_meta="$state_dir/$lane_key.meta"
   [ -f "$task_meta" ] || return 1
-  local key value tmp="$STATE/$lane_id.meta.new"
+  local key value tmp="$state_dir/$lane_id.meta.new"
   {
     printf 'endpoint_task_id=%s\n' "$lane_key"
     for key in window backend herdr_pane_id model harness worktree; do
@@ -472,8 +474,20 @@ record_lane_slot_binding() {
       [ -n "$value" ] && printf '%s=%s\n' "$key" "$value"
     done
   } > "$tmp" 2>/dev/null || return 1
-  mv "$tmp" "$STATE/$lane_id.meta" 2>/dev/null || return 1
+  mv "$tmp" "$state_dir/$lane_id.meta" 2>/dev/null || return 1
   return 0
+}
+
+dispatch_ownership_commit() {
+  local lane_id=$1 lane_key=$2 planning_id=$3 state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  if [ "$lane_key" != "$planning_id" ]; then
+    record_lane_key_origin "$lane_key" "$planning_id" || return 1
+  fi
+  if ! start_task_inflight "$planning_id"; then
+    [ "$lane_key" = "$planning_id" ] || rm -f "$state_dir/$lane_key.planning-id"
+    return 1
+  fi
+  record_lane_slot_binding "$lane_id" "$lane_key" || return 1
 }
 
 # --- Helpers ----------------------------------------------------------------
@@ -1723,12 +1737,27 @@ cmd_spawn() {
   [ -n "$model_arg" ] && spawn_args+=(--model "$model_arg")
   [ -n "$effort_arg" ] && spawn_args+=(--effort "$effort_arg")
 
+  reap_stale
+  if ! check_cap; then
+    printf 'always-four: spawn BLOCKED — subagent cap reached (pre-spawn check)\n' >&2
+    emit_coordinator_wake cap-blocked "$lane_id" "$task_id" "cap-reached pre-spawn"
+    return 64
+  fi
+  if ! command -v tasks-axi >/dev/null 2>&1; then
+    printf 'always-four: spawn BLOCKED — tasks-axi is required for queue ownership\n' >&2
+    emit_coordinator_wake route-blocked "$lane_id" "$task_id" "tasks-axi unavailable"
+    return 64
+  fi
+
   "$SCRIPT_DIR/fm-spawn.sh" "${spawn_args[@]}" && spawn_rc=$? || spawn_rc=$?
 
   if [ "${spawn_rc:-0}" -eq 0 ]; then
+    if ! dispatch_ownership_commit "$lane_id" "$lane_key" "$task_id"; then
+      record_rollback_evidence "$lane_id" "$task_id" "ownership-commit-failed" "lane_key=$lane_key"
+      emit_coordinator_wake replacement "$lane_id" "$task_id" "ownership commit FAILED lane_key=$lane_key"
+      return 1
+    fi
     lane_reset_attempts "$lane_id"
-    [ "$lane_key" != "$task_id" ] && record_lane_key_origin "$lane_key" "$task_id"
-    record_lane_slot_binding "$lane_id" "$lane_key" || true
     emit_coordinator_wake replacement "$lane_id" "$task_id" "spawned ok lane_key=$lane_key"
     sync_gbrain
     printf 'always-four: spawned %s in %s (lane key %s)\n' "$task_id" "$lane_id" "$lane_key"
@@ -1741,7 +1770,7 @@ cmd_spawn() {
       "$task_id" "$lane_id" "$spawn_rc" "$(lane_attempts "$lane_id")" "$lane_key"
   fi
 
-  return 0
+  return "$spawn_rc"
 }
 
 # One policy cycle: check the gap, fill it.
@@ -1870,8 +1899,6 @@ cmd_cycle() {
 
     # Replace!
     if [ -z "$dry_run" ]; then
-      # Require the same explicit adapter before moving the queued task.  This
-      # prevents a red-herring adapter failure from orphaning queue ownership.
       if ! scheduler_harness_guard; then
         emit_coordinator_wake route-blocked "$lane_id" "$eligible" "explicit worker adapter required"
         continue
@@ -1881,69 +1908,16 @@ cmd_cycle() {
       # cycle so the next lane in the same cycle cannot pick the same row.
       printf '%s\n' "$eligible" >> "$STATE/.always-four.inflight.tmp"
 
-      local lane_key project
-      lane_key=$(lane_key_for_task "$lane_id" "$eligible" "$(slot_model_for_lane "$lane_id")") || {
-        printf 'always-four: replacement BLOCKED — no compliant lane key for %s\n' \
-          "$eligible" >&2
-        record_rollback_evidence "$lane_id" "$eligible" "lane-key-mint-failed" \
-          "no compliant <harness>-<model>-<host>-<task> key for $eligible"
-        emit_coordinator_wake route-blocked "$lane_id" "$eligible" "no compliant lane key"
-        continue
-      }
-      project=$(backlog_task_to_project "$eligible" 2>/dev/null || true)
-      [ -z "$project" ] && project="projects/$eligible"
-      if ! prepare_lane_key_brief "$eligible" "$lane_key"; then
-        printf 'always-four: replacement BLOCKED — no brief for lane key %s (%s)\n' \
-          "$lane_key" "$eligible" >&2
-        record_rollback_evidence "$lane_id" "$eligible" "lane-key-brief-missing" \
-          "no brief at data/$lane_key/brief.md"
-        emit_coordinator_wake route-blocked "$lane_id" "$eligible" "no brief for lane key"
-        continue
-      fi
-
       local slot_model
       slot_model=$(slot_model_for_lane "$lane_id")
-
-      # SECOND cap check immediately before spawn (double-check after backlog update)
-      reap_stale
-      if ! check_cap; then
-        printf 'always-four: replacement spawn BLOCKED — subagent cap reached (pre-spawn check)\n' >&2
-        emit_coordinator_wake cap-blocked "$lane_id" "$eligible" "cap-reached pre-spawn"
-        continue
-      fi
-
-      # Keep replacement lanes on the explicitly guarded adapter; never inherit
-      # the controller harness while refilling a terminal slot.
-      local spawn_args=("$lane_key" "$project" --harness "$SCHEDULER_HARNESS" --model "$slot_model")
-      "$SCRIPT_DIR/fm-spawn.sh" "${spawn_args[@]}" && spawn_rc=$? || spawn_rc=$?
-
-      if [ "${spawn_rc:-0}" -eq 0 ]; then
-        if ! start_task_inflight "$eligible"; then
-          emit_coordinator_wake replacement "$lane_id" "$eligible" "row move failed after spawn"
-        fi
-        lane_reset_attempts "$lane_id"
-        [ "$lane_key" != "$eligible" ] && record_lane_key_origin "$lane_key" "$eligible"
-        record_lane_slot_binding "$lane_id" "$lane_key" || true
-        emit_coordinator_wake replacement "$lane_id" "$eligible" "spawned ok model=$slot_model lane_key=$lane_key"
-        sync_gbrain
-        printf 'always-four: replaced %s with %s in %s (model=%s, lane key %s)\n' \
-          "${replace_lanes[$lane_id]}" "$eligible" "$lane_id" "$slot_model" "$lane_key"
-      else
-        lane_inc_attempts "$lane_id" "$eligible"
-        record_rollback_evidence "$lane_id" "$eligible" "replacement-spawn-failed" \
-          "rc=$spawn_rc model=$slot_model lane_key=$lane_key"
-        emit_coordinator_wake replacement "$lane_id" "$eligible" \
-          "spawn FAILED rc=$spawn_rc model=$slot_model lane_key=$lane_key"
-        sync_gbrain
-        printf 'always-four: replacement spawn of %s in %s FAILED (rc=%s, model=%s, attempts=%s/%s, lane key %s)\n' \
-          "$eligible" "$lane_id" "$spawn_rc" "$slot_model" "$(lane_attempts "$lane_id")" "$MAX_ATTEMPTS" "$lane_key"
+      if cmd_spawn spawn "$lane_id" "$eligible" --harness "$SCHEDULER_HARNESS" --model "$slot_model"; then
+        changes=$((changes + 1))
       fi
     else
       printf 'always-four [DRY RUN]: would replace %s with %s in %s\n' \
         "${replace_lanes[$lane_id]}" "$eligible" "$lane_id"
     fi
 
-    changes=$((changes + 1))
   done
 
   if [ "$changes" -eq 0 ] && [ -z "$dry_run" ]; then

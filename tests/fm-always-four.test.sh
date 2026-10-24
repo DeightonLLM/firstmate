@@ -126,6 +126,8 @@ STUB
 printf '%s\n' "$@" > "$FAKE_SPAWN_ARGS"
 STUB
   chmod +x "$fakebin/fm-brief.sh" "$fakebin/fm-spawn.sh"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$fakebin/tasks-axi"
+  chmod +x "$fakebin/tasks-axi"
   printf '## In flight\n\n## Queued\n- [ ] selected-harness-task - Use the selected adapter (repo: test-project)\n' \
     > "$tmp_root/data/backlog.md"
 
@@ -138,7 +140,8 @@ STUB
     FM_ALWAYS_FOUR_HARNESS=pi
     FAKE_BRIEF_ARGS="$tmp_root/brief.args"
     FAKE_SPAWN_ARGS="$tmp_root/spawn.args"
-    export DATA FAKE_BRIEF_ARGS FAKE_SPAWN_ARGS
+    PATH="$fakebin:$PATH"
+    export DATA FAKE_BRIEF_ARGS FAKE_SPAWN_ARGS PATH
     scheduler_harness_guard codex || exit 1
     scaffold_lane_key_brief selected-harness-lane selected-harness-task || exit 1
     fm_raw_herdr_senpi_refuse_mutate() { :; }
@@ -146,6 +149,7 @@ STUB
     reap_stale() { :; }
     check_cap() { return 0; }
     prepare_lane_key_brief() { return 0; }
+    start_task_inflight() { :; }
     lane_reset_attempts() { :; }
     record_lane_key_origin() { :; }
     record_lane_slot_binding() { :; }
@@ -1180,6 +1184,96 @@ STUB
   pass "a dispatched row uses the executable tasks-axi start transition"
 }
 
+test_dispatch_ownership_requires_spawn_and_commits_success() {
+  local failed_root success_root fakebin
+  failed_root=$(fm_test_tmproot always-four-dispatch-failure)
+  fakebin="$failed_root/bin"
+  mkdir -p "$fakebin" "$failed_root/data" "$failed_root/state"
+  printf '# Backlog\n\n## Queued\n- [ ] failed-dispatch - a queued row\n\n## In flight\n' > "$failed_root/data/backlog.md"
+  cat > "$fakebin/fm-spawn.sh" <<'STUB'
+#!/usr/bin/env bash
+exit 7
+STUB
+  chmod +x "$fakebin/fm-spawn.sh"
+  (
+    SCRIPT_DIR="$fakebin" STATE="$failed_root/state" DATA="$failed_root/data" FM_STATE_OVERRIDE="$failed_root/state"
+    MINT_LANE_KEY=0 SCHEDULER_HARNESS=codex
+    export SCRIPT_DIR STATE DATA FM_STATE_OVERRIDE MINT_LANE_KEY SCHEDULER_HARNESS
+    fm_raw_herdr_senpi_refuse_mutate() { :; }
+    can_replace_lane() { return 0; }
+    reap_stale() { :; }
+    check_cap() { return 0; }
+    prepare_lane_key_brief() { return 0; }
+    backlog_task_to_project() { printf 'projects/%s\n' "$1"; }
+    lane_reset_attempts() { :; }
+    lane_inc_attempts() { :; }
+    lane_attempts() { printf '0\n'; }
+    emit_coordinator_wake() { :; }
+    sync_gbrain() { :; }
+    record_rollback_evidence() { :; }
+    lane_ids() { printf 'lane-001\n'; }
+    lane_is_active() { [ -f "$STATE/lane-001.meta" ]; }
+    if cmd_spawn spawn lane-001 failed-dispatch --harness codex --model MiniMax-M3.1-Flash; then
+      exit 1
+    fi
+    awk '/^## Queued/{q=1; next} /^## /{q=0} q && /failed-dispatch/{found=1} END{exit !found}' "$DATA/backlog.md"
+    [ "$(count_active_lanes)" = 0 ]
+  ) || fail "a failed spawn must remain queued and inactive"
+
+  success_root=$(fm_test_tmproot always-four-dispatch-success)
+  fakebin="$success_root/bin"
+  mkdir -p "$fakebin" "$success_root/data" "$success_root/state"
+  printf '# Backlog\n\n## Queued\n- [ ] successful-dispatch - a queued row\n\n## In flight\n' > "$success_root/data/backlog.md"
+  cat > "$fakebin/fm-spawn.sh" <<STUB
+#!/usr/bin/env bash
+cat > "$success_root/state/\$1.meta" <<META
+endpoint_task_id=\$1
+window=default:w1:p1
+harness=codex
+model=MiniMax-M3.1-Flash
+META
+STUB
+  cat > "$fakebin/tasks-axi" <<'STUB'
+#!/usr/bin/env bash
+cat > "$4" <<BACKLOG
+# Backlog
+
+## Queued
+
+## In flight
+- [ ] successful-dispatch - a queued row
+BACKLOG
+STUB
+  printf 'endpoint_task_id=successful-dispatch\nwindow=default:w1:p1\nharness=codex\nmodel=MiniMax-M3.1-Flash\n' \
+    > "$success_root/state/successful-dispatch.meta"
+  chmod +x "$fakebin/fm-spawn.sh" "$fakebin/tasks-axi"
+  (
+    SCRIPT_DIR="$fakebin" STATE="$success_root/state" DATA="$success_root/data" FM_STATE_OVERRIDE="$success_root/state"
+    MINT_LANE_KEY=0 SCHEDULER_HARNESS=codex
+    export SCRIPT_DIR STATE DATA FM_STATE_OVERRIDE MINT_LANE_KEY SCHEDULER_HARNESS
+    PATH="$fakebin:$PATH"; export PATH
+    fm_raw_herdr_senpi_refuse_mutate() { :; }
+    can_replace_lane() { return 0; }
+    reap_stale() { :; }
+    check_cap() { return 0; }
+    prepare_lane_key_brief() { return 0; }
+    backlog_task_to_project() { printf 'projects/%s\n' "$1"; }
+    lane_reset_attempts() { :; }
+    record_lane_slot_binding() { : > "$STATE/lane-001.meta"; }
+    emit_coordinator_wake() { :; }
+    sync_gbrain() { :; }
+    lane_inc_attempts() { :; }
+    record_rollback_evidence() { :; }
+    lane_ids() { printf 'lane-001\n'; }
+    lane_is_active() { [ -f "$STATE/lane-001.meta" ]; }
+    cmd_spawn spawn lane-001 successful-dispatch --harness codex --model MiniMax-M3.1-Flash \
+      || exit 1
+    awk '/^## In flight/{f=1; next} /^## /{f=0} f && /successful-dispatch/{found=1} END{exit !found}' "$DATA/backlog.md"
+    [ "$(count_active_lanes)" = 1 ]
+  ) || fail "a successful spawn must move the row in flight and count one active lane"
+  pass "dispatch ownership fails closed and commits one active lane after spawn"
+}
+
 test_tasks_axi_start_moves_the_row_and_is_idempotent() {
   command -v tasks-axi >/dev/null 2>&1 || {
     pass "tasks-axi is not installed here; the contract test was skipped"
@@ -1381,6 +1475,7 @@ for _t in \
   test_next_eligible_task_skips_unroutable_project_rows \
   test_pane_foreground_harness_alive_matches_only_the_running_harness \
   test_scheduler_moves_a_dispatched_row_with_tasks_axi_start \
+  test_dispatch_ownership_requires_spawn_and_commits_success \
   test_tasks_axi_start_moves_the_row_and_is_idempotent \
   test_build_inflight_tmp_drops_a_finished_lanes_row \
   test_capacity_gate_counts_managed_lane_slots_not_crew \

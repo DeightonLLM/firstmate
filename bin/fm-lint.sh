@@ -110,6 +110,7 @@ JOBS=${FM_LINT_JOBS:-2}
 TELEMETRY=${FM_LINT_TELEMETRY:-}
 LIST_FILES=0
 UPDATE_BASELINE=0
+EXPLICIT_ROOTS=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --jobs)
@@ -165,11 +166,26 @@ case "$JOBS" in
 esac
 
 if [ "$#" -gt 0 ]; then
+  EXPLICIT_ROOTS=1
   ROOTS=("$@")
 else
   ROOTS=(bin/*.sh bin/backends/*.sh tests/*.sh)
 fi
 ROOT_COUNT=${#ROOTS[@]}
+
+if [ "$UPDATE_BASELINE" -eq 1 ] && [ "$EXPLICIT_ROOTS" -eq 1 ]; then
+  CANONICAL_ROOTS=(bin/*.sh bin/backends/*.sh tests/*.sh)
+  if [ "${#ROOTS[@]}" -ne "${#CANONICAL_ROOTS[@]}" ]; then
+    printf 'fm-lint.sh: --update-baseline requires the complete canonical file set.\n' >&2
+    exit 2
+  fi
+  for i in "${!CANONICAL_ROOTS[@]}"; do
+    if [ "${ROOTS[$i]}" != "${CANONICAL_ROOTS[$i]}" ]; then
+      printf 'fm-lint.sh: --update-baseline requires the complete canonical file set.\n' >&2
+      exit 2
+    fi
+  done
+fi
 
 if [ "$LIST_FILES" -eq 1 ]; then
   [ "$#" -eq 0 ] || {

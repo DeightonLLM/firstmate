@@ -118,22 +118,28 @@ fm_surface_name_lane_id_valid() {  # <lane-id>
 
 # fm_surface_name_scope_valid: is this a scope token the rule allows?
 fm_surface_name_scope_valid() {  # <scope>
-  local scope=$1
+  local scope=$1 host home role rest
   case "$scope" in
     ''|*[!a-z0-9._/-]*) return 1 ;;
   esac
-  case "$scope" in
-    */*/*/*) return 1 ;;
-    */*/*) : ;;
-    */*) : ;;
+  host=${scope%%/*}
+  [ -n "$host" ] && [ "$host" != "$scope" ] || return 1
+  rest=${scope#*/}
+  home=${rest%%/*}
+  [ -n "$home" ] || return 1
+  case "$home" in
+    primary) ;;
+    2ndmate-*)
+      [ "${home#2ndmate-}" != "$home" ] || return 1
+      [ -n "${home#2ndmate-}" ] || return 1
+      ;;
     *) return 1 ;;
   esac
-  # A scope must not start or end with a separator and must not carry an empty
-  # segment: "hetz//primary" and "/primary" are both refused.
-  case "$scope" in
-    /*|*/) return 1 ;;
-    *//*) return 1 ;;
-  esac
+  if [ "$rest" != "$home" ]; then
+    role=${rest#*/}
+    [ -n "$role" ] || return 1
+    case "$role" in *[!a-z0-9._-]*|*/*) return 1 ;; esac
+  fi
   return 0
 }
 

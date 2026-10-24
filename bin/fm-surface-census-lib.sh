@@ -74,13 +74,32 @@ fm_surface_census_meta_value() {  # <state-dir> <lane-id> <key>
 fm_surface_census_lanes() {  # [state-dir] [session]
   local state=${1:-${FM_STATE_OVERRIDE:-$FM_HOME/state}}
   local session=${2:-$FM_SURFACE_CENSUS_SESSION}
-  local panes meta id window pane ws harness model kind live pane_full tab
+  local panes meta id endpoint window pane ws harness model kind live pane_full tab
+  local -a meta_files=()
+  local -A seen_endpoint_ids=()
   panes=$(fm_surface_census_panes "$session") || panes=""
   for meta in "$state"/*.meta; do
     [ -f "$meta" ] && [ ! -L "$meta" ] || continue
     id=${meta##*/}
     id=${id%.meta}
     case "$id" in ''|.*|*[!A-Za-z0-9._-]*) continue ;; esac
+    case "$id" in lane-*) continue ;; esac
+    meta_files+=("$meta")
+  done
+  for meta in "$state"/lane-*.meta; do
+    [ -f "$meta" ] && [ ! -L "$meta" ] || continue
+    id=${meta##*/}
+    id=${id%.meta}
+    case "$id" in ''|.*|*[!A-Za-z0-9._-]*) continue ;; esac
+    meta_files+=("$meta")
+  done
+  for meta in "${meta_files[@]}"; do
+    id=${meta##*/}
+    id=${id%.meta}
+    endpoint=$(fm_surface_census_meta_value "$state" "$id" endpoint_task_id) || endpoint=""
+    [ -n "$endpoint" ] || endpoint=$id
+    [ -z "${seen_endpoint_ids[$endpoint]+seen}" ] || continue
+    seen_endpoint_ids[$endpoint]=1
     window=$(fm_surface_census_meta_value "$state" "$id" window) || window=""
     pane=$(printf '%s' "$window" | awk -F: '{print $NF}')
     ws=$(printf '%s' "$window" | awk -F: '{print $(NF-1)}')
@@ -97,7 +116,7 @@ fm_surface_census_lanes() {  # [state-dir] [session]
       live=yes
     fi
     printf '%s\n' \
-      "$id$FM_SURFACE_CENSUS_FS$window$FM_SURFACE_CENSUS_FS$pane_full$FM_SURFACE_CENSUS_FS$ws$FM_SURFACE_CENSUS_FS$harness$FM_SURFACE_CENSUS_FS$model$FM_SURFACE_CENSUS_FS$kind$FM_SURFACE_CENSUS_FS$live$FM_SURFACE_CENSUS_FS$tab"
+      "$endpoint$FM_SURFACE_CENSUS_FS$window$FM_SURFACE_CENSUS_FS$pane_full$FM_SURFACE_CENSUS_FS$ws$FM_SURFACE_CENSUS_FS$harness$FM_SURFACE_CENSUS_FS$model$FM_SURFACE_CENSUS_FS$kind$FM_SURFACE_CENSUS_FS$live$FM_SURFACE_CENSUS_FS$tab"
   done
 }
 

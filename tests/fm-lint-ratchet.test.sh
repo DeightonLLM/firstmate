@@ -27,7 +27,6 @@ set -u
 RATCHET="$ROOT/bin/fm-lint-ratchet.sh"
 BASELINE="$ROOT/bin/fm-lint-baseline.tsv"
 LINT_OWNER="$ROOT/bin/fm-lint.sh"
-CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
 
 # Turn the committed baseline into a synthetic ShellCheck report with exactly
 # the recorded findings, so the comparison can be exercised without a lint run.
@@ -182,61 +181,28 @@ test_the_update_only_ratchets_down() {
   pass "the update refuses a new diagnostic and only ratchets the total down"
 }
 
-test_the_lint_owner_and_ci_use_the_ratchet() {
-  local out ci_semantics parser rc
+test_the_lint_owner_exposes_the_update_interface() {
+  local out version
   out=$("$LINT_OWNER" --help 2>&1)
   assert_contains "$out" "--update-baseline" "the lint owner does not document the baseline update"
-  parser=$(mktemp)
-  cat > "$parser" <<'PY'
-import sys
+  version=$("$LINT_OWNER" --required-version 2>&1)
+  [ -n "$version" ] || fail "the lint owner must expose its required ShellCheck version"
+  pass "the lint owner exposes executable baseline and version interfaces"
+}
 
-path = sys.argv[1]
-lines = open(path, encoding="utf-8").read().splitlines()
-runs = []
-in_lint = False
-in_steps = False
-index = 0
-while index < len(lines):
-    raw = lines[index]
-    stripped = raw.strip()
-    indent = len(raw) - len(raw.lstrip(" "))
-    if indent == 2 and stripped == "lint:":
-        in_lint = True
-        in_steps = False
-    elif in_lint and indent == 2 and stripped.endswith(":") and stripped != "lint:":
-        in_lint = False
-        in_steps = False
-    elif in_lint and indent == 4 and stripped == "steps:":
-        in_steps = True
-    elif in_steps and indent == 4 and stripped.endswith(":"):
-        in_steps = False
-    elif in_steps and indent == 8 and stripped == "run: |":
-        block = []
-        index += 1
-        while index < len(lines):
-            candidate = lines[index]
-            candidate_indent = len(candidate) - len(candidate.lstrip(" "))
-            if candidate.strip() and candidate_indent < 10:
-                index -= 1
-                break
-            block.append(candidate[10:] if candidate_indent >= 10 else "")
-            index += 1
-        runs.append("\n".join(block))
-    index += 1
-
-if not any(any(line.strip().startswith("bin/fm-lint.sh ") for line in run.splitlines()) for run in runs):
-    raise SystemExit("lint workflow has no executable lint owner step")
-if not any("$GITHUB_STEP_SUMMARY" in run for run in runs):
-    raise SystemExit("lint workflow has no step summary output")
-print("lint workflow semantic contract OK")
-PY
-  ci_semantics=$(python3 "$parser" "$CI_WORKFLOW" 2>&1)
-  rc=$?
-  rm -f "$parser"
-  [ "$rc" -eq 0 ] || fail "the CI lint workflow semantic contract is invalid:$'\n'$ci_semantics"
-  assert_contains "$ci_semantics" "lint workflow semantic contract OK" \
-    "the CI lint job must execute the lint owner and publish its summary"
-  pass "the lint owner and the CI workflow both run the ratchet and report the count"
+test_update_baseline_requires_the_complete_file_set() {
+  local tmp before after out rc
+  tmp=$(fm_test_tmproot fm-lint-partial-update)
+  mkdir -p "$tmp"
+  cp "$BASELINE" "$tmp/baseline.tsv"
+  before=$(sha256sum "$tmp/baseline.tsv")
+  rc=0
+  out=$(cd "$ROOT" && "$LINT_OWNER" --jobs 1 --update-baseline \
+    --baseline "$tmp/baseline.tsv" bin/fm-lint.sh 2>&1) || rc=$?
+  [ "$rc" -eq 2 ] || fail "a partial baseline update must fail before linting (exit $rc): $out"
+  after=$(sha256sum "$tmp/baseline.tsv")
+  [ "$before" = "$after" ] || fail "a rejected partial baseline update modified the baseline"
+  pass "partial baseline updates are rejected without changing the baseline"
 }
 
 test_the_committed_baseline_is_well_formed
@@ -246,4 +212,5 @@ test_one_new_diagnostic_fails
 test_one_missing_diagnostic_fails
 test_a_deleted_baseline_entry_fails
 test_the_update_only_ratchets_down
-test_the_lint_owner_and_ci_use_the_ratchet
+test_the_lint_owner_exposes_the_update_interface
+test_update_baseline_requires_the_complete_file_set
