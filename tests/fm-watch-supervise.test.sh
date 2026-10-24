@@ -34,6 +34,7 @@ bad() { checks=$((checks + 1)); fail=$((fail + 1)); printf 'FAIL %s\n' "$*"; }
 fatal() { printf 'FAIL %s\n' "$*"; exit 1; }
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/fm-watch-supervise.XXXXXX") || fatal "could not create a temp root"
+# shellcheck disable=SC2329 # Invoked by the EXIT trap below, not by name.
 cleanup() { rm -rf "$TMP" 2>/dev/null || true; }
 trap cleanup EXIT
 
@@ -91,6 +92,8 @@ supervisor_owns_artefact() {
     .watch-supervise.log) return 0 ;;
     .watch-supervise.lock|.watch-supervise.lock.*) return 0 ;;
     .watch-supervise-output.*) return 0 ;;
+    # The hand-back successor: the recorded arm and its own output file.
+    .watch-supervise-successor|.watch-supervise-successor.*) return 0 ;;
   esac
   return 1
 }
@@ -117,7 +120,8 @@ supervisor_log_size() {
 }
 
 # The owned-artefact list above must not drift from the supervisor's own source.
-for lit in '.watch-supervise.log' '.watch-supervise.lock' '.watch-supervise-output.'; do
+for lit in '.watch-supervise.log' '.watch-supervise.lock' '.watch-supervise-output.' \
+           '.watch-supervise-successor'; do
   grep -qF -- "$lit" "$SUPERVISE" \
     || fatal "the supervisor's source no longer contains '$lit' - update supervisor_owns_artefact() in this suite"
 done
@@ -151,6 +155,13 @@ cat > "$STUB_ARM" <<'STUB'
 set -u
 fixture=${FM_STUB_ARM_FIXTURE:?}
 counter=${FM_STUB_ARM_COUNTER:?}
+# The hand-back successor is started with the arm's own --restart mode. It owns
+# a FRESH cycle of its own and is NOT a cycle of the supervisor's loop, so it
+# does not consume a fixture line and does not count as a run.
+if [ "${1:-}" = "--restart" ]; then
+  printf 'watcher: started pid=%s (beacon fresh)\n' "$$"
+  exit 0
+fi
 n=$(cat "$counter" 2>/dev/null || printf '0')
 n=$((n + 1))
 printf '%s\n' "$n" > "$counter"
@@ -317,7 +328,7 @@ if [ -f "$STATE_DIR/.watch-supervise.log" ]; then
   ok "the supervisor kept its state inside the temporary home (the live home was untouched)"
 else
   bad "the supervisor did not keep its state inside the temporary home"
-  ls -la "$STATE_DIR" | sed 's/^/       /'
+  find "$STATE_DIR" -maxdepth 1 -print 2>/dev/null | sed 's/^/       /'
 fi
 
 # The suite's own isolation from the home it runs in is checked at the END of
@@ -466,18 +477,35 @@ else
 fi
 
 # ============================================================================
-# 5. The script never uses a shell `&` for the watcher.
+# 5. The script never backgrounds the WATCHER.
+#    The watcher is launched only by bin/fm-watch-arm.sh, as that arm's own
+#    tracked child, and the script never names it. The ONE backgrounded child
+#    the script may have is the hand-back successor ARM - an ARM, never the
+#    watcher - and that arm is started in a process group of its own, so the
+#    harness's teardown of this supervisor's group cannot reach it.
+#
 #    The proof is textual and mechanical: after every file-descriptor
-#    duplication (2>&1 and friends) is removed, no `&` remains anywhere in the
-#    script, and the script never names the watcher itself - the watcher is
-#    launched only by bin/fm-watch-arm.sh, as that arm's own tracked child.
+#    duplication (2>&1 and friends) is removed, every remaining `&` must be
+#    the successor arm's, and the script must enable job control so that arm
+#    really does get a group of its own.
 # ============================================================================
 stripped=$(code_lines "$SUPERVISE" | sed -E 's/&>>/>/g; s/[0-9]*>&[0-9-]//g; s/&&//g; s/&>//g')
-if printf '%s\n' "$stripped" | grep -q '&'; then
-  bad "the script uses a shell '&' somewhere"
-  printf '%s\n' "$stripped" | grep -n '&' | sed 's/^/       /'
+# shellcheck disable=SC2016 # A literal, not an expansion: the arm's own source text.
+ARM_LITERAL='$ARM'
+bg=$(printf '%s\n' "$stripped" | grep -E '(^|[^0-9&])&[[:space:]]*$' || true)
+if [ -z "$bg" ]; then
+  bad "the script backgrounds nothing - a hand-back cannot leave a survivor behind"
+elif printf '%s\n' "$bg" | grep -qvF "$ARM_LITERAL"; then
+  bad "the script backgrounds something other than the arm"
+  printf '%s\n' "$bg" | sed 's/^/       /'
 else
-  ok "the script contains no shell '&' at all (no backgrounded child, least of all the watcher)"
+  ok "the only backgrounded child is the hand-back successor arm, never the watcher"
+fi
+
+if code_lines "$SUPERVISE" | grep -q 'set -m'; then
+  ok "the successor arm is started with job control, so it gets a process group of its own"
+else
+  bad "the successor arm is not given a process group of its own - a group teardown would take it down"
 fi
 
 if code_lines "$SUPERVISE" | grep -q 'fm-watch\.sh'; then
@@ -494,10 +522,10 @@ else
 fi
 
 if code_lines "$SUPERVISE" | grep -Eq '(^|[^0-9&])&[[:space:]]*$'; then
-  bad "the script backgrounds a command with a trailing '&'"
-  code_lines "$SUPERVISE" | grep -En '(^|[^0-9&])&[[:space:]]*$' | sed 's/^/       /'
+  bg_count=$(code_lines "$SUPERVISE" | grep -Ec '(^|[^0-9&])&[[:space:]]*$')
+  ok "the script backgrounds exactly one command, the hand-back successor arm ($bg_count)"
 else
-  ok "the script backgrounds no command"
+  bad "the script backgrounds no command"
 fi
 
 # ============================================================================
