@@ -252,7 +252,7 @@ warehouse_tree() { # <directory>
       warehouse_tree "$child"
       printf '</ul></details></li>\n'
     else
-      node_kind=file
+      node_kind='file'
       [ ! -L "$child" ] || node_kind=pointer
       printf '<li>%s <small class="muted">%s · %s · %s</small></li>\n' \
         "$(html "$name")" "$node_kind" "$(format_bytes "$bytes")" "$(html "$age")"

@@ -76,10 +76,10 @@ echo "$BRIDGE_OUTPUT" | cat -A   # Show with visible newlines
 echo ""
 
 if validate_real_newlines "$PROMPT_CONTENT"; then
-  echo "PASS: Bridge section contains real newlines, not literal \\\\n"
+  printf '%s\n' "PASS: Bridge section contains real newlines, not literal \\\\n"
   exit 0
 else
-  echo "FAIL: Bridge section contains literal \\\\n instead of actual newlines"
+  printf '%s\n' "FAIL: Bridge section contains literal \\\\n instead of actual newlines"
   echo "--- Prompt excerpt ---"
   printf '%s' "$PROMPT_CONTENT" | grep -A2 'BRIDGE_READY_REPORTS'
   exit 1

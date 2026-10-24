@@ -27,7 +27,7 @@ setup_test_project() {
   local proj=$1
   mkdir -p "$proj"
   (
-    cd "$proj"
+    cd "$proj" || exit 1
     git init -b main >/dev/null 2>&1
     git config user.name "Liveness Test"
     git config user.email "test@example.com"

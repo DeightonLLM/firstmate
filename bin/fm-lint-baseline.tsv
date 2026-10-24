@@ -1,0 +1,79 @@
+# fm-lint-baseline.tsv - the committed ShellCheck baseline for this repository.
+#
+# One record per (file, ShellCheck code): <file>	<SCxxxx>	<count>, sorted by
+# file then code. bin/fm-lint.sh collects the diagnostics; bin/fm-lint-ratchet.sh
+# owns this format, the comparison, and the update.
+#
+# Recorded: 270 diagnostics across 44 files.
+#
+# The ratchet only ratchets down: bin/fm-lint.sh --update-baseline refuses to
+# record a new diagnostic, so this count can never grow. A new diagnostic has
+# to be fixed in the source first.
+bin/factory-health.sh	SC2010	1
+bin/factory-health.sh	SC2016	1
+bin/fm-always-four.sh	SC1090	4
+bin/fm-always-four.sh	SC1091	5
+bin/fm-always-four.sh	SC2034	3
+bin/fm-always-four.sh	SC2086	1
+bin/fm-campaign-worker-lib.sh	SC2174	1
+bin/fm-context-preflight.sh	SC2034	2
+bin/fm-context-preflight.sh	SC2329	1
+bin/fm-docs-drift-gate.sh	SC2329	1
+bin/fm-fleet-status-by-name.sh	SC2016	1
+bin/fm-fleet-status-by-name.sh	SC2029	1
+bin/fm-fleet-status-by-name.sh	SC2034	3
+bin/fm-gate-escalation-order.sh	SC2012	1
+bin/fm-guard-attest.sh	SC2015	1
+bin/fm-lock-reclaim-lib.sh	SC2034	1
+bin/fm-log-rotate.sh	SC2329	1
+bin/fm-m3-review-loop.sh	SC2016	1
+bin/fm-provider-route.sh	SC2016	4
+bin/fm-reap-gate.sh	SC2097	2
+bin/fm-reap-gate.sh	SC2098	4
+bin/fm-teardown.sh	SC2016	1
+bin/fm-warehouse-submit.sh	SC2016	4
+bin/fm-whoosh-fixture.sh	SC2034	1
+bin/fm-whoosh-fixture.sh	SC2086	1
+bin/fm-whoosh-fixture.sh	SC2154	1
+bin/test-ready-bridge.sh	SC2034	2
+bin/test-ready-bridge.sh	SC2329	1
+tests/fm-afk-launch.test.sh	SC2031	3
+tests/fm-agy-harness.test.sh	SC2016	5
+tests/fm-always-four.test.sh	SC2016	7
+tests/fm-always-four.test.sh	SC2030	7
+tests/fm-always-four.test.sh	SC2031	7
+tests/fm-always-four.test.sh	SC2129	1
+tests/fm-always-four.test.sh	SC2181	7
+tests/fm-brief.test.sh	SC2016	3
+tests/fm-brief.test.sh	SC2034	1
+tests/fm-calm-pi-extension.test.sh	SC2034	1
+tests/fm-campaign-worker-authority.test.sh	SC1090	1
+tests/fm-campaign-worker-authority.test.sh	SC2174	1
+tests/fm-comms-ingest.test.sh	SC2317	4
+tests/fm-comms-notify-hang.test.sh	SC2034	1
+tests/fm-context-preflight.test.sh	SC2001	1
+tests/fm-context-preflight.test.sh	SC2329	1
+tests/fm-dead-pane-sweep.test.sh	SC2034	1
+tests/fm-dead-pane-sweep.test.sh	SC2155	1
+tests/fm-dead-pane-sweep.test.sh	SC2329	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	5
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2034	1
+tests/fm-gate-lib.test.sh	SC2016	1
+tests/fm-lock-reclaim-disk.test.sh	SC2329	1
+tests/fm-pane-isolation.test.sh	SC2016	2
+tests/fm-provider-route-supervise.test.sh	SC2034	1
+tests/fm-provider-route-watch.test.sh	SC2034	1
+tests/fm-provider-route.test.sh	SC2034	2
+tests/fm-provider-route.test.sh	SC2269	1
+tests/fm-quota-board-browser.test.sh	SC2015	30
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	18
+tests/fm-quota-gate.test.sh	SC2015	13
+tests/fm-raw-herdr-senpi.test.sh	SC1090	11
+tests/fm-raw-herdr-senpi.test.sh	SC2034	7
+tests/fm-raw-herdr-senpi.test.sh	SC2329	27
+tests/fm-reap-gate.test.sh	SC2034	1
+tests/fm-spawn-cap-enforcement.test.sh	SC2155	2
+tests/fm-todo-gate.test.sh	SC2016	1
+tests/fm-wake-drain-loop.test.sh	SC2015	3
+tests/fm-watch-triage.test.sh	SC2031	35
+tests/plan-page-contract.test.sh	SC2317	2
