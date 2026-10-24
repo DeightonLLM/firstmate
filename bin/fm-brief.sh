@@ -200,7 +200,7 @@ emit_baseline_block() {
     # The policy-family roles resolve from this home, so a brief is never
     # pointed at another host's account home. A role with no readable home-local
     # file is declared unavailable instead of being dropped or mislabeled.
-    for role in policy project-policy routing bounded lean-ctx; do
+    for role in policy project-policy routing bounded lean-ctx watchers; do
       if ! resolved="$(fm_baseline_resolve_role "$role")"; then
         fm_baseline_unavailable_line "$role"
         continue

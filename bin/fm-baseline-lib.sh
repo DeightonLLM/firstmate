@@ -43,6 +43,7 @@ fm_baseline_role_override_var() {
     routing) printf 'FM_BASELINE_ROUTING\n' ;;
     bounded) printf 'FM_BASELINE_BOUNDED\n' ;;
     'lean-ctx') printf 'FM_BASELINE_LEAN_CTX\n' ;;
+    watchers) printf 'FM_BASELINE_WATCHERS\n' ;;
     *) return 1 ;;
   esac
 }
@@ -74,6 +75,15 @@ fm_baseline_role_candidates() {
       printf '%s\n' "$FM_HOME/.codex/LEAN-CTX.md"
       [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/.codex/LEAN-CTX.md"
       printf '%s\n' "$root_scope/.codex/LEAN-CTX.md"
+      ;;
+    watchers)
+      # The watchers-and-polls contract. It is in the manifest because the
+      # knowledge gap kept recurring: agents could not tell whether a watcher
+      # should run, who owned it, or how to make it safe. On 2026-10-23 a
+      # pile-up of 577 stuck sync processes took a 6-core host to load 340.
+      printf '%s\n' "$FM_HOME/docs/agent-policy/WATCHERS_AND_POLLS.md"
+      [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/docs/agent-policy/WATCHERS_AND_POLLS.md"
+      printf '%s\n' "$root_scope/docs/agent-policy/WATCHERS_AND_POLLS.md"
       ;;
     *) return 1 ;;
   esac

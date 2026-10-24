@@ -394,6 +394,10 @@
     {
       "path": "docs/handoff/message-template.md",
       "audience": "operator-example"
+    },
+    {
+      "path": "docs/agent-policy/WATCHERS_AND_POLLS.md",
+      "audience": "agent-runtime"
     }
   ]
 }
