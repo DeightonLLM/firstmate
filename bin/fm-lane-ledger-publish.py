@@ -62,18 +62,64 @@ it in three ways:
                        row, so a lane that spawned while the publisher was
                        down still lands on the board.
 
+THE END OF A LANE
+-----------------
+A claim that is never withdrawn is a claim that never frees. Two defects
+measured on 2026-10-24 made the ledger lie in the direction that hides work:
+
+  * reconcile only ever ADDED rows. Four lanes were torn down and their
+    spawn records removed, and the ledger still carried all four as ACTIVE:
+    there was no code path that moved a row to DONE.
+  * the always-four scheduler keeps a SLOT record, state/lane-<N>.meta,
+    naming the task the slot runs, and that record survives the task. The
+    publisher walked the slot record, resolved identity = the slot's
+    endpoint_task_id, and published the CLOSED task as ACTIVE with a fresh
+    lease. Five closed tasks were published that way.
+
+So the end of a lane is now a machine-detectable event too:
+
+  close <lane-id>      the teardown calls this. A teardown and a claim
+                       withdrawal are ONE operation: a lane that is torn down
+                       must never leave a live claim behind. The close is
+                       best effort - a failed ledger close must never block a
+                       legitimate teardown - and it says so loudly.
+  reconcile            the catch-up for the ends that were missed. It closes
+                       the row of every lane that has ENDED, and renews the
+                       claim of every lane that is still alive.
+
+THE END OF A LANE IS PROVEN, NEVER GUESSED
+------------------------------------------
+A close must never hide work that is still running, so the close requires
+POSITIVE evidence that the lane ended:
+
+  * the lane's own spawn record, state/<id>.meta, is GONE. A lane is
+    registered by that record and the teardown is the only thing in the
+    fleet that removes it, so its absence is a fact about the lane. It is
+    never the absence of a status line: a lane that has not posted a wake
+    event yet has no status line either, and it is still running. A lane
+    that still HAS its spawn record is never closed.
+  * the claim belongs to THIS home. A row this publisher did not write, and
+    a row inherited from the published ledger, belong to the home that
+    published them and are never closed here.
+
+A slot record alone is never a lane. The slot names a task; the lane is the
+task, and the task must be registered here. A slot whose target task has no
+spawn record of its own is an EMPTY slot: it never produces a ledger row and
+it never keeps a claim alive.
+
 WHAT THIS TOOL NEVER DOES
 -------------------------
-It never deletes or rewrites a lane's own row, never invents a lane id, never
-writes a lane's report, status or meta file, and never weakens or edits the
-to-do gate. If it cannot write the ledger truthfully it fails and says so.
+It never deletes a row, never invents a lane id, never writes a lane's
+report, status or meta file, never closes a claim it does not own, and never
+weakens or edits the to-do gate. If it cannot write the ledger truthfully it
+fails and says so.
 
 usage: fm-lane-ledger-publish.py [register <lane-id> | close <lane-id>
                                  | reconcile | watch]
                                  [--repo <path>] [--ops <dir>] [--ledger <path>]
                                  [--claims <path>] [--board <path>]
                                  [--state <dir>] [--no-refresh] [--check]
-                                 [--timeout <seconds>]
+                                 [--if-present] [--timeout <seconds>]
 """
 
 import argparse
@@ -147,6 +193,21 @@ def claims_expiry(stamp):
     except (OSError, ValueError, subprocess.SubprocessError):
         pass
     return "%s %s" % (local.strftime("%Y-%m-%d %H:%M"), zone)
+
+
+def claims_expiry_text(iso_text):
+    """The expiry cell of a claims row, for the expiry the ledger records.
+    The claims board writes local wall clock with a zone name and the drift
+    checker resolves the zone explicitly, so the same instant is readable.
+    A claim that holds no scope expires at nothing: '-'."""
+    if not iso_text:
+        return "-"
+    try:
+        stamp = dt.datetime.strptime(str(iso_text), "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=dt.timezone.utc)
+    except (TypeError, ValueError):
+        return "-"
+    return claims_expiry(stamp)
 
 
 def clean_cell(value, limit=400):
@@ -275,8 +336,15 @@ def add_claims_row(path, cells):
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def set_claims_state(path, lane, state):
-    """Keep the state cell of a claims row in step with the ledger."""
+def set_claims_state(path, lane, state, expiry=None):
+    """Keep the state cell of a claims row in step with the ledger. When an
+    expiry is given it keeps the expiry cell in step too.
+
+    THE EXPIRY CELL IS THE FIFTH, the one the live claims board writes and
+    the one a human reads to know when a scope frees up. The sixth cell stays
+    '-': that is the shape the drift checker reads, and it is the shape the
+    board has always had.
+    """
     if not path.is_file():
         return False
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -294,12 +362,16 @@ def set_claims_state(path, lane, state):
         if cells[0].strip("`").strip() != lane:
             continue
         token = CLAIM_STATE_RE.search(cells[6])
-        if token and token.group(1) == state:
-            continue
-        cells[6] = re.sub(r"\*\*(ACTIVE|DONE|RELEASED|BLOCKED|EXPIRED)\*\*",
-                           "**%s**" % state, cells[6]) if token else "**%s**" % state
+        state_cell = (re.sub(r"\*\*(ACTIVE|DONE|RELEASED|BLOCKED|EXPIRED)\*\*",
+                              "**%s**" % state, cells[6])
+                      if token else "**%s**" % state)
+        if state_cell != cells[6]:
+            cells[6] = state_cell
+            changed = True
+        if expiry is not None and cells[4] != expiry:
+            cells[4] = expiry
+            changed = True
         lines[index] = "| " + " | ".join(cells) + " |"
-        changed = True
     if changed:
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return changed
@@ -307,7 +379,9 @@ def set_claims_state(path, lane, state):
 
 def close_claims_row(path, lane, state):
     """Close a lane on the claims board: the state token moves and the expiry
-    cell becomes '-', because a closed lane holds no scope."""
+    cell becomes '-', because a closed lane holds no scope. Both expiry cells
+    are cleared: the fifth is the one a human reads, the sixth is the shape
+    the drift checker reads."""
     if not path.is_file():
         return False
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -328,6 +402,7 @@ def close_claims_row(path, lane, state):
         cells[6] = (re.sub(r"\*\*(ACTIVE|DONE|RELEASED|BLOCKED|EXPIRED)\*\*",
                            "**%s**" % state, cells[6])
                     if token else "**%s** - closed" % state)
+        cells[4] = "-"
         cells[5] = "-"
         lines[index] = "| " + " | ".join(cells) + " |"
         changed = True
@@ -361,11 +436,26 @@ def read_status(state_dir, lane_id):
     return path.read_text(encoding="utf-8", errors="replace").splitlines()
 
 
-def lane_state(state_dir, lane_id):
+def is_secondmate(meta):
+    """A second mate is not a lane: it is a standing worker with its own home,
+    and it must never be published as a lane claim."""
+    if not meta:
+        return False
+    return meta.get("kind") == "secondmate" or meta.get("mode") == "secondmate"
+
+
+def lane_state(state_dir, lane_id, fallback_id=None):
     """(is_live, next_note). A lane with no spawn record is not a lane here.
     A lane whose last wake event is terminal is finished. A lane that is still
-    working carries its last working note, which is its real next action."""
+    working carries its last working note, which is its real next action.
+
+    The lane's own wake events live in state/<lane-id>.status. A lane SLOT
+    (state/lane-<N>.meta) keeps only the scheduler's own binding events, so
+    the slot's log is the FALLBACK for a lane that has no task log yet - the
+    same order bin/fm-always-four.sh resolves a lane's log in."""
     notes = read_status(state_dir, lane_id)
+    if not notes and fallback_id:
+        notes = read_status(state_dir, fallback_id)
     last = ""
     for line in notes:
         if line.strip():
@@ -379,23 +469,63 @@ def lane_state(state_dir, lane_id):
     return True, last
 
 
+def lane_identities(state_dir):
+    """(lanes, aliases).
+
+    lanes   {identity: (meta, own_id)} - every lane REGISTERED in this home.
+             A lane is registered by its OWN spawn record, state/<id>.meta.
+    aliases {identity: [own_id, ...]} - the slot records that NAME that lane.
+
+    The always-four scheduler keeps a SLOT record, state/lane-<N>.meta, that
+    names the task the slot runs. A slot record is a REFERENCE to a lane, not
+    a lane: it resolves to the identity its endpoint_task_id names, so the
+    slot record and the task's own record are one lane, not two.
+    """
+    state_dir = pathlib.Path(state_dir)
+    metas = {}
+    for meta_path in sorted(state_dir.glob("*.meta")):
+        own_id = meta_path.name[: -len(".meta")]
+        meta = read_meta(state_dir, own_id)
+        if not meta or is_secondmate(meta):
+            continue
+        metas[own_id] = meta
+    lanes = {}
+    aliases = {}
+    for own_id, meta in metas.items():
+        identity = meta.get("endpoint_task_id") or own_id
+        if identity == own_id:
+            lanes[identity] = (meta, own_id)
+        else:
+            aliases.setdefault(identity, []).append(own_id)
+    return lanes, aliases
+
+
 def live_lanes(state_dir):
-    """Every lane in this home that is alive: a spawn record, and no terminal
-    wake event. A second mate is not a lane: it is a standing worker, it has
-    its own home, and it must never be published as a lane claim."""
-    lanes = []
-    for meta_path in sorted(pathlib.Path(state_dir).glob("*.meta")):
-        lane_id = meta_path.name[: -len(".meta")]
-        meta = read_meta(state_dir, lane_id)
-        if not meta:
-            continue
-        if meta.get("kind") == "secondmate" or meta.get("mode") == "secondmate":
-            continue
-        alive, note = lane_state(state_dir, lane_id)
+    """Every lane in this home that is alive: a lane that is REGISTERED here,
+    and no terminal wake event.
+
+    A slot record alone never makes a lane. The always-four scheduler keeps
+    state/lane-<N>.meta naming the task a slot runs, and that record survives
+    the task it names. Before this, the publisher walked that slot record,
+    resolved identity = meta.get("endpoint_task_id"), and published the TASK
+    as ACTIVE with a fresh lease - naming work that was already closed. Five
+    closed tasks were published that way on 2026-10-24.
+
+    So a slot is only the lane it names when the task it names is REGISTERED
+    here, with a spawn record of its own. A slot whose target task has no
+    spawn record is an EMPTY slot: it must never produce a ledger row, and it
+    must never keep a claim alive.
+    """
+    lanes, aliases = lane_identities(state_dir)
+    out = []
+    for identity, (meta, own_id) in lanes.items():
+        slots = aliases.get(identity) or []
+        alive, note = lane_state(state_dir, identity,
+                                 fallback_id=slots[0] if slots else None)
         if not alive:
             continue
-        lanes.append((lane_id, meta, note))
-    return lanes
+        out.append((identity, meta, note))
+    return out
 
 
 def git_branch(worktree):
@@ -440,8 +570,7 @@ def build_claims_cells(row, meta, repo):
     scope = "its own worktree %s, its brief data/%s/brief.md and its report data/%s/report.md" % (
         meta.get("worktree") or "(none)", row["lane_id"], row["lane_id"])
     holder = "firstmate (`%s`, branch `%s`)" % (repo, row["branch"])
-    expiry = claims_expiry(dt.datetime.strptime(row["expires"], "%Y-%m-%dT%H:%M:%SZ")
-                            .replace(tzinfo=dt.timezone.utc)) if row["expires"] else "-"
+    expiry = claims_expiry_text(row["expires"])
     state_cell = "**%s** - %s" % (row["state"], row["next"])
     return ["`%s`" % row["lane_id"], where, scope, holder, expiry, "-", state_cell]
 
@@ -460,6 +589,10 @@ class Publisher:
         self.board = pathlib.Path(args.board).resolve() if args.board else self.repo / "data" / "tracker" / "NEXT-BOARD.md"
         self.state = pathlib.Path(args.state).resolve() if args.state else self.repo / "state"
         self.inherit_marker = self.ops / ".inherited-ledger-source"
+        # The teardown copies a lane's own state into data/teardown-archives/
+        # <lane-id>/<date>/ before it removes the lane's spawn record, so an
+        # archive here is the durable witness that a lane ended in THIS home.
+        self.archives = self.repo / "data" / "teardown-archives"
         self.owner = args.owner
         self.ttl = args.claim_ttl_hours
         self.seed_source = pathlib.Path(args.seed_from).resolve() if args.seed_from else None
@@ -536,16 +669,33 @@ class Publisher:
 
     # -- keeping the inherited rows in step -------------------------------
 
+    def inherit_source(self):
+        """The published ledger this home inherited, or None. A row that came
+        from there belongs to the home that published it, so this home never
+        withdraws its claim."""
+        if self.args.no_seed or not self.inherit_marker.is_file():
+            return None
+        named = self.inherit_marker.read_text(encoding="utf-8").strip()
+        if not named:
+            return None
+        path = pathlib.Path(named)
+        return path if path.is_file() else None
+
+    def inherited_identities(self):
+        """The lane ids the inherited published ledger carries. A row that is
+        one of these belongs to the home that published it."""
+        source = self.inherit_source()
+        if source is None:
+            return set()
+        _, published = read_ledger(source)
+        return {row["lane_id"] for row in published if row.get("lane_id")}
+
     def sync_published(self, rows):
         """A row that came from the published ledger is owned by the home that
         published it, so that home stays the authority for it. A row this
         publisher wrote is owned by this home and is never touched here."""
-        source = None
-        if self.inherit_marker.is_file():
-            named = self.inherit_marker.read_text(encoding="utf-8").strip()
-            if named and pathlib.Path(named).is_file():
-                source = pathlib.Path(named)
-        if not source or self.args.no_seed:
+        source = self.inherit_source()
+        if source is None:
             return 0
         _, published = read_ledger(source)
         by_id = {row["lane_id"]: row for row in rows}
@@ -574,6 +724,26 @@ class Publisher:
 
     # -- the lane rows ----------------------------------------------------
 
+    def resolve_lane(self, lane_id):
+        """(identity, meta) for the lane named by lane_id, or (None, None).
+
+        A lane is named by its own id, or by a slot that runs it. A slot that
+        names a task that is not registered here is an EMPTY slot: there is no
+        lane behind it, so it resolves to nothing.
+        """
+        meta = read_meta(self.state, lane_id)
+        if not meta:
+            return None, None
+        if is_secondmate(meta):
+            return None, None
+        identity = meta.get("endpoint_task_id") or lane_id
+        if identity == lane_id:
+            return identity, meta
+        target = read_meta(self.state, identity)
+        if not target or is_secondmate(target):
+            return None, None
+        return identity, target
+
     def register(self, lane_id, rows, header):
         """Write the row for one lane. The spawn record is the source of the
         lane's identity; the row carries the lane's real state."""
@@ -582,16 +752,29 @@ class Publisher:
             self.say("FAIL %s has no spawn record in %s, so there is no lane to publish"
                      % (lane_id, self.state))
             return False
-        if meta.get("kind") == "secondmate" or meta.get("mode") == "secondmate":
+        if is_secondmate(meta):
             self.say("FAIL %s is a second mate, not a lane: it is not published as a lane claim"
                      % lane_id)
             return False
         identity = meta.get("endpoint_task_id") or lane_id
+        if identity != lane_id:
+            # A SLOT record naming a task: the lane is the task, and the task
+            # must be registered here. An empty slot publishes nothing.
+            target = read_meta(self.state, identity)
+            if not target:
+                self.say("FAIL %s is an empty slot: it names %s, which has no spawn record "
+                         "of its own, so there is no lane to publish"
+                         % (lane_id, identity))
+                return False
+            meta = target
         for row in rows:
             if row["lane_id"] in (lane_id, identity):
                 self.say("%s already has a ledger row (state %s)" % (identity, row["state"]))
                 return False
-        alive, note = lane_state(self.state, lane_id)
+        alive, note = lane_state(self.state, identity, fallback_id=lane_id)
+        if not alive:
+            self.say("FAIL %s is not a live lane: its last wake event is terminal" % identity)
+            return False
         row = build_row(identity, meta, note, self.owner, self.ttl)
         rows.append(row)
         cells = build_claims_cells(row, meta, self.repo)
@@ -616,17 +799,19 @@ class Publisher:
             cells[1] = row.get("owner") or self.owner
             cells[2] = row.get("artifact") or "the work its ledger row records"
             cells[3] = "%s (branch `%s`)" % (self.owner, row.get("branch") or "-")
-            cells[4] = claims_expiry(dt.datetime.strptime(row["expires"], "%Y-%m-%dT%H:%M:%SZ")
-                                    .replace(tzinfo=dt.timezone.utc)) if row.get("expires") else "-"
+            cells[4] = claims_expiry_text(row.get("expires"))
             cells[6] = "**%s** - %s" % (row["state"], row.get("next") or "no next action recorded")
             add_claims_row(self.claims, cells)
             claims.add(row["lane_id"])
             added += 1
         if added:
             self.say("added %d claims row(s) for ledger rows that had none" % added)
-        # and the state token of a claims row must agree with the ledger
+        # and the state token AND the expiry of a claims row must agree with
+        # the ledger: the drift checker refuses a board whose scope frees up
+        # at a different instant than the ledger says.
         for row in rows:
-            set_claims_state(self.claims, row["lane_id"], row["state"])
+            set_claims_state(self.claims, row["lane_id"], row["state"],
+                             claims_expiry_text(row.get("expires")))
         return added
 
     # -- republishing the board -------------------------------------------
@@ -679,27 +864,135 @@ class Publisher:
         self.say("republished %s from %s" % (self.board, self.ledger))
         return True
 
+    # -- withdrawing and renewing a claim ---------------------------------
+
+    def closed_next(self, row):
+        """The note a closed lane carries. ONE shape, so a claim withdrawn by
+        the teardown and a claim withdrawn by the catch-up read the same."""
+        artifact = row.get("artifact") or ""
+        if artifact:
+            return ("closed - the lane finished; the follow-up is recorded in its "
+                    "artifact %s" % artifact)
+        return "closed - the lane finished; there is no follow-up recorded"
+
+    def close_row(self, row, reason):
+        """Move one row to DONE: the state, the empty expiry, the note and the
+        updated stamp. The row is never deleted: a row is a record of work
+        that happened."""
+        row["state"] = "DONE"
+        row["expires"] = ""
+        row["updated"] = iso(now_utc())
+        row["next"] = self.closed_next(row)
+        close_claims_row(self.claims, row["lane_id"], "DONE")
+        self.say("closed %s (state DONE, expiry empty): %s" % (row["lane_id"], reason))
+        return True
+
+    def teardown_witness(self, identity):
+        """The durable record that a lane ended in THIS home, or None. The
+        teardown copies the lane's own state into data/teardown-archives/
+        <lane-id>/<date>/ before it removes the lane's spawn record."""
+        archive = self.archives / identity
+        if not archive.is_dir():
+            return None
+        stamps = sorted(p.parent.name for p in archive.glob("*/meta") if p.is_file())
+        if not stamps:
+            return None
+        return "the teardown archive %s/%s records it" % (identity, stamps[-1])
+
+    def close_ended_lanes(self, rows, live_identities):
+        """Withdraw the claim of every lane that has ended.
+
+        A row is closed when the lane it names is no longer REGISTERED in this
+        home AND this home owns the claim.
+
+        THE POSITIVE EVIDENCE that the lane ended is the lane's own spawn
+        record being GONE. A lane is registered by state/<id>.meta, and the
+        teardown is the only thing in the fleet that removes that record, so
+        its absence is a FACT about the lane - never a guess. It is never the
+        absence of a status line: a lane that has not posted a wake event yet
+        has no status line either, and it is still running. A lane that still
+        HAS its spawn record is never closed here, so a close can never hide
+        work that is still running.
+
+        A row this home does not own is never closed, and neither is a row
+        inherited from the published ledger: that row belongs to the home
+        that published it, and that home stays the authority for it.
+        """
+        inherited = self.inherited_identities()
+        closed = 0
+        for row in rows:
+            if row["state"] != "ACTIVE":
+                continue
+            identity = row["lane_id"]
+            if row.get("owner") != self.owner:
+                continue
+            if identity in inherited:
+                continue
+            if identity in live_identities:
+                continue
+            if (self.state / ("%s.meta" % identity)).is_file():
+                # Still registered: the lane may be running. Never close it.
+                continue
+            witness = self.teardown_witness(identity)
+            reason = ("its spawn record is gone" if witness is None
+                      else "its spawn record is gone and %s" % witness)
+            self.close_row(row, reason)
+            closed += 1
+        return closed
+
+    def renew_row(self, row, note):
+        """Renew the claim of a lane that is still alive.
+
+        A claim that is still being worked must never lapse: the drift
+        checker reads a lapsed ACTIVE claim as a violation, so the lease is
+        pushed forward while the lane lives. The lease moves at most once a
+        minute, so a publisher that runs every minute does not churn the
+        ledger on every cycle.
+        """
+        target = now_utc() + dt.timedelta(hours=self.ttl)
+        try:
+            current = dt.datetime.strptime(row.get("expires") or "", "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=dt.timezone.utc)
+        except (TypeError, ValueError):
+            current = None
+        if current is not None and target - current < dt.timedelta(seconds=60):
+            return False
+        row["updated"] = iso(now_utc())
+        row["expires"] = iso(target)
+        if note:
+            row["next"] = note
+        return True
+
     # -- the commands ------------------------------------------------------
 
     def reconcile(self):
         self.seed()
         header, rows = read_ledger(self.ledger)
         changed = self.sync_published(rows)
-        registered = 0
-        for lane_id, meta, note in live_lanes(self.state):
-            identity = meta.get("endpoint_task_id") or lane_id
-            if any(row["lane_id"] == identity for row in rows):
+        live = live_lanes(self.state)
+        live_identities = {identity for identity, _meta, _note in live}
+        # Withdraw the claim of every lane that has ended. A lane that is
+        # still alive is never closed here: its claim is renewed below.
+        changed += self.close_ended_lanes(rows, live_identities)
+        for identity, meta, note in live:
+            row = None
+            for candidate in rows:
+                if candidate["lane_id"] == identity:
+                    row = candidate
+                    break
+            if row is None:
+                row = build_row(identity, meta, note, self.owner, self.ttl)
+                rows.append(row)
+                add_claims_row(self.claims, build_claims_cells(row, meta, self.repo))
+                changed += 1
+                self.say("published %s as ACTIVE (opened %s, expires %s)"
+                         % (identity, row["opened"], row["expires"]))
                 continue
-            alive, _ = lane_state(self.state, lane_id)
-            if not alive:
+            if row["state"] != "ACTIVE" or row.get("owner") != self.owner:
                 continue
-            row = build_row(identity, meta, note, self.owner, self.ttl)
-            rows.append(row)
-            add_claims_row(self.claims, build_claims_cells(row, meta, self.repo))
-            registered += 1
-            changed += 1
-            self.say("published %s as ACTIVE (opened %s, expires %s)"
-                     % (identity, row["opened"], row["expires"]))
+            if self.renew_row(row, note):
+                changed += 1
+                self.say("renewed the claim of %s (expires %s)" % (identity, row["expires"]))
         write_ledger(self.ledger, header, rows)
         self.claims_coverage(rows)
         if self.args.check:
@@ -728,7 +1021,17 @@ class Publisher:
     def do_close(self, lane_id):
         """Close a lane's claim: the row moves to DONE, the expiry empties and
         the claims board says '-' for the scope it held. The row is never
-        deleted: a row is a record of work that happened."""
+        deleted: a row is a record of work that happened.
+
+        --if-present makes "there is nothing to close" a success rather than a
+        failure. The teardown uses it: a lane that never held a claim has
+        nothing stale to withdraw, and that is not an error worth shouting
+        about. A close that FAILS is still a failure, and it is still loud.
+        """
+        if not self.ledger.is_file():
+            self.say("%s has no claim to close: there is no ledger at %s"
+                     % (lane_id, self.ledger))
+            return 0 if self.args.if_present else 1
         self.seed()
         header, rows = read_ledger(self.ledger)
         target = None
@@ -737,19 +1040,13 @@ class Publisher:
                 target = row
                 break
         if target is None:
-            self.say("FAIL %s has no ledger row, so there is nothing to close" % lane_id)
-            return 1
+            self.say("%s has no ledger row, so there is nothing to close" % lane_id)
+            return 0 if self.args.if_present else 1
         if target["state"] == "DONE":
             self.say("%s is already closed" % lane_id)
             return 0
-        target["state"] = "DONE"
-        target["expires"] = ""
-        target["updated"] = iso(now_utc())
-        target["next"] = ("closed - the lane finished; the follow-up is recorded in its "
-                          "artifact %s" % target.get("artifact") or "its report")
+        self.close_row(target, "it was closed on request")
         write_ledger(self.ledger, header, rows)
-        close_claims_row(self.claims, lane_id, "DONE")
-        self.say("closed %s (state DONE, expiry empty)" % lane_id)
         self.republish()
         return 0
 
@@ -759,16 +1056,14 @@ class Publisher:
         deadline = time.time() + self.args.timeout
         # The watch compares lane IDENTITIES (the endpoint task id the spawn
         # record carries), not the file name the record happens to live under.
-        seen = {meta.get("endpoint_task_id") or lane_id
-                for lane_id, meta, _ in live_lanes(self.state)}
+        seen = {identity for identity, _meta, _note in live_lanes(self.state)}
         while time.time() < deadline:
-            for lane_id, meta, note in live_lanes(self.state):
-                identity = meta.get("endpoint_task_id") or lane_id
+            for identity, meta, note in live_lanes(self.state):
                 if identity in seen:
                     continue
                 seen.add(identity)
                 self.say("a lane spawned: %s" % identity)
-                self.do_register(lane_id)
+                self.do_register(identity)
                 return 0
             time.sleep(0.5)
         self.say("FAIL no lane spawned within %d seconds" % self.args.timeout)
@@ -789,6 +1084,8 @@ def main(argv):
     parser.add_argument("--no-refresh", action="store_true")
     parser.add_argument("--no-seed", action="store_true",
                         help="do not inherit the published ledger: this home's ledger stands alone")
+    parser.add_argument("--if-present", action="store_true",
+                        help="with close: a lane that holds no claim is not an error")
     parser.add_argument("--seed-from", default=None,
                         help="the published ledger to inherit from")
     parser.add_argument("--seed-claims-from", default=None,
