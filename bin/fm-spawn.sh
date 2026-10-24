@@ -690,7 +690,22 @@ fi
 # is, in bin/fm-project-capacity-lib.sh.
 #
 # See bin/fm-capacity-gate.sh for the contract and its narrow, logged bypass.
-if ! "$FM_ROOT/bin/fm-capacity-gate.sh" check; then
+#
+# The gate is resolved from THIS SCRIPT'S OWN CODE ROOT first, for the same
+# reason the dispatch guard above is: FM_ROOT_OVERRIDE may name a checkout that
+# does not carry this tool's bin/ tree at all, and a mandatory policy gate must
+# be the gate the RUNNING firstmate ships. A missing gate must be an
+# actionable refusal, never a bare "No such file or directory" from the shell
+# with no hint about which gate was missing.
+CAPACITY_GATE_BIN=""
+for _cg_cand in "$SCRIPT_DIR/fm-capacity-gate.sh" "$FM_ROOT/bin/fm-capacity-gate.sh" "/root/bin/fm-capacity-gate.sh"; do
+  if [ -x "$_cg_cand" ]; then CAPACITY_GATE_BIN="$_cg_cand"; break; fi
+done
+if [ -z "$CAPACITY_GATE_BIN" ]; then
+  echo "fm-spawn: REFUSED - the disk-capacity gate (bin/fm-capacity-gate.sh) was not found at $SCRIPT_DIR/fm-capacity-gate.sh, $FM_ROOT/bin/fm-capacity-gate.sh or /root/bin/fm-capacity-gate.sh, so the Captain's 80% ceiling cannot be evaluated. Restore the ladder owner, or set FM_CAPACITY_GATE_BYPASS=1 to skip the ceiling for this placement (logged by the gate)." >&2
+  exit 64
+fi
+if ! "$CAPACITY_GATE_BIN" check; then
   exit 64
 fi
 # Leave-refused binding gate (captain ruling 2026-10-21, board question

@@ -335,13 +335,23 @@ fm_capacity_critical_section() {
 
 # fm_capacity_gate_check: the ONE decision. Returns 0 to admit, 64 to refuse.
 fm_capacity_gate_check() {
-  local pct verdict out pct2 verdict2 summary rest rc
+  local pct verdict out pct2 verdict2 summary rest rc cap_bypass_var
 
   # The bypass is narrow: it skips THIS check only, and it is always logged and
   # always printed, so it can never be a silent path.
+  #
+  # The notice names the variable that was ACTUALLY set. A bypass message that
+  # names the wrong knob sends the next reader looking for a variable that was
+  # never exported, which is how "the bypass is on" and "the bypass is off"
+  # end up meaning different things to two people.
   if [ "${FM_CAPACITY_GATE_BYPASS:-0}" = "1" ] || [ "${FM_DISPATCH_GUARD_CAPACITY_BYPASS:-0}" = "1" ]; then
-    log_event "BYPASS_CAPACITY"
-    echo "capacity-gate: BYPASS - the disk capacity ceiling was skipped for this placement (FM_CAPACITY_GATE_BYPASS=1)" >&2
+    if [ "${FM_CAPACITY_GATE_BYPASS:-0}" = "1" ]; then
+      cap_bypass_var="FM_CAPACITY_GATE_BYPASS"
+    else
+      cap_bypass_var="FM_DISPATCH_GUARD_CAPACITY_BYPASS"
+    fi
+    log_event "BYPASS_CAPACITY bypass=${cap_bypass_var}"
+    echo "capacity-gate: BYPASS - the disk capacity ceiling was skipped for this placement (${cap_bypass_var}=1, logged)." >&2
     return 0
   fi
 
@@ -355,7 +365,39 @@ fm_capacity_gate_check() {
   fi
 
   if [ "$verdict" != "CAPACITY_BLOCK_NEW_PLACEMENT" ]; then
-    log_event "CAPACITY_ALLOW pct=${pct} verdict=${verdict}"
+    # THE TIERS THAT DO NOT BLOCK STILL SPEAK.
+    #
+    # The Captain's ladder has four tiers and only ONE of them stops a
+    # placement. The other three used to be silent: the gate wrote
+    # "CAPACITY_ALLOW pct=… verdict=…" into its own log file and printed
+    # NOTHING to the person placing the work. A review tier that says nothing
+    # is a review tier that never happens - the ladder's own wording is
+    # "review before placing anything new", and the review was invisible to
+    # the only person who could act on it.
+    #
+    # So the owner states its own verdict out loud, on stderr, on every
+    # placement. The thresholds AND the meaning of each tier live HERE and
+    # nowhere else: a surface that re-derived them would be a second ladder,
+    # and the ladder is the one thing in this repo that must never have two
+    # copies.
+    #
+    # The review tier ADMITS. Blocking at 75% would be a STRONGER policy than
+    # the Captain's ladder, and this gate does not make the ceiling stricter
+    # than the ceiling that was set: 80% is the boundary that stops a
+    # placement, 75% is the boundary that demands a look.
+    case "$verdict" in
+      CAPACITY_REVIEW_REQUIRED)
+        log_event "CAPACITY_REVIEW pct=${pct} verdict=${verdict}"
+        echo "capacity-gate: WARNING - CAPACITY_REVIEW_REQUIRED - the root filesystem is at ${pct}% and the Captain's hard ceiling is 80%. THIS PLACEMENT IS ADMITTED, but review the disk and reclaim before placing anything new. The number comes from 'df -P /' on this host, read by the single owner of the ladder (bin/fm-capacity-gate.sh)." >&2
+        ;;
+      CAPACITY_EARLY_WARNING)
+        log_event "CAPACITY_EARLY_WARNING pct=${pct} verdict=${verdict}"
+        echo "capacity-gate: NOTICE - CAPACITY_EARLY_WARNING - the root filesystem is at ${pct}% and the Captain's hard ceiling is 80%. THIS PLACEMENT IS ADMITTED. This is the tier to reclaim in while there is still headroom. The number comes from 'df -P /' on this host, read by the single owner of the ladder (bin/fm-capacity-gate.sh)." >&2
+        ;;
+      *)
+        log_event "CAPACITY_ALLOW pct=${pct} verdict=${verdict}"
+        ;;
+    esac
     return 0
   fi
 
@@ -411,7 +453,7 @@ fm_capacity_gate_check() {
   fi
 
   log_event "CAPACITY_REFUSED_AFTER_RECLAIM pct=${pct2} verdict=${verdict2}"
-  refuse "the root filesystem is still at ${pct2}% after the reclaim (CAPACITY_BLOCK_NEW_PLACEMENT), so the placement is refused. What the reclaim did: ${summary:-no reclaim was run}. The reclaim only clears regenerable caches and build litter and the merged worktree pool; the remaining bytes are archive-class material that is cold but valuable and is reported, never deleted. Move the archive material off this filesystem, or free space by hand, then dispatch again."
+  refuse "the root filesystem is still at ${pct2}% after the reclaim (CAPACITY_BLOCK_NEW_PLACEMENT), so the placement is refused. The number comes from 'df -P /' on this host, read by the single owner of the ladder (bin/fm-capacity-gate.sh). What the reclaim did: ${summary:-no reclaim was run}. The reclaim only clears regenerable caches and build litter and the merged worktree pool; the remaining bytes are archive-class material that is cold but valuable and is reported, never deleted. Move the archive material off this filesystem, or free space by hand, then dispatch again."
   return 64
 }
 
