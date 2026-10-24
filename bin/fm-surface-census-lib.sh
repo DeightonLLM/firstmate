@@ -101,13 +101,6 @@ fm_surface_census_lanes() {  # [state-dir] [session]
   done
 }
 
-# fm_surface_census_live_lanes_in: the live lane ids hosted by one workspace.
-fm_surface_census_live_lanes_in() {  # <workspace-id> [state-dir] [session]
-  local ws=$1 state=${2:-${FM_STATE_OVERRIDE:-$FM_HOME/state}} session=${3:-$FM_SURFACE_CENSUS_SESSION}
-  fm_surface_census_lanes "$state" "$session" \
-    | awk -F'\037' -v w="$ws" '$4 == w && $8 == "yes" { print $1 }'
-}
-
 # fm_surface_census_task_tabs_in: the TASK TAB labels a workspace holds.
 # A task tab is a tab whose label is "fm-<lane-id>"; any other tab is a free
 # human tab (the Captain's own panes) and is not a lane.

@@ -466,7 +466,7 @@ test_workspace_ensure_refuses_an_ambiguous_label_with_no_launcher() {
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_ensure fmtest /tmp' "$ROOT" 2>&1 )
   status=$?
   expect_code 3 "$status" "two same-labeled home workspaces with no launcher identity must refuse"
-  assert_contains "$out" "labeled 'testhost/primary'" "the ambiguity refusal did not name the duplicated label"
+  assert_contains "$out" "carry the scope 'testhost/primary'" "the ambiguity refusal did not name the duplicated scope"
   assert_contains "$out" "w1 w7" "the ambiguity refusal did not name the candidate workspaces"
   assert_not_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create' "an ambiguous placement must not mint a third same-labeled workspace"
   pass "fm_backend_herdr_workspace_ensure: refuses to guess between two same-labeled home workspaces"
@@ -496,7 +496,7 @@ test_container_ensure_refuses_an_ambiguous_home_label() {
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "container_ensure must fail when the home workspace is ambiguous"
-  assert_contains "$out" "labeled 'testhost/primary'" "container_ensure buried the specific ambiguity it refused"
+  assert_contains "$out" "carry the scope 'testhost/primary'" "container_ensure buried the specific ambiguity it refused"
   assert_not_contains "$out" "failed to ensure herdr workspace" "container_ensure added a generic message over the specific one"
   pass "fm_backend_herdr_container_ensure: surfaces the exact ambiguous-placement refusal instead of a generic failure"
 }
@@ -2325,6 +2325,31 @@ test_projection_reclaim_refusal_matrix_is_non_mutating() {
   pass "herdr presentation reclaim: legacy, cross-home, ambiguous, live/unknown, and focus-unknown cases refuse without mutation"
 }
 
+test_projection_binding_accepts_renamed_parent_workspace() {
+  local dir response out rc token projection
+  dir="$TMP_ROOT/projection-renamed-parent"; mkdir -p "$dir"
+  response="$dir/workspaces.json"
+  token='AbCdEfGhIjKlMnOpQrStUv'
+  projection="└ testhost/primary · task-p2 · p:$token"
+  printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"testhost/primary · 2 lanes"},{"workspace_id":"w2","label":"'"$projection"'"}]}}' > "$response"
+  out=$(ROOT="$ROOT" RESPONSE="$response" PROJECTION="$projection" TOKEN="$token" bash -c '
+    . "$ROOT/bin/backends/herdr.sh"
+    fm_backend_herdr_cli() {
+      case "$*" in
+        *"workspace list"*) cat "$RESPONSE" ;;
+        *"tab list"*) printf "%s\n" "{\"result\":{\"tabs\":[{\"tab_id\":\"w2:t1\",\"label\":\"fm-task-p2\"}]}}" ;;
+        *"pane list"*) printf "%s\n" "{\"result\":{\"panes\":[{\"pane_id\":\"w2:p1\",\"tab_id\":\"w2:t1\"}]}}" ;;
+      esac
+    }
+    rc=0
+    fm_backend_herdr_projection_live_binding_matches \
+      fmtest "$TOKEN" w2 w2:t1 w2:p1 w1 testhost/primary "$PROJECTION" fm-task-p2 || rc=$?
+    printf "%s\n" "$rc"
+  ')
+  [ "$out" = 0 ] || fail "a renamed parent workspace rejected a stable-ID projection binding: $out"
+  pass "herdr presentation binding follows the stable parent workspace ID after a rename"
+}
+
 test_projection_reclaim_replaces_only_exact_husk_and_advances_binding() {
   local dir state home home_real log resp fb journal token label out calls create_line close_line agent_line boundary_mutations
   dir="$TMP_ROOT/projection-reclaim-exact"; state="$dir/state"; home="$dir/home"
@@ -3947,6 +3972,7 @@ test_presentation_session_lock_path_is_shared_across_homes
 test_presentation_session_lock_path_rejects_malformed_socket
 test_projection_order_rejects_malformed_socket
 test_projection_reclaim_refusal_matrix_is_non_mutating
+test_projection_binding_accepts_renamed_parent_workspace
 test_projection_reclaim_replaces_only_exact_husk_and_advances_binding
 test_projection_recovery_is_read_only_and_refuses_live_duplicate_risk
 test_workspace_find_matches_only_this_homes_own_label

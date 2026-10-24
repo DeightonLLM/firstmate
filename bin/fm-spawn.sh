@@ -471,10 +471,72 @@ else
 fi
 [ -z "$HARNESS_ARG" ] || ARG3=$HARNESS_ARG
 
+fm_codex_hook_path_is_trusted() {
+  local path=$1 resolved
+  [ -n "${HOME:-}" ] || return 1
+  [ -f "$path" ] && [ -x "$path" ] || return 1
+  resolved=$(readlink -f -- "$path" 2>/dev/null) || return 1
+  [ -f "$resolved" ] && [ -x "$resolved" ] || return 1
+  case "$resolved" in
+    "$HOME/.local/bin/"*|"$HOME/.codex/"*|"$FM_ROOT/bin/"*) return 0 ;;
+    /usr/lib/node_modules/lean-ctx-bin/bin/lean-ctx.js) return 0 ;;
+  esac
+  return 1
+}
+
+fm_codex_hook_command_is_trusted() {
+  local command=$1 resolved
+  case "$command" in
+    "$HOME/.local/bin/lean-ctx-bin hook observe"|\
+    "$HOME/.local/bin/lean-ctx-bin hook codex-pretooluse"|\
+    "$HOME/.local/bin/lean-ctx-bin hook codex-session-start")
+      fm_codex_hook_path_is_trusted "$HOME/.local/bin/lean-ctx-bin"
+      ;;
+    "/usr/local/bin/lean-ctx hook codex-pretooluse")
+      fm_codex_hook_path_is_trusted /usr/local/bin/lean-ctx
+      ;;
+    "bash '$HOME/.codex/herdr-agent-state.sh' session")
+      fm_codex_hook_path_is_trusted "$HOME/.codex/herdr-agent-state.sh"
+      ;;
+    gh-axi|chrome-devtools-axi|lavish-axi)
+      resolved=$(type -P "$command" 2>/dev/null) || return 1
+      resolved=$(readlink -f -- "$resolved" 2>/dev/null) || return 1
+      case "$resolved" in
+        "$HOME/.local/bin/"*|"$HOME/.nvm/versions/node/"*) [ -x "$resolved" ] ;;
+        *) return 1 ;;
+      esac
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+fm_codex_hook_trust_flag() {
+  local codex_home=${CODEX_HOME:-${HOME:-}/.codex} hooks_json commands command
+  hooks_json="$codex_home/hooks.json"
+  [ -n "${HOME:-}" ] && [ -f "$hooks_json" ] && [ ! -L "$hooks_json" ] || return 1
+  jq -e '(.hooks | type == "object") and all(.hooks[]; type == "array" and all(.[]; type == "object" and ((.enabled // true) == false or ((.hooks | type) == "array" and all(.hooks[]; type == "object" and ((.enabled // true) == false or (.type == "command" and (.command | type == "string"))))))))' "$hooks_json" >/dev/null 2>&1 || return 1
+  commands=$(jq -r '
+    .hooks
+    | to_entries[]
+    | .value[]?
+    | select(type == "object" and ((.enabled // true) == true))
+    | .hooks[]?
+    | select(type == "object" and ((.enabled // true) == true) and .type == "command")
+    | .command
+  ' "$hooks_json" 2>/dev/null) || return 1
+  while IFS= read -r command; do
+    [ -n "$command" ] || continue
+    fm_codex_hook_command_is_trusted "$command" || return 1
+  done <<EOF
+$commands
+EOF
+  printf '%s' '--dangerously-bypass-hook-trust'
+}
+
 # The verified launch command per adapter. The knowledge half of each adapter
 # (busy-state source, exit command, dialogs, quirks) lives in the harness-adapters skill.
 launch_template() {
-  local harness=$1 kind=${2:-ship}
+  local harness=$1 kind=${2:-ship} codex_hook_flag
   # shellcheck disable=SC2016  # single quotes are deliberate: $(cat ...) expands in the crewmate pane, not here
   case "$harness" in
     # CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false disables claude's interactive
@@ -501,10 +563,14 @@ launch_template() {
     # the flag the same TUI launch submits its prompt and answers ("Worked for
     # 3s"); without it the modal never clears.
     codex)
+      codex_hook_flag=$(fm_codex_hook_trust_flag) || {
+        echo "error: refusing codex launch because every enabled hook is not provably fleet-owned" >&2
+        return 1
+      }
       if [ "$kind" = secondmate ]; then
-        printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+        printf '%s%s%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox ' "$codex_hook_flag" ' "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       else
-        printf '%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust -c "notify=[\"bash\",\"-c\",\"touch __TURNEND__\"]" "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
+        printf '%s%s%s' 'codex __MODELFLAG____EFFORTFLAG__--dangerously-bypass-approvals-and-sandbox ' "$codex_hook_flag" ' -c "notify=[\"bash\",\"-c\",\"touch __TURNEND__\"]" "$(__OPINPUT__ encode launch-brief < __BRIEF__)"'
       fi
       ;;
     opencode) printf '%s' 'OPENCODE_CONFIG_CONTENT='\''{"permission":{"*":"allow"}}'\'' opencode __MODELFLAG__--prompt "$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;

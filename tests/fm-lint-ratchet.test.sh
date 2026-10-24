@@ -12,7 +12,8 @@
 #   3. ONE baselined diagnostic that disappeared FAILS and is named
 #   4. a baseline entry that is deleted FAILS (the baseline decides, not the
 #      code alone)
-#   5. the update refuses to record a new diagnostic and only ratchets down
+#   5. a same-code replacement at another location FAILS
+#   6. the update refuses to record a new diagnostic and only ratchets down
 #
 # The test drives the ratchet directly with synthetic ShellCheck reports, so
 # it stays fast. The end-to-end proof over the real tree is the lint job
@@ -33,11 +34,11 @@ CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
 synthetic_report() {  # <baseline> <out-file>
   awk -F'\t' '
     /^#/ { next }
-    NF >= 3 {
-      for (i = 0; i < $3; i++) {
-        printf "In %s line %d:\n", $1, i + 1
-        printf "a synthetic source line\n"
-        printf "^-- %s (info): a synthetic reproduction of a baselined finding\n", $2
+    NF >= 6 {
+      for (i = 0; i < $6; i++) {
+        printf "In %s line %s:\n", $1, $3
+        printf "%*s synthetic source line\n", $4, ""
+        printf "%*s^-- %s (info): %s\n", $4 - 1, "", $2, $5
         printf "\n"
       }
     }
@@ -47,7 +48,7 @@ synthetic_report() {  # <baseline> <out-file>
 # The files the baseline describes are the files the comparison considers
 # linted, so a baselined diagnostic that is gone is reported as missing.
 linted_list() {  # <baseline> <out-file>
-  awk -F'\t' '/^#/ { next } NF >= 3 { print $1 }' "$1" | LC_ALL=C sort -u > "$2"
+  awk -F'\t' '/^#/ { next } NF >= 6 { print $1 }' "$1" | LC_ALL=C sort -u > "$2"
 }
 
 test_the_committed_baseline_is_well_formed() {
@@ -57,7 +58,7 @@ test_the_committed_baseline_is_well_formed() {
   tmp=$(fm_test_tmproot fm-lint-ratchet-baseline)
   mkdir -p "$tmp"
   listed="$tmp/listed"
-  awk -F'\t' '/^#/ { next } NF >= 3 { print $1 }' "$BASELINE" | LC_ALL=C sort -u > "$listed"
+  awk -F'\t' '/^#/ { next } NF >= 6 { print $1 }' "$BASELINE" | LC_ALL=C sort -u > "$listed"
   total=$(wc -l < "$listed" | tr -d ' ')
   [ "$total" -gt 0 ] || fail "the committed baseline records no diagnostic at all"
   # Every baseline file must be a tracked canonical shell file, or the clean
@@ -84,6 +85,23 @@ test_matching_diagnostics_pass() {
   [ "$rc" -eq 0 ] || fail "the ratchet rejected diagnostics that match the baseline"$'\n'"$out"
   assert_contains "$out" "ratchet OK" "the ratchet did not report a passing verdict"
   pass "diagnostics that match the committed baseline pass the ratchet"
+}
+
+test_same_code_replacement_fails() {
+  local tmp out rc
+  tmp=$(fm_test_tmproot fm-lint-ratchet-replacement)
+  mkdir -p "$tmp"
+  printf '# synthetic baseline\nfixture.sh\tSC2086\t10\t1\told diagnostic\t1\n' > "$tmp/baseline.tsv"
+  printf 'fixture.sh\n' > "$tmp/linted.txt"
+  printf 'In fixture.sh line 11:\nsource\n^-- SC2086 (warning): new diagnostic\n' > "$tmp/report.txt"
+  rc=0
+  out=$("$RATCHET" --compare "$tmp/report.txt" "$tmp/baseline.tsv" "$tmp/linted.txt" 2>&1) || rc=$?
+  [ "$rc" -eq 1 ] || fail "the ratchet accepted a same-code replacement at a new location (exit $rc)"$'\n'"$out"
+  assert_contains "$out" "NEW diagnostic not in the baseline" \
+    "the ratchet did not report the replacement diagnostic"
+  assert_contains "$out" "no longer present" \
+    "the ratchet did not report the replaced diagnostic"
+  pass "a same-code diagnostic replacement fails the ratchet"
 }
 
 test_one_new_diagnostic_fails() {
@@ -223,6 +241,7 @@ PY
 
 test_the_committed_baseline_is_well_formed
 test_matching_diagnostics_pass
+test_same_code_replacement_fails
 test_one_new_diagnostic_fails
 test_one_missing_diagnostic_fails
 test_a_deleted_baseline_entry_fails

@@ -20,8 +20,8 @@
 #   exit 2  usage or I/O error.
 #
 # The baseline only ratchets down: --update-baseline refuses to record any
-# diagnostic whose (file, code) count is above the recorded one, so a new
-# diagnostic has to be fixed in the source before it can be recorded.
+# diagnostic fingerprint is above the recorded one, so a new diagnostic has to
+# be fixed in the source before it can be recorded.
 #
 # Canonical lint defaults to two bounded workers over two stable logical shards.
 # Each shard writes separate diagnostics, and the parent replays those outputs in

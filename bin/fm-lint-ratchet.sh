@@ -11,24 +11,19 @@
 #   exit 0  no drift. Every diagnostic the lint found is already recorded in
 #           the baseline, and every baselined diagnostic of a linted file is
 #           still present.
-#   exit 1  drift. A NEW diagnostic appeared (a file/code count above the
-#           baseline) or a baselined diagnostic DISAPPEARED (a file/code count
-#           below the baseline, which means the baseline is stale).
+#   exit 1  drift. A NEW diagnostic appeared or a baselined diagnostic
+#           DISAPPEARED from a linted file.
 #   exit 2  usage or I/O error.
 #
-# The baseline format is one tab-separated record per (file, ShellCheck code):
+# The baseline format is one tab-separated record per diagnostic fingerprint:
 #
-#   <file>\t<SCxxxx>\t<count>
+#   <file>\t<SCxxxx>\t<line>\t<column>\t<message>\t<count>
 #
-# sorted by file, then by code. The count is per file and per code rather than
-# per line, so an unrelated edit above a baselined diagnostic does not churn
-# the baseline, while a second diagnostic of the same code in the same file
-# still shows up as drift. '#' comment lines carry the metadata and are
+# sorted by the complete fingerprint. '#' comment lines carry metadata and are
 # ignored by the comparison.
 #
-# The ratchet only ratchets DOWN. --update refuses to record any (file, code)
-# count above the one already recorded, so the recorded total can never grow;
-# a new diagnostic has to be fixed in the source first.
+# The ratchet only ratchets DOWN. --update refuses to record any fingerprint
+# above the one already recorded, so the recorded total can never grow.
 #
 # Usage:
 #   fm-lint-ratchet.sh --compare <diagnostics> <baseline> [linted-files]
@@ -49,42 +44,44 @@ die() {
   exit 2
 }
 
-# Parse a ShellCheck default-format report into one "<file>\t<code>" record
-# per diagnostic. Only caret lines carry a diagnostic, so the source line
-# echoed above them and the "For more information" trailer are ignored.
-fm_ratchet_pairs() {  # <diagnostics-file>
+# Parse a ShellCheck default-format report into one fingerprint per diagnostic.
+fm_ratchet_diagnostics() {  # <diagnostics-file>
   awk '
-    /^In .* line [0-9]+:$/ { file = $2; next }
+    /^In .* line [0-9]+:$/ { file = $2; line = $4; sub(/:$/, "", line); next }
     /^[[:space:]]*\^/ {
-      if (match($0, /SC[0-9]+ \((info|warning|style|error)\):/)) {
+      if (match($0, /\^[-^]+[[:space:]]+SC[0-9]+/)) {
         code = substr($0, RSTART, RLENGTH)
-        sub(/ .*/, "", code)
-        if (file != "") print file "\t" code
+        sub(/^.*[[:space:]]/, "", code)
+        column = RSTART
+        message = $0
+        sub(/^[[:space:]]*\^[-^]+[[:space:]]+SC[0-9]+[[:space:]]+\([^)]*\):[[:space:]]*/, "", message)
+        gsub(/\t/, " ", message)
+        if (file != "" && line != "") print file "\t" code "\t" line "\t" column "\t" message
       }
     }
   ' "$1"
 }
 
-# Aggregate pairs into one "<file>\t<code>\t<count>" record per pair.
+# Aggregate fingerprints and retain duplicate counts.
 fm_ratchet_counts() {  # <pairs-file>
   LC_ALL=C sort "$1" \
-    | awk -F'\t' '{ c[$1 "\t" $2]++ } END { for (k in c) print k "\t" c[k] }' \
+    | awk -F'\t' '{ c[$1 "\t" $2 "\t" $3 "\t" $4 "\t" $5]++ } END { for (k in c) print k "\t" c[k] }' \
     | LC_ALL=C sort
 }
 
-# Read the committed baseline into "<file>\t<code>\t<count>" records.
+# Read the committed baseline into fingerprint records.
 fm_ratchet_baseline() {  # <baseline-file>
   awk -F'\t' '
     /^#/ { next }
-    NF >= 3 { print $1 "\t" $2 "\t" $3 }
+    NF >= 6 { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 "\t" $6 }
   ' "$1"
 }
 
 # Compare the current counts with the baseline. Prints one tagged record per
 # drift and a final TOTALS record:
 #
-#   NEW\t<file>\t<code>\t<delta>\t<baseline-count>
-#   MISSING\t<file>\t<code>\t<delta>\t<baseline-count>
+#   NEW\t<file>\t<code>\t<line>\t<column>\t<message>\t<delta>\t<baseline-count>
+#   MISSING\t<file>\t<code>\t<line>\t<column>\t<message>\t<delta>\t<baseline-count>
 #   TOTALS\t<new>\t<missing>\t<current-total>\t<baseline-total>
 #
 # The third input file lists the files this run linted. A baselined
@@ -92,8 +89,8 @@ fm_ratchet_baseline() {  # <baseline-file>
 # file never fails because the other files were not part of the run.
 fm_ratchet_compare() {  # <current-counts> <baseline> [linted-files]
   awk -F'\t' -v have_linted="${3:-}" '
-    FILENAME == ARGV[1] { cur[$1 "\t" $2] = $3 + 0; next }
-    FILENAME == ARGV[2] { base[$1 "\t" $2] = $3 + 0; next }
+    FILENAME == ARGV[1] { cur[$1 "\t" $2 "\t" $3 "\t" $4 "\t" $5] = $6 + 0; next }
+    FILENAME == ARGV[2] { base[$1 "\t" $2 "\t" $3 "\t" $4 "\t" $5] = $6 + 0; next }
     FILENAME == ARGV[3] { linted[$1] = 1; next }
     END {
       new_total = 0
@@ -105,7 +102,7 @@ fm_ratchet_compare() {  # <current-counts> <baseline> [linted-files]
         b = (k in base) ? base[k] : 0
         if (cur[k] > b) {
           split(k, parts, "\t")
-          printf "NEW\t%s\t%s\t%d\t%d\n", parts[1], parts[2], cur[k] - b, b
+          printf "NEW\t%s\t%s\t%s\t%s\t%s\t%d\t%d\n", parts[1], parts[2], parts[3], parts[4], parts[5], cur[k] - b, b
           new_total += cur[k] - b
         }
       }
@@ -115,7 +112,7 @@ fm_ratchet_compare() {  # <current-counts> <baseline> [linted-files]
         baseline_total += base[k]
         c = (k in cur) ? cur[k] : 0
         if (c < base[k]) {
-          printf "MISSING\t%s\t%s\t%d\t%d\n", parts[1], parts[2], base[k] - c, base[k]
+          printf "MISSING\t%s\t%s\t%s\t%s\t%s\t%d\t%d\n", parts[1], parts[2], parts[3], parts[4], parts[5], base[k] - c, base[k]
           missing_total += base[k] - c
         }
       }
@@ -125,16 +122,16 @@ fm_ratchet_compare() {  # <current-counts> <baseline> [linted-files]
 }
 
 fm_ratchet_print_report() {  # <comparison-body>
-  local kind file code delta base
-  while IFS=$'\t' read -r kind file code delta base; do
+  local kind file code line column message delta base
+  while IFS=$'\t' read -r kind file code line column message delta base; do
     case "$kind" in
       NEW)
-        printf 'fm-lint-ratchet.sh: NEW diagnostic not in the baseline: %s %s (+%s, baseline %s)\n' \
-          "$file" "$code" "$delta" "$base"
+        printf 'fm-lint-ratchet.sh: NEW diagnostic not in the baseline: %s %s line %s column %s (%s, +%s, baseline %s)\n' \
+          "$file" "$code" "$line" "$column" "$message" "$delta" "$base"
         ;;
       MISSING)
-        printf 'fm-lint-ratchet.sh: baselined diagnostic no longer present: %s %s (-%s, baseline %s)\n' \
-          "$file" "$code" "$delta" "$base"
+        printf 'fm-lint-ratchet.sh: baselined diagnostic no longer present: %s %s line %s column %s (%s, -%s, baseline %s)\n' \
+          "$file" "$code" "$line" "$column" "$message" "$delta" "$base"
         ;;
     esac
   done <<EOF
@@ -175,7 +172,7 @@ if [ "$MODE" = "--count" ]; then
   [ "$#" -ge 1 ] || die "--count needs a baseline path."
   BASELINE=$1
   [ -f "$BASELINE" ] || die "baseline not found: $BASELINE"
-  fm_ratchet_baseline "$BASELINE" | awk -F'\t' '{ total += $3 } END { printf "%d\n", total + 0 }'
+  fm_ratchet_baseline "$BASELINE" | awk -F'\t' '{ total += $6 } END { printf "%d\n", total + 0 }'
   exit 0
 fi
 
@@ -194,10 +191,10 @@ trap cleanup EXIT
 
 PAIRS="$WORK_DIR/pairs"
 COUNTS="$WORK_DIR/counts"
-fm_ratchet_pairs "$DIAGNOSTICS" > "$PAIRS"
+fm_ratchet_diagnostics "$DIAGNOSTICS" > "$PAIRS"
 fm_ratchet_counts "$PAIRS" > "$COUNTS"
 
-CURRENT_TOTAL=$(awk -F'\t' '{ total += $3 } END { printf "%d\n", total + 0 }' "$COUNTS")
+CURRENT_TOTAL=$(awk -F'\t' '{ total += $6 } END { printf "%d\n", total + 0 }' "$COUNTS")
 
 if [ "$MODE" = "--update" ]; then
   # The baseline may only lose diagnostics, never gain one. The same comparison
@@ -238,15 +235,14 @@ if [ "$MODE" = "--update" ]; then
   {
     printf '# fm-lint-baseline.tsv - the committed ShellCheck baseline for this repository.\n'
     printf '#\n'
-    printf '# One record per (file, ShellCheck code): <file>\t<SCxxxx>\t<count>, sorted by\n'
+    printf '# One record per diagnostic fingerprint: <file>\t<SCxxxx>\t<line>\t<column>\t<message>\t<count>, sorted by\n'
     printf '# file then code. bin/fm-lint.sh collects the diagnostics; bin/fm-lint-ratchet.sh\n'
     printf '# owns this format, the comparison, and the update.\n'
     printf '#\n'
     printf '# Recorded: %s diagnostics across %s files.\n' "$CURRENT_TOTAL" "$FILE_COUNT"
     printf '#\n'
     printf '# The ratchet only ratchets down: bin/fm-lint.sh --update-baseline refuses to\n'
-    printf '# record a new diagnostic, so this count can never grow. A new diagnostic has\n'
-    printf '# to be fixed in the source first.\n'
+    printf '# record a new fingerprint, so this count can never grow.\n'
     cat "$COUNTS"
   } > "$TMP_BASELINE" || die "could not write $TMP_BASELINE"
   mv -f "$TMP_BASELINE" "$BASELINE" || die "could not replace $BASELINE"
