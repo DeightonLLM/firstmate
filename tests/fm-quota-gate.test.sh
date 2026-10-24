@@ -4,7 +4,7 @@
 # behaviour through a stub quota-axi emitting canned provider JSON - no
 # source-text assertions.
 set -u
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 GATE=bin/fm-quota-gate.sh
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT

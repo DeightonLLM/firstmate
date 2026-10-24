@@ -131,7 +131,7 @@ t7_refuse_inactive() {
 t8_spawn_refuses_env() {
   mkdir -p "$STATE_DIR" "$DATA_DIR"
   RAW_HERDR_SENPI=1 \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -150,8 +150,8 @@ t8_spawn_refuses_env() {
 t9_spawn_refuses_file() {
   printf 'RAW_HERDR_SENPI=1\n' > "$CONF_DIR/raw-herdr-senpi.env"
   mkdir -p "$STATE_DIR" "$DATA_DIR"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -170,7 +170,7 @@ t9_spawn_refuses_file() {
 t10_spawn_help_allowed_env() {
   mkdir -p "$STATE_DIR" "$DATA_DIR"
   RAW_HERDR_SENPI=1 \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -188,8 +188,8 @@ t10_spawn_help_allowed_env() {
 t11_alwaysfour_spawn_refuses() {
   printf 'RAW_HERDR_SENPI=1\n' > "$CONF_DIR/raw-herdr-senpi.env"
   mkdir -p "$STATE_DIR" "$DATA_DIR"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -207,8 +207,8 @@ t11_alwaysfour_spawn_refuses() {
 t12_alwaysfour_cycle_refuses() {
   printf 'RAW_HERDR_SENPI=1\n' > "$CONF_DIR/raw-herdr-senpi.env"
   mkdir -p "$STATE_DIR" "$DATA_DIR"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -226,8 +226,8 @@ t12_alwaysfour_cycle_refuses() {
 t13_alwaysfour_daemon_refuses() {
   printf 'RAW_HERDR_SENPI=1\n' > "$CONF_DIR/raw-herdr-senpi.env"
   mkdir -p "$STATE_DIR" "$DATA_DIR"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -245,8 +245,8 @@ t13_alwaysfour_daemon_refuses() {
 t14_alwaysfour_status_allowed() {
   printf 'RAW_HERDR_SENPI=1\n' > "$CONF_DIR/raw-herdr-senpi.env"
   mkdir -p "$STATE_DIR" "$DATA_DIR"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -262,8 +262,8 @@ t14_alwaysfour_status_allowed() {
 t15_alwaysfour_checkeligible_allowed() {
   printf 'RAW_HERDR_SENPI=1\n' > "$CONF_DIR/raw-herdr-senpi.env"
   mkdir -p "$STATE_DIR" "$DATA_DIR"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -322,8 +322,8 @@ t18_report_active_file() {
 # =============================================================================
 t19_preflight_not_blocked_by_mode() {
   printf 'RAW_HERDR_SENPI=1\n' > "$CONF_DIR/raw-herdr-senpi.env"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
     output=$(timeout 10s "$PREFLIGHT" --pane-id test-pane --expected-model MiniMax-M2.7 2>&1 || true)
   # preflight must NOT cite RAW_HERDR_SENPI refusal line
@@ -336,8 +336,8 @@ t19_preflight_not_blocked_by_mode() {
 # =============================================================================
 t20_preflight_allows() {
   printf 'RAW_HERDR_SENPI=0\n' > "$CONF_DIR/raw-herdr-senpi.env"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
     output=$(timeout 10s "$PREFLIGHT" --pane-id test-pane --expected-model MiniMax-M2.7 2>&1 || true)
   echo "$output" | grep -q "RAW_HERDR_SENPI mode is active" && { fail "T20: preflight should not cite RAW_HERDR_SENPI when inactive"; return 1; }
@@ -349,8 +349,8 @@ t20_preflight_allows() {
 # =============================================================================
 t21_spawn_allows_zero() {
   printf 'RAW_HERDR_SENPI=0\n' > "$CONF_DIR/raw-herdr-senpi.env"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -379,8 +379,8 @@ t22_config_file_missing_var() {
 t23_status_shows_senpi_active() {
   printf 'RAW_HERDR_SENPI=1\n' > "$CONF_DIR/raw-herdr-senpi.env"
   mkdir -p "$STATE_DIR" "$DATA_DIR"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -397,8 +397,8 @@ t23_status_shows_senpi_active() {
 t24_status_shows_senpi_inactive() {
   printf 'RAW_HERDR_SENPI=0\n' > "$CONF_DIR/raw-herdr-senpi.env"
   mkdir -p "$STATE_DIR" "$DATA_DIR"
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
     FM_CONFIG_OVERRIDE="$CONF_DIR" \
@@ -416,8 +416,8 @@ t24_status_shows_senpi_inactive() {
 t25_live_durable_mode_blocks_spawn() {
   mkdir -p "$STATE_DIR" "$DATA_DIR"
   # FM_CONFIG_OVERRIDE points at the real SCRIPT_DIR/config which has RAW_HERDR_SENPI=1
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_CONFIG_OVERRIDE="$SCRIPT_DIR/config" \
     FM_STATE_OVERRIDE="$STATE_DIR" \
     FM_DATA_OVERRIDE="$DATA_DIR" \
@@ -435,8 +435,8 @@ t25_live_durable_mode_blocks_spawn() {
 # =============================================================================
 t26_live_preflight_not_blocked() {
   # Use the real firstmate config (RAW_HERDR_SENPI=1 is set there)
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_CONFIG_OVERRIDE="$SCRIPT_DIR/config" \
     output=$(timeout 10s "$PREFLIGHT" --pane-id test-pane --expected-model MiniMax-M2.7 2>&1 || true)
   # Must NOT cite RAW_HERDR_SENPI
@@ -450,8 +450,8 @@ t26_live_preflight_not_blocked() {
 # sets RAW_HERDR_SENPI=1. This is the primary scenario the operator cares about.
 # =============================================================================
 t27_live_help_allowed() {
-  RAW_HERDR_SENPI= \
-    FM_RAW_HERDR_SENPI_BYPASS= \
+  RAW_HERDR_SENPI='' \
+    FM_RAW_HERDR_SENPI_BYPASS='' \
     FM_CONFIG_OVERRIDE="$SCRIPT_DIR/config" \
     FM_HOME="$CONF_DIR" \
     FM_ROOT="$SCRIPT_DIR" \
