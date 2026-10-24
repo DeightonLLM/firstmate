@@ -609,7 +609,7 @@ status_verb_of_line() {
 #   4. the task status log <state-dir>/<endpoint_task_id>.status exists and its
 #      last non-empty line's verb is non-empty and NOT a terminal verb
 #   5. FALLBACK, only when there is no status line to read: the pane's own
-#      foreground process is alive (see fm_pane_foreground_harness_alive)
+#      foreground process is alive (see fm_pane_foreground_harness_state)
 #
 # No CPU time, process sleep state, marker mtime, or rendered-UI regex is read
 # here: bin/fm-busy-lib.sh explicitly forbids those as liveness signals, so
@@ -664,15 +664,26 @@ worker_task_is_working() {
     fi
   fi
 
-  # No status line to read (missing, empty, or unparseable).  Fall back to the
-  # pane's foreground process, which is the ONLY oracle that exists for a
+  # No status line to read (missing, empty, or unparseable).  Fall back to
+  # the pane's foreground process, which is the ONLY oracle that exists for a
   # harness the backend has no adapter for: herdr ships no MCode adapter, so
   # `herdr agent get` answers agent_not_found for every MCode pane and reads
   # a live worker as dead.
+  #
+  # This is the THREE-STATE oracle (0 = the harness IS running, 1 = the pane
+  # is readable and the harness is NOT running, 2 = unknown).  The boolean
+  # spelling of the same query answered "not running" for BOTH "dead" and
+  # "unknown", and that answer is preserved here exactly: only state 0 means
+  # the worker is there.
   harness=$(fm_meta_get "$meta" harness 2>/dev/null || true)
   [ -n "$harness" ] || harness="${FM_ALWAYS_FOUR_HARNESS:-}"
   [ -n "$harness" ] || return 1
-  fm_pane_foreground_harness_alive "$backend" "$target" "$harness" && return 0
+  local fg_state=0
+  fg_state=0
+  fm_pane_foreground_harness_state "$backend" "$target" "$harness" || fg_state=$?
+  if [ "$fg_state" = 0 ]; then
+    return 0
+  fi
 
   return 1
 }
@@ -725,38 +736,15 @@ fm_pane_foreground_harness_state() {  # <backend> <target> <harness>
   return 1
 }
 
-fm_pane_foreground_harness_alive() {  # <backend> <target> <harness>
-  local backend=$1 target=$2 harness=$3
-  local session pane out
-
-  [ "$backend" = herdr ] || return 1
-  [ -n "$target" ] || return 1
-  [ -n "$harness" ] || return 1
-  command -v herdr >/dev/null 2>&1 || return 1
-  command -v jq >/dev/null 2>&1 || return 1
-
-  # The target shape is "<session>:<pane>", the same split that
-  # bin/backends/herdr.sh's fm_backend_herdr_parse_target owns.
-  session=${target%%:*}
-  pane=${target#*:}
-  [ "$pane" != "$target" ] || session=""
-  [ -n "$pane" ] || return 1
-
-  if [ -n "$session" ]; then
-    out=$(HERDR_SESSION="$session" herdr pane process-info --pane "$pane" --session "$session" 2>/dev/null) || return 1
-  else
-    out=$(herdr pane process-info --pane "$pane" 2>/dev/null) || return 1
-  fi
-
-  printf '%s' "$out" | jq -e --arg h "$harness" '
-    [ (.result.process_info.foreground_processes // [])[]
-      | select(
-          ((.name // "") | contains($h))
-          or ( ((.argv // []) | join(" ")) | contains($h) )
-        )
-    ] | length > 0
-  ' >/dev/null 2>&1
-}
+# REMOVED 2026-10-24 (six-findings R38): fm_pane_foreground_harness_alive.
+# It was a byte-for-byte copy of fm_pane_foreground_harness_state with a
+# different exit mapping, and the three-state form subsumes it: it can also
+# say "I do not know", which a boolean cannot.  Two copies of one liveness
+# rule is how the two copies drift apart.  Every caller - the census
+# fallback in worker_task_is_working, and both terminal guards in
+# lane_is_active and count_active_worker_tasks - now uses the three-state
+# form, so a terminal task whose retained pane transcript still reads busy
+# is still never counted active.
 
 # Return 0 if the given lane is provably working (active).
 # A working lane must NOT be replaced.
@@ -1263,11 +1251,12 @@ next_eligible_task() {
   build_inflight_tmp 2>/dev/null || true
   build_valid_projects_tmp 2>/dev/null || true
 
-  # Build in-flight set from lane metas
-  local in_flight_cmd="grep -l 'endpoint_task_id=' $STATE/lane-*.meta 2>/dev/null | "
-  in_flight_cmd="${in_flight_cmd}while read f; do "
-  in_flight_cmd="${in_flight_cmd}grep '^endpoint_task_id=' \"\$f\" 2>/dev/null | "
-  in_flight_cmd="${in_flight_cmd}cut -d= -f2; done"
+  # The in-flight set comes ENTIRELY from the shell-generated temp file the
+  # awk below reads (state/.always-four.inflight.tmp).  The old
+  # "in_flight_cmd" string built here was never evaluated by anything: it
+  # was a second, DEAD spelling of a set the temp file already owned, and a
+  # dead second copy of a rule is exactly how the two copies drift apart.
+  # Removed 2026-10-24 (six-findings R39).
 
   # POSIX awk: scan backlog for first queued item without blocked-by.
   # Scans for lines matching: "  - [ ] task-id - title"

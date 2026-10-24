@@ -1151,10 +1151,15 @@ BACKLOG
   pass "next_eligible_task skips rows whose project is not a checkout"
 }
 
-test_pane_foreground_harness_alive_matches_only_the_running_harness() {
+test_pane_foreground_harness_state_matches_only_the_running_harness() {
   # The census fallback: a lane with no .status file (the MiniMax harness
   # writes none) is judged by its pane's foreground process.  That oracle must
   # match the harness that is actually running, and nothing else.
+  #
+  # There is ONE foreground-process oracle (fm_pane_foreground_harness_state,
+  # three-state).  The boolean spelling of the same query was removed
+  # 2026-10-24 (six-findings R38); this test now pins the three states
+  # directly, so a future second copy of the rule cannot come back unnoticed.
   local dir fakebin
   dir=$(mktemp -d)
   fakebin="$dir/bin"; mkdir -p "$fakebin"
@@ -1166,16 +1171,20 @@ JSON
 STUB
   chmod +x "$fakebin/herdr"
 
-  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_alive herdr default:w99:p1 minimax-code )
-  [ $? -eq 0 ] || fail "a pane running minimax-code must read as alive"
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_state herdr default:w99:p1 minimax-code )
+  [ $? -eq 0 ] || fail "a pane running minimax-code must read as alive (0)"
 
-  if ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_alive herdr default:w99:p1 codex ) >/dev/null 2>&1; then
-    fail "a pane running minimax-code must NOT read as a codex pane"
-  fi
+  # A readable pane running another harness is DEFINITIVELY dead (1).
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_state herdr default:w99:p1 codex )
+  [ $? -eq 1 ] || fail "a pane running minimax-code must NOT read as a codex pane"
 
   # A non-herdr backend has no such oracle and must never claim to be alive.
-  if ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_alive tmux default:w99:p1 minimax-code ) >/dev/null 2>&1; then
-    fail "a tmux target must not use the herdr foreground-process oracle"
+  ( PATH="$fakebin:$PATH"; fm_pane_foreground_harness_state tmux default:w99:p1 minimax-code )
+  [ $? -eq 2 ] || fail "a tmux target must not use the herdr foreground-process oracle"
+
+  # The boolean spelling must be gone: one liveness rule, one implementation.
+  if declare -F fm_pane_foreground_harness_alive >/dev/null 2>&1; then
+    fail "the duplicate boolean foreground-process oracle must not exist"
   fi
 
   pass "the pane foreground-process oracle matches the running harness and nothing else"
@@ -1574,7 +1583,7 @@ for _t in \
   test_next_eligible_task_skips_captain_call_rows \
   test_lane_key_for_task_never_doubles_the_prefix \
   test_next_eligible_task_skips_unroutable_project_rows \
-  test_pane_foreground_harness_alive_matches_only_the_running_harness \
+  test_pane_foreground_harness_state_matches_only_the_running_harness \
   test_scheduler_moves_a_dispatched_row_with_tasks_axi_start \
   test_dispatch_ownership_requires_spawn_and_commits_success \
   test_dispatch_commit_failure_cleans_endpoint_and_requeues \

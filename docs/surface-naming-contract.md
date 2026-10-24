@@ -39,6 +39,27 @@ A fresh workspace may temporarily use the scope-only form while it has no task
 lanes. The Herdr adapter adds the summary when the first task lane is created;
 once a workspace has a lane, its label always includes the summary.
 
+The lane summary is a **live count**, not a snapshot. Both halves of the
+container's lifecycle maintain it:
+
+- the **create** path writes it when a task lane is created, counting the task
+  tabs the container holds after the create;
+- the **close** path rewrites it when a task lane closes, counting the task
+  tabs the container holds after the close.
+
+So closing one of two lanes renames the container to `scope · <lane-id>`, and
+closing the last lane restores the scope-only form - the exact label a fresh
+workspace of that home carries. A summary that is left behind as a snapshot
+is a false statement about the running surface, and the naming check cannot
+catch it: a stale count is syntactically valid, so it reads as conforming.
+The count is of TASK TABS the container physically holds right now; whether
+each of those lanes is alive is a separate question, answered by
+`bin/fm-surface-view.sh`.
+
+Only the home's OWN container is relabelled by that home: the relabel is
+gated on the same scope matcher the spawn path uses to resolve a home's
+container, so a close inside another home's container can never take it over.
+
 A **scope** is the machine-matchable half of a workspace label: everything
 before the first separator. The Herdr adapter resolves a home's container by
 SCOPE, never by the whole label, so a container may say how many lanes it
@@ -94,6 +115,12 @@ A home may own more than one container. The role names which one:
 3. a tab that a lane record names does not carry that lane's `fm-<lane-id>`
    label;
 4. a lane of this home sits inside another home's container.
+
+The check reads the live surface through `bin/fm-surface-census-lib.sh`, and
+that census **fails closed**: a Herdr response that does not carry the
+expected structure is an UNREADABLE surface, not an empty one, so the check
+refuses to report "OK every live workspace and task tab name conforms" for a
+census it never took. A clean report means the surface was read.
 
 A legacy label (`firstmate`, `2ndmate-<id>`,
 `firstmate-afk-daemon-<pid>-<n>-<ts>`) is reported as a violation WITH the

@@ -32,31 +32,58 @@ FM_SURFACE_CENSUS_SESSION=${FM_SURFACE_CENSUS_SESSION:-default}
 # exceptional, so the separator must preserve empty fields.
 FM_SURFACE_CENSUS_FS=$'\x1f'
 
+# fm_surface_census_validates: is this herdr response a READABLE census
+# collection?
+#
+# The census is EVIDENCE about a live surface, so a response that does not
+# carry the expected structure is not an empty surface - it is an UNREADABLE
+# one, and the two must never read the same. A reader that turned "unreadable"
+# into "zero rows" made the visibility view print an all-zero census and the
+# naming check print "OK every live workspace and task tab name conforms" for
+# a surface it never read: a clean report for a census nobody took.
+#
+# The gate is therefore: the response must be an object whose "result" is an
+# object, whose named collection is an ARRAY, and every element of that
+# collection must carry a non-empty string id. Anything else fails, and the
+# caller must report that it could not read the surface.
+#
+# <raw-json> <collection-key> <id-key>
+fm_surface_census_validates() {  # <raw-json> <collection-key> <id-key>
+  printf '%s' "$1" | jq -e --arg key "$2" --arg idkey "$3" '
+    (.result | type == "object")
+    and (.result[$key] | type == "array")
+    and all(.result[$key][]; (.[$idkey] | type == "string") and (.[$idkey] | length > 0))
+  ' >/dev/null 2>&1
+}
+
 # fm_surface_census_workspaces: "<workspace_id>\t<label>" per workspace.
 fm_surface_census_workspaces() {  # [session]
   local session=${1:-$FM_SURFACE_CENSUS_SESSION} out
   out=$(herdr workspace list --session "$session" 2>/dev/null) || return 1
+  fm_surface_census_validates "$out" workspaces workspace_id || return 1
   printf '%s' "$out" | jq -r '
-    (.result.workspaces // [])[]
-    | [.workspace_id, (.label // "")] | join("\u001f")' 2>/dev/null
+    .result.workspaces[]
+    | [.workspace_id, (.label // "")] | join("\u001f")' 2>/dev/null || return 1
 }
 
 # fm_surface_census_tabs: "<tab_id>\t<workspace_id>\t<label>" per tab.
 fm_surface_census_tabs() {  # [session]
   local session=${1:-$FM_SURFACE_CENSUS_SESSION} out
   out=$(herdr tab list --session "$session" 2>/dev/null) || return 1
+  fm_surface_census_validates "$out" tabs tab_id || return 1
   printf '%s' "$out" | jq -r '
-    (.result.tabs // [])[]
-    | [.tab_id, (.workspace_id // ""), (.label // "")] | join("\u001f")' 2>/dev/null
+    .result.tabs[]
+    | [.tab_id, (.workspace_id // ""), (.label // "")] | join("\u001f")' 2>/dev/null || return 1
 }
 
 # fm_surface_census_panes: "<pane_id>\t<tab_id>\t<workspace_id>\t<agent>\t<agent_status>" per pane.
 fm_surface_census_panes() {  # [session]
   local session=${1:-$FM_SURFACE_CENSUS_SESSION} out
   out=$(herdr pane list --session "$session" 2>/dev/null) || return 1
+  fm_surface_census_validates "$out" panes pane_id || return 1
   printf '%s' "$out" | jq -r '
-    (.result.panes // [])[]
-    | [.pane_id, (.tab_id // ""), (.workspace_id // ""), (.agent // ""), (.agent_status // "")] | join("\u001f")' 2>/dev/null
+    .result.panes[]
+    | [.pane_id, (.tab_id // ""), (.workspace_id // ""), (.agent // ""), (.agent_status // "")] | join("\u001f")' 2>/dev/null || return 1
 }
 
 # fm_surface_census_meta_value: one field of a lane's own meta record.
@@ -123,9 +150,13 @@ fm_surface_census_lanes() {  # [state-dir] [session]
 # fm_surface_census_task_tabs_in: the TASK TAB labels a workspace holds.
 # A task tab is a tab whose label is "fm-<lane-id>"; any other tab is a free
 # human tab (the Captain's own panes) and is not a lane.
+#
+# An unreadable tab census FAILS: an empty answer here would silently make
+# every workspace look like it holds no lanes at all, which is the same
+# fail-open census the readers above refuse.
 fm_surface_census_task_tabs_in() {  # <workspace-id> [session]
-  local ws=$1 session=${2:-$FM_SURFACE_CENSUS_SESSION}
-  fm_surface_census_tabs "$session" \
-    | awk -F'\037' -v w="$ws" '$2 == w && $3 ~ /^fm-/ { print $3 }'
+  local ws=$1 session=${2:-$FM_SURFACE_CENSUS_SESSION} tabs
+  tabs=$(fm_surface_census_tabs "$session") || return 1
+  printf '%s' "$tabs" | awk -F'\037' -v w="$ws" '$2 == w && $3 ~ /^fm-/ { print $3 }'
 }
 

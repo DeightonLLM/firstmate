@@ -484,17 +484,69 @@ fm_codex_hook_path_is_trusted() {
   return 1
 }
 
+# fm_codex_hook_lean_ctx_binary_is_trusted: is <path> a live spelling of the
+# TRUSTED lean-ctx implementation?
+#
+# The fleet installs one tool under two path spellings:
+#   $HOME/.local/bin/lean-ctx-bin          the operator's own binary
+#   /usr/local/bin/lean-ctx -> /usr/bin/lean-ctx
+#     -> /usr/lib/node_modules/lean-ctx-bin/bin/lean-ctx.js   the node launcher
+# Both resolve to the SAME lean-ctx implementation, so a trust gate that
+# recognises one spelling and refuses the other is not a safety property - it
+# is a spelling lottery that refuses every codex lane the moment the hooks
+# file names the other path. Measured 2026-10-24 on the live hooks.json:
+# "/usr/local/bin/lean-ctx hook observe" and
+# "/usr/local/bin/lean-ctx hook codex-session-start" were both refused.
+#
+# The trust stays ANCHORED on the resolved binary, never on the spelling: this
+# accepts a path only when readlink resolves it to one of the two known
+# lean-ctx implementation paths, and it is used only for commands whose hook
+# subcommand is one the fleet actually installs. A different binary under any
+# name is still refused.
+fm_codex_hook_lean_ctx_binary_is_trusted() {  # <path>
+  local path=$1 resolved
+  [ -n "${HOME:-}" ] || return 1
+  [ -f "$path" ] && [ -x "$path" ] || return 1
+  resolved=$(readlink -f -- "$path" 2>/dev/null) || return 1
+  [ -f "$resolved" ] && [ -x "$resolved" ] || return 1
+  case "$resolved" in
+    /usr/lib/node_modules/lean-ctx-bin/bin/lean-ctx.js) return 0 ;;
+    "$HOME/.local/bin/lean-ctx-bin") return 0 ;;
+  esac
+  return 1
+}
+
+# fm_codex_hook_lean_ctx_subcommand_is_known: is this a lean-ctx hook
+# subcommand the fleet installs? An unknown subcommand on a trusted binary is
+# still an unknown hook command, and stays refused.
+fm_codex_hook_lean_ctx_subcommand_is_known() {  # <subcommand>
+  case "$1" in
+    observe|codex-pretooluse|codex-session-start) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 fm_codex_hook_command_is_trusted() {
-  local command=$1 resolved
+  local command=$1 resolved path subcommand
+  # A lean-ctx hook invocation, under ANY live spelling of the trusted
+  # lean-ctx binary. The command shape is "<path> hook <subcommand>"; the
+  # path must be absolute (never a shell word that could be looked up on
+  # PATH), the subcommand must be one the fleet installs, and the path must
+  # RESOLVE to the known lean-ctx implementation.
   case "$command" in
-    "$HOME/.local/bin/lean-ctx-bin hook observe"|\
-    "$HOME/.local/bin/lean-ctx-bin hook codex-pretooluse"|\
-    "$HOME/.local/bin/lean-ctx-bin hook codex-session-start")
-      fm_codex_hook_path_is_trusted "$HOME/.local/bin/lean-ctx-bin"
+    /*' hook '*)
+      path=${command%% hook *}
+      subcommand=${command#* hook }
+      case "$path" in
+        *[!A-Za-z0-9._/-]*) return 1 ;;
+      esac
+      fm_codex_hook_lean_ctx_subcommand_is_known "$subcommand" || return 1
+      fm_codex_hook_lean_ctx_binary_is_trusted "$path" || return 1
+      fm_codex_hook_path_is_trusted "$path" || return 1
+      return 0
       ;;
-    "/usr/local/bin/lean-ctx hook codex-pretooluse")
-      fm_codex_hook_path_is_trusted /usr/local/bin/lean-ctx
-      ;;
+  esac
+  case "$command" in
     "bash '$HOME/.codex/herdr-agent-state.sh' session")
       fm_codex_hook_path_is_trusted "$HOME/.codex/herdr-agent-state.sh"
       ;;
