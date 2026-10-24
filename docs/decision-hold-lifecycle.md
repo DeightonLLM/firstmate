@@ -28,6 +28,27 @@ It records the decision digest and routed task identities as a retry identity in
 An exact retry can finish a partial routing operation, while a changed decision or routed-task set is rejected.
 A failed intermediate step leaves the hold open.
 
+## Lane worktree shape and scheduler harvest
+
+A lane runs in its own disposable worktree, so its `FM_HOME` is that worktree while the lane's task metadata, status event log, report, and backlog row live in the half that owns the originating work.
+The lane's own ownership test therefore cannot see the origin it is working on, and the hold cannot be registered at all.
+
+The lifecycle has exactly two writers, and the split is by path:
+
+- The lane writes inside its own worktree. `hold` registers the captain hold in the lane's own backlog, and `complete` writes the completion attestation into the lane's own state.
+- The scheduler writes inside the half. `bin/fm-decision-hold-harvest.sh` is the single-writer action that moves a lane's hold out of the worktree and into the half that owns the originating work.
+
+The harvest does four things, all owned by the scheduler:
+
+1. Seed. The lane's worktree receives its own copy of the lane identity at `state/<id>.meta`, carrying `half_state=` and `half_data=` so the lane can read the owning half. The seed is create-once: the lane owns that file afterwards and appends its completion attestation to it.
+2. Harvest. The lane's captain-held rows are registered in the half's authoritative backlog, and each harvested hold is recorded in the half's state directory at `state/decision-holds/<id>.hold`.
+3. Attest. The lane's completion attestation is merged into the half's metadata for that origin.
+4. Transfer. The half's live status decision is transferred to its durable backlog owner once the hold is durable in the half's backlog.
+
+The result is that the half's own read-only `verify` gate, which scout teardown calls, sees the same durable inventory the lane recorded, and a lane never writes into a half's state directory.
+
+`bin/fm-decision-hold.sh` reads the owning half through the seed only. It never writes there: the completion attestation stays in the lane's own state, and the status transfer is performed by the harvest in the half.
+
 ## Structured read surfaces
 
 `bin/fm-fleet-snapshot.sh` parses canonical tasks-axi `(hold: ...)` and `(hold-kind: captain)` metadata alongside existing backlog fields.

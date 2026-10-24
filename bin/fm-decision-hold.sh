@@ -16,6 +16,13 @@
 # All backlog mutations run in the active FM_HOME, which keeps main-home and
 # secondmate-home ownership aligned with the work that discovered the decision.
 #
+# A LANE that works in its own disposable worktree registers its hold inside
+# that worktree: the lane's own backlog and the lane's own state. The scheduler
+# (bin/fm-decision-hold-harvest.sh) is the single writer that harvests the
+# lane's hold into the half that owns the originating work. A lane therefore
+# never writes into a half's state directory, and no half ever has six lanes
+# writing into one shared path.
+#
 # Usage:
 #   fm-decision-hold.sh id <origin-id> <decision-key>
 #   fm-decision-hold.sh hold <origin-id> <decision-key> \
@@ -44,6 +51,13 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
+# The lane view. When this home is a lane's own worktree, the scheduler seeds
+# the lane's identity into the worktree's state and records there which half
+# owns the originating work. The lane may READ that half's state and data to
+# find the origin it owns; it never writes there.
+LANE_STATE=''
+LANE_DATA=''
+LANE_VIEW_RESOLVED=0
 
 # shellcheck source=bin/fm-classify-lib.sh
 # shellcheck disable=SC1091
@@ -115,10 +129,65 @@ show_field() {  # <show-output> <field>
   printf '%s\n' "$output" | sed -n "s/^  $field: //p" | head -1
 }
 
+# Resolve the read-only lane view: the half that owns this lane's originating
+# work. The scheduler seeds the lane's own identity into the lane's worktree
+# state, and the seed names the owning half. Read-only by contract: the lane
+# may look there, and never writes there.
+lane_view_dirs() {
+  local meta
+  if [ "$LANE_VIEW_RESOLVED" = 1 ]; then
+    return 0
+  fi
+  LANE_VIEW_RESOLVED=1
+  for meta in "$STATE"/*.meta; do
+    if [ ! -f "$meta" ]; then
+      continue
+    fi
+    LANE_STATE=$(meta_value "$meta" half_state)
+    if [ -z "$LANE_STATE" ]; then
+      continue
+    fi
+    LANE_DATA=$(meta_value "$meta" half_data)
+    return 0
+  done
+  return 0
+}
+
+lane_task_show() {  # <id>
+  local id=$1 home
+  if [ -z "$LANE_DATA" ]; then
+    return 1
+  fi
+  home=$(dirname "$LANE_DATA")
+  if [ ! -d "$home" ]; then
+    return 1
+  fi
+  (cd "$home" && tasks-axi show "$id" --full 2>/dev/null)
+}
+
 origin_exists_here() {  # <origin-id>
-  [ -f "$STATE/$1.meta" ] && return 0
-  [ -f "$DATA/$1/report.md" ] && return 0
-  task_show "$1" >/dev/null 2>&1
+  local origin=$1
+  if [ -f "$STATE/$origin.meta" ]; then
+    return 0
+  fi
+  if [ -f "$DATA/$origin/report.md" ]; then
+    return 0
+  fi
+  if task_show "$origin" >/dev/null 2>&1; then
+    return 0
+  fi
+  # Lane view: the origin must still be visible in the half that owns it.
+  lane_view_dirs
+  if [ -n "$LANE_STATE" ] && [ -f "$LANE_STATE/$origin.meta" ]; then
+    return 0
+  fi
+  if [ -n "$LANE_DATA" ] && [ -f "$LANE_DATA/$origin/report.md" ]; then
+    return 0
+  fi
+  if [ -n "$LANE_DATA" ] && lane_task_show "$origin" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
 }
 
 list_has_key() {  # <comma-list> <key>
@@ -140,8 +209,8 @@ meta_value() {  # <meta> <key>
   grep "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2- || true
 }
 
-origin_open_decisions() {  # <origin-id>
-  local origin=$1 meta="$STATE/$1.meta" status_file="$STATE/$1.status" open kind last verb
+origin_open_decisions() {  # <origin-id> [status-file]
+  local origin=$1 meta="$STATE/$1.meta" status_file="${2:-$STATE/$1.status}" open kind last verb
   open=$(status_open_decisions "$status_file")
   [ -n "$open" ] || return 0
   [ -f "$meta" ] || { printf '%s' "$open"; return 0; }
@@ -275,7 +344,7 @@ command_hold() {
 }
 
 command_complete() {
-  local origin=${1:-} meta previous='' supplied='' keys='' key status_file open raw_open key_seen=0 has_meta=0
+  local origin=${1:-} meta previous='' supplied='' keys='' key status_file check_status_file open raw_open key_seen=0 has_meta=0
   [ "$#" -ge 2 ] || { usage >&2; exit 2; }
   validate_slug origin-id "$origin"
   shift
@@ -307,8 +376,18 @@ EOF
   fi
 
   status_file="$STATE/$origin.status"
-  raw_open=$(status_open_decisions "$status_file")
-  open=$(origin_open_decisions "$origin")
+  # In a lane worktree the live status event log belongs to the half that owns
+  # the origin. The lane READS it so the open-decision gate stays honest, and
+  # the scheduler performs the transfer write in the half.
+  check_status_file=$status_file
+  if [ ! -f "$check_status_file" ]; then
+    lane_view_dirs
+    if [ -n "$LANE_STATE" ] && [ -f "$LANE_STATE/$origin.status" ]; then
+      check_status_file="$LANE_STATE/$origin.status"
+    fi
+  fi
+  raw_open=$(status_open_decisions "$check_status_file")
+  open=$(origin_open_decisions "$origin" "$check_status_file")
   while IFS=$'\t' read -r key _verb _summary; do
     [ -n "$key" ] || continue
     list_has_key "$keys" "$key" \
@@ -323,22 +402,26 @@ EOF
     fi
 
     # Transfer any still-open status decision to its durable backlog owner so the
-    # live status fold does not duplicate the same Captain's Call item.
-    while IFS=$'\t' read -r key _verb _summary; do
-      [ -n "$key" ] || continue
-      list_has_key "$keys" "$key" || continue
-      printf 'captain-held [key=%s]: tracked by %s\n' "$key" "$(hold_id "$origin" "$key")" >> "$status_file"
-      key_seen=1
-    done <<EOF
+    # live status fold does not duplicate the same Captain's Call item. The
+    # transfer is written only in the home that owns the status file; in a lane
+    # worktree the scheduler's harvest performs it in the half.
+    if [ "$check_status_file" = "$status_file" ]; then
+      while IFS=$'\t' read -r key _verb _summary; do
+        [ -n "$key" ] || continue
+        list_has_key "$keys" "$key" || continue
+        printf 'captain-held [key=%s]: tracked by %s\n' "$key" "$(hold_id "$origin" "$key")" >> "$status_file"
+        key_seen=1
+      done <<EOF
 $raw_open
 EOF
+    fi
   fi
   : "$key_seen"
   printf 'complete: %s decision inventory reviewed%s\n' "$origin" "${keys:+ ($keys)}"
 }
 
 command_verify() {
-  local origin=${1:-} meta reviewed keys key open
+  local origin=${1:-} meta reviewed keys key open check_status_file
   [ "$#" -eq 1 ] || { usage >&2; exit 2; }
   validate_slug origin-id "$origin"
   meta="$STATE/$origin.meta"
@@ -355,7 +438,14 @@ command_verify() {
 $(printf '%s\n' "$keys" | tr ',' '\n')
 EOF
   fi
-  open=$(origin_open_decisions "$origin")
+  check_status_file="$STATE/$origin.status"
+  if [ ! -f "$check_status_file" ]; then
+    lane_view_dirs
+    if [ -n "$LANE_STATE" ] && [ -f "$LANE_STATE/$origin.status" ]; then
+      check_status_file="$LANE_STATE/$origin.status"
+    fi
+  fi
+  open=$(origin_open_decisions "$origin" "$check_status_file")
   while IFS=$'\t' read -r key _verb _summary; do
     [ -n "$key" ] || continue
     list_has_key "$keys" "$key" \

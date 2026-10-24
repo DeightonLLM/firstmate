@@ -1744,6 +1744,16 @@ cmd_cycle() {
   # Step 0: Build in-flight task set for awk parser
   build_inflight_tmp
 
+  # Step 0b: Harvest lane decision holds into this half. A lane registers its
+  # captain holds inside its own worktree; the scheduler is the single writer
+  # that moves them into the half that owns the originating work, so no lane
+  # ever writes into a shared state directory.
+  local harvest_out
+  harvest_out=$("$SCRIPT_DIR/fm-decision-hold-harvest.sh" 2>&1) || harvest_out=''
+  if [ -n "$harvest_out" ]; then
+    printf 'always-four: decision-hold harvest\n%s\n' "$harvest_out"
+  fi
+
   # Step 1: Count active lanes
   local active_count
   active_count=$(count_active_worker_tasks)
