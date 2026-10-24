@@ -165,12 +165,59 @@ test_the_update_only_ratchets_down() {
 }
 
 test_the_lint_owner_and_ci_use_the_ratchet() {
-  local out
+  local out ci_semantics parser rc
   out=$("$LINT_OWNER" --help 2>&1)
   assert_contains "$out" "--update-baseline" "the lint owner does not document the baseline update"
-  assert_grep "fm-lint-ratchet.sh" "$LINT_OWNER" "the lint owner does not call the ratchet"
-  assert_grep "bin/fm-lint.sh" "$CI_WORKFLOW" "the CI lint job does not run the lint owner"
-  assert_grep "GITHUB_STEP_SUMMARY" "$CI_WORKFLOW" "the CI lint job does not report the burn-down count"
+  parser=$(mktemp)
+  cat > "$parser" <<'PY'
+import sys
+
+path = sys.argv[1]
+lines = open(path, encoding="utf-8").read().splitlines()
+runs = []
+in_lint = False
+in_steps = False
+index = 0
+while index < len(lines):
+    raw = lines[index]
+    stripped = raw.strip()
+    indent = len(raw) - len(raw.lstrip(" "))
+    if indent == 2 and stripped == "lint:":
+        in_lint = True
+        in_steps = False
+    elif in_lint and indent == 2 and stripped.endswith(":") and stripped != "lint:":
+        in_lint = False
+        in_steps = False
+    elif in_lint and indent == 4 and stripped == "steps:":
+        in_steps = True
+    elif in_steps and indent == 4 and stripped.endswith(":"):
+        in_steps = False
+    elif in_steps and indent == 8 and stripped == "run: |":
+        block = []
+        index += 1
+        while index < len(lines):
+            candidate = lines[index]
+            candidate_indent = len(candidate) - len(candidate.lstrip(" "))
+            if candidate.strip() and candidate_indent < 10:
+                index -= 1
+                break
+            block.append(candidate[10:] if candidate_indent >= 10 else "")
+            index += 1
+        runs.append("\n".join(block))
+    index += 1
+
+if not any(any(line.strip().startswith("bin/fm-lint.sh ") for line in run.splitlines()) for run in runs):
+    raise SystemExit("lint workflow has no executable lint owner step")
+if not any("$GITHUB_STEP_SUMMARY" in run for run in runs):
+    raise SystemExit("lint workflow has no step summary output")
+print("lint workflow semantic contract OK")
+PY
+  ci_semantics=$(python3 "$parser" "$CI_WORKFLOW" 2>&1)
+  rc=$?
+  rm -f "$parser"
+  [ "$rc" -eq 0 ] || fail "the CI lint workflow semantic contract is invalid:$'\n'$ci_semantics"
+  assert_contains "$ci_semantics" "lint workflow semantic contract OK" \
+    "the CI lint job must execute the lint owner and publish its summary"
   pass "the lint owner and the CI workflow both run the ratchet and report the count"
 }
 

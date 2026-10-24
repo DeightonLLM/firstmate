@@ -106,6 +106,14 @@ fm_surface_name_workspace_conforms "" && fail "an empty label must NOT conform"
 fm_surface_name_workspace_conforms "testhost" && fail "a scope-less label must NOT conform"
 fm_surface_name_workspace_conforms "testhost/primary · " \
   && fail "an empty summary must NOT conform"
+fm_surface_name_workspace_conforms "testhost/primary · arbitrary garbage" \
+  && fail "an unconstrained workspace summary must NOT conform"
+fm_surface_name_workspace_conforms "testhost/primary · 3 live lanes" \
+  && fail "a non-contract workspace count must NOT conform"
+fm_surface_name_workspace_conforms "testhost/primary · afk-daemon f962fcac" \
+  || fail "an away-mode summary with an eight-character nonce must conform"
+fm_surface_name_workspace_conforms "testhost/primary · afk-daemon too-short" \
+  && fail "an away-mode summary with an invalid nonce must NOT conform"
 pass "fm_surface_name_workspace_conforms: legacy and scope-less labels are violations"
 
 fm_surface_name_projection_conforms "└ testhost/primary · my-lane · p:AbCdEfGhIjKlMnOpQrStUv" \
@@ -114,6 +122,10 @@ fm_surface_name_projection_conforms "└ my-lane · p:AbCdEfGhIjKlMnOpQrStUv" \
   && fail "a projection label without a scope must NOT conform"
 fm_surface_name_projection_conforms "└ testhost/primary · my-lane · p:short" \
   && fail "a projection label with a short token must NOT conform"
+fm_surface_name_projection_conforms "└ testhost/primary · my lane · p:AbCdEfGhIjKlMnOpQrStUv" \
+  && fail "a projection label with an unconstrained lane must NOT conform"
+fm_surface_name_projection_conforms "└ testhost/primary · my-lane · extra · p:AbCdEfGhIjKlMnOpQrStUv" \
+  && fail "a projection label with an extra separator must NOT conform"
 pass "fm_surface_name_projection_conforms: marker, scope, lane and a full token"
 
 fm_surface_name_tab_conforms "fm-my-lane" || fail "a task tab label must conform"

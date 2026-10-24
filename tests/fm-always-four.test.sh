@@ -2,7 +2,7 @@
 # tests/fm-always-four.test.sh - Unit tests for fm-always-four.sh scheduler hook.
 #
 # Tests cover:
-#   - slot_model_for_lane: model-based slot enforcement (3×M2.7 + 1×GLM-5.3-Flash checker)
+#   - slot_model_for_lane: model-based slot enforcement (3×M3.1-Flash + 1×GLM-5.3-Flash checker)
 #   - cleanup_lane_resources: browser/process cleanup for terminal lanes
 #   - record_rollback_evidence: rollback evidence tracking
 #   - cmd_daemon --once: single-cycle daemon mode
@@ -51,14 +51,14 @@ STATE="${FM_STATE_OVERRIDE:-$STATE}"  # Use override if set, else keep sourced d
 # =============================================================================
 
 test_slot_model_worker_lanes() {
-  # Worker lanes (non-checker) should return WORKER_MODEL (MiniMax-M2.7)
+  # Worker lanes (non-checker) should return WORKER_MODEL (MiniMax-M3.1-Flash)
   for lane in lane-001 lane-002 lane-003; do
     local model
     model=$(FM_ALWAYS_FOUR_CHECKER_SLOT=lane-004 \
-            FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M2.7 \
+            FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M3.1-Flash \
             FM_ALWAYS_FOUR_CHECKER_MODEL=GLM-5.3-Flash \
             slot_model_for_lane "$lane")
-    [ "$model" = "MiniMax-M2.7" ] || fail "slot_model_for_lane($lane) should return MiniMax-M2.7, got: $model"
+    [ "$model" = "MiniMax-M3.1-Flash" ] || fail "slot_model_for_lane($lane) should return MiniMax-M3.1-Flash, got: $model"
   done
   pass "slot_model_for_lane returns worker model for non-checker lanes"
 }
@@ -67,7 +67,7 @@ test_slot_model_checker_lane() {
   # Checker slot (lane-004) should return CHECKER_MODEL (default: GLM-5.3-Flash)
   local model
   model=$(FM_ALWAYS_FOUR_CHECKER_SLOT=lane-004 \
-          FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M2.7 \
+          FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M3.1-Flash \
           FM_ALWAYS_FOUR_CHECKER_MODEL=GLM-5.3-Flash \
           slot_model_for_lane lane-004)
   [ "$model" = "GLM-5.3-Flash" ] || fail "slot_model_for_lane(lane-004) should return GLM-5.3-Flash, got: $model"
@@ -78,7 +78,7 @@ test_slot_model_custom_checker_slot() {
   # Custom checker slot should be respected
   local model
   model=$(FM_ALWAYS_FOUR_CHECKER_SLOT=lane-002 \
-          FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M2.7 \
+          FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M3.1-Flash \
           FM_ALWAYS_FOUR_CHECKER_MODEL=GLM-5.3-Flash \
           slot_model_for_lane lane-002)
   [ "$model" = "GLM-5.3-Flash" ] || fail "slot_model_for_lane(lane-002) with CHECKER_SLOT=lane-002 should return GLM-5.3-Flash, got: $model"
@@ -89,32 +89,84 @@ test_slot_model_default_checker_is_glm52() {
   # Without FM_ALWAYS_FOUR_CHECKER_MODEL, checker slot defaults to GLM-5.3-Flash
   local model
   model=$(FM_ALWAYS_FOUR_CHECKER_SLOT=lane-004 \
-          FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M2.7 \
+          FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M3.1-Flash \
           slot_model_for_lane lane-004)
   [ "$model" = "GLM-5.3-Flash" ] || fail "slot_model_for_lane(lane-004) default should be GLM-5.3-Flash, got: $model"
   pass "slot_model_for_lane default checker model is GLM-5.3-Flash"
 }
 
 test_scheduler_dispatch_requires_explicit_non_pi_harness() {
-  # Scheduler dispatch must require an explicit concrete adapter.  First Mate
-  # is the coordinator role, not a harness, and Pi/AGY must never be selected
-  # implicitly for these lanes.
-  assert_contains "$(sed -n '/local spawn_args=(\"\$task_id\"/,/\$SCRIPT_DIR\/fm-spawn.sh/p;/local spawn_args=(\"\$lane_key\" \"\$project\" --harness \"\$SCHEDULER_HARNESS\")/,/\$SCRIPT_DIR\/fm-spawn.sh/p' "$ALWAYS_FOUR")" \
-    '--harness "$SCHEDULER_HARNESS"' \
-    "initial scheduler spawn must pass the guarded scheduler harness"
-  assert_contains "$(sed -n '/local spawn_args=(\"\$eligible\"/,/\$SCRIPT_DIR\/fm-spawn.sh/p;/local spawn_args=(\"\$lane_key\" \"\$project\" --harness \"\$SCHEDULER_HARNESS\" --model/,/\$SCRIPT_DIR\/fm-spawn.sh/p' "$ALWAYS_FOUR")" \
-    '--harness "$SCHEDULER_HARNESS"' \
-    "replacement scheduler spawn must pass the guarded scheduler harness"
-  assert_contains "$(sed -n '/SCHEDULER_HARNESS=/p' "$ALWAYS_FOUR")" \
-    'SCHEDULER_HARNESS=""' \
-    "scheduler harness must default to unset rather than Pi or AGY"
-  assert_not_contains "$(sed -n '/SCHEDULER_HARNESS=/p' "$ALWAYS_FOUR")" \
-    'pi' \
-    "scheduler harness default must not contain Pi"
-  assert_not_contains "$(sed -n '/SCHEDULER_HARNESS=/p' "$ALWAYS_FOUR")" \
-    'agy' \
-    "scheduler harness default must not contain AGY"
+  local key
+  FM_ALWAYS_FOUR_HARNESS=pi scheduler_harness_guard codex \
+    || fail "an explicit codex harness must pass the scheduler guard"
+  [ "$SCHEDULER_HARNESS" = codex ] \
+    || fail "the scheduler guard must retain the normalized explicit harness"
+  key=$(lane_key_for_task lane-001 dispatch-harness-test MiniMax-M3.1-Flash 2>/dev/null) \
+    || fail "lane-key minting must use the selected explicit harness"
+  case "$key" in
+    codex-*) ;;
+    *) fail "lane key must use the selected codex harness, got: $key" ;;
+  esac
   pass "scheduler dispatch requires an explicit non-Pi/non-AGY adapter"
+}
+
+test_scheduler_brief_and_spawn_use_selected_harness() {
+  local tmp_root fakebin brief_args spawn_args
+  tmp_root=$(fm_test_tmproot always-four-selected-harness)
+  fakebin="$tmp_root/bin"
+  mkdir -p "$fakebin" "$tmp_root/data" "$tmp_root/state"
+  cat > "$fakebin/fm-brief.sh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$FAKE_BRIEF_ARGS"
+mkdir -p "$DATA/$1"
+printf '{TASK}\n' > "$DATA/$1/brief.md"
+STUB
+  cat > "$fakebin/fm-spawn.sh" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$FAKE_SPAWN_ARGS"
+STUB
+  chmod +x "$fakebin/fm-brief.sh" "$fakebin/fm-spawn.sh"
+  printf '## In flight\n\n## Queued\n- [ ] selected-harness-task - Use the selected adapter (repo: test-project)\n' \
+    > "$tmp_root/data/backlog.md"
+
+  (
+    SCRIPT_DIR="$fakebin"
+    DATA="$tmp_root/data"
+    STATE="$tmp_root/state"
+    SCAFFOLD_BRIEF=1
+    MINT_LANE_KEY=0
+    FM_ALWAYS_FOUR_HARNESS=pi
+    FAKE_BRIEF_ARGS="$tmp_root/brief.args"
+    FAKE_SPAWN_ARGS="$tmp_root/spawn.args"
+    export DATA FAKE_BRIEF_ARGS FAKE_SPAWN_ARGS
+    scheduler_harness_guard codex || exit 1
+    scaffold_lane_key_brief selected-harness-lane selected-harness-task || exit 1
+    fm_raw_herdr_senpi_refuse_mutate() { :; }
+    can_replace_lane() { return 0; }
+    reap_stale() { :; }
+    check_cap() { return 0; }
+    prepare_lane_key_brief() { return 0; }
+    lane_reset_attempts() { :; }
+    record_lane_key_origin() { :; }
+    record_lane_slot_binding() { :; }
+    emit_coordinator_wake() { :; }
+    sync_gbrain() { :; }
+    lane_inc_attempts() { :; }
+    record_rollback_evidence() { :; }
+    cmd_spawn spawn lane-001 selected-harness-task --harness codex || exit 1
+  ) || fail "scheduler dispatch should use the selected harness for brief and spawn"
+
+  brief_args=$(cat "$tmp_root/brief.args")
+  spawn_args=$(cat "$tmp_root/spawn.args")
+  assert_contains "$brief_args" "codex" \
+    "brief scaffolding must receive the normalized selected harness"
+  assert_not_contains "$brief_args" "pi" \
+    "brief scaffolding must not receive the conflicting environment harness"
+  assert_contains "$spawn_args" "codex" \
+    "spawn must receive the normalized selected harness"
+  assert_not_contains "$spawn_args" "pi" \
+    "spawn must not receive the conflicting environment harness"
+  pass "scheduler brief scaffolding and spawn use the selected harness"
 }
 
 test_scheduler_harness_guard_rejects_red_herring_adapters() {
@@ -218,7 +270,7 @@ test_record_rollback_evidence_writes_file() {
   rollback_file="$state_dir/lane-001.rollback"
 
   FM_STATE_OVERRIDE="$state_dir" \
-    record_rollback_evidence lane-001 test-task-123 "spawn-failed" "rc=1 model=MiniMax-M2.7"
+    record_rollback_evidence lane-001 test-task-123 "spawn-failed" "rc=1 model=MiniMax-M3.1-Flash"
 
   [ -f "$rollback_file" ] || fail "rollback file should be created"
   assert_contains "$(cat "$rollback_file")" "rollback:" \
@@ -275,7 +327,7 @@ test_cmd_status_includes_slot_model_policy() {
         FM_DATA_OVERRIDE="$tmp_root/data" \
         FM_ROOT_OVERRIDE="$tmp_root" \
         FM_ALWAYS_FOUR_CHECKER_SLOT=lane-004 \
-        FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M2.7 \
+        FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M3.1-Flash \
   FM_ALWAYS_FOUR_CHECKER_MODEL=GLM-5.3-Flash \
         FM_ALWAYS_FOUR_POLL_SECS=30 \
         "$ALWAYS_FOUR" status 2>&1)
@@ -377,7 +429,7 @@ test_cmd_cycle_uses_slot_model_for_checker() {
   # so we verify the underlying slot_model_for_lane directly.
   local model
   model=$(FM_ALWAYS_FOUR_CHECKER_SLOT=lane-004 \
-          FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M2.7 \
+          FM_ALWAYS_FOUR_WORKER_MODEL=MiniMax-M3.1-Flash \
           FM_ALWAYS_FOUR_CHECKER_MODEL=GLM-5.3-Flash \
           slot_model_for_lane lane-004)
   [ "$model" = "GLM-5.3-Flash" ] || fail "slot_model_for_lane(lane-004) should return GLM-5.3-Flash, got: $model"
@@ -1026,7 +1078,9 @@ test_lane_key_for_task_never_doubles_the_prefix() {
   # raised them ("<harness>-<model>-<host>-<task>-decision-<key>"). Minting
   # such an id produced "<harness>-<model>-<host>-<harness>-<model>-<host>-...".
   local key
-  key=$(FM_ALWAYS_FOUR_HARNESS=codex lane_key_for_task lane-001 "codex-luna6-brandon-luna-credentials-runbook-11-decision-host-targets" "openai-codex/gpt-6-luna" 2>/dev/null || true)
+  scheduler_harness_guard codex >/dev/null 2>&1 \
+    || fail "the explicit codex harness must be accepted before minting a lane key"
+  key=$(lane_key_for_task lane-001 "codex-luna6-brandon-luna-credentials-runbook-11-decision-host-targets" "openai-codex/gpt-6-luna" 2>/dev/null || true)
   [ -n "$key" ] || fail "lane_key_for_task must mint a key for an already-prefixed planning id"
   case "$key" in
     codex-luna6-brandon-codex-luna6-brandon-*) fail "lane_key_for_task must not prefix an already lane-key-shaped id twice: $key" ;;
@@ -1102,20 +1156,28 @@ STUB
 }
 
 test_scheduler_moves_a_dispatched_row_with_tasks_axi_start() {
-  # The installed tasks-axi has NO --to-section: its `mv` moves a task to
-  # another backlog FILE and refuses the call.  The same-file transition the
-  # scheduler wants is `tasks-axi start <id>`, which is idempotent.
-  grep -q 'tasks-axi start' "$ALWAYS_FOUR" \
-    || fail "the scheduler must move a dispatched row with 'tasks-axi start'"
-  # Look at CODE lines only: the fix explains the retired API in a comment, and
-  # the comment must not be mistaken for a call.
-  if grep -vE '^[[:space:]]*#' "$ALWAYS_FOUR" | grep -q -- '--to-section'; then
-    fail "the scheduler still calls the tasks-axi API that no longer exists (--to-section)"
-  fi
-  if grep -vE '^[[:space:]]*#' "$ALWAYS_FOUR" | grep -q 'tasks-axi mv'; then
-    fail "the scheduler still uses 'tasks-axi mv', which moves a row to another backlog FILE"
-  fi
-  pass "a dispatched row is moved with tasks-axi start, not the API that no longer exists"
+  local root fakebin log
+  root=$(fm_test_tmproot always-four-row-move)
+  fakebin="$root/bin"
+  log="$root/tasks-axi.log"
+  mkdir -p "$fakebin" "$root/data" "$root/state"
+  printf '# Backlog\n\n## Queued\n\n## In flight\n' > "$root/data/backlog.md"
+  cat > "$fakebin/tasks-axi" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$TASKS_AXI_LOG"
+STUB
+  chmod +x "$fakebin/tasks-axi"
+  TASKS_AXI_LOG="$log" PATH="$fakebin:$PATH" \
+    FM_STATE_OVERRIDE="$root/state" DATA="$root/data" \
+    start_task_inflight dispatched-row \
+    || fail "the scheduler's queue transition should invoke tasks-axi successfully"
+  assert_contains "$(cat "$log")" "start" \
+    "queue transition should use the tasks-axi start action"
+  assert_contains "$(cat "$log")" "dispatched-row" \
+    "queue transition should name the dispatched row"
+  assert_contains "$(cat "$log")" "$root/data/backlog.md" \
+    "queue transition should target the scheduler backlog"
+  pass "a dispatched row uses the executable tasks-axi start transition"
 }
 
 test_tasks_axi_start_moves_the_row_and_is_idempotent() {
@@ -1163,15 +1225,14 @@ test_build_inflight_tmp_drops_a_finished_lanes_row() {
 }
 
 test_capacity_gate_counts_managed_lane_slots_not_crew() {
-  # The scheduler target is a count of this half's own managed slots. The
-  # standing crew (ship, scout, secondmate) run outside those slots, so
-  # counting every worker meta here made a six-slot half read as seven and
-  # stopped a finished lane from ever being refilled.
-  grep -q 'managed_active=$(count_active_lanes)' "$ALWAYS_FOUR" \
-    || fail "the capacity gate must compare managed lane slots with the target"
-  if grep -vE '^[[:space:]]*#' "$ALWAYS_FOUR" | grep -q 'managed_active=$(count_active_worker_tasks)'; then
-    fail "the capacity gate must not compare every worker meta with the lane target"
-  fi
+  local state_dir fakebin managed worker
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-capacity-owner)"
+  fm_test_write_worker_meta "$state_dir" "lane-001" "managed-task" "$WORKER_MODEL" "ship" "working"
+  fm_test_write_worker_meta "$state_dir" "standing-ship" "standing-task" "$WORKER_MODEL" "ship" "working"
+  managed=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_lanes 2>/dev/null)
+  worker=$(PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir" count_active_worker_tasks 2>/dev/null)
+  [ "$managed" = "1" ] || fail "managed capacity should count one occupied scheduler slot, got: $managed"
+  [ "$worker" = "2" ] || fail "worker census should include the standing crew, got: $worker"
   pass "the capacity gate counts managed lane slots, not the standing crew"
 }
 
@@ -1253,13 +1314,26 @@ STUB
 }
 
 test_lane_is_active_releases_a_finished_lane_with_a_dead_worker() {
-  # A finished lane whose worker has exited must be released even though
-  # herdr's stale transcript still reads busy.  The source must consult the
-  # corroboration oracle, and only for a terminal task log.
-  grep -q 'fm_pane_foreground_harness_state' "$ALWAYS_FOUR" \
-    || fail "lane_is_active must corroborate a busy verdict for a finished lane"
-  grep -vE '^[[:space:]]*#' "$ALWAYS_FOUR" | grep -q 'fm_pane_foreground_harness_state "$backend" "$target" "$harness" || fg_state=\$?' \
-    || fail "lane_is_active must capture the corroboration oracle state before accepting busy"
+  local tmp_root state_dir
+  tmp_root=$(fm_test_tmproot always-four-dead-finished-worker)
+  state_dir="$tmp_root/state"
+  mkdir -p "$state_dir"
+  {
+    printf 'endpoint_task_id=finished-task\n'
+    printf 'window=default:finished-pane\n'
+    printf 'backend=herdr\n'
+    printf 'harness=codex\n'
+  } > "$state_dir/lane-001.meta"
+  printf 'done: finished\n' > "$state_dir/finished-task.status"
+  (
+    FM_STATE_OVERRIDE="$state_dir"
+    lane_current_task() { printf 'finished-task'; }
+    fm_backend_target_exists() { return 0; }
+    fm_backend_capture() { printf 'busy transcript'; }
+    fm_busy_classify() { printf 'busy synthetic'; }
+    fm_pane_foreground_harness_state() { return 1; }
+    lane_is_active lane-001
+  ) && fail "a finished lane with a dead worker must be released"
   pass "a finished lane with a dead worker is released, and only then"
 }
 
@@ -1269,6 +1343,7 @@ for _t in \
   test_slot_model_custom_checker_slot \
   test_slot_model_default_checker_is_glm52 \
   test_scheduler_dispatch_requires_explicit_non_pi_harness \
+  test_scheduler_brief_and_spawn_use_selected_harness \
   test_scheduler_harness_guard_rejects_red_herring_adapters \
   test_cleanup_lane_resources_no_browser \
   test_cleanup_lane_resources_browser_task \

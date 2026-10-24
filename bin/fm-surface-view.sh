@@ -117,6 +117,10 @@ crew_state_line() {  # <lane-id>
 # finished-but-unclosed case the Captain is asking to see.
 verdict() {  # <lane-id> <herdr-status> <live>
   local id=$1 herdr_status=$2 live=$3 line verb
+  if [ "$live" = no ]; then
+    printf 'GONE'
+    return 0
+  fi
   line=$(crew_state_line "$id")
   verb=""
   case "$line" in
@@ -132,10 +136,6 @@ verdict() {  # <lane-id> <herdr-status> <live>
     working) printf 'LIVE'; return 0 ;;
     idle) printf 'IDLE'; return 0 ;;
   esac
-  if [ "$live" = no ]; then
-    printf 'GONE'
-    return 0
-  fi
   printf 'UNKNOWN'
 }
 

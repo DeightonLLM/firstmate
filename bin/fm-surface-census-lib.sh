@@ -117,12 +117,3 @@ fm_surface_census_task_tabs_in() {  # <workspace-id> [session]
     | awk -F'\037' -v w="$ws" '$2 == w && $3 ~ /^fm-/ { print $3 }'
 }
 
-# fm_surface_census_workspace_lane_count: how many task tabs a workspace holds.
-fm_surface_census_workspace_lane_count() {  # <workspace-id> [session]
-  fm_surface_census_task_tabs_in "$@" | grep -c '[^[:space:]]' || true
-}
-
-# fm_surface_census_workspace_live_count: how many live lanes a workspace has.
-fm_surface_census_workspace_live_count() {  # <workspace-id> [state-dir] [session]
-  fm_surface_census_live_lanes_in "$@" | grep -c '[^[:space:]]' || true
-}

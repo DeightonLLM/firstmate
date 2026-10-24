@@ -20,12 +20,12 @@
 #   host             := "hetz" | "controller" | "hd2" | "local"
 #   home             := "primary" | "2ndmate-" <secondmate-id>
 #   role             := lowercase token, e.g. "afk", "older"
-#   workspace label  := scope " . " summary
-#   summary          := <lane-id>            (exactly one live lane)
-#                     | "<N> live lanes"     (N live lanes, N != 1)
-#                     | "no live lanes"      (none)
-#                     | "afk-daemon . <nonce>"
-#   projection label := ". " scope " . " <lane-id> " . p:" <token>
+#   workspace label  := scope " · " summary
+#   summary          := <lane-id>
+#                     | "<N> lanes"
+#                     | "no lanes"
+#                     | "afk-daemon " <nonce>
+#   projection label := "└ " scope " · " <lane-id> " · p:" <token>
 #   task tab label   := "fm-" <lane-id>
 #
 # The separator is U+00B7 MIDDLE DOT with one space on each side - the same
@@ -109,6 +109,13 @@ fm_surface_name_scope() {  # <home-dir> [role]
   fi
 }
 
+fm_surface_name_lane_id_valid() {  # <lane-id>
+  case "$1" in
+    ''|*[!A-Za-z0-9._-]*) return 1 ;;
+  esac
+  return 0
+}
+
 # fm_surface_name_scope_valid: is this a scope token the rule allows?
 fm_surface_name_scope_valid() {  # <scope>
   local scope=$1
@@ -151,12 +158,8 @@ fm_surface_name_lane_summary() {  # <task-tab-count> [single-lane-id]
   case "$count" in
     ''|*[!0-9]*) count=0 ;;
   esac
-  if [ "$count" -eq 1 ] && [ -n "$single" ]; then
+  if [ "$count" -eq 1 ] && fm_surface_name_lane_id_valid "$single"; then
     printf '%s' "$single"
-    return 0
-  fi
-  if [ "$count" -eq 1 ]; then
-    printf '1 lane'
     return 0
   fi
   if [ "$count" -eq 0 ]; then
@@ -164,12 +167,6 @@ fm_surface_name_lane_summary() {  # <task-tab-count> [single-lane-id]
     return 0
   fi
   printf '%s lanes' "$count"
-}
-
-# fm_surface_name_afk_label: the visible name of an away-mode daemon
-# container. The nonce distinguishes concurrent daemons of the same home.
-fm_surface_name_afk_label() {  # <scope> <nonce>
-  printf '%s%safk-daemon%s%s' "$1" "$FM_SURFACE_NAME_SEP" "$FM_SURFACE_NAME_SEP" "$2"
 }
 
 # fm_surface_name_projection_label: the visible name of a disposable
@@ -271,7 +268,7 @@ fm_surface_name_workspace_conforms() {  # <label>
   case "$label" in
     *"$FM_SURFACE_NAME_SEP"*)
       summary=${label#*"$FM_SURFACE_NAME_SEP"}
-      [ -n "$summary" ] || return 1
+      fm_surface_name_summary_conforms "$summary" || return 1
       ;;
     *)
       # scope alone: conforming, but unsummaryed
@@ -280,27 +277,43 @@ fm_surface_name_workspace_conforms() {  # <label>
   return 0
 }
 
+fm_surface_name_summary_conforms() {  # <summary>
+  local summary=$1
+  if fm_surface_name_lane_id_valid "$summary"; then
+    return 0
+  fi
+  [[ "$summary" =~ ^[0-9]+\ lanes$ ]] && return 0
+  case "$summary" in
+    "no lanes"|"afk-daemon "[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f])
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 # fm_surface_name_projection_conforms: does this presentation-space label
 # satisfy the rule? "MARK <scope> SEP <lane> SEP p:<22-char-token>"
 fm_surface_name_projection_conforms() {  # <label>
-  local label=$1 rest scope lane token
+  local label=$1 rest scope remainder lane suffix token
+  case "$label" in
+    "$FM_SURFACE_NAME_PROJECTION_MARK"*) ;;
+    *) return 1 ;;
+  esac
   rest=${label#"$FM_SURFACE_NAME_PROJECTION_MARK"}
-  case "$rest" in
-    *"$FM_SURFACE_NAME_SEP"*) : ;;
-    *) return 1 ;;
-  esac
-  scope=$(fm_surface_name_scope_of "$label")
+  scope=${rest%%"$FM_SURFACE_NAME_SEP"*}
+  [ "$scope" != "$rest" ] || return 1
   fm_surface_name_scope_valid "$scope" || return 1
-  case "$rest" in
-    *" p:"*) : ;;
+  remainder=${rest#"$scope$FM_SURFACE_NAME_SEP"}
+  lane=${remainder%%"$FM_SURFACE_NAME_SEP"*}
+  [ "$lane" != "$remainder" ] || return 1
+  fm_surface_name_lane_id_valid "$lane" || return 1
+  suffix=${remainder#"$lane$FM_SURFACE_NAME_SEP"}
+  case "$suffix" in
+    p:*) token=${suffix#p:} ;;
     *) return 1 ;;
   esac
-  token=${rest##*" p:"}
   [ "${#token}" -eq 22 ] || return 1
   case "$token" in *[!A-Za-z0-9_-]*) return 1 ;; esac
-  lane=${rest%" p:$token"}
-  lane=${lane#"$scope$FM_SURFACE_NAME_SEP"}
-  [ -n "$lane" ] || return 1
   return 0
 }
 
@@ -317,10 +330,7 @@ fm_surface_name_tab_conforms() {  # <label>
   esac
   local lane=${label#fm-}
   [ -n "$lane" ] || return 1
-  case "$lane" in
-    *[!A-Za-z0-9._-]*) return 1 ;;
-  esac
-  return 0
+  fm_surface_name_lane_id_valid "$lane"
 }
 
 # fm_surface_name_lane_of_tab: the lane id a task tab label names.

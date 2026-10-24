@@ -53,7 +53,7 @@
 #   FM_ALWAYS_FOUR_SEQUENCE            space-separated lane numbers (default: "001 002 003 004")
 #   FM_ALWAYS_FOUR_POLL_SECS           poll interval in daemon mode (default: 30)
 #   FM_ALWAYS_FOUR_CHECKER_SLOT        which lane is the checker slot (default: lane-004)
-#   FM_ALWAYS_FOUR_WORKER_MODEL        model for worker slots (default: MiniMax-M2.7)
+#   FM_ALWAYS_FOUR_WORKER_MODEL        model for worker slots (default: MiniMax-M3.1-Flash)
 #   FM_ALWAYS_FOUR_CHECKER_MODEL       model for checker slot (default: GLM-5.3-Flash)
 #   FM_ALWAYS_FOUR_CHECKER_LANES       comma-separated lanes for checker (default: lane-004)
 #   FM_ALWAYS_FOUR_HARNESS             required concrete verified worker adapter;
@@ -114,7 +114,7 @@ MAX_ATTEMPTS="${FM_ALWAYS_FOUR_MAX_ATTEMPTS:-3}"
 SEQUENCE="${FM_ALWAYS_FOUR_SEQUENCE:-001 002 003 004}"
 POLL_SECS="${FM_ALWAYS_FOUR_POLL_SECS:-30}"
 CHECKER_SLOT="${FM_ALWAYS_FOUR_CHECKER_SLOT:-lane-004}"
-WORKER_MODEL="${FM_ALWAYS_FOUR_WORKER_MODEL:-MiniMax-M2.7}"
+WORKER_MODEL="${FM_ALWAYS_FOUR_WORKER_MODEL:-MiniMax-M3.1-Flash}"
 CHECKER_MODEL="${FM_ALWAYS_FOUR_CHECKER_MODEL:-GLM-5.3-Flash}"
 # First Mate is the coordinator role, not a launch adapter.  This scheduler
 # must never infer a worker harness from the controller, a pane icon, or a
@@ -216,10 +216,11 @@ lane_key_harness_segment() {
 lane_key_model_segment() {
   local model_id=${1:-}
   [ -n "$model_id" ] || return 1
-  local alias identifier
+  local alias identifier identifier_name
   while IFS=$'\t' read -r alias identifier; do
     [ -n "$alias" ] || continue
-    if [ "$identifier" = "$model_id" ]; then
+    identifier_name=${identifier##*/}
+    if [ "$identifier" = "$model_id" ] || [ "$identifier_name" = "$model_id" ]; then
       printf '%s' "$alias"
       return 0
     fi
@@ -282,7 +283,7 @@ lane_key_for_task() {
     return 0
   fi
   local harness model host prefix budget task key
-  harness=$(lane_key_harness_segment "${FM_ALWAYS_FOUR_HARNESS:-}")
+  harness=$(lane_key_harness_segment "${SCHEDULER_HARNESS:-${FM_ALWAYS_FOUR_HARNESS:-}}")
   [ -n "$harness" ] || return 1
   [ -n "$model_id" ] || model_id=$(slot_model_for_lane "$lane_id")
   model=$(lane_key_model_segment "$model_id") || return 1
@@ -345,6 +346,21 @@ backlog_row_text() {
   ' "$backlog" 2>/dev/null
 }
 
+start_task_inflight() {
+  local task_id=$1 state_dir row_move_err data_dir
+  command -v tasks-axi >/dev/null 2>&1 || return 0
+  state_dir="${FM_STATE_OVERRIDE:-$STATE}"
+  data_dir="${FM_DATA_OVERRIDE:-$DATA}"
+  row_move_err="$state_dir/row-move.err"
+  if ! tasks-axi start "$task_id" --file "$data_dir/backlog.md" >/dev/null 2>"$row_move_err"; then
+    printf '%s\trow-move-failed\t%s\t%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$task_id" "$(tr '\n' ' ' < "$row_move_err" 2>/dev/null)" \
+      >> "$state_dir/row-move-failures.log"
+    return 1
+  fi
+  return 0
+}
+
 # fill_brief_task <brief-path> <task-text>: replace the {TASK} placeholder a
 # scaffolded brief carries with the task text. python3 does the substitution
 # because the text is arbitrary prose with backticks and quotes.
@@ -386,7 +402,7 @@ scaffold_lane_key_brief() {
   repo=$(printf '%s' "$row" | sed -n 's/.*(repo: \([^)]*\)).*/\1/p')
   [ -n "$repo" ] || return 1
   kind=$(printf '%s' "$row" | sed -n 's/.*(kind: \([^)]*\)).*/\1/p')
-  local -a brief_args=("$lane_key" "$repo" --harness "${FM_ALWAYS_FOUR_HARNESS:-}")
+  local -a brief_args=("$lane_key" "$repo" --harness "${SCHEDULER_HARNESS:-${FM_ALWAYS_FOUR_HARNESS:-}}")
   [ "$kind" = "scout" ] && brief_args+=(--scout)
   "$SCRIPT_DIR/fm-brief.sh" "${brief_args[@]}" >/dev/null 2>&1 || return 1
   fill_brief_task "$dst" "$row" || return 1
@@ -496,7 +512,7 @@ is_checker_lane() {
 
 # slot_model_for_lane: return the model for a given lane based on slot policy.
 # Checker lanes (default: lane-004) get CHECKER_MODEL (default: GLM-5.3-Flash).
-# All other slots get WORKER_MODEL (default: MiniMax-M2.7).
+# All other slots get WORKER_MODEL (default: MiniMax-M3.1-Flash).
 # This enforces the "always-four" policy: 3 workers + 1 checker.
 slot_model_for_lane() {
   local lane_id=$1
@@ -1704,7 +1720,6 @@ cmd_spawn() {
   # Pass the explicitly guarded adapter so fm-spawn cannot silently resolve a
   # controller or pane-default harness for this worker/checker lane.
   local spawn_args=("$lane_key" "$project" --harness "$SCHEDULER_HARNESS")
-  [ -n "$harness_arg" ] && spawn_args+=(--harness "$harness_arg")
   [ -n "$model_arg" ] && spawn_args+=(--model "$model_arg")
   [ -n "$effort_arg" ] && spawn_args+=(--effort "$effort_arg")
 
@@ -1866,10 +1881,6 @@ cmd_cycle() {
       # cycle so the next lane in the same cycle cannot pick the same row.
       printf '%s\n' "$eligible" >> "$STATE/.always-four.inflight.tmp"
 
-      # Mint the lane key and resolve the project BEFORE the queued row is
-      # moved: the row leaves the Queued section, and the project is read from
-      # that row. The planning id is not a lane key, so fm-spawn.sh refused
-      # every one of these dispatches with exit 5 and the slot stayed empty.
       local lane_key project
       lane_key=$(lane_key_for_task "$lane_id" "$eligible" "$(slot_model_for_lane "$lane_id")") || {
         printf 'always-four: replacement BLOCKED — no compliant lane key for %s\n' \
@@ -1890,29 +1901,6 @@ cmd_cycle() {
         continue
       fi
 
-      # Update backlog state.
-      #
-      # The installed tasks-axi has NO --to-section flag.  Its `mv` moves a
-      # task to another backlog FILE (--to <path-or-dir>) and refuses this call
-      # with "--to <path-or-dir> is required".  The same-file transition the
-      # scheduler actually wants is `tasks-axi start <id>`: it moves the row to
-      # the "In flight" section of its own file and is idempotent ("already:
-      # true" on a second run).
-      #
-      # The old call failed silently, so a dispatched row never left "Queued"
-      # and the same row could be dispatched twice.  This is the tool moving
-      # exactly the row it just dispatched - the shared queue file is never
-      # rebuilt from a filtered list of its rows - and a failure is recorded
-      # rather than swallowed.
-      if command -v tasks-axi >/dev/null 2>&1; then
-        local row_move_err="${FM_STATE_OVERRIDE:-$STATE}/row-move.err"
-        if ! tasks-axi start "$eligible" --file "$DATA/backlog.md" >/dev/null 2>"$row_move_err"; then
-          printf '%s\trow-move-failed\t%s\t%s\n' \
-            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$eligible" "$(tr '\n' ' ' < "$row_move_err" 2>/dev/null)" \
-            >> "${FM_STATE_OVERRIDE:-$STATE}/row-move-failures.log"
-        fi
-      fi
-
       local slot_model
       slot_model=$(slot_model_for_lane "$lane_id")
 
@@ -1930,6 +1918,9 @@ cmd_cycle() {
       "$SCRIPT_DIR/fm-spawn.sh" "${spawn_args[@]}" && spawn_rc=$? || spawn_rc=$?
 
       if [ "${spawn_rc:-0}" -eq 0 ]; then
+        if ! start_task_inflight "$eligible"; then
+          emit_coordinator_wake replacement "$lane_id" "$eligible" "row move failed after spawn"
+        fi
         lane_reset_attempts "$lane_id"
         [ "$lane_key" != "$eligible" ] && record_lane_key_origin "$lane_key" "$eligible"
         record_lane_slot_binding "$lane_id" "$lane_key" || true
