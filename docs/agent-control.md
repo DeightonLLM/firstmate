@@ -144,6 +144,25 @@ The stray pane holds a bare shell - the harness is not delivered until after pub
 That self-heals only when the retry resolves the *same* workspace, which the placement rule above does not guarantee.
 The worktree and the task's records are unaffected either way.
 
+### Reclaiming a finished lane's treehouse slot
+
+A finished lane gives its worktree slot back. It does not give it back by itself, so the pool fills up with slots nobody will ever use again and `treehouse get` eventually refuses to hand out a worktree - which is what stopped the twelfth lane on 2026-10-23. [`bin/fm-reap-finished-lanes.sh`](../bin/fm-reap-finished-lanes.sh) is the tool that does it.
+
+The SLOT is what is returned. A reaper that closed panes would be a different act with a different risk, and it is not this one's.
+
+**Two independent facts, or it is not a candidate.**
+
+1. The lane's task log shows a **terminal verb**. The real terminal lines are `done: ...` and `resolved [key=...]: ...`. The verb is read with `status_line_verb` from [`bin/fm-classify-lib.sh`](../bin/fm-classify-lib.sh), which strips an optional timestamp prefix and an optional `[key=...]` token and returns the leading verb. `blocked` and `needs-decision` are **live work** and are never terminal: the reclaim-terminal set is `{done, resolved}`.
+2. The pane **demonstrably no longer runs that lane's worker**. The oracle answers alive / dead / unknown, and only a positive *dead* licenses a reclaim. A pane whose state cannot be read is unknown, and unknown fails closed.
+
+Anything else - no lane record, no task log, an unreadable pane, a ledger state of BLOCKED - is left alone and reported with its reason. "Probably finished" is never enough.
+
+**Preserve first, every time.** Before a slot is returned, the reaper writes a verified `git bundle create --all` for the slot, a focused and verified bundle for every branch that holds commits not in the base ref, a tar of the slot's untracked and ignored files, and a binary patch of its tracked modifications. The tar is verified by comparing the number of listed files with the number of archive entries: they must match. That comparison is a hard gate, because `tar -czf out -C dir --null -T list` silently produces an **empty** archive when `-C` follows `-T` - tar's options are positional - and an empty archive was produced by accident once already. A slot whose branch holds unmerged commits is never returned unless the bundle that carries them exists and verifies. Untracked and ignored files are **moved** out of the slot into the preservation directory, never deleted, and the tracked paths are restored from HEAD, so `treehouse return` never has to discard anything and `treehouse return --force` is never used.
+
+**What the reaper will not do.** It never raises a pool ceiling: the fix is to reclaim, not to enlarge. It never runs `treehouse prune --yes` on a slot it has not proven safe. It never kills a process with `pkill -f` and never closes a pane. It never publishes anything - no push, no board write, no ledger write. It runs bounded, under a lock, so two runs never overlap, and it reports both what it reclaimed and what it deliberately left alone, with the reason.
+
+The dry run is the default. `--apply` is the only thing that changes anything.
+
 ### Failure and rollback
 
 - A refusal **before** the agent is stopped leaves the durable record and the instructions byte-identical.
@@ -195,3 +214,4 @@ The empirical basis for each adapter's value is the `harness-adapters` skill's v
 - `tests/fm-control.test.sh` - the adapter contract for its verified-harness lane (adapters outside the lane pin their control mechanics in their own harness suites), the backend capability matrix, exact-id scoping, the closed verb list, the busy, idle, dead, and idempotent lifecycle cases, and marker non-regression, all against a stubbed session provider.
 - `tests/fm-control-relaunch.test.sh` - the relaunch transaction: identity preservation, harness switching, the progress note, checkpoint refusals, rollback after a failed launch, and the endpoint-absence proof both verbs share - the Herdr reclaim of a destroyed endpoint, and tmux refusing one it cannot prove absent.
 - `tests/fm-control-herdr-smoke.test.sh` - the second state-verified backend against the real herdr binary, on an isolated throwaway lab session.
+- `tests/fm-reap-finished-lanes.test.sh` - the reclaim contract: a terminal verb with a dead pane is reclaimed; a live pane, a missing terminal verb, a BLOCKED lane (by status verb or by ledger state), an unknown pane, a missing task log and a missing lane record are not; the unmerged-commit slot is preserved with a verified bundle that carries its branch before the return; and an empty tar archive is caught by the entry-count check. The suite is red-capable by construction: every guard is mutated away in a copy of the script and the mutant is shown violating that guard's rule, so a guard that stops mattering fails the suite.
