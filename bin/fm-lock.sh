@@ -44,7 +44,32 @@ rm -f "$probe" 2>/dev/null || {
 }
 # shellcheck source=bin/fm-wake-lib.sh
 . "$SCRIPT_DIR/fm-wake-lib.sh"
-CLAIM_LOCK="$STATE/.lock.acquire"
+# The claim lock MUST be named so its basename ends in ".lock".
+#
+# Every lock-shape matcher in the fleet requires exactly that:
+# fm_lock_pointer_basename_matches and fm_lock_owner_dir_basename_matches in
+# bin/fm-wake-lib.sh, and the mirrored pair in bin/fm-lock-reclaim-lib.sh. A
+# name that does not end in ".lock" is invisible to all of them, which has
+# two consequences:
+#
+#   1. fm_lock_release cannot unlink it. fm_lock_purge_own refuses a path
+#      whose shape it does not recognise, so the pointer SURVIVES its own
+#      release. The owner dir survives too: fm_lock_discard_owner cleans the
+#      lock-internal files it recognises, and the files inside a ".lock.acquire"
+#      owner dir are not lock-internal under those rules, so the dir never
+#      empties and its rmdir fails.
+#   2. Nothing can reclaim it afterwards. The scratch purge, the owner-dir
+#      discard and the dead-lock reclaimer all skip a name that is not a lock
+#      shape, so the leftover pointer and owner dir stay forever and the
+#      wedge re-forms after every session.
+#
+# Measured on 2026-10-24 with a take/release of the claim lock under a home
+# state/ directory: the pre-fix name left the pointer AND one owner dir
+# behind, and the same lock under this name leaves nothing.
+#
+# The name also stays distinct from the session lock itself, which is
+# "$STATE/.lock" and is a plain file, not a lock pointer.
+CLAIM_LOCK="$STATE/.acquire.lock"
 CLAIM_LOCK_HELD=0
 release_claim_lock() {
   if [ "$CLAIM_LOCK_HELD" -eq 1 ]; then

@@ -547,12 +547,18 @@ EOF
   stage_started=$(fm_timing_now_ms)
   rc=0
   if [ "$sweep_locked" -eq 1 ]; then
-    if ! take_lock "$STATE/.lock.acquire" "$(seconds_until "$stage_deadline")"; then
+    # This lease shares its name with the session-lock claim mutex in
+    # bin/fm-lock.sh, and it must keep that name: the basename has to end in
+    # ".lock" so the lock-shape matchers in bin/fm-wake-lib.sh and
+    # bin/fm-lock-reclaim-lib.sh can see it. A name like ".lock.acquire" is
+    # invisible to them, so the pointer survives its own release and no
+    # purge or dead-lock reclaimer can ever collect it.
+    if ! take_lock "$STATE/.acquire.lock" "$(seconds_until "$stage_deadline")"; then
       # The lease is what makes a takeover wait for a settled sweep; a live
       # holder past the budget means no sweep can safely start, so this is a
       # failed stage to rerun, published through the ordinary bounded path.
       printf 'NETWORK_CHECKS: the deferred check worker gave up because %s was still held by %s at its deadline, so %s did not run; rerun %s/bin/fm-startup-network.sh run --locked 1 once that lease is released\n' \
-        "$STATE/.lock.acquire" "$(held_by)" "$(phase_label "$phases")" "$FM_ROOT" >> "$out"
+        "$STATE/.acquire.lock" "$(held_by)" "$(phase_label "$phases")" "$FM_ROOT" >> "$out"
       publish "$generation" failed "$phases" "$sweep_locked" "$started" 124 "$out" "$timings"
       run_cleanup "$out" "$timings"
       return 1
@@ -584,7 +590,7 @@ EOF
     fm_run_timed "$budget" env FM_BOOTSTRAP_NETWORK=only FM_BOOTSTRAP_DETECT_ONLY=1 \
       "$SCRIPT_DIR/fm-bootstrap.sh" >"$out" 2>&1 || rc=$?
   fi
-  [ "$lease_held" -eq 0 ] || fm_lock_release "$STATE/.lock.acquire"
+  [ "$lease_held" -eq 0 ] || fm_lock_release "$STATE/.acquire.lock"
   # The bounded run as a whole, so the per-phase records can be read against the
   # total even when the bound cut some of them off.
   fm_timing_record stage network-checks "$stage_started" "$phases"
