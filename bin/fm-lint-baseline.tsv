@@ -8,18 +8,18 @@
 # The ratchet only ratchets down; new fingerprints must be fixed before recording.
 bin/factory-health.sh	SC2010	68	34	Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.	1
 bin/factory-health.sh	SC2016	78	34	Expressions don't expand in single quotes, use double quotes for that.	1
-bin/fm-always-four.sh	SC1090	1541	9	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1090	1631	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1090	1919	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 bin/fm-always-four.sh	SC1090	98	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1530	9	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1620	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1908	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 bin/fm-always-four.sh	SC1091	78	5	Not following: ./fm-crew-state.sh: openBinaryFile: does not exist (No such file or directory)	1
 bin/fm-always-four.sh	SC1091	79	3	Not following: ./fm-classify-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
 bin/fm-always-four.sh	SC1091	89	3	Not following: ./fm-backend.sh: openBinaryFile: does not exist (No such file or directory)	1
 bin/fm-always-four.sh	SC1091	90	3	Not following: ./fm-busy-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
 bin/fm-always-four.sh	SC1091	93	3	Not following: ./fm-wake-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
-bin/fm-always-four.sh	SC2034	122	1	CAP_REAP appears unused. Verify use (or export if used externally).	1
-bin/fm-always-four.sh	SC2034	1897	12	spawns_done appears unused. Verify use (or export if used externally).	1
 bin/fm-always-four.sh	SC2034	75	1	CONFIG appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2034	122	1	CAP_REAP appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2034	1886	12	spawns_done appears unused. Verify use (or export if used externally).	1
 bin/fm-always-four.sh	SC2086	518	17	Double quote to prevent globbing and word splitting.	1
 bin/fm-campaign-worker-lib.sh	SC2174	103	36	When used with -p, -m only applies to the deepest directory.	1
 bin/fm-context-preflight.sh	SC2034	29	1	WAREHOUSE_DIR_DEFAULT appears unused. Verify use (or export if used externally).	1
@@ -65,18 +65,24 @@ tests/fm-agy-harness.test.sh	SC2016	285	23	Expressions don't expand in single qu
 tests/fm-agy-harness.test.sh	SC2016	288	19	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-agy-harness.test.sh	SC2016	401	11	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-agy-harness.test.sh	SC2016	402	6	Expressions don't expand in single quotes, use double quotes for that.	1
-tests/fm-always-four.test.sh	SC2030	1036	5	Modification of PATH is local (to subshell caused by $(..) expansion).	1
-tests/fm-always-four.test.sh	SC2030	1169	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1172	8	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1177	8	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1280	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1343	65	Modification of FM_STATE_OVERRIDE is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1344	29	Modification of PATH is local (to subshell caused by (..) group).	1
 tests/fm-always-four.test.sh	SC2030	142	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1475	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1485	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1493	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1501	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1036	5	Modification of PATH is local (to subshell caused by $(..) expansion).	1
+tests/fm-always-four.test.sh	SC2030	1174	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1178	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1182	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1289	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1352	65	Modification of FM_STATE_OVERRIDE is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1353	29	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1484	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1494	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1502	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1510	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2031	952	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	958	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	965	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	968	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	983	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	995	26	PATH was modified in a subshell. That change might be lost.	1
 tests/fm-always-four.test.sh	SC2031	1001	26	PATH was modified in a subshell. That change might be lost.	1
 tests/fm-always-four.test.sh	SC2031	1013	26	PATH was modified in a subshell. That change might be lost.	1
 tests/fm-always-four.test.sh	SC2031	1018	26	PATH was modified in a subshell. That change might be lost.	1
@@ -85,35 +91,29 @@ tests/fm-always-four.test.sh	SC2031	1058	20	PATH was modified in a subshell. Tha
 tests/fm-always-four.test.sh	SC2031	1064	20	PATH was modified in a subshell. That change might be lost.	1
 tests/fm-always-four.test.sh	SC2031	1095	27	PATH was modified in a subshell. That change might be lost.	1
 tests/fm-always-four.test.sh	SC2031	1147	27	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1169	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1172	23	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1177	23	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1196	39	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1225	70	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1280	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1344	44	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1426	28	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1427	27	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1444	12	FM_STATE_OVERRIDE was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1475	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1485	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1493	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1501	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1504	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	952	26	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	958	26	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	965	26	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	968	26	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	983	26	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	995	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1174	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1178	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1182	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1205	39	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1234	70	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1289	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1353	44	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1435	28	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1436	27	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1453	12	FM_STATE_OVERRIDE was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1484	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1494	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1502	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1510	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1513	20	PATH was modified in a subshell. That change might be lost.	1
 tests/fm-always-four.test.sh	SC2129	845	3	Consider using { cmd1; cmd2; } >> file instead of individual redirects.	1
-tests/fm-always-four.test.sh	SC2181	1170	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
-tests/fm-always-four.test.sh	SC2181	1476	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
 tests/fm-always-four.test.sh	SC2181	533	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
 tests/fm-always-four.test.sh	SC2181	606	5	Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?.	1
 tests/fm-always-four.test.sh	SC2181	680	5	Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?.	1
 tests/fm-always-four.test.sh	SC2181	720	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
 tests/fm-always-four.test.sh	SC2181	806	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	1175	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	1485	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
 tests/fm-brief.test.sh	SC2016	799	15	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-brief.test.sh	SC2016	826	15	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-brief.test.sh	SC2016	864	15	Expressions don't expand in single quotes, use double quotes for that.	1
@@ -121,21 +121,21 @@ tests/fm-brief.test.sh	SC2034	767	5	FM_HARNESS_TODO_LIST appears unused. Verify 
 tests/fm-calm-pi-extension.test.sh	SC2034	40	3	step appears unused. Verify use (or export if used externally).	1
 tests/fm-campaign-worker-authority.test.sh	SC1090	20	3	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 tests/fm-campaign-worker-authority.test.sh	SC2174	26	10	When used with -p, -m only applies to the deepest directory.	1
-tests/fm-comms-ingest.test.sh	SC2317	329	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
 tests/fm-comms-ingest.test.sh	SC2317	83	7	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
 tests/fm-comms-ingest.test.sh	SC2317	91	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
 tests/fm-comms-ingest.test.sh	SC2317	95	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
+tests/fm-comms-ingest.test.sh	SC2317	329	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
 tests/fm-comms-notify-hang.test.sh	SC2034	40	16	mode appears unused. Verify use (or export if used externally).	1
 tests/fm-context-preflight.test.sh	SC2001	116	9	See if you can use ${variable//search/replace} instead.	1
 tests/fm-context-preflight.test.sh	SC2329	73	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
 tests/fm-dead-pane-sweep.test.sh	SC2034	20	1	ROOT appears unused. Verify use (or export if used externally).	1
 tests/fm-dead-pane-sweep.test.sh	SC2155	95	9	Declare and assign separately to avoid masking return values.	1
 tests/fm-dead-pane-sweep.test.sh	SC2329	60	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
-tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	102	15	Expressions don't expand in single quotes, use double quotes for that.	1
-tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	109	18	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	75	40	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	85	59	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	96	15	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	102	15	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	109	18	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-dispatch-guard-max-lanes.test.sh	SC2034	73	18	body appears unused. Verify use (or export if used externally).	1
 tests/fm-gate-lib.test.sh	SC2016	24	15	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-lock-reclaim-disk.test.sh	SC2329	57	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
@@ -207,17 +207,17 @@ tests/fm-quota-gate.test.sh	SC2015	80	58	Note that A && B || C is not if-then-el
 tests/fm-quota-gate.test.sh	SC2015	85	17	Note that A && B || C is not if-then-else. C may run when A is true.	1
 tests/fm-quota-gate.test.sh	SC2015	90	57	Note that A && B || C is not if-then-else. C may run when A is true.	1
 tests/fm-quota-gate.test.sh	SC2015	93	83	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	50	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	61	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	73	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	84	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	96	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 tests/fm-raw-herdr-senpi.test.sh	SC1090	109	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 tests/fm-raw-herdr-senpi.test.sh	SC1090	122	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 tests/fm-raw-herdr-senpi.test.sh	SC1090	283	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 tests/fm-raw-herdr-senpi.test.sh	SC1090	296	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 tests/fm-raw-herdr-senpi.test.sh	SC1090	310	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 tests/fm-raw-herdr-senpi.test.sh	SC1090	371	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-tests/fm-raw-herdr-senpi.test.sh	SC1090	50	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-tests/fm-raw-herdr-senpi.test.sh	SC1090	61	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-tests/fm-raw-herdr-senpi.test.sh	SC1090	73	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-tests/fm-raw-herdr-senpi.test.sh	SC1090	84	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-tests/fm-raw-herdr-senpi.test.sh	SC1090	96	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 tests/fm-raw-herdr-senpi.test.sh	SC2034	402	5	FM_HOME appears unused. Verify use (or export if used externally).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2034	403	5	FM_ROOT appears unused. Verify use (or export if used externally).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2034	405	5	FM_STATE_OVERRIDE appears unused. Verify use (or export if used externally).	1
@@ -225,6 +225,11 @@ tests/fm-raw-herdr-senpi.test.sh	SC2034	406	5	FM_DATA_OVERRIDE appears unused. V
 tests/fm-raw-herdr-senpi.test.sh	SC2034	438	3	RAW_HERDR_SENPI appears unused. Verify use (or export if used externally).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2034	439	5	FM_RAW_HERDR_SENPI_BYPASS appears unused. Verify use (or export if used externally).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2034	440	5	FM_CONFIG_OVERRIDE appears unused. Verify use (or export if used externally).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	46	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	58	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	69	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	81	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	92	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2329	105	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2329	118	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2329	131	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
@@ -247,14 +252,9 @@ tests/fm-raw-herdr-senpi.test.sh	SC2329	397	1	This function is never invoked. Ch
 tests/fm-raw-herdr-senpi.test.sh	SC2329	416	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2329	436	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
 tests/fm-raw-herdr-senpi.test.sh	SC2329	452	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
-tests/fm-raw-herdr-senpi.test.sh	SC2329	46	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
-tests/fm-raw-herdr-senpi.test.sh	SC2329	58	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
-tests/fm-raw-herdr-senpi.test.sh	SC2329	69	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
-tests/fm-raw-herdr-senpi.test.sh	SC2329	81	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
-tests/fm-raw-herdr-senpi.test.sh	SC2329	92	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
 tests/fm-reap-gate.test.sh	SC2034	20	1	TEARDOWN appears unused. Verify use (or export if used externally).	1
-tests/fm-spawn-cap-enforcement.test.sh	SC2155	208	9	Declare and assign separately to avoid masking return values.	1
 tests/fm-spawn-cap-enforcement.test.sh	SC2155	83	9	Declare and assign separately to avoid masking return values.	1
+tests/fm-spawn-cap-enforcement.test.sh	SC2155	208	9	Declare and assign separately to avoid masking return values.	1
 tests/fm-todo-gate.test.sh	SC2016	171	10	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-wake-drain-loop.test.sh	SC2015	41	15	Note that A && B || C is not if-then-else. C may run when A is true.	1
 tests/fm-wake-drain-loop.test.sh	SC2015	55	5	Note that A && B || C is not if-then-else. C may run when A is true.	1
@@ -294,5 +294,5 @@ tests/fm-watch-triage.test.sh	SC2031	1747	7	! was modified in a subshell. That c
 tests/fm-watch-triage.test.sh	SC2031	1768	7	! was modified in a subshell. That change might be lost.	1
 tests/fm-watch-triage.test.sh	SC2031	1801	7	! was modified in a subshell. That change might be lost.	1
 tests/fm-watch-triage.test.sh	SC2031	1835	7	! was modified in a subshell. That change might be lost.	1
-tests/plan-page-contract.test.sh	SC2317	115	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
 tests/plan-page-contract.test.sh	SC2317	65	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
+tests/plan-page-contract.test.sh	SC2317	115	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
