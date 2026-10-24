@@ -1,6 +1,10 @@
 projects/
 state/
 data/
+# The live machine lane ledger, the claims board and the drift checker are
+# runtime state of this home, not shared tracked material: they are published
+# and changed by bin/fm-lane-ledger-publish.py.
+ops/
 .no-mistakes/
 .lavish/*
 !.lavish/CAPTAIN-BOARD.html
