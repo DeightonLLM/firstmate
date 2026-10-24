@@ -35,9 +35,11 @@ Real harness credential tests remain opt-in rather than part of default CI.
 
 The ordinary topology puts one task tab per endpoint in the exact workspace of the Firstmate or secondmate that launches it.
 When the launcher has no Herdr workspace to inherit, the adapter maintains one durable home-labeled workspace instead.
-The primary home label is `firstmate`.
-A secondmate home label is `2ndmate-<secondmate-id>`, derived from its validated `.fm-secondmate-home` marker.
+That workspace's VISIBLE name follows `docs/surface-naming-contract.md`: a SCOPE (`<host>/<home>[/<role>]`) plus a summary.
+The primary home's scope is `hetz/primary`; a secondmate home's scope is `hetz/2ndmate-<secondmate-id>`, derived from its validated `.fm-secondmate-home` marker.
 A secondmate launched by the primary receives a narrowly scoped home override during container creation.
+The SCOPE is the machine-matchable half of the label: the adapter resolves a home's container by scope, never by the whole label, so a container may say how many lanes it holds without changing which home owns it.
+The legacy home labels (`firstmate`, `2ndmate-<secondmate-id>`) are still accepted by that matcher so an unrenamed fleet keeps resolving to the same container, but they are not conforming names: `bin/fm-surface-name-check.sh` reports them.
 
 Attach to the selected named Herdr session and switch to the relevant home workspace to watch its task tabs.
 Routine supervision uses `bin/fm-peek.sh <id>` and `FM_HOME=<home> bin/fm-send.sh <id> '<text>'` without attaching.
@@ -56,10 +58,10 @@ A claimed parent identity that cannot be resolved exactly stops the spawn before
 That covers a missing or unusable socket identity, a closed or unreadable launcher pane, a pane and tab that disagree about their workspace, a workspace missing from the session, and a pane belonging to another named session or Herdr server.
 
 Firstmate running outside Herdr entirely has no launcher workspace to inherit, so its workers use this home's own labeled workspace, created on first use.
-That path needs the home label to identify exactly one workspace: two workspaces sharing it are an unresolvable placement and refuse rather than adopting either.
-Avoid naming a personal workspace `firstmate` or `2ndmate-<id>` for that reason, and because the adapter cannot distinguish that label collision from its own container.
+That path needs the home SCOPE to identify exactly one workspace: two workspaces sharing a scope are an unresolvable placement and refuse rather than adopting either.
+Avoid giving a personal workspace a scope-form label for that reason, and because the adapter cannot distinguish that collision from its own container.
 An older secondmate workspace using `firstmate-<id>` is not migrated automatically; rename it manually before expecting new tasks or recovery to use it.
-Recovery and list-live still scan the first workspace matching the home label, because they address panes they already recorded rather than choosing where new work goes.
+Recovery and list-live still scan the first workspace matching the home scope, because they address panes they already recorded rather than choosing where new work goes.
 
 Existing task operations use recorded endpoint ids and do not move a live task when labels change.
 The per-home workspace is reused while it has task tabs.

@@ -73,8 +73,15 @@ fi
 FM_AFK_LAUNCH_STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 FM_AFK_LAUNCH_RECORD="$FM_AFK_LAUNCH_STATE/.afk-daemon-terminal"
 FM_AFK_LAUNCH_LOCK="$FM_AFK_LAUNCH_STATE/.afk-launch.lock"
-FM_AFK_LAUNCH_WS_LABEL="firstmate-afk-daemon"
 
+# The away-mode daemon's own workspace label. It is built from the visible
+# surface-name grammar (docs/surface-naming-contract.md) so the left-hand name
+# says WHICH surface owns the daemon and WHICH kind of container it is, instead
+# of the old hardcoded "firstmate-afk-daemon-<pid>-<n>-<ts>", which named an
+# implementation detail and a dead launcher pid.
+
+# shellcheck source=bin/fm-surface-name-lib.sh
+. "$FM_AFK_LAUNCH_DIR/fm-surface-name-lib.sh"
 # shellcheck source=bin/fm-backend.sh
 . "$FM_AFK_LAUNCH_DIR/fm-backend.sh"
 # shellcheck source=bin/fm-supervisor-target-lib.sh
@@ -153,6 +160,16 @@ fm_afk_launch_usage() {
 # daemon entry; a test overrides it with a harmless placeholder.
 fm_afk_launch_entry_cmd() {
   printf '%s' "${FM_AFK_LAUNCH_ENTRY:-$FM_ROOT/bin/fm-afk-start.sh}"
+}
+
+# fm_afk_launch_ws_label: the visible name of the daemon's container.
+# "<host>/<home>/afk . afk-daemon <nonce>". The nonce keeps concurrent
+# daemons of one home apart; it is a random correlator, not authority.
+fm_afk_launch_ws_label() {
+  local scope nonce
+  scope=$(fm_surface_name_scope "$FM_HOME" afk)
+  nonce=$(fm_surface_name_nonce)
+  fm_surface_name_workspace_label "$scope" "afk-daemon $nonce"
 }
 
 fm_afk_launch_record_write() {  # <backend> <target> <extra>
@@ -392,7 +409,7 @@ fm_afk_launch_create_herdr() {  # <captain-target> <captain-backend>
   fi
   fm_backend_source herdr || return 1
   fm_backend_herdr_server_ensure "$session" || { fm_afk_launch_log "herdr server not ready for session '$session'"; return 1; }
-  label=${FM_AFK_LAUNCH_LABEL:-"$FM_AFK_LAUNCH_WS_LABEL-$$-${RANDOM:-0}-$(date '+%s')"}
+  label=${FM_AFK_LAUNCH_LABEL:-"$(fm_afk_launch_ws_label)"}
   out=$(fm_backend_herdr_cli "$session" workspace create --cwd "$FM_HOME" --label "$label" --no-focus 2>/dev/null)
   create_result=$?
   wsid=$(printf '%s' "$out" | jq -r '.result.workspace.workspace_id // empty' 2>/dev/null)

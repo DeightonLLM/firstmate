@@ -76,6 +76,12 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 # shellcheck source=bin/fm-composer-lib.sh
 . "$FM_BACKEND_HERDR_ROOT/bin/fm-composer-lib.sh"
 
+# The visible surface-name grammar (docs/surface-naming-contract.md). This
+# adapter builds every Herdr label it writes through it, so the label a human
+# reads and the label the matcher resolves by cannot drift apart.
+# shellcheck source=bin/fm-surface-name-lib.sh
+. "$FM_BACKEND_HERDR_ROOT/bin/fm-surface-name-lib.sh"
+
 # Shared, backend-neutral normalized-transition shape and the single-owner
 # status->action policy table (bin/fm-transition-lib.sh). This adapter's event
 # subscriber (fm_backend_herdr_wait_transition) normalizes every
@@ -107,7 +113,6 @@ FM_BACKEND_HERDR_ESCALATED_PREFIX=".herdr-escalated-"
 # .fm-secondmate-home is written by bin/fm-home-seed.sh (AGENTS.md section 6)
 # at a seeded secondmate home's root, containing exactly that secondmate's id.
 # The primary firstmate home never carries this marker.
-FM_BACKEND_HERDR_SECONDMATE_MARKER=".fm-secondmate-home"
 # The default-off presentation projection is intentionally separate from the
 # authoritative task endpoint record.
 # A per-task journal lives under state/ as <id>.herdr-presentation.
@@ -118,29 +123,27 @@ FM_BACKEND_HERDR_SECONDMATE_MARKER=".fm-secondmate-home"
 # No send, capture, Treehouse, or general task-ownership path reads it.
 FM_BACKEND_HERDR_PRESENTATION_JOURNAL_SUFFIX=".herdr-presentation"
 
-# fm_backend_herdr_workspace_label: the per-firstmate-HOME herdr workspace
-# label (docs/herdr-backend.md "Default task container shape"). The PRIMARY home (no
-# secondmate marker) resolves to the constant "firstmate", byte-identical to
-# every pre-existing task's recorded label - no forced migration. A SECONDMATE
-# home resolves to "2ndmate-<secondmate-id>", so its tasks land in their own
-# workspace, obviously distinguishable from the primary's (and from every
-# other secondmate's) in herdr's spaces sidebar. Read fresh from FM_HOME on
-# every call rather than cached at source time: FM_HOME is the home's own
-# durable identity, not env plumbing threaded through a call chain, so the
-# label is automatically stable across every respawn/recovery for the life of
-# that home. fm-spawn.sh briefly shadows FM_HOME to a secondmate's own home
-# when the PRIMARY spawns that secondmate (its own process's FM_HOME still
-# names the primary at that point) - see fm-spawn.sh's herdr case arm.
+# fm_backend_herdr_workspace_label: the SCOPE of the per-firstmate-HOME herdr
+# workspace (docs/surface-naming-contract.md, docs/herdr-backend.md "Watching
+# and task containers").
+#
+# The scope is "<host>/<home>": "hetz/primary" for the primary home and
+# "hetz/2ndmate-<secondmate-id>" for a secondmate home. It is the machine
+# matchable half of a visible workspace label: everything before the first
+# " . " separator. A container's label may therefore say how many lanes it
+# holds without changing WHICH home owns it, and the matcher resolves the
+# home's container by scope instead of by a whole label that a lane count
+# would invalidate.
+#
+# Read fresh from FM_HOME on every call rather than cached at source time:
+# FM_HOME is the home's own durable identity, not env plumbing threaded
+# through a call chain, so the scope is automatically stable across every
+# respawn/recovery for the life of that home. fm-spawn.sh briefly shadows
+# FM_HOME to a secondmate's own home when the PRIMARY spawns that secondmate
+# (its own process's FM_HOME still names the primary at that point) - see
+# fm-spawn.sh's herdr case arm.
 fm_backend_herdr_workspace_label() {
-  local marker="$FM_HOME/$FM_BACKEND_HERDR_SECONDMATE_MARKER" id
-  if [ -f "$marker" ]; then
-    id=$(tr -d '[:space:]' < "$marker" 2>/dev/null)
-    if [ -n "$id" ]; then
-      printf '2ndmate-%s' "$id"
-      return 0
-    fi
-  fi
-  printf 'firstmate'
+  fm_surface_name_scope "$FM_HOME"
 }
 
 # fm_backend_herdr_cli: run `herdr <args...>` scoped to <session>, setting
@@ -444,10 +447,23 @@ fm_backend_herdr_projection_concise_task_label() {  # <task-id>
 
 # fm_backend_herdr_projection_workspace_label: presentation-only child label.
 # Format is literal U+2514 BOX DRAWINGS LIGHT UP AND RIGHT, one space, the
-# concise task label, then the unchanged · p:<full-22-char-token> suffix.
+# owning home's SCOPE, the concise task label, then the unchanged
+# · p:<full-22-char-token> suffix.
+#
+# The scope is what makes the space name the SURFACE as well as the lane: a
+# disposable one-task space used to read as the lane alone, so the Captain
+# could not tell which surface was running it.
+#
+# The trailing " · p:<token>" grammar is unchanged on purpose: the locked
+# session-start cleanup in bin/fm-herdr-session-cleanup.sh discovers these
+# spaces by exactly that grammar, and the projection ordering predicates
+# match "MARK .+ · p:<22 chars>".
+#
 # Labels and tokens remain non-authoritative correlators only.
 fm_backend_herdr_projection_workspace_label() {  # <task-id> <projection-id>
-  printf '└ %s · p:%s' "$(fm_backend_herdr_projection_concise_task_label "$1")" "$2"
+  fm_surface_name_projection_label \
+    "$(fm_surface_name_scope "$FM_HOME")" \
+    "$(fm_backend_herdr_projection_concise_task_label "$1")" "$2"
 }
 
 # fm_backend_herdr_presentation_session_lock_path: one machine-private lock
@@ -1057,25 +1073,38 @@ fm_backend_herdr_pane_idle_shell_sample() {  # <session> <pane-id>
 # After a successful move, every pre-existing workspace id sequence excluding
 # the new id must be byte-identical to the pre-move sequence.
 fm_backend_herdr_projection_order_best_effort() {  # <session> <created-workspace-id> <parent-label> [<parent-workspace-id>]
-  local session=$1 created=$2 parent=$3 parent_ws=${4:-} list analysis current desired socket mover response move_status focus_before move_capable
+  local session=$1 created=$2 parent=$3 parent_ws=${4:-} list analysis current desired socket mover response move_status focus_before move_capable parent_scope
   local before_existing after_existing
   [ -n "$parent" ] || {
     echo "warning: herdr presentation ordering missing owning parent label; leaving worker in Herdr's current order" >&2
     return 0
   }
+  parent_scope=$(fm_surface_name_scope_of "$parent")
   list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || {
     echo "warning: herdr presentation ordering could not list workspaces; leaving worker in Herdr's current order" >&2
     return 0
   }
-  analysis=$(printf '%s' "$list" | jq -c --arg created "$created" --arg parent "$parent" --arg parent_ws "$parent_ws" '
+  analysis=$(printf '%s' "$list" | jq -c --arg created "$created" --arg parent "$parent" --arg parent_ws "$parent_ws" --arg parent_scope "$parent_scope" '
+    def scope_of($l): ($l | split(" · ")[0]);
+    def is_projection($l): ($l | startswith("└ "));
+    # A scope-form container label: "<host>/<home>[/<role>]", optionally with a
+    # summary after the separator. A legacy CHILD label ("<owner>/<task> . p:
+    # <token>") is not a container: its owner segment is not a host.
+    def is_scope_label($l):
+      ($l | test("^[a-z0-9.-]+/[a-z0-9._-]+(/[a-z0-9._-]+)?( · .*)?$"));
     def is_parent:
       if ($parent_ws | length) > 0
       then .workspace_id == $parent_ws
-      else (.label | type) == "string" and .label == $parent
+      else (.label | type) == "string"
+           and (is_projection(.label) | not)
+           and ((.label == $parent) or (scope_of(.label) == scope_of($parent)))
       end;
     def is_top_level_parent:
       (.label | type) == "string"
-      and ((.label == "firstmate") or (.label | test("^2ndmate-[^/]+$")));
+      and (is_projection(.label) | not)
+      and ((.label == "firstmate")
+           or (.label | test("^2ndmate-[^/]+$"))
+           or (is_scope_label(.label) and ((.label | test(" · p:")) | not)));
     def is_new_child:
       (.label | type) == "string"
       and (.label | test("^└ .+ · p:[A-Za-z0-9_-]{22}$"));
@@ -1256,16 +1285,32 @@ fm_backend_herdr_server_ensure() {  # <session>
 # which one is the caller's, while the read-only recovery path below keeps its
 # historical first-match behavior.
 fm_backend_herdr_workspace_find_all() {  # <session>
-  local session=$1 label list
-  label=$(fm_backend_herdr_workspace_label)
+  local session=$1 scope legacy list
+  scope=$(fm_backend_herdr_workspace_label)
+  legacy=$(fm_surface_name_legacy_home_label "$scope" 2>/dev/null || printf '')
   list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || return 0
   # NOTE: the jq variable is $want, NOT $label - `label` is a jq reserved
   # keyword (label/break), so declaring a jq variable named "label" is a
   # compile error that `2>/dev/null` would silently swallow, making this find
   # ALWAYS return empty and every spawn mint a fresh "firstmate" workspace
   # (the workspace leak).
-  printf '%s' "$list" | jq -r --arg want "$label" \
-    '.result.workspaces[]? | select(.label == $want) | .workspace_id' 2>/dev/null
+  #
+  # A workspace belongs to a home when its label's SCOPE field equals the
+  # home's scope. A projection space ("MARK <scope> . ...") is NEVER a home
+  # container: it is a disposable one-lane child of one, and adopting it as
+  # the home's container would put a task in the wrong place.
+  #
+  # The legacy home label ("firstmate", "2ndmate-<id>") is still accepted so a
+  # fleet that has not been renamed yet keeps resolving to the same
+  # workspace. It is a transitional match, not a conforming name.
+  printf '%s' "$list" | jq -r --arg want "$scope" --arg legacy "$legacy" '
+    def scope_of($l): ($l | split(" · ")[0]);
+    .result.workspaces[]?
+    | select((.label | type) == "string")
+    | select((.label | startswith("└ ")) | not)
+    | select((scope_of(.label) == $want)
+             or (($legacy | length) > 0 and .label == $legacy))
+    | .workspace_id' 2>/dev/null
 }
 
 # fm_backend_herdr_workspace_find: this HOME's own workspace id inside
@@ -1548,7 +1593,7 @@ fm_backend_herdr_workspace_ensure() {  # <session> <cwd> [<launcher-relationship
   matches=$(fm_backend_herdr_workspace_find_all "$session")
   count=$(printf '%s' "$matches" | grep -c '[^[:space:]]' || true)
   if [ "$count" -gt 1 ]; then
-    echo "error: ${count} herdr workspaces in session '$session' are labeled '$label' (${matches//$'\n'/ }) and this spawn has no herdr parent pane to identify which one is its own; rename or close the extras, or run firstmate inside the workspace its workers belong in" >&2
+    echo "error: ${count} herdr workspaces in session '$session' carry the scope '$label' (${matches//$'\n'/ }) and this spawn has no herdr parent pane to identify which one is its own; rename or close the extras, or run firstmate inside the workspace its workers belong in" >&2
     return 3
   fi
   wsid=${matches%%$'\n'*}
@@ -1969,10 +2014,18 @@ fm_backend_herdr_projection_cleanup_exact() {  # <session> <task-pane> <seeded-p
 fm_backend_herdr_projection_parent_workspace_exact() {  # <session> <parent-label>
   local session=$1 parent_label=$2 list
   list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || return 1
+  # The parent is resolved by its SCOPE field, so a parent whose label also
+  # carries a lane summary is still found. A projection space is never a
+  # parent: it is a child of one.
   printf '%s' "$list" | jq -er --arg parent_label "$parent_label" '
+    def scope_of($l): ($l | split(" · ")[0]);
     (.result.workspaces // null) as $spaces
     | select(($spaces | type) == "array")
-    | [$spaces[]? | select(.label == $parent_label)]
+    | [$spaces[]?
+       | select((.label | type) == "string")
+       | select((.label | startswith("└ ")) | not)
+       | select((.label == $parent_label)
+                or (scope_of(.label) == scope_of($parent_label)))]
     | if length == 1
         and (.[0].workspace_id | type) == "string"
         and (.[0].workspace_id | length) > 0

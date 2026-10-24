@@ -81,7 +81,10 @@ ANCHOR=$(lab workspace create --cwd "$ROOT" --label captain-anchor --focus) || f
 ANCHOR_TAB=$(printf '%s' "$ANCHOR" | jq -r '.result.tab.tab_id')
 TOKEN=AbCdEfGhIjKlMnOpQrStUv
 ID=restored-idle-shell
-TITLE="└ $ID · p:$TOKEN"
+# The visible title is the CURRENT projection label for this home, built by
+# the one function that owns it (docs/surface-naming-contract.md).
+TITLE=$(bash -c '. "$1/bin/fm-surface-name-lib.sh"; fm_surface_name_projection_label "$(fm_surface_name_scope "$2")" "$3" "$4"' \
+  _ "$ROOT" "$HOME_DIR" "$ID" "$TOKEN")
 CANDIDATE=$(lab workspace create --cwd "$ROOT" --label "$TITLE" --no-focus) || fail 'could not create projected child fixture'
 WS=$(printf '%s' "$CANDIDATE" | jq -r '.result.workspace.workspace_id')
 PANE=$(printf '%s' "$CANDIDATE" | jq -r '.result.root_pane.pane_id')
