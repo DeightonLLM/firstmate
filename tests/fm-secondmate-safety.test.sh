@@ -1058,6 +1058,88 @@ test_home_seed_refuses_reassigning_existing_id_to_different_home() {
   pass "home seeding refuses same-id reassignment to a different home"
 }
 
+test_home_seed_reassigns_id_only_when_registered_home_is_missing() {
+  local home missing replacement replacement_abs err registry_before
+  home="$TMP_ROOT/reseed-missing-home-main"
+  missing="$TMP_ROOT/reseed-missing-home-old"
+  replacement="$TMP_ROOT/reseed-missing-home-new"
+  err="$TMP_ROOT/reseed-missing-home.err"
+  mkdir -p "$home/projects" "$home/data" "$home/state" "$replacement/data" "$replacement/state" \
+    "$replacement/config" "$replacement/projects"
+  mark_firstmate_home "$replacement"
+  printf -- '- design - design domain (home: %s; scope: design work; projects: ; added 2026-06-22)\n' \
+    "$missing" > "$home/data/secondmates.md"
+
+  FM_HOME="$home" FM_SECONDMATE_CHARTER='design domain' FM_SECONDMATE_SCOPE='design work' \
+    "$ROOT/bin/fm-home-seed.sh" design "$replacement" --no-projects >/dev/null 2>"$err" \
+    || fail "seed refused reassignment after the registered home was genuinely missing: $(cat "$err")"
+  replacement_abs=$(cd "$replacement" && pwd -P)
+  [ "$(cat "$replacement/.fm-secondmate-home")" = design ] \
+    || fail "missing-home reassignment did not write the matching identity marker"
+  [ -f "$replacement/data/charter.md" ] \
+    || fail "missing-home reassignment did not copy the charter"
+  [ "$(grep -c '^- design ' "$home/data/secondmates.md")" -eq 1 ] \
+    || fail "missing-home reassignment left duplicate registry entries"
+  grep -F "home: $replacement_abs" "$home/data/secondmates.md" >/dev/null \
+    || fail "missing-home reassignment did not update the registry to the replacement"
+  FM_HOME="$home" "$ROOT/bin/fm-home-seed.sh" validate >/dev/null \
+    || fail "registry validation rejected the reassigned missing-home route"
+
+  # A dangling symlink is a present filesystem entry, not an absent old home.
+  missing="$TMP_ROOT/reseed-dangling-old"
+  replacement="$TMP_ROOT/reseed-dangling-new"
+  ln -s "$TMP_ROOT/reseed-dangling-target" "$missing"
+  printf -- '- dangling - dangling domain (home: %s; scope: design work; projects: ; added 2026-06-22)\n' \
+    "$missing" > "$home/data/secondmates.md"
+  cp "$home/data/secondmates.md" "$TMP_ROOT/reseed-dangling-registry.before"
+  registry_before="$TMP_ROOT/reseed-dangling-registry.before"
+  if FM_HOME="$home" FM_SECONDMATE_CHARTER='dangling domain' FM_SECONDMATE_SCOPE='design work' \
+    "$ROOT/bin/fm-home-seed.sh" dangling "$replacement" --no-projects >/dev/null 2>"$err"; then
+    fail "seed reassigned an id whose registered home path is a dangling symlink"
+  fi
+  grep -F "secondmate id dangling is already registered to home $missing" "$err" >/dev/null \
+    || fail "dangling-home refusal did not retain the same-id conflict diagnostic"
+  [ -L "$missing" ] || fail "dangling-home refusal removed the registered symlink"
+  [ ! -e "$replacement" ] || fail "dangling-home refusal created a replacement home"
+  cmp -s "$registry_before" "$home/data/secondmates.md" \
+    || fail "dangling-home refusal changed the registry"
+  pass "home seeding reassigns an id only when its old registered path is absent"
+}
+
+test_home_seed_reassignment_rolls_back_after_later_failure() {
+  local home missing replacement err registry_before
+  home="$TMP_ROOT/reseed-rollback-main"
+  missing="$TMP_ROOT/reseed-rollback-old"
+  replacement="$TMP_ROOT/reseed-rollback-new"
+  err="$TMP_ROOT/reseed-rollback.err"
+  mkdir -p "$home/projects/alpha" "$home/projects/beta" "$home/data" "$home/state"
+  fm_git_init_commit "$home/projects/alpha"
+  fm_git_add_origin "$home/projects/alpha" "$TMP_ROOT/remotes/reseed-rollback-alpha.git"
+  fm_git_init_commit "$home/projects/beta"
+  git -C "$home/projects/beta" remote add origin "file://$TMP_ROOT/remotes/reseed-rollback-missing.git"
+  cat > "$home/data/projects.md" <<EOF
+- alpha [direct-PR] - alpha project (added 2026-06-22)
+- beta [direct-PR] - beta project (added 2026-06-22)
+EOF
+  printf -- '- rollback - rollback domain (home: %s; scope: rollback; projects: alpha; added 2026-06-22)\n' \
+    "$missing" > "$home/data/secondmates.md"
+  cp "$home/data/secondmates.md" "$TMP_ROOT/reseed-rollback-registry.before"
+  registry_before="$TMP_ROOT/reseed-rollback-registry.before"
+
+  if FM_HOME="$home" FM_SECONDMATE_CHARTER='rollback domain' \
+    "$ROOT/bin/fm-home-seed.sh" rollback "$replacement" alpha beta >/dev/null 2>"$err"; then
+    fail "seed succeeded despite the intentionally unavailable beta clone remote"
+  fi
+  grep -F 'repository' "$err" >/dev/null \
+    || fail "rollback test did not reach the expected post-provision clone failure"
+  [ ! -e "$replacement" ] || fail "failed missing-home reassignment left its created home behind"
+  [ ! -e "$home/data/rollback/brief.md" ] \
+    || fail "failed missing-home reassignment left its generated charter brief behind"
+  cmp -s "$registry_before" "$home/data/secondmates.md" \
+    || fail "failed missing-home reassignment changed the original registry"
+  pass "home seeding rolls back failed missing-home reassignment"
+}
+
 test_home_seed_refuses_home_overlapping_registered_home() {
   local home registered_parent registered_child nested parent err
   home="$TMP_ROOT/overlap-seed-home"
@@ -2650,6 +2732,8 @@ test_home_seed_refuses_active_home_and_root
 test_home_seed_refuses_home_marked_for_another_id
 test_home_seed_refuses_home_registered_to_another_id
 test_home_seed_refuses_reassigning_existing_id_to_different_home
+test_home_seed_reassigns_id_only_when_registered_home_is_missing
+test_home_seed_reassignment_rolls_back_after_later_failure
 test_home_seed_refuses_home_overlapping_registered_home
 test_home_seed_refuses_remote_backed_project_without_origin
 test_home_seed_refuses_existing_remote_backed_project_with_wrong_origin

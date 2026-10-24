@@ -18,6 +18,9 @@
 #       is copied to data/charter.md, newly cloned no-mistakes projects are
 #       initialized, an ignored .fm-secondmate-home identity marker is written, and
 #       data/secondmates.md is updated.
+#       An already-registered id may be reassigned only when its registered home
+#       path is genuinely absent; an existing directory, file, or dangling symlink
+#       still refuses the assignment.
 #       Seeding is transactional: on validation, clone, init, or registry failure,
 #       generated briefs, new homes, new project clones, and registry edits are
 #       rolled back. Treehouse-acquired homes are returned only when the rollback
@@ -454,7 +457,7 @@ validate_home_assignment() {
     fi
   fi
   id_conflict=$(registry_id_conflict_for_assignment "$id" "$home" || true)
-  if [ -n "$id_conflict" ]; then
+  if [ -n "$id_conflict" ] && { [ -e "$id_conflict" ] || [ -L "$id_conflict" ]; }; then
     echo "error: secondmate id $id is already registered to home $id_conflict; retire it before assigning $home" >&2
     return 1
   fi
