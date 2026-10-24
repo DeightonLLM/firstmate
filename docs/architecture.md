@@ -299,6 +299,43 @@ The update is fast-forward only: dirty, diverged, offline, and off-default targe
 The origin-based updater and the local secondmate sync share the same guarded fast-forward helper; only the origin mode fetches.
 The mechanics are owned by the `/updatefirstmate` skill and firstmate's operating manual in [`AGENTS.md`](../AGENTS.md) (self-update).
 
+### Fast-forward collisions with a locally changed tracked path
+
+A tracked path can also be matched by an ignore rule, and it can carry a local working-tree change - the shape a captain-private file has when the repository tracks it and ignores it at the same time.
+When that path's index entry also carries the `skip-worktree` or the `assume-unchanged` bit, `git status --porcelain` cannot see the change at all: the dirtiness gate passes, the fast-forward is attempted anyway, and git refuses it with `Your local changes to the following files would be overwritten by merge`.
+The guarded fast-forward therefore compares the working tree against the index blob by CONTENT, not through `git status`, and detects that shape before the merge runs.
+It reports it as `skipped: dirty working tree: the fast-forward would overwrite locally changed tracked path(s): <paths>` and names the gitignored subset of those paths, because a path that is tracked and ignored is exactly the one an operator wrongly assumes git will not touch.
+The working tree and HEAD are left exactly as they were: the refusal never overwrites a local change and never loses one.
+The detection is general - any tracked path under any ignore rule - and it is owned by `bin/fm-ff-lib.sh`, which both the origin updater and the local secondmate sync run.
+
+Recovering one is a manual procedure, because the fast-forward never performs it unattended: the step that makes git accept the fast-forward replaces the working-tree copy, so an interrupted sweep could leave the private content absent from the checkout.
+Run it in the checkout that reported the collision, with the base you intend to fast-forward to:
+
+```sh
+# 1. Back the colliding paths up byte-exactly, and keep the backup until the
+#    fast-forward is done.
+tar -cpf /tmp/ff-backup.tar -- data/backlog.md data/projects.md
+
+# 2. Clear the index bits that hide the local change from git. These two
+#    options conflict: in ONE call they clear neither, so use one call each.
+git update-index --no-skip-worktree -- data/backlog.md data/projects.md
+git update-index --no-assume-unchanged -- data/backlog.md data/projects.md
+
+# 3. Put the paths back at their HEAD content so git will allow the
+#    fast-forward. The backup from step 1 still holds the private content.
+git checkout -- data/backlog.md data/projects.md
+
+# 4. Fast-forward.
+git merge --ff-only origin/main
+
+# 5. Restore the private content byte-exactly, and prove it.
+tar -xpf /tmp/ff-backup.tar
+tar -xOf /tmp/ff-backup.tar data/backlog.md | cmp - data/backlog.md
+```
+
+After step 5 the checkout still carries the private content byte-exactly, and the path is still tracked, so the next fast-forward reports it as dirty again.
+The durable fix is for the repository to stop tracking the private path, exactly as this repository stopped tracking the captain-private operational dirs on 2026-10-24; a path that is neither tracked nor ignored cannot collide with a fast-forward.
+
 ## Restart-proof
 
 Fleet state lives in each task's session-provider backend (tmux by hard default, herdr or cmux when selected or auto-detected, zellij/orca when explicitly selected), no-mistakes run records, status event logs, local markdown under `data/` including `data/captain.md`, `data/captain-shared.md`, and `data/learnings.md`, and persistent secondmate homes.

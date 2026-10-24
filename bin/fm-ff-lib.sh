@@ -23,6 +23,33 @@
 # Homes are leased at a detached HEAD on the
 # default branch, so the fast-forward advances HEAD only and never moves the
 # shared default branch or any other worktree's checkout.
+#
+# FAST-FORWARD COLLISIONS (the contract)
+#   A path can be TRACKED by the index and gitIGNORED by an ignore rule at the
+#   same time, and it can carry a local working-tree change. When the index
+#   entry also carries the skip-worktree or the assume-unchanged bit, `git
+#   status --porcelain` cannot see that change at all: the dirty gate below
+#   passed, the fast-forward was attempted anyway, and git refused with "Your
+#   local changes to the following files would be overwritten by merge". This
+#   helper printed only git's FIRST line, so the refusal named no path and
+#   offered no way forward. Measured on 2026-10-24 in the
+#   residual-queue-20261020 home: data/backlog.md and data/projects.md, both
+#   tracked-but-carrying-a-local-change.
+#
+#   A fast-forward never overwrites a local change and never loses one. When
+#   the fast-forward would overwrite a tracked path whose working-tree copy
+#   differs from the index blob, the target is refused BEFORE the merge is
+#   attempted: the status line names every colliding path, carries the
+#   recovery procedure (docs/architecture.md, "Fast-forward collisions with a
+#   locally changed tracked path"), and the working tree and HEAD are left
+#   exactly as they were.
+#
+#   The detection is GENERAL - any tracked path, under any ignore rule, never
+#   a data/ special case - and it is a CONTENT comparison against the index
+#   blob rather than a `git status` reading, so it sees the change that the
+#   skip-worktree and assume-unchanged bits hide from `git status`. A tracked
+#   symlink is not a local change: its link target, not the target's content,
+#   is the file.
 
 SUB_HOME_MARKER="${SUB_HOME_MARKER:-.fm-secondmate-home}"
 # shellcheck source=bin/fm-secondmate-registry-lib.sh
@@ -233,6 +260,74 @@ dirty_status() {
   fi
 }
 
+# The procedure that owns the recovery from a fast-forward collision. The
+# collision status line points at it, so the recipe lives in the repository
+# instead of in tribal knowledge.
+FF_COLLISION_RECOVERY='docs/architecture.md (Fast-forward collisions with a locally changed tracked path)'
+
+# Join paths with ", " on one line.
+ff_join_paths() {
+  local out="" p
+  for p in "$@"; do
+    [ -n "$p" ] || continue
+    out="${out:+$out, }$p"
+  done
+  printf '%s' "$out"
+}
+
+# ff_collision_paths <dir> <base>
+# Echo "<all paths>|<gitignored paths>". Both lists are comma-separated and
+# both may be empty. The first is every tracked path the fast-forward to
+# <base> would overwrite whose working-tree copy differs from the index blob;
+# the second is the subset of those that an ignore rule also matches.
+#
+# The comparison is by CONTENT. The current index entries for the candidate
+# paths are copied into a temporary index that carries no stat cache and no
+# skip-worktree/assume-unchanged bit, and git's own diff compares the working
+# tree against that index - the same comparison git's own fast-forward makes,
+# so the answer is exactly the set of paths git would refuse on. A tracked
+# symlink is compared as a symlink, so a link whose target changed is not a
+# local change of the link.
+#
+# Anything the detector cannot read is reported as NO collision. That
+# degrades to the pre-existing refusal (git refuses, the merge does not run)
+# rather than to a lost change, so a read failure is never unsafe.
+ff_collision_paths() {
+  local dir=$1 base=$2
+  local tmpdir tmpidx path all="" ignored=""
+  local -a candidates=() changed=() ignored_paths=()
+  mapfile -d '' -t candidates < <(git -C "$dir" diff --name-only -z HEAD "$base" -- 2>/dev/null) || true
+  if [ "${#candidates[@]}" -eq 0 ]; then
+    printf '%s\n' "|"
+    return 0
+  fi
+  tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/fm-ff-collision.XXXXXX" 2>/dev/null) || {
+    printf '%s\n' "|"
+    return 0
+  }
+  tmpidx="$tmpdir/index"
+  if ! git -C "$dir" --literal-pathspecs ls-files -s -z -- "${candidates[@]}" 2>/dev/null \
+      | GIT_INDEX_FILE="$tmpidx" git -C "$dir" update-index -z --index-info 2>/dev/null; then
+    fm_purge_scratch "$tmpdir" 2>/dev/null || true
+    printf '%s\n' "|"
+    return 0
+  fi
+  mapfile -d '' -t changed < <(GIT_INDEX_FILE="$tmpidx" git -C "$dir" diff --name-only -z -- "${candidates[@]}" 2>/dev/null) || true
+  fm_purge_scratch "$tmpdir" 2>/dev/null || true
+  if [ "${#changed[@]}" -eq 0 ]; then
+    printf '%s\n' "|"
+    return 0
+  fi
+  all=$(ff_join_paths "${changed[@]}")
+  # The ignored subset, through git's own ignore machinery. The paths are fed
+  # on stdin so they are read as LITERAL paths, never as pathspec globs.
+  mapfile -d '' -t ignored_paths < <(
+    printf '%s\0' "${changed[@]}" | git -C "$dir" check-ignore --no-index --stdin -z 2>/dev/null
+  ) || true
+  ignored=$(ff_join_paths "${ignored_paths[@]}")
+  printf '%s|%s\n' "$all" "$ignored"
+}
+
 # List this home's LIVE secondmate direct reports from state/<id>.meta records.
 # The meta file is the liveness signal; data/secondmates.md is only the fallback
 # for durable fields such as home= when an older/incomplete meta lacks them.
@@ -285,6 +380,7 @@ ff_target() {
   fi
 
   local default base cur instr local_rev base_rev before after out
+  local collisions collision_all collision_ignored is_ancestor detail
   default=$(default_branch "$dir") || {
     echo "$label: skipped: cannot determine default branch"
     return 0
@@ -320,6 +416,30 @@ ff_target() {
     return 0
   fi
 
+  # Fast-forward collisions. A tracked path the fast-forward would overwrite
+  # whose working-tree copy differs from the index blob - detected BEFORE the
+  # merge is attempted, so the refusal names the path and carries the recovery
+  # procedure instead of relaying git's one-line refusal with no path in it.
+  # Only a target that could actually fast-forward is inspected: a diverged
+  # target is still reported as diverged, exactly as before.
+  is_ancestor=no
+  if git -C "$dir" merge-base --is-ancestor HEAD "$base" 2>/dev/null; then
+    is_ancestor=yes
+  fi
+  if [ "$is_ancestor" = yes ]; then
+    collisions=$(ff_collision_paths "$dir" "$base")
+    collision_all=${collisions%%|*}
+    collision_ignored=${collisions#*|}
+    if [ -n "$collision_all" ]; then
+      detail="the fast-forward would overwrite locally changed tracked path(s): $collision_all"
+      if [ -n "$collision_ignored" ]; then
+        detail="$detail; gitignored tracked path(s): $collision_ignored"
+      fi
+      echo "$label: skipped: dirty working tree: $detail; recovery: $FF_COLLISION_RECOVERY"
+      return 0
+    fi
+  fi
+
   if [ -n "$(dirty_status "$dir" "$ignore_seed_marker")" ]; then
     echo "$label: skipped: dirty working tree"
     return 0
@@ -338,7 +458,7 @@ ff_target() {
     echo "$label: already current"
     return 0
   fi
-  if ! git -C "$dir" merge-base --is-ancestor HEAD "$base" 2>/dev/null; then
+  if [ "$is_ancestor" != yes ]; then
     echo "$label: skipped: diverged from $base"
     return 0
   fi

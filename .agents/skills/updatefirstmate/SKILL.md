@@ -55,6 +55,10 @@ This touches only the firstmate repo and its own worktrees, never anything under
   Nothing with unlanded work is ever discarded - this is prime directive #3.
 - **Only the firstmate repo and its worktrees** are touched, never `projects/`.
   It is the same sanctioned self-write as the fleet sync.
+- **A tracked path that is also ignored never loses its local change.**
+  A path can be tracked by the index and matched by an ignore rule at the same time, and it can carry a local working-tree change.
+  When that change is invisible to `git status` (the `skip-worktree` or `assume-unchanged` index bit), the guarded fast-forward refuses the target BEFORE the merge runs, names the colliding paths in the skip line, and leaves the working tree untouched.
+  The recovery procedure is in [`docs/architecture.md`](../../docs/architecture.md) ("Fast-forward collisions with a locally changed tracked path").
 - **Secondmates are never disrupted.**
   A secondmate gets a tracked-files fast-forward (safe while it is mid-task, since its work lives in gitignored operational dirs and separate project worktrees) plus a gentle re-read nudge.
   It is never torn down, interrupted, or forced.
