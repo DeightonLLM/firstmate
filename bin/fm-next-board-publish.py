@@ -314,6 +314,63 @@ def find_processes(needle):
     return found
 
 
+# The status line of a captured result lives in the file's session block, at the head.
+# 4 KiB covers every result this host has written with room to spare (the status line
+# sits at byte 91-115 in all of them), and the rest of the file is scanned in 64 KiB
+# chunks when the head does not carry it.
+RESULT_STATUS_PREFIX_BYTES = 4096
+RESULT_STATUS_CHUNK_BYTES = 65536
+RESULT_STATUS_OVERLAP_BYTES = 65536
+
+
+def _status_from_text(text):
+    """The status a captured result carries, or "" when it carries none."""
+    match = re.search(r"^\s*status:\s*(.+)$", text, re.M)
+    return match.group(1).strip() if match else ""
+
+
+def read_result_status(path, prefix_bytes=RESULT_STATUS_PREFIX_BYTES,
+                       chunk_bytes=RESULT_STATUS_CHUNK_BYTES,
+                       overlap_bytes=RESULT_STATUS_OVERLAP_BYTES):
+    """The status line of one captured result, read without pulling the whole file in.
+
+    A captured result holds the adapter's FULL output - for the browser adapter that is
+    a DOM snapshot of the Captain's tracker, roughly half a megabyte per delivery - and
+    the board needs exactly one field from it: the status line, which the adapter writes
+    in the file's session block at the head.
+
+    The publisher used to read every captured result in full on every publish, so it
+    pulled megabytes per run to extract one line from each, and that cost grew with
+    both the number of deliveries and the size of the page they captured. Reading the
+    head first keeps the common case bounded by a fixed prefix instead of by the size
+    of the captured page.
+
+    When the head does not carry the status, the remainder is scanned in bounded chunks
+    with a sliding overlap, so a status line that sits deeper is still found and the
+    file is never held in memory as a whole. The overlap means a match that straddles
+    a chunk boundary is still seen.
+    """
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(prefix_bytes)
+            status = _status_from_text(head.decode("utf-8", "replace"))
+            if status:
+                return status
+            carry = head[-overlap_bytes:] if overlap_bytes else b""
+            while True:
+                chunk = handle.read(chunk_bytes)
+                if not chunk:
+                    break
+                window = carry + chunk
+                status = _status_from_text(window.decode("utf-8", "replace"))
+                if status:
+                    return status
+                carry = window[-overlap_bytes:] if overlap_bytes else b""
+    except OSError:
+        return ""
+    return ""
+
+
 def read_delivery_state(repo):
     """Measure how a Captain message actually reaches the fleet. Read-only."""
     home = pathlib.Path(repo)
@@ -352,14 +409,7 @@ def read_delivery_state(repo):
                     seq = int(res.name.split(".")[-2])
                 except (IndexError, ValueError):
                     continue
-                status, text = "", ""
-                try:
-                    text = res.read_text(encoding="utf-8", errors="replace")
-                except OSError:
-                    text = ""
-                match = re.search(r"^\s*status:\s*(.+)$", text, re.M)
-                if match:
-                    status = match.group(1).strip()
+                status = read_result_status(res)
                 handled = (inbox_dir / ("%s.%d.handled" % (sid, seq))).is_file()
                 results.append({
                     "sequence": seq,
