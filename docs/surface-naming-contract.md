@@ -5,13 +5,8 @@ agent surface. It does not own the current label strings: those are produced by
 `bin/fm-surface-name-lib.sh`, which every writer and every checker uses, so a
 name and the rule about names cannot drift apart.
 
-The problem this contract exists to solve: on 2026-10-24 the Herdr spaces
-sidebar read `firstmate`, `firstmate-afk-daemon-659043-363-1792753227`,
-`2ndmate-mcode-runner` and `PROTECTED HETZ PRIMARY - saved session recovery`.
-None of those said which surface was running the work, which lane it was, or
-whether it was still alive. The Captain asked for the naming to be "SET AND
-ENFORCED TO ALL AGENTS". This is the setting; `bin/fm-surface-name-check.sh` is
-the enforcement.
+The naming makes each visible surface identify its home, lane summary, and
+role. `bin/fm-surface-name-check.sh` enforces this contract.
 
 ## The rule
 
