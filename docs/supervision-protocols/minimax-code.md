@@ -5,6 +5,7 @@ MCode is the standalone `mcode` CLI, a documented MiniMax fork of pi.dev, and it
 Verified for this primary:
 
 - Session lock acquisition and self-ownership through the shared session-lock library.
+- Primary ownership token and lock contracts through bin/fm-mcode-primary-lib.sh (atomic claim, self-ownership verification, stale detection, safe release, and reacquisition).
 - Harness self-report as `minimax-code`, so dispatch and supervision resolve to this protocol instead of the unknown-harness fallback.
 - Visible To-Do List extension, usable as the preflight tracker before the first task action.
 
