@@ -26,9 +26,9 @@
 # still shows up as drift. '#' comment lines carry the metadata and are
 # ignored by the comparison.
 #
-# The ratchet only ratchets DOWN. --update refuses to write a baseline whose
-# total is larger than the baseline it replaces, so the recorded count can
-# never grow; a growth has to be fixed in the source first.
+# The ratchet only ratchets DOWN. --update refuses to record any (file, code)
+# count above the one already recorded, so the recorded total can never grow;
+# a new diagnostic has to be fixed in the source first.
 #
 # Usage:
 #   fm-lint-ratchet.sh --compare <diagnostics> <baseline> [linted-files]
