@@ -1305,7 +1305,11 @@ fm_backend_herdr_workspace_find_all() {  # <session>
   local session=$1 scope legacy list
   scope=$(fm_backend_herdr_workspace_label)
   legacy=$(fm_surface_name_legacy_home_label "$scope" 2>/dev/null || printf '')
-  list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || return 0
+  # A workspace list that could not be READ is not an empty list of owners:
+  # the caller has to be able to tell "this home owns no container here" from
+  # "the surface could not be read".  The second one is a FAILURE, and a
+  # caller that treats it as an empty list acts on a surface it never read.
+  list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || return 1
   # NOTE: the jq variable is $want, NOT $label - `label` is a jq reserved
   # keyword (label/break), so declaring a jq variable named "label" is a
   # compile error that `2>/dev/null` would silently swallow, making this find
@@ -1607,7 +1611,11 @@ fm_backend_herdr_workspace_ensure() {  # <session> <cwd> [<launcher-relationship
     esac
   fi
   label=$(fm_backend_herdr_workspace_label)
-  matches=$(fm_backend_herdr_workspace_find_all "$session")
+  # The spawn path mints a container when it cannot see one - that behaviour is
+  # unchanged - but the failed read must not abort the caller (bin/fm-spawn.sh
+  # runs under `set -e`), so the status is consumed HERE instead of being
+  # inherited by the assignment.
+  matches=$(fm_backend_herdr_workspace_find_all "$session") || matches=""
   count=$(printf '%s' "$matches" | grep -c '[^[:space:]]' || true)
   if [ "$count" -gt 1 ]; then
     echo "error: ${count} herdr workspaces in session '$session' carry the scope '$label' (${matches//$'\n'/ }) and this spawn has no herdr parent pane to identify which one is its own; rename or close the extras, or run firstmate inside the workspace its workers belong in" >&2
@@ -1859,6 +1867,13 @@ fm_backend_herdr_create_task() {  # <container> <label> <cwd> <seeded_default_ta
     fm_backend_herdr_create_task_rollback "$session" "$wsid" "$label" \
       "$FM_BACKEND_HERDR_CREATED_TAB_ID" "$FM_BACKEND_HERDR_CREATED_PANE_ID" \
       "$FM_BACKEND_HERDR_PRE_CREATE_TAB_IDS" || true
+    # The rollback removed a tab from this container, so the container's LIVE
+    # lane count changed and its label must be refreshed.  Without this a
+    # container whose create failed (and whose husk was already removed)
+    # keeps a "scope + N lanes" label that counts a lane which is gone.  A
+    # failed refresh is reported, never swallowed.
+    fm_backend_herdr_workspace_refresh_lane_summary "$session" "$wsid" \
+      "the rolled back task tab '$label'" || true
   fi
   return 1
 }
@@ -1961,18 +1976,51 @@ fm_backend_herdr_workspace_lane_label() {
 # container over.  Such a container is left exactly as it is - the naming
 # check reports it instead.
 #
+# Every READ this helper depends on is checked.  A failed read is a FAILURE,
+# never a successful "nothing to do": the lane count in a container label is
+# a LIVE statement about the fleet, and a container whose count could not be
+# read keeps a STALE count that nothing downstream can catch (a stale label is
+# syntactically valid, so the naming check reads it as conforming).
+#
 # <session> <workspace_id>
 fm_backend_herdr_workspace_relabel_lanes() {
-  local session=$1 wsid=$2 owners current_label new_label
+  local session=$1 wsid=$2 owners current_label current_raw new_label
   [ -n "$wsid" ] || return 0
-  owners=$(fm_backend_herdr_workspace_find_all "$session") || owners=""
+  # A failed OWNER read is not "this container is not mine": it is an
+  # unreadable surface.  Reporting success there leaves a stale lane summary
+  # behind and tells the caller the summary is correct when nobody checked.
+  owners=$(fm_backend_herdr_workspace_find_all "$session") || {
+    echo "warning: herdr could not read the workspace list in session $session; the lane summary of workspace $wsid was not refreshed" >&2
+    return 1
+  }
   if ! printf '%s\n' "$owners" | grep -qx -- "$wsid"; then
     return 0
   fi
-  current_label=$(fm_backend_herdr_cli "$session" workspace get "$wsid" 2>/dev/null \
-    | jq -r '.result.workspace.label // empty' 2>/dev/null)
-  new_label=$(fm_backend_herdr_workspace_lane_label "$session" "$wsid") || return 0
-  [ -n "$new_label" ] || return 0
+  # The current label is its own read: a failed read is not an empty label,
+  # and comparing a computed label against an empty one renames on a guess.
+  current_raw=$(fm_backend_herdr_cli "$session" workspace get "$wsid" 2>/dev/null) || {
+    echo "warning: herdr could not read the label of workspace $wsid (session $session); the lane summary was not refreshed" >&2
+    return 1
+  }
+  if ! printf '%s' "$current_raw" | jq -e '
+        (.result.workspace | type) == "object"
+        and (.result.workspace.label | type) == "string"
+      ' >/dev/null 2>&1; then
+    echo "warning: herdr could not parse the label of workspace $wsid (session $session); the lane summary was not refreshed" >&2
+    return 1
+  fi
+  current_label=$(printf '%s' "$current_raw" | jq -r '.result.workspace.label' 2>/dev/null)
+  # The NEW label carries the LIVE lane count.  A failed lane-count read is
+  # UNKNOWN, never zero: a "no lanes" label on a container that still holds
+  # two lanes is a false statement about the fleet.
+  new_label=$(fm_backend_herdr_workspace_lane_label "$session" "$wsid") || {
+    echo "warning: herdr could not read the lane count of workspace $wsid (session $session); the lane summary was not refreshed" >&2
+    return 1
+  }
+  [ -n "$new_label" ] || {
+    echo "warning: herdr computed an empty lane summary for workspace $wsid (session $session); the lane summary was not refreshed" >&2
+    return 1
+  }
   if [ "$new_label" = "$current_label" ]; then
     return 0
   fi
@@ -1981,6 +2029,34 @@ fm_backend_herdr_workspace_relabel_lanes() {
   fi
   echo "warning: herdr could not refresh the lane summary of workspace $wsid (session $session)" >&2
   return 1
+}
+
+# fm_backend_herdr_workspace_refresh_lane_summary: refresh the lane summary of
+# the container a lane was removed from, and REPORT a failed refresh.
+#
+# The lane summary is a LIVE count.  Removing a lane from a container changes
+# that count, and a container whose count was not refreshed keeps a stale
+# "scope + N lanes" label - a false statement about the running fleet that
+# the naming check cannot catch, because a stale label is syntactically
+# valid.  An UNKNOWN container (the pane lookup failed) means the summary
+# cannot be refreshed at all, which is reported too.
+#
+# The refresh never changes the caller's own status: the lane IS gone, and a
+# caller that treats a failed refresh as a failed close would retry a close
+# that already happened.  The failure is reported on stderr instead.
+#
+# <session> <workspace_id> <what-removed>
+fm_backend_herdr_workspace_refresh_lane_summary() {  # <session> <workspace_id> <what>
+  local session=$1 wsid=$2 what=$3
+  if [ -z "$wsid" ]; then
+    echo "warning: herdr could not read the container of $what (session $session); its lane summary was not refreshed and may still show the old lane count" >&2
+    return 1
+  fi
+  if ! fm_backend_herdr_workspace_relabel_lanes "$session" "$wsid"; then
+    echo "warning: herdr could not refresh the lane summary of workspace $wsid after removing $what (session $session); its label may still show the old lane count" >&2
+    return 1
+  fi
+  return 0
 }
 
 fm_backend_herdr_create_task_inner() {  # <container> <label> <cwd> <seeded_default_tab_id>
@@ -3032,13 +3108,19 @@ fm_backend_herdr_kill_serialized() {  # <session> <pane>
       # The lane summary is a LIVE count: the container the closed lane was
       # in is relabelled so it says how many lanes it holds NOW.  Without
       # this, closing one of two lanes leaves a syntactically valid but
-      # FALSE "scope + 2 lanes" on the running surface.
-      fm_backend_herdr_workspace_relabel_lanes "$session" "$target_ws" || true
+      # FALSE "scope + 2 lanes" on the running surface.  A failed refresh is
+      # REPORTED (the helper warns on stderr) and never swallowed into a
+      # silent success - the kill itself stays best-effort.
+      fm_backend_herdr_workspace_refresh_lane_summary "$session" "$target_ws" "pane $pane" || true
       return 0
     fi
   fi
   fm_backend_herdr_explicit_close_pane_confirmed "$session" "$pane" || true
-  fm_backend_herdr_workspace_relabel_lanes "$session" "$target_ws" || true
+  # Same LIVE-COUNT refresh as the focus-safe path above.  When the pane
+  # lookup failed, target_ws is EMPTY: the container of the closed lane is
+  # then UNKNOWN, and the helper reports that the summary could not be
+  # refreshed instead of pretending the container held no lanes.
+  fm_backend_herdr_workspace_refresh_lane_summary "$session" "$target_ws" "pane $pane" || true
 }
 
 fm_backend_herdr_kill() {  # <target>

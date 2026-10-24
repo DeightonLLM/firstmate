@@ -9,9 +9,9 @@
 bin/factory-health.sh	SC2010	68	34	Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.	1
 bin/factory-health.sh	SC2016	78	34	Expressions don't expand in single quotes, use double quotes for that.	1
 bin/fm-always-four.sh	SC1090	98	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1090	1530	9	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1090	1620	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1090	1908	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1547	9	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1637	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1925	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
 bin/fm-always-four.sh	SC1091	78	5	Not following: ./fm-crew-state.sh: openBinaryFile: does not exist (No such file or directory)	1
 bin/fm-always-four.sh	SC1091	79	3	Not following: ./fm-classify-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
 bin/fm-always-four.sh	SC1091	89	3	Not following: ./fm-backend.sh: openBinaryFile: does not exist (No such file or directory)	1
@@ -19,7 +19,7 @@ bin/fm-always-four.sh	SC1091	90	3	Not following: ./fm-busy-lib.sh: openBinaryFil
 bin/fm-always-four.sh	SC1091	93	3	Not following: ./fm-wake-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
 bin/fm-always-four.sh	SC2034	75	1	CONFIG appears unused. Verify use (or export if used externally).	1
 bin/fm-always-four.sh	SC2034	122	1	CAP_REAP appears unused. Verify use (or export if used externally).	1
-bin/fm-always-four.sh	SC2034	1886	12	spawns_done appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2034	1903	12	spawns_done appears unused. Verify use (or export if used externally).	1
 bin/fm-always-four.sh	SC2086	518	17	Double quote to prevent globbing and word splitting.	1
 bin/fm-campaign-worker-lib.sh	SC2174	103	36	When used with -p, -m only applies to the deepest directory.	1
 bin/fm-context-preflight.sh	SC2034	29	1	WAREHOUSE_DIR_DEFAULT appears unused. Verify use (or export if used externally).	1

@@ -726,6 +726,23 @@ fm_pane_foreground_harness_state() {  # <backend> <target> <harness>
   printf '%s' "$out" | jq -e '.result.process_info.foreground_processes | type == "array"' \
     >/dev/null 2>&1 || return 2
 
+  # Every entry must carry the SHAPE the matcher below consumes: an object
+  # whose name is a string and whose argv is an array of strings.  The guard
+  # above only proved that foreground_processes is an ARRAY; it said nothing
+  # about the entries inside it.  An entry whose argv is a STRING makes the
+  # matcher's own `join(" ")` fail, and a jq error inside an `if` condition is
+  # indistinguishable from "no match" - which is how a malformed entry used to
+  # read as a DEFINITIVELY DEAD pane (state 1), and a live worker therefore
+  # became eligible to be killed and replaced.  A shape this oracle cannot
+  # read is UNKNOWN (state 2), never "not running" (state 1).
+  printf '%s' "$out" | jq -e '
+        all(.result.process_info.foreground_processes[];
+            (type == "object")
+            and ((.name // "") | type == "string")
+            and (((.argv // []) | type) == "array")
+            and (all((.argv // [])[]; type == "string")))
+      ' >/dev/null 2>&1 || return 2
+
   if printf '%s' "$out" | jq -e --arg h "$harness" '
         [ (.result.process_info.foreground_processes // [])[]
           | select((( .name // "") | contains($h))

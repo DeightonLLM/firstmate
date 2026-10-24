@@ -67,10 +67,23 @@ fm_surface_census_workspaces() {  # [session]
 }
 
 # fm_surface_census_tabs: "<tab_id>\t<workspace_id>\t<label>" per tab.
+#
+# The CONSUMED fields are validated before a row is emitted.  A tab row that
+# lost its workspace or its label would stop being a TASK tab, and a task tab
+# that stops being a task tab is a LIVE LANE THAT THE CENSUS NO LONGER SEES -
+# the lane count it produces is then too small, and a workspace with two lanes
+# reads as a workspace with none.  A row without a readable workspace is an
+# unreadable census, not a tab of no workspace; a row without a readable label
+# is an unreadable census too (an EMPTY label is readable and stays).
 fm_surface_census_tabs() {  # [session]
   local session=${1:-$FM_SURFACE_CENSUS_SESSION} out
   out=$(herdr tab list --session "$session" 2>/dev/null) || return 1
   fm_surface_census_validates "$out" tabs tab_id || return 1
+  printf '%s' "$out" | jq -e '
+    all(.result.tabs[];
+      ((.workspace_id | type) == "string") and ((.workspace_id | length) > 0)
+      and ((.label | type) == "string"))
+  ' >/dev/null 2>&1 || return 1
   printf '%s' "$out" | jq -r '
     .result.tabs[]
     | [.tab_id, (.workspace_id // ""), (.label // "")] | join("\u001f")' 2>/dev/null || return 1

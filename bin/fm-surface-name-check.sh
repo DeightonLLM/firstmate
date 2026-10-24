@@ -38,6 +38,10 @@
 #
 # Exit status: 0 when every name conforms, 1 when at least one name violates
 # the contract, 2 on a usage error, 3 when the surface could not be read.
+#
+# A workspace whose LANE COUNT could not be read is an unknown state, not a
+# violation with a "no lanes" replacement: --apply never renames a workspace
+# on a lane count nobody read.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -176,14 +180,28 @@ nonce_for_label() {  # <label>
 }
 
 # task_tab_lanes <workspace-id>: the lane ids of the task tabs a workspace holds.
+#
+# The exit status IS the census read's status.  A census that could not be
+# read is UNKNOWN, never "this workspace holds no lanes": the count this feeds
+# is written into a live workspace label, and "no lanes" on a two-lane
+# container is a false statement about the fleet that --apply would persist.
 task_tab_lanes() {  # <workspace-id>
+  local wsid=$1 tabs tab
   [ -n "$FROM_FILE" ] && return 0
-  fm_surface_census_task_tabs_in "$1" "$SESSION" | while IFS= read -r tab; do
+  tabs=$(fm_surface_census_task_tabs_in "$wsid" "$SESSION") || return 1
+  printf '%s\n' "$tabs" | while IFS= read -r tab; do
+    [ -n "$tab" ] || continue
     fm_surface_name_lane_of_tab "$tab" 2>/dev/null && printf '\n'
   done
 }
 
 # target_label <workspace-id> <current-label>
+#
+# Exit status: 0 = a conforming replacement was printed; 1 = no replacement
+# could be computed from the label alone (the scope itself is unknown);
+# 2 = the lane census could not be read, so the lane count is UNKNOWN.  A
+# replacement is NEVER derived from a failed read: the lane count of a
+# workspace that could not be counted is not zero, it is unknown.
 target_label() {  # <workspace-id> <current-label>
   local wsid=$1 label=$2 scope lanes count single nonce lane
   scope=$(scope_for_label "$wsid" "$label") || return 1
@@ -194,7 +212,7 @@ target_label() {  # <workspace-id> <current-label>
       return 0
       ;;
   esac
-  lanes=$(task_tab_lanes "$wsid")
+  lanes=$(task_tab_lanes "$wsid") || return 2
   count=$(printf '%s\n' "$lanes" | grep -c '[^[:space:]]' || true)
   single=""
   if [ "$count" -eq 1 ]; then
@@ -228,6 +246,7 @@ target_projection_label() {  # <current-label>
 
 VIOLATIONS=0
 INFO=0
+UNKNOWN=0
 # The computed target label for every offending workspace, so the suggestion
 # printed here and the rename --apply performs are the SAME string.
 TARGETS=""
@@ -268,7 +287,21 @@ while IFS=$'\037' read -r wsid label; do
   if fm_surface_name_workspace_conforms "$label"; then
     continue
   fi
-  replacement=$(target_label "$wsid" "$label" || printf '')
+  replacement=$(target_label "$wsid" "$label")
+  target_status=$?
+  case "$target_status" in
+    0) ;;
+    2)
+      # The lane count is UNKNOWN: the task tab census could not be read, so
+      # the workspace's lane count cannot be computed.  It is reported as an
+      # unknown state and NEVER as a violation with a "no lanes" replacement:
+      # --apply must not rename a workspace on a count nobody read.
+      UNKNOWN=$(( UNKNOWN + 1 ))
+      printf 'surface-name: workspace %s [%s] lane count is unknown (the task tab census could not be read); no replacement was computed\n' "$wsid" "$label"
+      continue
+      ;;
+    *) replacement="" ;;
+  esac
   report "workspace $wsid" "$label" "does not conform to the surface naming contract" "$replacement"
   [ -n "$replacement" ] && record_target "$wsid" "$replacement"
 done <<< "$WORKSPACES"
@@ -322,12 +355,24 @@ while IFS=$'\037' read -r id _ pane ws _ _ kind _; do
   esac
 done <<< "$LANES"
 
-if [ "$VIOLATIONS" -eq 0 ]; then
+if [ "$VIOLATIONS" -eq 0 ] && [ "$UNKNOWN" -eq 0 ]; then
   printf 'surface-name: OK every live workspace and task tab name conforms\n'
   exit 0
 fi
 
-printf 'surface-name: %s violation(s), %s note(s)\n' "$VIOLATIONS" "$INFO"
+if [ "$VIOLATIONS" -eq 0 ]; then
+  # Nothing was wrong with the names that could be read, but at least one
+  # workspace could not be checked at all: the surface could not be read, so
+  # this is a read failure (3), never a clean report.
+  printf 'surface-name: %s workspace(s) could not be checked: the task tab census could not be read\n' "$UNKNOWN"
+  exit 3
+fi
+
+if [ "$UNKNOWN" -gt 0 ]; then
+  printf 'surface-name: %s violation(s), %s note(s), %s unknown lane count(s)\n' "$VIOLATIONS" "$INFO" "$UNKNOWN"
+else
+  printf 'surface-name: %s violation(s), %s note(s)\n' "$VIOLATIONS" "$INFO"
+fi
 
 if [ "$APPLY" = 1 ] && [ -z "$FROM_FILE" ]; then
   command -v herdr >/dev/null 2>&1 || {
