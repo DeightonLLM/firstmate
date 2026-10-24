@@ -68,6 +68,18 @@
 #   Nothing is deleted.  Untracked and ignored files are MOVED out of the slot
 #   into the preservation directory, never removed.
 #
+# THE DRY RUN WRITES NOTHING.
+#   The default mode is a dry run and "dry run" means exactly that: the run
+#   creates no file, changes no file and leaves no state behind.  No bundle, no
+#   tar, no patch, no file list, no marker, no lock file, no state directory
+#   change.  It only READS: the lane records, the task logs, the pool
+#   inventory and the slot's git state.
+#   What it WOULD preserve is computed and REPORTED - the file count, the
+#   archive entry count, the payload bytes, the branches that hold unmerged
+#   commits - so the dry run is as useful as the real thing.  A dry run that
+#   reports nothing is useless, and a dry run that writes something is a lie.
+#   So it computes, and it writes nothing.
+#
 # USAGE.
 #   fm-reap-finished-lanes.sh                    dry run: report, change nothing
 #   fm-reap-finished-lanes.sh --apply            reclaim the proven-safe slots
@@ -319,26 +331,30 @@ fm_reap_tar_entries() {  # <archive> -> number of archive entries
 # and the files under it.  "Every git entry is in the list" is then true by
 # construction, and the archive is built with --no-recursion so that one
 # listed directory is exactly one archive entry.
-fm_reap_build_file_list() {  # <worktree> <out-list>
-  local wt=$1 out=$2 tmp e d
-  tmp=$(mktemp) || return 1
-  {
+# The path list, on stdout, NUL separated.  It is a FUNCTION, not a file, so
+# the dry run can compute exactly the list the apply run would archive
+# without writing a list file anywhere.
+fm_reap_file_list_stream() {  # <worktree>
+  local wt=$1 e d
+  while IFS= read -r -d '' e; do
+    [ -n "$e" ] || continue
+    printf '%s\0' "$e"
+    if [ -d "$wt/$e" ]; then
+      d=$(find "$wt/$e" -mindepth 1 \( -type f -o -type d \) -print0 2>/dev/null | sed -z "s#^$wt/##")
+      [ -n "$d" ] && printf '%s' "$d"
+    fi
+  done < <(
     git -C "$wt" ls-files --others --exclude-standard -z 2>/dev/null
     git -C "$wt" ls-files --others --ignored --exclude-standard -z 2>/dev/null
     git -C "$wt" diff --name-only --diff-filter=d -z HEAD 2>/dev/null
-  } > "$tmp"
-  : > "$out"
-  while IFS= read -r -d '' e; do
-    [ -n "$e" ] || continue
-    printf '%s\0' "$e" >> "$out"
-    if [ -d "$wt/$e" ]; then
-      d=$(find "$wt/$e" -mindepth 1 \( -type f -o -type d \) -print0 2>/dev/null | sed -z "s#^$wt/##")
-      [ -n "$d" ] && printf '%s' "$d" >> "$out"
-    fi
-  done < "$tmp"
-  tr '\0' '\n' < "$out" | LC_ALL=C sort -u | tr '\n' '\0' > "$out.dedup"
-  mv "$out.dedup" "$out"
-  rm -f "$tmp"
+  )
+}
+
+fm_reap_build_file_list() {  # <worktree> <out-list>
+  local wt=$1 out=$2
+  fm_reap_file_list_stream "$wt" \
+    | tr '\0' '\n' | LC_ALL=C sort -u | tr '\n' '\0' > "$out" || return 1
+  [ -f "$out" ] || return 1
   return 0
 }
 
@@ -452,6 +468,57 @@ fm_reap_preserve() {  # <worktree> <label> <task-id> <outdir>
   return 0
 }
 
+# fm_reap_preserve_plan <worktree> <label> <task-id>
+# Computes what fm_reap_preserve WOULD preserve, and writes NOTHING.
+#
+# This is the dry run's half of the preservation contract: the same file set,
+# the same branches, the same counts - all read out of the slot's git state,
+# with no bundle, no tar, no patch, no file list and no directory created.
+# The counts are what the operator needs to decide whether to run for real:
+# how many paths would be archived, how many archive entries that would be,
+# and how many bytes those paths carry.
+fm_reap_preserve_plan() {  # <worktree> <label> <task-id>
+  local wt=$1 label=$2 task=$3
+  local refs b ahead listed=0 payload=0 patch_bytes e
+
+  refs=$(git -C "$wt" for-each-ref --format='%(refname)' 2>/dev/null | wc -l | tr -d ' ')
+  printf 'bundle=WOULD-CREATE refs=%s bytes=unknown sha256=none verified=not-verified (a dry run writes no bundle)\n' \
+    "${refs:-0}"
+
+  for b in $(fm_reap_lane_branches "$wt" "$task"); do
+    ahead=$(git -C "$wt" rev-list --count "$FM_REAP_BASE_REF..$b" 2>/dev/null)
+    case "$ahead" in ''|*[!0-9]*) ahead=0 ;; esac
+    [ "$ahead" -gt 0 ] || continue
+    printf 'branch_bundle=WOULD-CREATE branch=%s commits_ahead=%s bytes=unknown verified=not-verified (a dry run writes no bundle)\n' \
+      "$b" "$ahead"
+  done
+
+  # The file set the apply run would archive, computed the same way, so the
+  # dry run's counts are the apply run's counts.
+  while IFS= read -r -d '' e; do
+    [ -n "$e" ] || continue
+    listed=$((listed + 1))
+    if [ -f "$wt/$e" ]; then
+      payload=$((payload + $(stat -c %s "$wt/$e" 2>/dev/null || printf 0)))
+    fi
+  done < <(fm_reap_file_list_stream "$wt" | tr '\0' '\n' | LC_ALL=C sort -u | tr '\n' '\0')
+
+  if [ "$listed" -eq 0 ]; then
+    printf 'tar=WOULD-CREATE files=0 entries=0 bytes=0 reason=no-untracked-or-ignored-files\n'
+  else
+    printf 'tar=WOULD-CREATE files=%s entries=%s bytes=%s sha256=none verified=not-verified (a dry run writes no archive)\n' \
+      "$listed" "$listed" "$payload"
+  fi
+
+  patch_bytes=$(git -C "$wt" diff HEAD --binary 2>/dev/null | wc -c | tr -d ' ')
+  if [ "${patch_bytes:-0}" -gt 0 ]; then
+    printf 'patch=WOULD-CREATE bytes=%s sha256=none (a dry run writes no patch)\n' "$patch_bytes"
+  else
+    printf 'patch=none reason=no-tracked-modifications\n'
+  fi
+  return 0
+}
+
 # Move the slot's untracked + ignored files out of the slot and restore its
 # tracked paths from HEAD, so `treehouse return` does not have to discard
 # anything.  Nothing is deleted: the moved files stay in the preservation
@@ -518,20 +585,47 @@ main() {
     shift
   done
 
+  # A dry run must not write, and git's own index refresh IS a write.  This
+  # makes every git command of a dry run read-only, so the slot's git state
+  # is left exactly as it was found.
+  if [ "$APPLY" != "1" ]; then
+    export GIT_OPTIONAL_LOCKS=0
+  fi
+
   command -v "$FM_REAP_TREEHOUSE" >/dev/null 2>&1 || {
     printf 'fm-reap-finished-lanes: FAIL treehouse binary not found: %s\n' "$FM_REAP_TREEHOUSE" >&2
     exit 2
   }
 
   # ---- the lock.  Two runs never overlap. -------------------------------
-  local lockfile="${FM_REAP_LOCK_FILE:-$FM_REAP_STATE/.fm-reap-finished-lanes.lock}"
-  mkdir -p "$(dirname "$lockfile")" 2>/dev/null
-  exec 9>"$lockfile" || {
-    printf 'fm-reap-finished-lanes: FAIL cannot open lock file: %s\n' "$lockfile" >&2
-    exit 2
-  }
+  # The lock is the STATE DIRECTORY itself, taken with flock(2) on an open
+  # directory descriptor.  A lock FILE would be a file the dry run CREATES in
+  # the state directory, and "the dry run writes nothing" has to be true of
+  # the state directory too - that is where the markers live.  Locking the
+  # directory keeps the exclusion between two runs, and between a dry run and
+  # an apply run (they lock the same directory), without writing anything at
+  # all.  An explicit FM_REAP_LOCK_FILE still selects a lock FILE, which is
+  # what the test suite uses to hold the lock from the outside.
+  local lock_target="$FM_REAP_STATE"
+  if [ -n "${FM_REAP_LOCK_FILE:-}" ]; then
+    lock_target="$FM_REAP_LOCK_FILE"
+    mkdir -p "$(dirname "$lock_target")" 2>/dev/null
+    exec 9>"$lock_target" || {
+      printf 'fm-reap-finished-lanes: FAIL cannot open lock file: %s\n' "$lock_target" >&2
+      exit 2
+    }
+  else
+    [ -d "$lock_target" ] || {
+      printf 'fm-reap-finished-lanes: FAIL the state directory does not exist: %s\n' "$lock_target" >&2
+      exit 2
+    }
+    exec 9<"$lock_target" || {
+      printf 'fm-reap-finished-lanes: FAIL cannot open the state directory for locking: %s\n' "$lock_target" >&2
+      exit 2
+    }
+  fi
   if ! flock -n 9; then
-    printf 'fm-reap-finished-lanes: SKIPPED another run holds the lock (%s)\n' "$lockfile"
+    printf 'fm-reap-finished-lanes: SKIPPED another run holds the lock (%s)\n' "$lock_target"
     exit 3
   fi
 
@@ -596,7 +690,11 @@ main() {
   local stamp
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   local preserve_dir="${FM_REAP_PRESERVE_DIR:-$FM_ROOT/data/fm-reap-finished-lanes/$stamp}"
-  mkdir -p "$preserve_dir" 2>/dev/null
+  # The preservation directory belongs to the APPLY path.  A dry run must not
+  # create it, not even empty.
+  if [ "$APPLY" = "1" ]; then
+    mkdir -p "$preserve_dir" 2>/dev/null
+  fi
 
   # ---- the candidate scan -------------------------------------------------
   local reclaimed=0 skipped=0 candidates=0
@@ -682,18 +780,28 @@ main() {
 
     # ---- preserve, then reclaim ------------------------------------------
     label=$(printf '%s' "$path" | sed -E "s#^$POOL/##; s#/[^/]+\$##; s#/#-#g")
-    pres=$(fm_reap_preserve "$path" "$label" "$task" "$preserve_dir" 2>&1)
-    if [ $? -ne 0 ]; then
+
+    # The dry run WRITES NOTHING.  It does not preserve, it does not clean
+    # the slot, it does not return the slot and it does not write a marker.
+    # It computes what it WOULD preserve and reports that, so the dry run
+    # is worth reading.
+    if [ "$APPLY" != "1" ]; then
+      if ! pres=$(fm_reap_preserve_plan "$path" "$label" "$task" 2>&1); then
+        skipped=$((skipped + 1))
+        report_rows+=("$(fm_reap_row SKIP "$name" "$status" "$task" "$verb" "the preservation plan failed: $(printf '%s' "$pres" | tr '\n' ';')")")
+        continue
+      fi
       skipped=$((skipped + 1))
-      report_rows+=("$(fm_reap_row SKIP "$name" "$status" "$task" "$verb" "preservation failed: $(printf '%s' "$pres" | tr '\n' ';')")")
+      report_rows+=("$(fm_reap_row CANDIDATE "$name" "$status" "$task" "$verb" "would preserve, not returned (dry run: nothing was written)")")
+      note "CANDIDATE slot=$name lane=$task verb=$verb"
+      printf '%s\n' "$pres" | sed 's/^/    /'
       continue
     fi
 
-    if [ "$APPLY" != "1" ]; then
+    # ---- the apply path: preserve FIRST, then reclaim --------------------
+    if ! pres=$(fm_reap_preserve "$path" "$label" "$task" "$preserve_dir" 2>&1); then
       skipped=$((skipped + 1))
-      report_rows+=("$(fm_reap_row CANDIDATE "$name" "$status" "$task" "$verb" "preserved, not returned (dry run)")")
-      note "CANDIDATE slot=$name lane=$task verb=$verb"
-      printf '%s\n' "$pres" | sed 's/^/    /'
+      report_rows+=("$(fm_reap_row SKIP "$name" "$status" "$task" "$verb" "preservation failed: $(printf '%s' "$pres" | tr '\n' ';')")")
       continue
     fi
 
@@ -758,7 +866,11 @@ for x in d:
 
   say "  candidates=$candidates reclaimed=$reclaimed skipped=$skipped"
   say "  records_after=$records_after ceiling=$ceiling occupied_after=$occupied_after"
-  say "  preserve_dir=$preserve_dir"
+  if [ "$APPLY" = "1" ]; then
+    say "  preserve_dir=$preserve_dir"
+  else
+    say "  preserve_dir=$preserve_dir (dry run: not created)"
+  fi
 
   if [ -n "$JSON_OUT" ]; then
     {

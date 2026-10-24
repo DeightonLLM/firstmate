@@ -161,7 +161,7 @@ Anything else - no lane record, no task log, an unreadable pane, a ledger state 
 
 **What the reaper will not do.** It never raises a pool ceiling: the fix is to reclaim, not to enlarge. It never runs `treehouse prune --yes` on a slot it has not proven safe. It never kills a process with `pkill -f` and never closes a pane. It never publishes anything - no push, no board write, no ledger write. It runs bounded, under a lock, so two runs never overlap, and it reports both what it reclaimed and what it deliberately left alone, with the reason.
 
-The dry run is the default. `--apply` is the only thing that changes anything.
+The dry run is the default, and it writes **nothing**. A dry run creates no bundle, no tar, no patch, no file list, no marker and no lock file, and it leaves the state directory and the pool exactly as it found them: it only reads. What it *would* preserve is computed and reported anyway - the file count, the archive entry count, the payload bytes, the branches that hold unmerged commits - because a dry run that reports nothing is useless, and a dry run that writes something is a lie. `--apply` is the only thing that changes anything.
 
 ### Failure and rollback
 

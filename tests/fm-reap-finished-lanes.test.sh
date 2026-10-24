@@ -11,6 +11,9 @@
 #       bundle that carries those commits exists and is verified - before the
 #       return;
 #   (f) the tar check catches an EMPTY archive;
+#   (g) the DRY RUN WRITES NOTHING - the whole fixture tree is byte-identical
+#       before and after the dry run, while the dry run still reports the
+#       counts it would have preserved;
 #   and the terminal-verb grammar accepts the real lines `done: ...` and
 #   `resolved [key=...]: ...`, and a second run over the same pool is a no-op.
 #
@@ -265,6 +268,25 @@ returned_slot() {  # <root> <slot-number> -> 0 when that slot was returned
   grep -q "return	$1/pool/$2/repo" "$1/treehouse.log" 2>/dev/null
 }
 
+# snapshot_tree <dir> - the complete inventory of a directory tree: every
+# path, and the content hash of every file.  "The dry run wrote nothing" is
+# then a comparison of two snapshots, not a promise.
+snapshot_tree() {  # <dir>
+  local dir=$1 f
+  if [ ! -d "$dir" ]; then
+    printf 'ABSENT %s\n' "$dir"
+    return 0
+  fi
+  (
+    cd "$dir" 2>/dev/null || exit 0
+    find . -mindepth 1 \( -type d -printf 'DIR  %p\n' -o -type f -printf 'FILE %p\n' \) 2>/dev/null \
+      | LC_ALL=C sort
+    find . -mindepth 1 -type f 2>/dev/null | LC_ALL=C sort | while IFS= read -r f; do
+      printf 'HASH %s %s\n' "$f" "$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)"
+    done
+  )
+}
+
 # =============================================================================
 # (a) the main run
 # =============================================================================
@@ -437,6 +459,9 @@ test_mutants_are_caught() {
   # `blocked` is excluded by the terminal set, not by a second redundant gate.
   root=$(mktemp -d /tmp/fm-reap-test.XXXXXX)
   build_fixture "$root" 0
+  # The `$verb` below is the LITERAL text of the script under test: this sed
+  # expression matches the source line, so the dollar sign must NOT expand.
+  # shellcheck disable=SC2016
   if mutate "$root" m1 's#if ! fm_reap_is_reclaim_terminal_verb "$verb"; then#if false; then#'; then
     run_reaper "$root" "$root/m1/bin/fm-reap-finished-lanes.sh" apply
     returned_slot "$root" 3
@@ -451,6 +476,9 @@ test_mutants_are_caught() {
   # The ledger-BLOCKED guard.
   root=$(mktemp -d /tmp/fm-reap-test.XXXXXX)
   build_fixture "$root" 0
+  # The `$lane_state` is the LITERAL text of the script under test, so the
+  # dollar sign must NOT expand.
+  # shellcheck disable=SC2016
   if mutate "$root" m3 's#if \[ "$lane_state" = "BLOCKED" \]; then#if false; then#'; then
     run_reaper "$root" "$root/m3/bin/fm-reap-finished-lanes.sh" apply
     returned_slot "$root" 5
@@ -463,6 +491,9 @@ test_mutants_are_caught() {
   # The pane guard.
   root=$(mktemp -d /tmp/fm-reap-test.XXXXXX)
   build_fixture "$root" 0
+  # The `$pane_state` is the LITERAL text of the script under test, so the
+  # dollar sign must NOT expand.
+  # shellcheck disable=SC2016
   if mutate "$root" m4 's#if \[ "$pane_state" != "1" \]; then#if false; then#'; then
     run_reaper "$root" "$root/m4/bin/fm-reap-finished-lanes.sh" apply
     returned_slot "$root" 2
@@ -475,6 +506,9 @@ test_mutants_are_caught() {
   # The tar count check.
   root=$(mktemp -d /tmp/fm-reap-test.XXXXXX)
   build_fixture "$root" 1
+  # The `$entries` and `$listed` are the LITERAL text of the script under
+  # test, so the dollar signs must NOT expand.
+  # shellcheck disable=SC2016
   if mutate "$root" m5 's#if \[ "$entries" != "$listed" \]; then#if false; then#'; then
     run_reaper "$root" "$root/m5/bin/fm-reap-finished-lanes.sh" apply
     returned_slot "$root" 1
@@ -487,6 +521,9 @@ test_mutants_are_caught() {
   # The preservation step.
   root=$(mktemp -d /tmp/fm-reap-test.XXXXXX)
   build_fixture "$root" 0
+  # The `$path`, `$label`, `$task` and `$preserve_dir` are the LITERAL text
+  # of the script under test, so the dollar signs must NOT expand.
+  # shellcheck disable=SC2016
   if mutate "$root" m6 's#pres=$(fm_reap_preserve "$path" "$label" "$task" "$preserve_dir" 2>&1)#pres="bundle=SKIPPED"#'; then
     run_reaper "$root" "$root/m6/bin/fm-reap-finished-lanes.sh" apply
     local bundle
@@ -499,6 +536,31 @@ test_mutants_are_caught() {
     fi
   else
     fail "MUTATION DID NOT APPLY: the preservation step"
+  fi
+  fm_reap_test_trash "$root" >/dev/null 2>&1
+
+  # The dry-run guard.  Removing it must make the dry run WRITE: the mutant
+  # has to create the bundle and the tar, because writing in a dry run is
+  # exactly what the guard exists to prevent.
+  root=$(mktemp -d /tmp/fm-reap-test.XXXXXX)
+  build_fixture "$root" 0
+  # The `$APPLY` is the LITERAL text of the script under test, so the dollar
+  # sign must NOT expand.
+  # shellcheck disable=SC2016
+  if mutate "$root" m7 's#if \[ "$APPLY" != "1" \]; then#if false; then#'; then
+    run_reaper "$root" "$root/m7/bin/fm-reap-finished-lanes.sh" dry
+    local drybundle drytar
+    drybundle=$(find "$root/preserve" -name '*.bundle' 2>/dev/null | head -1)
+    drytar=$(find "$root/preserve" -name '*files.tar.gz' 2>/dev/null | head -1)
+    if [ -n "$drybundle" ] && [ -n "$drytar" ]; then
+      ASSERTIONS=$((ASSERTIONS + 1))
+      pass "MUTANT: removing the dry-run guard makes the dry run WRITE a bundle and a tar (the guard is load-bearing)"
+    else
+      fail "MUTANT: removing the dry-run guard did not make the dry run write (the guard is not load-bearing)"
+      find "$root/preserve" 2>/dev/null | head -20 >&2
+    fi
+  else
+    fail "MUTATION DID NOT APPLY: the dry-run guard"
   fi
   fm_reap_test_trash "$root" >/dev/null 2>&1
 }
@@ -523,6 +585,112 @@ test_terminal_verb_grammar() {
   assert_ok "$?" "the dry run reports the candidates it would reclaim"
 
   fm_reap_test_trash "$root" >/dev/null 2>&1
+}
+
+# =============================================================================
+# (g) the dry run writes nothing
+# =============================================================================
+
+test_dry_run_writes_nothing() {
+  local root before after rc same=0 gone=0
+  root=$(mktemp -d /tmp/fm-reap-test.XXXXXX)
+  build_fixture "$root" 0
+
+  before=$(snapshot_tree "$root")
+
+  # The dry run, with NO FM_REAP_LOCK_FILE: the script must not create a
+  # lock file in the state directory either.  Its output goes OUTSIDE the
+  # fixture tree, so the tree itself can be compared before and after.
+  env \
+    FM_REAP_POOL="$root/pool" \
+    FM_REAP_STATE="$root/state" \
+    FM_REAP_LEDGER="$root/ops/lane-ledger.tsv" \
+    FM_REAP_PRESERVE_DIR="$root/preserve" \
+    FM_REAP_TREEHOUSE="$root/fakebin/treehouse" \
+    FM_REAP_PANE_PROBE="$root/fakebin/pane-probe" \
+    FM_REAP_BASE_REF="origin/main" \
+    FM_FAKE_POOL_JSON="$root/pool.json" \
+    FM_FAKE_TREEHOUSE_LOG="$root/treehouse.log" \
+    FM_ROOT_OVERRIDE="$ROOT" \
+    PATH="$root/fakebin:$PATH" \
+    bash "$SCRIPT_UNDER_TEST" > "$root.out.txt" 2>&1
+  rc=$?
+
+  after=$(snapshot_tree "$root")
+
+  assert_ok "$([ $rc -eq 0 ] && echo 0 || echo 1)" "the dry run exits 0"
+
+  # THE PURITY ASSERTION.  The whole fixture tree - every file, with every
+  # content hash - is the same before and after.  Not "the important files
+  # are unchanged": the tree.
+  [ "$before" = "$after" ] || same=1
+  assert_ok "$same" "the dry run created NO file and changed NO file anywhere under the fixture tree"
+  if [ "$same" != "0" ]; then
+    printf '  --- before ---\n%s\n  --- after ---\n%s\n' "$before" "$after" >&2
+  fi
+
+  [ ! -e "$root/preserve" ] || gone=1
+  assert_ok "$gone" "the dry run did not even create the preserve directory"
+
+  gone=0
+  [ ! -e "$root/preserve/slot-1-repo.all-refs.bundle" ] || gone=1
+  assert_ok "$gone" "the dry run created no bundle"
+
+  gone=0
+  [ ! -e "$root/preserve/slot-1-repo-files.tar.gz" ] || gone=1
+  assert_ok "$gone" "the dry run created no tar"
+
+  gone=0
+  [ ! -e "$root/preserve/slot-1-repo.filelist" ] || gone=1
+  assert_ok "$gone" "the dry run created no file list"
+
+  gone=0
+  [ ! -e "$root/state/lane-slot-1.fm-reaped" ] || gone=1
+  assert_ok "$gone" "the dry run wrote no lane marker"
+
+  gone=0
+  [ ! -e "$root/state/.fm-reap-finished-lanes.lock" ] || gone=1
+  assert_ok "$gone" "the dry run created no lock file in the state directory"
+
+  gone=0
+  [ ! -s "$root/treehouse.log" ] || gone=1
+  assert_ok "$gone" "the dry run returned no slot"
+
+  # A dry run that reports nothing is useless: the counts it WOULD have
+  # preserved are still printed.
+  grep -q 'WOULD-CREATE' "$root.out.txt"
+  assert_ok "$?" "the dry run says what it would create"
+
+  grep -qE 'files=[0-9]+ entries=[0-9]+ bytes=[0-9]+' "$root.out.txt"
+  assert_ok "$?" "the dry run reports the file count, the entry count and the byte count"
+
+  grep -qE 'files=[1-9][0-9]* entries=[1-9][0-9]* bytes=[1-9][0-9]*' "$root.out.txt"
+  assert_ok "$?" "the dry run reports a non-zero file, entry and byte count for the slot that has files"
+
+  grep -q 'CANDIDATE' "$root.out.txt"
+  assert_ok "$?" "the dry run still reports the candidate it would reclaim"
+
+  grep -q 'lane-slot-1' "$root.out.txt"
+  assert_ok "$?" "the dry run names the lane it would reclaim"
+
+  # And the dry run's counts are the apply run's counts: the same fixture,
+  # run for real, archives exactly what the dry run said it would.
+  local root2 real_files real_entries dry_files dry_entries
+  root2=$(mktemp -d /tmp/fm-reap-test.XXXXXX)
+  build_fixture "$root2" 0
+  run_reaper "$root2" "$SCRIPT_UNDER_TEST" apply
+  real_files=$(grep -oE 'files=[0-9]+' "$root2/out.txt" 2>/dev/null | head -1 | cut -d= -f2)
+  real_entries=$(grep -oE 'entries=[0-9]+' "$root2/out.txt" 2>/dev/null | head -1 | cut -d= -f2)
+  dry_files=$(grep -oE 'files=[0-9]+' "$root.out.txt" 2>/dev/null | head -1 | cut -d= -f2)
+  dry_entries=$(grep -oE 'entries=[0-9]+' "$root.out.txt" 2>/dev/null | head -1 | cut -d= -f2)
+  [ -n "$dry_files" ] && [ "$dry_files" = "$real_files" ]
+  assert_ok "$?" "the dry run's file count equals the apply run's archived file count"
+
+  [ -n "$dry_entries" ] && [ "$dry_entries" = "$real_entries" ]
+  assert_ok "$?" "the dry run's entry count equals the apply run's archive entry count"
+
+  fm_reap_test_trash "$root" >/dev/null 2>&1
+  fm_reap_test_trash "$root2" >/dev/null 2>&1
 }
 
 test_lock_prevents_overlap() {
@@ -591,6 +759,7 @@ for _t in \
   test_empty_archive_is_caught \
   test_mutants_are_caught \
   test_terminal_verb_grammar \
+  test_dry_run_writes_nothing \
   test_lock_prevents_overlap \
   test_reaper_is_idempotent; do
   "$_t" || { echo "FAIL: $_t"; exit 1; }
