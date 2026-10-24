@@ -33,14 +33,40 @@ When this session owns supervision and away mode is not active:
 4. Ordinary wake: **the re-arm step is no longer the model's job.**
    The supervisor re-arms itself after every routine wake. Do not run `bin/fm-watch-arm.sh`, and do not re-run the supervisor, after an ordinary wake.
 5. A captain-relevant wake arrives as the tracked background task's completion: the supervisor prints `supervise: ESCALATION - ...` with the reason and the arm's own lines, then exits 0.
-   Drain queued wakes, handle the wake, then start the next supervisor as a new tracked background task.
+   **The exit does NOT leave the home blind.** Before the escalation is delivered the supervisor starts ONE successor watcher cycle, proves it is alive with the arm's own readiness line, and prints `supervise: supervision is handed back to the primary with a live watcher cycle: re-arm with bin/fm-watch-supervise.sh`. That line means supervision is still on.
+   Drain queued wakes, handle the wake, then start the next supervisor as a new tracked background task. The next supervisor takes the successor over by itself (see "The hand-back successor" below), so a slow re-arm does not leave the home unwatched.
 6. `supervise: PARKED after <N>s - ...` is the bounded park interval (default 900s; `FM_WATCH_SUPERVISE_PARK_SECS` sets it, 0 means no bound).
    The watcher was still alive, and the cycle is handed back on purpose so the primary gets a periodic heartbeat.
    The bound is enforced at CYCLE BOUNDARIES: a healthy blocked watcher is never interrupted, so a quiet fleet keeps one watcher alive instead of bouncing it every bound, and the park fires at the first boundary at or after it.
+   The park is a hand-back too, so it also leaves a live successor cycle behind before it exits.
    Drain, then start the next supervisor as a new tracked background task.
-7. `supervise: FAILED - ...` with a non-zero exit means the watcher could not be kept alive and supervision is DOWN.
+7. `supervise: FAILED - ...` with a non-zero exit means the watcher could not be kept alive, or the hand-back could not leave a live watcher cycle behind. Supervision is DOWN.
    This is the only repair case: drain queued wakes, inspect the failure, and start a fresh supervisor.
 8. Never use shell `&` for watcher supervision.
+
+## The hand-back successor
+
+The watcher is one-shot by contract: `bin/fm-watch.sh` blocks until it has an actionable wake to surface, prints one reason line, and exits. So the cycle that surfaced a captain-relevant wake is already gone by the time the supervisor hands that wake back.
+
+Before a hand-back the supervisor therefore starts ONE successor watcher cycle:
+
+- through the same arm, so `bin/fm-watch-arm.sh` remains the only thing that launches a watcher;
+- in a process group of its own, so the harness's teardown of the supervisor's group when the tracked task completes cannot take the successor down with it (the shape `bin/fm-supervision-host.sh`'s `start_arm` uses with `ARM_OWN_GROUP`);
+- proven live by the arm's own readiness line (`watcher: started ...` / `watcher: attached ...`), so a hand-back never claims a successor it did not verify;
+- recorded in `state/.watch-supervise-successor` as the arm's pid and process identity.
+
+The NEXT supervisor takes that cycle over by itself: it retires the recorded arm (the identity check means a reused pid is never signalled) and then forks its own watcher, so the next wake's reason stays readable. The take-over happens before the supervisor's first cycle, and the window in which no watcher is alive is the arm's own restart time.
+
+Nothing is lost either way: the watcher appends every actionable wake to the durable queue (`state/.wake-queue`) BEFORE it prints its reason line, so the primary's drain still carries the wake.
+
+## Restarting supervision
+
+This script IS the arm owner for a host with no native turn-end hook, and it is restartable by hand or by an auto-arm: it owns no state that outlives its own process except the durable queue and the coalescing window, both of which are files under `state/`.
+
+- The command: `exec bin/fm-watch-supervise.sh`, run as the harness's own tracked background task, as its own call. Never bundle it onto another command and never use shell `&` for it.
+- On a routine wake it classifies the wake in bash, prints `supervise: routine wake absorbed (...) - re-arming`, and arms the next cycle. No model turn, no re-arm.
+- On a captain-relevant wake it prints `supervise: ESCALATION - ...`, leaves a live successor cycle behind, and exits 0 so the tracked task completes and the model is notified.
+- It fails loudly: `supervise: FAILED - ...` plus `supervision is DOWN`, with a non-zero exit, whenever a watcher cannot be kept alive or the hand-back cannot leave a live cycle behind.
 
 ## How a wake is classified
 

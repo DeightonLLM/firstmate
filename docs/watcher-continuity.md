@@ -15,6 +15,14 @@ A numeric session-lock owner that fails the shared `fm_harness_pid_alive` predic
 The stale-owner claim occurs only after the existing AFK and supervision-need gates pass.
 While supervision is still needed and away mode remains inactive, an actionable close or typed failure wakes the idle session through exit 2.
 
+`bin/fm-watch-supervise.sh` owns continuity for a primary with no native turn-end hook: it loops the arm, so a routine wake costs no model turn, and it owns the hand-back.
+A hand-back there must not leave the home blind.
+The watcher is one-shot, so the cycle that surfaced a captain-relevant wake is already gone when the supervisor hands that wake back; before the hand-back the supervisor starts ONE successor watcher cycle, proves it alive with the arm's own readiness line, and records it as the arm's pid and process identity.
+The next supervisor takes that cycle over by itself - it retires the recorded arm and then forks its own watcher - so the next wake's reason stays readable and the window in which no watcher is alive is the arm's own restart time.
+A hand-back that cannot leave a live cycle behind is not a clean hand-back: the supervisor fails loudly and exits non-zero.
+The wake itself is never lost either way, because the watcher appends every actionable wake to the durable queue before it prints its reason line.
+See [`supervision-protocols/minimax-code.md`](supervision-protocols/minimax-code.md) for the primary-facing contract.
+
 ## Actionable wake ordering
 
 After an actionable Pi or OpenCode child close, the adapter starts and verifies one singleton successor before it delivers the original wake.

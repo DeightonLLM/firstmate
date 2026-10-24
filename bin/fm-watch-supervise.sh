@@ -66,14 +66,90 @@
 #   the same arm, the same watcher, and the same shared classifier, and it needs
 #   no engine and no mirror.
 #
+# THE HAND-BACK LEAVES SUPERVISION ON
+#   The watcher is ONE-SHOT by contract: bin/fm-watch.sh blocks until it has an
+#   actionable wake to surface, prints one reason line, and exits. So the cycle
+#   that surfaced a captain-relevant wake is already gone by the time this
+#   supervisor hands that wake back to the primary, and NOTHING is watching the
+#   fleet until the primary starts the next supervisor. On a primary with no
+#   native turn-end hook that gap is unbounded: somebody has to remember the
+#   re-arm, and when nobody does the home runs blind. That is how a lane crash
+#   went unnoticed for twenty hours on a host whose supervision was already
+#   known to be down.
+#
+#   So a hand-back here starts ONE successor watcher cycle and PROVES it is
+#   alive before it claims the hand-back:
+#     - the successor is started through the SAME arm, so bin/fm-watch-arm.sh
+#       remains the only thing that launches a watcher;
+#     - the successor is started with the arm's own --restart mode, so it is
+#       the SINGLE owner of the cycle it leaves behind and any stale cycle is
+#       retired with it;
+#     - the successor runs in a PROCESS GROUP OF ITS OWN, so the harness's
+#       teardown of THIS supervisor's group when the tracked task completes
+#       cannot take the successor down with it (the shape
+#       bin/fm-supervision-host.sh's start_arm uses with ARM_OWN_GROUP);
+#     - the arm's OWN readiness line ("watcher: started ..." / "watcher:
+#       attached ...") is the proof. A hand-back never claims a successor it
+#       did not verify;
+#     - the successor's arm pid and identity are recorded durably in
+#       state/.watch-supervise-successor, so the NEXT supervisor takes that
+#       cycle over instead of racing it. The next supervisor retires the
+#       recorded arm and then FORKS its own watcher: an arm that ATTACHES to a
+#       watcher it did not fork cannot read that watcher's reason when the
+#       cycle closes, so the next wake would arrive as a typed failure instead
+#       of a wake.
+#   A hand-back that cannot leave a live watcher behind is NOT a clean
+#   hand-back: the supervisor says so loudly and exits NON-ZERO.
+#
+#   Nothing is lost either way. The watcher appends every actionable wake to
+#   the durable queue (state/.wake-queue) BEFORE it prints its reason line
+#   (bin/fm-watch.sh's fm_wake_append calls), so the primary's drain still
+#   carries the wake even inside the window where the successor is retired.
+#
+# RESTARTING THE SUPERVISOR
+#   This script IS the arm owner for a host with no native turn-end hook, and
+#   it is restartable by hand or by an auto-arm because it owns no state that
+#   outlives its own process except the durable queue and the coalescing
+#   window, both of which are files under state/.
+#
+#   THE COMMAND
+#     exec bin/fm-watch-supervise.sh
+#   HOW IT IS MEANT TO BE RUN
+#     As the harness's OWN tracked background task, as its own call. Never
+#     bundle it onto another command, and never use a shell `&` for it: a
+#     backgrounded child is reaped when the call returns, which leaves no
+#     supervisor running and a false "already running" off a dying process.
+#     This script is itself the tracked task, so its child CAN outlive it - the
+#     hand-back successor is the one deliberate exception, and it gets a
+#     process group of its own so it is not reaped either.
+#   WHAT IT DOES ON A ROUTINE WAKE
+#     The wake is classified in bash by the shared classifier, absorbed, and the
+#     next cycle is armed again with no model turn at all:
+#       supervise: routine wake absorbed (<reason>) - re-arming
+#   WHAT IT DOES ON A CAPTAIN-RELEVANT WAKE
+#     The wake is classified, printed, a live successor cycle is left behind,
+#     and the script EXITS 0 so the primary's tracked background task completes
+#     and the model is notified:
+#       supervise: ESCALATION - ...
+#       supervise: supervision is handed back to the primary with a live
+#       watcher cycle: re-arm with bin/fm-watch-supervise.sh
+#   HOW IT FAILS LOUDLY
+#     When a watcher cannot be kept alive, or when the hand-back cannot leave a
+#     live watcher behind, the supervisor prints "supervise: FAILED - ..." and
+#     "supervision is DOWN" and exits NON-ZERO. That is the only repair case:
+#     fix the cause, then re-arm.
+#
 # WHAT IT NEVER DOES
-#   - It NEVER uses a shell `&` for the watcher. The watcher is launched only by
+#   - It NEVER backgrounds the WATCHER. The watcher is launched only by
 #     bin/fm-watch-arm.sh, as that arm's own tracked child; this script runs the
 #     ARM in its own foreground process tree. The prohibition on shell `&` is
 #     about a backgrounded child being reaped when the CALL returns: this
 #     script is itself the harness-owned tracked task, so its child cannot
 #     outlive it. A process-group teardown takes the arm and the watcher down
 #     together, exactly as bin/fm-claude-stop-autoarm.sh relies on.
+#     The ONE deliberate exception is the hand-back successor above, which is
+#     an ARM (never the watcher) and is given a process group of its own so the
+#     teardown cannot reach it.
 #   - It NEVER swallows a captain-relevant wake. Escalation is the point.
 #   - It NEVER exits 0 while supervision is down. A watcher that cannot be kept
 #     alive is a non-zero exit with an unambiguous line.
@@ -119,17 +195,27 @@
 #                                              reason and the arm's own lines
 #                                              follow; supervision is handed
 #                                              back to the primary.
+#   supervise: supervision is handed back to the primary with a live watcher
+#   cycle: re-arm with bin/fm-watch-supervise.sh
+#                                              the hand-back line. It is printed
+#                                              only after the successor cycle
+#                                              was started AND verified, so it
+#                                              means supervision is still on.
 #   supervise: PARKED after <N>s - ...         the bounded park interval ended
 #                                              while the watcher was still
 #                                              alive; a compact summary follows.
 #   supervise: FAILED - ...                    the watcher could not be kept
-#                                              alive. Supervision is DOWN and
-#                                              the exit status is non-zero.
+#                                              alive, or the hand-back could
+#                                              not leave a live watcher behind.
+#                                              Supervision is DOWN and the exit
+#                                              status is non-zero.
 #
 # EXIT STATUS
 #   0  a captain-relevant wake was delivered and supervision was handed back to
-#      the primary, or the bounded park interval ended with the watcher alive.
-#   1  the watcher could not be kept alive. Supervision is DOWN.
+#      the primary WITH a live watcher cycle behind it, or the bounded park
+#      interval ended with a live watcher cycle behind it.
+#   1  the watcher could not be kept alive, or the hand-back could not leave a
+#      live watcher behind. Supervision is DOWN.
 #   2  usage error.
 #
 # ENVIRONMENT KNOBS
@@ -141,6 +227,13 @@
 #                                     first boundary at or after the bound.
 #   FM_WATCH_SUPERVISE_ARM_ATTEMPTS   consecutive arm attempts allowed before
 #                                     the failure is declared (default 3).
+#   FM_WATCH_SUPERVISE_SUCCESSOR_SECS
+#                                     bounded seconds the hand-back waits for
+#                                     the successor cycle's readiness line
+#                                     (default 15). The successor is started
+#                                     before the hand-back is claimed, so this
+#                                     bound is the longest a hand-back can
+#                                     take to fail loudly.
 #   FM_WATCH_SUPERVISE_CYCLE_GAP_SECS seconds between two routine cycles
 #                                     (default 1). Keeps a fast-failing arm
 #                                     from spinning.
@@ -190,6 +283,11 @@ ARM="${FM_WATCH_SUPERVISE_ARM:-$SCRIPT_DIR/fm-watch-arm.sh}"
 PARK_SECS="${FM_WATCH_SUPERVISE_PARK_SECS:-900}"
 ARM_ATTEMPTS="${FM_WATCH_SUPERVISE_ARM_ATTEMPTS:-3}"
 CYCLE_GAP_SECS="${FM_WATCH_SUPERVISE_CYCLE_GAP_SECS:-1}"
+# How long the hand-back waits for the successor cycle's readiness line before
+# it declares the hand-back failed. The successor is started BEFORE the
+# hand-back is claimed, so this is the longest a hand-back can take to fail
+# loudly rather than leave a hole.
+SUCCESSOR_SECS="${FM_WATCH_SUPERVISE_SUCCESSOR_SECS:-15}"
 SUPERVISE_LOCK="$STATE/.watch-supervise.lock"
 LOG="$STATE/.watch-supervise.log"
 LOG_MAX_BYTES=${FM_WATCH_SUPERVISE_LOG_MAX_BYTES:-262144}
@@ -217,6 +315,15 @@ MACHINE_ARTEFACTS="${FM_WATCH_SUPERVISE_MACHINE_ARTEFACTS:-CAPTAIN-BOARD.html NE
 # between one coalescing window and the next.
 COALESCE_STATE="$STATE/.watch-supervise-coalesce"
 
+# The successor cycle a hand-back leaves behind, and the record that names it.
+# The record holds the successor ARM's pid and its process identity, so the
+# NEXT supervisor can retire exactly that arm - and only that arm - when it
+# takes the cycle over. The output file is the successor arm's own stdout: it
+# is deliberately NOT this supervisor's stdout, so the successor's later output
+# can never be mistaken for a line this supervisor printed.
+SUCCESSOR_RECORD="$STATE/.watch-supervise-successor"
+SUCCESSOR_OUT="$STATE/.watch-supervise-successor.out"
+
 TAB=$'\t'
 
 # A non-numeric knob is an actionable configuration error, not a silent
@@ -234,6 +341,7 @@ require_number() {  # <value> <name>
 require_number "$PARK_SECS" FM_WATCH_SUPERVISE_PARK_SECS
 require_number "$ARM_ATTEMPTS" FM_WATCH_SUPERVISE_ARM_ATTEMPTS
 require_number "$CYCLE_GAP_SECS" FM_WATCH_SUPERVISE_CYCLE_GAP_SECS
+require_number "$SUCCESSOR_SECS" FM_WATCH_SUPERVISE_SUCCESSOR_SECS
 require_number "$COALESCE_SECS" FM_WATCH_SUPERVISE_COALESCE_SECS
 case "$LOG_MAX_BYTES" in ''|*[!0-9]*|0) LOG_MAX_BYTES=262144 ;; esac
 case "$LOG_KEEP_LINES" in ''|*[!0-9]*|0) LOG_KEEP_LINES=1000 ;; esac
@@ -257,6 +365,11 @@ routine=0
 escalated=0
 failures=0
 attempts=0
+# 1 once this supervisor holds the home's supervise lock, i.e. once it owns the
+# watcher cycle. A hand-back only leaves a successor behind when it owns the
+# cycle: otherwise another supervisor owns a live cycle already, and a second
+# one would race it.
+OWNS_CYCLE=0
 
 log() {  # <line>
   [ -n "${LOG:-}" ] && printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" >> "$LOG" 2>/dev/null
@@ -894,6 +1007,124 @@ print_arm_lines() {  # <capture-file>
   return 0
 }
 
+# --- the hand-back successor --------------------------------------------------
+#
+# A hand-back must leave supervision ON. The watcher is one-shot by contract,
+# so the cycle that surfaced a captain-relevant wake is already gone when this
+# supervisor hands that wake back. Without a successor the home runs blind
+# until somebody re-arms by hand, and on a primary with no native turn-end
+# hook that gap is unbounded.
+#
+# The successor is ONE watcher cycle, started through the same arm, in a
+# process group of its own so the harness's teardown of THIS supervisor's group
+# cannot take it down with it. The arm's own readiness line is the proof that a
+# live cycle exists, so the hand-back never claims a successor it did not
+# verify.
+
+SUCCESSOR_PID=
+SUCCESSOR_IDENTITY=
+
+# successor_record_write <pid> <identity>
+# Record the successor arm, with its identity, so the next supervisor retires
+# exactly that arm and nothing else.
+successor_record_write() {  # <pid> <identity>
+  local pid=$1 identity=$2 tmp
+  [ -n "$pid" ] || return 1
+  tmp=$(mktemp "$STATE/.watch-supervise-successor.XXXXXX" 2>/dev/null) || return 1
+  if ! printf '%s\t%s\n' "$pid" "$identity" > "$tmp" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  fi
+  if ! mv -f "$tmp" "$SUCCESSOR_RECORD" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null || true
+    return 1
+  fi
+  return 0
+}
+
+# successor_record_read
+# Read the recorded successor into SUCCESSOR_PID and SUCCESSOR_IDENTITY.
+# Returns 1 when there is no usable record.
+successor_record_read() {
+  SUCCESSOR_PID=
+  SUCCESSOR_IDENTITY=
+  [ -f "$SUCCESSOR_RECORD" ] || return 1
+  IFS="$TAB" read -r SUCCESSOR_PID SUCCESSOR_IDENTITY < "$SUCCESSOR_RECORD" 2>/dev/null || true
+  case "$SUCCESSOR_PID" in ''|*[!0-9]*) SUCCESSOR_PID=; return 1 ;; esac
+  [ -n "$SUCCESSOR_IDENTITY" ] || return 1
+  return 0
+}
+
+successor_record_clear() {
+  rm -f "$SUCCESSOR_RECORD" 2>/dev/null || true
+  return 0
+}
+
+# retire_recorded_successor
+# Take the cycle over from the successor a previous hand-back left.
+#
+# The recorded arm is retired, and the arm's own TERM handler stops the watcher
+# that arm owns (bin/fm-watch-arm.sh's handle_arm_signal). The next cycle then
+# FORKS its own watcher, which is what keeps the next wake's reason readable:
+# an arm that ATTACHES to a watcher it did not fork cannot read that watcher's
+# reason when the cycle closes, so the wake would arrive as a typed failure
+# instead of a wake.
+#
+# The identity check is the guard: a pid that was reused by an unrelated
+# process is never signalled. A record whose owner is gone is simply cleared.
+retire_recorded_successor() {
+  local pid identity i
+  successor_record_read || { successor_record_clear; return 0; }
+  pid=$SUCCESSOR_PID
+  identity=$SUCCESSOR_IDENTITY
+  if fm_pid_alive "$pid" && [ "$(fm_pid_identity "$pid" 2>/dev/null || true)" = "$identity" ]; then
+    kill -TERM "$pid" 2>/dev/null || true
+    i=0
+    while [ "$i" -lt 50 ] && fm_pid_alive "$pid"; do
+      sleep 0.1
+      i=$((i + 1))
+    done
+    fm_pid_alive "$pid" && kill -KILL "$pid" 2>/dev/null || true
+  fi
+  successor_record_clear
+  rm -f "$SUCCESSOR_OUT" 2>/dev/null || true
+  return 0
+}
+
+# start_handback_successor
+# Start ONE successor watcher cycle and prove it is alive.
+# Returns 0 only when the arm reported a live cycle.
+start_handback_successor() {
+  local pid identity deadline
+  : > "$SUCCESSOR_OUT" 2>/dev/null || true
+  # The successor runs in a process group of its own, so the teardown of this
+  # supervisor's group when the tracked task completes cannot reach it. This is
+  # the shape bin/fm-supervision-host.sh's start_arm uses with ARM_OWN_GROUP.
+  #
+  # The arm is asked for --restart, which is its own "stop this home's watcher
+  # and own a fresh cycle" mode: the successor is the SINGLE owner of the cycle
+  # it leaves behind, and any stale cycle is retired with it.
+  set -m 2>/dev/null || true
+  "$ARM" --restart >"$SUCCESSOR_OUT" 2>&1 </dev/null &
+  pid=$!
+  set +m 2>/dev/null || true
+  deadline=$(( $(date +%s) + SUCCESSOR_SECS + 1 ))
+  while :; do
+    # The readiness line is checked FIRST: the arm prints it as soon as the
+    # cycle is verified, and it may already have closed by the time this loop
+    # looks.
+    if grep -qE '^watcher: (started|attached) ' "$SUCCESSOR_OUT" 2>/dev/null; then
+      break
+    fi
+    fm_pid_alive "$pid" || return 1
+    [ "$(date +%s)" -ge "$deadline" ] && return 1
+    sleep 0.2
+  done
+  identity=$(fm_pid_identity "$pid" 2>/dev/null || true)
+  successor_record_write "$pid" "$identity" || return 1
+  return 0
+}
+
 # --- supervisor lifecycle ----------------------------------------------------
 
 # The capture file of the cycle in flight. It is removed on every exit path,
@@ -915,10 +1146,43 @@ escalate_and_exit() {  # <reason> <distilled> <capture-file>
   # and when the window resets. Nothing that was absorbed is silently lost.
   [ -n "$SUPERVISE_EXTRA" ] && printf '%s' "$SUPERVISE_EXTRA"
   print_arm_lines "$3"
-  printf 'supervise: supervision is handed back to the primary: re-arm with bin/fm-watch-supervise.sh\n'
+  # The wake is delivered first, so it is never lost to a successor that fails
+  # to start. The successor is started next, and the hand-back is only claimed
+  # once a live cycle is verified behind it.
+  handback_successor_or_fail "the hand-back could not leave a live watcher cycle behind"
+  printf 'supervise: supervision is handed back to the primary with a live watcher cycle: re-arm with bin/fm-watch-supervise.sh\n'
   log "escalate: $1 -> $2"
   trim_log
   exit 0
+}
+
+# handback_successor_or_fail <message>
+# Leave a live watcher cycle behind the hand-back, or fail loudly.
+#
+# A hand-back that leaves no watcher is not a clean hand-back: supervision is
+# down until somebody re-arms by hand, which is exactly the gap this exists to
+# close. So the failure is loud and the exit status is non-zero.
+#
+# When this supervisor does NOT own the cycle (another supervisor holds the
+# lock) there is nothing to leave behind: the lock holder owns a live cycle,
+# and starting a second one would race it.
+handback_successor_or_fail() {  # <message>
+  local message=$1
+  if [ "${OWNS_CYCLE:-0}" -ne 1 ]; then
+    log "handback: another supervisor owns the cycle; no successor started"
+    trim_log
+    return 0
+  fi
+  if start_handback_successor; then
+    log "handback: successor armed"
+    trim_log
+    return 0
+  fi
+  printf 'supervise: FAILED - %s\n' "$message" >&2
+  printf 'supervise: supervision is DOWN. Fix the cause, then re-arm with bin/fm-watch-supervise.sh\n' >&2
+  log "failed: $message"
+  trim_log
+  exit 1
 }
 
 fail_and_exit() {  # <message> <capture-file>
@@ -934,6 +1198,9 @@ park_and_exit() {  # <elapsed-seconds>
   printf 'supervise: PARKED after %ss - the watcher is still alive and the primary owns the next cycle.\n' "$1"
   printf 'supervise: summary cycles=%s routine=%s escalated=%s failures=%s\n' \
     "$cycles" "$routine" "$escalated" "$failures"
+  # The park is a hand-back too: the cycle that ran the park window has closed,
+  # so a successor is started and verified before the hand-back is claimed.
+  handback_successor_or_fail "the park could not leave a live watcher cycle behind"
   printf 'supervise: re-arm to continue: bin/fm-watch-supervise.sh\n'
   log "parked after ${1}s cycles=$cycles routine=$routine escalated=$escalated failures=$failures"
   trim_log
@@ -1004,6 +1271,12 @@ main() {
     park_and_exit "$elapsed"
   }
   trap supervisor_cleanup EXIT
+  # This supervisor now owns the cycle. A previous hand-back may have left a
+  # successor cycle behind: that successor is retired here, so this
+  # supervisor's first cycle FORKS the watcher it owns and can read its
+  # reason when the cycle closes.
+  OWNS_CYCLE=1
+  retire_recorded_successor
 
   while :; do
     if [ "$deadline" -gt 0 ] && [ "$(date +%s)" -ge "$deadline" ]; then
