@@ -282,7 +282,7 @@ collect_enforcements() {
   if [ -x "$SCRIPT_DIR/fm-capacity-gate.sh" ]; then
     cg_active=1
     cg_status="active"
-    cg_details="Active: 80% root-usage ceiling enforced by bin/fm-capacity-gate.sh; reclaim-then-refuse; unmeasurable disk fails closed"
+    cg_details="Active: 80% root-usage ceiling enforced by bin/fm-capacity-gate.sh; reclaim-then-refuse; unmeasurable disk fails closed; the 75% review tier warns on every placement and does not block"
     if [ "${FM_CAPACITY_GATE_BYPASS:-0}" = "1" ] || [ "${FM_DISPATCH_GUARD_CAPACITY_BYPASS:-0}" = "1" ]; then
       cg_active=0
       cg_status="inactive"
@@ -291,7 +291,7 @@ collect_enforcements() {
   else
     cg_details="Inactive: bin/fm-capacity-gate.sh not found, so the 80% ceiling is not enforced in the dispatch path"
   fi
-  printf 'fm-capacity-gate\tbin/fm-capacity-gate.sh\tBlocks a fresh placement when root filesystem usage is at or above 80%%; reclaims first (tiers 1-2) and refuses only if still over; refuses an unmeasurable disk\tFM_CAPACITY_GATE_BYPASS, FM_CAPACITY_GATE_RECLAIM_TIMEOUT_S, FM_CAPACITY_GATE_LOCK\t%d\t%s\t%s\tEnsure FM_CAPACITY_GATE_BYPASS is unset and bin/fm-capacity-gate.sh is executable\tSet FM_CAPACITY_GATE_BYPASS=1 (logged, never silent)\n' \
+  printf 'fm-capacity-gate\tbin/fm-capacity-gate.sh\tBlocks a fresh placement when root filesystem usage is at or above 80%%; reclaims first (tiers 1-2) and refuses only if still over; refuses an unmeasurable disk; the 75%% review tier warns on every placement and does not block\tFM_CAPACITY_GATE_BYPASS, FM_DISPATCH_GUARD_CAPACITY_BYPASS, FM_CAPACITY_GATE_RECLAIM_TIMEOUT_S, FM_CAPACITY_GATE_LOCK\t%d\t%s\t%s\tEnsure FM_CAPACITY_GATE_BYPASS is unset and bin/fm-capacity-gate.sh is executable\tSet FM_CAPACITY_GATE_BYPASS=1 (logged, never silent)\n' \
     "$cg_active" "$cg_status" "$cg_details"
 }
 
