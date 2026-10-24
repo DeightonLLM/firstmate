@@ -67,6 +67,7 @@ on each machine-readable record.
 | `PRD_TRACEABILITY.md` + `prd_traceability.yaml` | PRD item status and blockers | Resolving PRD status |
 | `BRANDON_MULTI_PROJECT_INFRASTRUCTURE_PRD_V3.md` | Canonical Brandon Multi-Project Infrastructure PRD v3.0 | Before Brandon architecture, rollout, or completion decisions |
 | `../../bin/fm-context-preflight.sh` | Fail-closed validator (in `bin/`) | Before any lane depends on the warehouse |
+| `../../bin/fm-nginx-bind-preflight.sh` | Web-tier bind-ability pre-flight (in `bin/`) | Before any nginx vhost change |
 
 The preflight script lives in `bin/fm-context-preflight.sh`. It is the
 only safe way to check the warehouse programmatically.
@@ -150,4 +151,11 @@ that is an exact-byte provenance limitation, not a missing warehouse source.
 4. To add a record, edit the Markdown first, then mirror the change
    into YAML, then re-run the preflight. The preflight must return
    `PASS` before the change is considered valid.
+5. To change the web tier, run `bin/fm-nginx-bind-preflight.sh` against
+   every changed vhost on the host that will run nginx, before the change
+   is deployed. `nginx -t` parses the configuration and never binds a
+   socket, so a vhost that declares a listen port another service already
+   holds passes it and then fails at the next nginx restart. The
+   preflight must report `PASS` before the change is considered valid, and
+   an `UNVERIFIED` check is not a pass.
 - [LEAN-CTX-TERMINAL-LAYERS.md](LEAN-CTX-TERMINAL-LAYERS.md) — why some terminals run lean-ctx-wrapped and some raw; per-surface enforcement matrix (2026-10-04)
