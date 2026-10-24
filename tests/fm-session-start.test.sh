@@ -757,6 +757,71 @@ SH
   pass "concurrent session-lock acquisition admits exactly one live harness"
 }
 
+# --- primary checkout guard --------------------------------------------------
+
+# The primary checkout must sit on the branch the fleet ships from and carry no
+# dirty paths. The digest ASSERTS that, DETECT-ONLY: it reports the drift and
+# the reconcile command, and it never repairs the checkout.
+test_primary_checkout_guard_detects_drift() {
+  local rec root home fakebin out branch_after dirty_after wt
+  rec=$(new_world primary-guard)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  # The fixture world starts with untracked fixture dirs, so commit them: the
+  # healthy case must be genuinely clean.
+  git -C "$root" add -A >/dev/null 2>&1
+  git -C "$root" commit -q -m fixture >/dev/null 2>&1
+
+  # 1. A healthy primary: on 'main', clean, nothing ahead.
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "ASSERT: the primary checkout is on 'main' and clean" \
+    "primary guard: the assertion line is missing"
+  assert_contains "$out" "OK: the primary checkout is on main and clean." \
+    "primary guard: a healthy primary did not report OK"
+
+  # 2. A dirty primary is reported, with the count and the reconcile command.
+  printf '%s\n' 'unlanded work' > "$root/dirty-file.txt"
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "DRIFT: the primary checkout is not on main" \
+    "primary guard: a dirty primary did not report DRIFT"
+  assert_contains "$out" "dirty   : 1" \
+    "primary guard: the dirty entry count was not reported"
+  assert_contains "$out" "git -C $root status --porcelain" \
+    "primary guard: the reconcile command was not reported"
+  assert_contains "$out" "This check only reports" \
+    "primary guard: the report does not say that it only reports"
+
+  # The check must NOT repair: the dirty path is still there.
+  dirty_after=0
+  [ -e "$root/dirty-file.txt" ] && dirty_after=1
+  [ "$dirty_after" -eq 1 ] || fail "primary guard: the check removed a dirty path; it must be detect-only"
+  pass "primary guard: a dirty primary is reported and never repaired"
+
+  # 3. A feature branch is reported, and is not switched away from.
+  git -C "$root" checkout -q -b fm/primary-guard-probe >/dev/null 2>&1
+  out=$(run_session_start "$home" "$root" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "branch  : fm/primary-guard-probe" \
+    "primary guard: the offending branch was not named"
+  assert_contains "$out" "DRIFT: the primary checkout is not on main" \
+    "primary guard: a primary on a feature branch did not report DRIFT"
+  branch_after=$(git -C "$root" symbolic-ref --quiet --short HEAD 2>/dev/null || printf '')
+  [ "$branch_after" = "fm/primary-guard-probe" ] \
+    || fail "primary guard: the check switched the primary branch; it must be detect-only"
+  pass "primary guard: a feature branch is reported and never switched"
+
+  # 4. A linked worktree - a lane worktree or a secondmate home - is not the
+  # primary, so the assertion is skipped rather than reported against it.
+  wt="$TMP_ROOT/primary-guard-wt"
+  git -C "$root" worktree add -q "$wt" -b fm/primary-guard-wt-probe >/dev/null 2>&1
+  out=$(run_session_start "$home" "$wt" "$fakebin:$BASE_PATH")
+  assert_contains "$out" "skipped (this checkout is not the primary" \
+    "primary guard: a linked worktree was asserted as the primary"
+  pass "primary guard: a linked worktree is skipped, not asserted"
+}
+
 # --- output ordering ----------------------------------------------------------
 
 test_output_ordering_diagnostics_lead() {
@@ -1419,6 +1484,7 @@ test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
 test_session_lock_concurrent_single_winner
 test_output_ordering_diagnostics_lead
+test_primary_checkout_guard_detects_drift
 test_herdr_backend_diagnostics_follow_real_session_start
 test_session_start_relaunches_missing_pi_secondmate
 test_session_start_preserves_ambiguous_pi_process

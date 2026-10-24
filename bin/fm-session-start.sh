@@ -363,6 +363,69 @@ else
   printf '(silent - all good)\n'
 fi
 
+# --- 2b. primary checkout identity -----------------------------------------
+# DETECT-ONLY. The primary checkout is the fleet's operational home: it holds
+# data/, state/, config/ and projects/, so it must sit on the branch the fleet
+# ships from and carry no dirty paths. Nothing asserted that, so the primary
+# drifted onto a feature branch with 36 dirty paths and bin/fm-guard.sh printed
+# its WORKTREE TANGLE banner on every run.
+#
+# This check REPORTS the drift and the exact reconcile command. It never
+# repairs: a repair would be a git write in the primary checkout, which the
+# primary's own standing landing rule forbids.
+subsection "PRIMARY CHECKOUT"
+PRIMARY_DIR=
+if [ ! -e "$FM_HOME/.fm-secondmate-parent" ] && \
+   git -C "$FM_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  PRIMARY_GIT_DIR=$(git -C "$FM_ROOT" rev-parse --absolute-git-dir 2>/dev/null || printf '')
+  PRIMARY_COMMON_DIR=$(git -C "$FM_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || printf '')
+  # A linked worktree - a lane worktree, a secondmate home - has its own
+  # --git-dir. The primary is the main worktree, where both paths are the same
+  # place. Only the primary is asserted; a lane sees its own checkout.
+  if [ -n "$PRIMARY_GIT_DIR" ] && [ "$PRIMARY_GIT_DIR" = "$PRIMARY_COMMON_DIR" ]; then
+    PRIMARY_DIR=$FM_ROOT
+  fi
+fi
+if [ -z "$PRIMARY_DIR" ]; then
+  printf 'skipped (this checkout is not the primary - a lane worktree or a secondmate home)\n'
+else
+  # shellcheck source=bin/fm-tangle-lib.sh
+  . "$SCRIPT_DIR/fm-tangle-lib.sh"
+  PRIMARY_BRANCH=$(git -C "$PRIMARY_DIR" symbolic-ref --quiet --short HEAD 2>/dev/null || printf '')
+  PRIMARY_DEFAULT=$(fm_default_branch "$PRIMARY_DIR" || printf 'main')
+  PRIMARY_AHEAD=0
+  PRIMARY_BEHIND=0
+  if git -C "$PRIMARY_DIR" rev-parse --verify --quiet "refs/remotes/origin/$PRIMARY_DEFAULT" >/dev/null 2>&1; then
+    PRIMARY_COUNTS=$(git -C "$PRIMARY_DIR" rev-list --left-right --count "origin/$PRIMARY_DEFAULT...HEAD" 2>/dev/null || printf '')
+    if [ -n "$PRIMARY_COUNTS" ]; then
+      # shellcheck disable=SC2162 # tab-separated two-column output
+      read -r PRIMARY_BEHIND PRIMARY_AHEAD <<EOF
+$PRIMARY_COUNTS
+EOF
+    fi
+  fi
+  PRIMARY_DIRTY=$(git -C "$PRIMARY_DIR" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+  printf "ASSERT: the primary checkout is on '%s' and clean\n" "$PRIMARY_DEFAULT"
+  printf '  branch  : %-31s expected: %s\n' "${PRIMARY_BRANCH:-detached HEAD}" "$PRIMARY_DEFAULT"
+  printf '  ahead   : %-31s expected: 0\n' "$PRIMARY_AHEAD commits"
+  printf '  behind  : %-31s expected: 0\n' "$PRIMARY_BEHIND commits"
+  printf '  dirty   : %-31s expected: 0\n' "$PRIMARY_DIRTY entries"
+  if [ "$PRIMARY_BRANCH" != "$PRIMARY_DEFAULT" ] || [ "$PRIMARY_AHEAD" -gt 0 ] || [ "$PRIMARY_DIRTY" -gt 0 ]; then
+    printf '  DRIFT: the primary checkout is not on %s and/or carries dirty paths.\n' "$PRIMARY_DEFAULT"
+    printf '  This check only reports. Do NOT repair it from a session: the primary lands by\n'
+    printf '  fast-forwarding in a CLEAN SEPARATE worktree and pushing from there - never\n'
+    printf '  checkout/merge/reset/stash in the primary checkout, and never touch the dirty paths.\n'
+    printf '  Reconcile commands (read-only):\n'
+    printf '    git -C %s status --porcelain\n' "$PRIMARY_DIR"
+    printf '    git -C %s rev-list --left-right --count origin/%s...HEAD\n' "$PRIMARY_DIR" "$PRIMARY_DEFAULT"
+    printf '  The 9-step sequence that lands or loses nothing, with the per-path\n'
+    printf '  classification and the Captain decisions it waits on:\n'
+    printf '    data/mcode-m3.1f-brandon-primary-checkout-classify-20261024/report.md\n'
+  else
+    printf '  OK: the primary checkout is on %s and clean.\n' "$PRIMARY_DEFAULT"
+  fi
+fi
+
 # Observability probe: orphaned lean-ctx background processes (PPID=1)
 ORPHAN_LCTX=$(ps -eo pid,ppid,rss,etime,cmd 2>/dev/null | awk '$2 == 1 && /lean-ctx/ && !/awk/ {print $0}')
 if [ -n "$ORPHAN_LCTX" ]; then
