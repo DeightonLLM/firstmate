@@ -56,6 +56,11 @@
 #   --force skips ordinary-task dirty and landed-work checks, skips scout report
 #   checks, and discards secondmate child work for kind=secondmate. Only use it
 #   when the captain has explicitly said to discard the work.
+#   --probe-landed-work is READ-ONLY: it runs the same landed-work guard the
+#   destructive path runs and prints its verdict (LANDED_WORK: <id>
+#   verdict=landed|unlanded|unknown), then exits 0/1/2 without removing
+#   anything. It exists so a caller that must know whether the work has landed
+#   reuses THIS test instead of writing a second, weaker one.
 #
 # Transient / stale worktree git lock recovery (teardown-lock-race): a crew process
 # killed mid-git-operation can leave a .git/worktrees/<wt>/index.lock (or, for a
@@ -120,6 +125,15 @@ if [ "$#" -lt 1 ] || ! fm_task_id_path_safe "$1"; then
 fi
 ID=$1
 FORCE=${2:-}
+# Read-only landed-work probe. It answers "has this task's work landed?" for a
+# caller that must not tear anything down - bin/fm-mcode-lane-lifetime.sh is
+# the one such caller - by running the SAME validate_worktree_teardown_safety
+# guard the destructive path below runs. It is not a second, weaker test.
+PROBE_LANDED_WORK=0
+if [ "$FORCE" = "--probe-landed-work" ]; then
+  PROBE_LANDED_WORK=1
+  FORCE=
+fi
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never tear
 # down a worktree (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -1566,6 +1580,48 @@ remove_secondmate_registry_entry() {
 }
 
 validate_pr_poll_cleanup "$STATE" "$ID" || exit 1
+
+# --- read-only landed-work probe ---------------------------------------------
+#
+# A caller that must decide whether a task's work has LANDED, without tearing
+# anything down, runs this mode. It executes the SAME
+# validate_worktree_teardown_safety guard the destructive path below runs, so
+# this repo keeps exactly ONE landed-work test. It changes nothing: no
+# worktree return, no pane close, no record removal, no state write.
+#
+#   bin/fm-teardown.sh <task-id> --probe-landed-work
+#
+# Output (stdout), one line:
+#   LANDED_WORK: <task-id> verdict=landed|unlanded|unknown detail=<text>
+#
+# Exit codes:
+#   0  landed      - the work has landed, or the task kind owns no landable work
+#   1  unlanded   - the work has NOT landed, or the worktree is dirty
+#   2  unknown    - the verdict could not be established (git lock held, state
+#                   unreadable); a caller must fail closed on this, never guess
+if [ "$PROBE_LANDED_WORK" = 1 ]; then
+  probe_rc=0
+  probe_detail="no worktree recorded for this task"
+  if [ -d "$WT" ]; then
+    if validate_worktree_teardown_safety; then
+      probe_detail="work has landed"
+    else
+      probe_rc=$?
+      if [ "$probe_rc" -eq "$TEARDOWN_WORKTREE_SAFETY_LOCK_BLOCKED" ]; then
+        probe_rc=2
+        probe_detail="could not inspect the worktree (a git lock is held)"
+      else
+        probe_detail="work has not landed"
+      fi
+    fi
+  fi
+  case "$probe_rc" in
+    0) printf 'LANDED_WORK: %s verdict=landed detail=%s\n' "$ID" "$probe_detail" ;;
+    1) printf 'LANDED_WORK: %s verdict=unlanded detail=%s\n' "$ID" "$probe_detail" ;;
+    *) printf 'LANDED_WORK: %s verdict=unknown detail=%s\n' "$ID" "$probe_detail" ;;
+  esac
+  exit "$probe_rc"
+fi
 
 if [ "$KIND" = secondmate ]; then
   [ -n "$HOME_PATH" ] || HOME_PATH=$WT

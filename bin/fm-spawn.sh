@@ -116,6 +116,9 @@
 #                   dir with permissionMode: bypassPermissions so mcode never parks on gates)
 #     __MCODEDATADIR__  absolute path to the mcode data dir, which stays the real one
 #                   because mcode keys its OAuth credential on the literal auth-home path
+#     __MCODEHEAPOPTS__  the V8 old-space ceiling for a minimax-code lane, e.g.
+#                   --max-old-space-size=1024 (mcode_heap_cap_opts owns the value);
+#                   applied to the launch line AND to the pane export
 #     __OPINPUT__   absolute path to the canonical operational-input encoder
 # Verified per-harness turn-end hooks are installed automatically where enabled; some live outside the worktree.
 # Kimi uses one surgically installed Firstmate region in $HOME/.kimi-code/config.toml,
@@ -473,6 +476,54 @@ else
 fi
 [ -z "$HARNESS_ARG" ] || ARG3=$HARNESS_ARG
 
+# The MCode heap ceiling, in MB of V8 old space, applied by THIS spawner to
+# EVERY minimax-code lane.
+#
+# Node's old-space ceiling is otherwise the host-derived default - measured
+# 2096 MB on the 7 GB controller host - which is a number nobody chose. A
+# long-lived lane that retains one session's history walks into it and dies,
+# and when no supervisor is running the death is silent.
+#
+# The value is justified by measurement, not inherited. The full evidence and
+# arithmetic are in data/mcode-m3.1f-controller-mcodeheapcap/report.md; the
+# short form:
+#
+#   * A HEALTHY live lane peaks at 884 MB resident (VmHWM of pid 1712860, a
+#     live working mcode lane measured on this host). V8 old space is always a
+#     component of RSS, so that measured peak bounds a healthy lane's peak
+#     old space from above.
+#   * The CLI's own fixed V8 footprint, measured in-process with
+#     v8.getHeapStatistics(), is 176 MB of heap and 313 MB of RSS, so the
+#     session-history growth term is what actually pushes a lane upward.
+#   * 1024 is the smallest round value whose EFFECTIVE V8 ceiling (measured:
+#     --max-old-space-size=1024 yields heap_size_limit 1072 MB) clears that
+#     healthy peak, so a healthy lane cannot be capped into a crash.
+#   * Host arithmetic: four concurrent MCode lanes at the old 2096 MB default
+#     could claim 8.4 GB of heap on a 7.9 GB host, which is not survivable and
+#     starves the supervisor that has to notice a death. At 1024 the same four
+#     lanes can claim 4.2 GB, leaving room for the rest of the fleet.
+#
+# The cap lives here, in the spawn path, so it is never remembered per-lane,
+# per-session or per-host. FM_MCODE_HEAP_CAP_MB is an operator escape hatch for
+# a host that needs a different ceiling; a malformed value is refused rather
+# than silently ignored. The cap is NOT placed in the CLI's installer-managed
+# prefix (/root/.minimax-code), whose own updater erases it.
+MCODE_HEAP_CAP_MB_DEFAULT=1024
+mcode_heap_cap_opts() {  # prints the NODE_OPTIONS value for mcode lanes
+  local cap=${FM_MCODE_HEAP_CAP_MB:-$MCODE_HEAP_CAP_MB_DEFAULT}
+  case "$cap" in
+    ''|*[!0-9]*)
+      echo "error: FM_MCODE_HEAP_CAP_MB must be a positive integer (got: $cap)" >&2
+      return 1
+      ;;
+  esac
+  [ "$cap" -ge 64 ] || {
+    echo "error: FM_MCODE_HEAP_CAP_MB must be at least 64 MB (got: $cap)" >&2
+    return 1
+  }
+  printf '%s' "--max-old-space-size=$cap"
+}
+
 # The verified launch command per adapter. The knowledge half of each adapter
 # (busy-state source, exit command, dialogs, quirks) lives in the harness-adapters skill.
 launch_template() {
@@ -530,7 +581,12 @@ launch_template() {
     # so permissions are structurally disabled by launching with a per-task config
     # directory (__MCODEDIR__) where permissionMode is set to bypassPermissions.
     # It exposes no effort axis, so __EFFORTFLAG__ is omitted.
-    minimax-code) printf '%s' 'MINIMAX_DATA_DIR=__MCODEDATADIR__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
+    # NODE_OPTIONS rides FIRST in the env prefix: it sets the V8 old-space
+    # ceiling before the CLI starts, for this lane and for every child process
+    # it spawns. It is a placeholder here (like __MCODEDIR__) so the template
+    # stays a literal string and the value is substituted by the spawner from
+    # its single owner (mcode_heap_cap_opts).
+    minimax-code) printf '%s' 'NODE_OPTIONS=__MCODEHEAPOPTS__ MINIMAX_DATA_DIR=__MCODEDATADIR__ MCODE_CONFIG_DIR=__MCODEDIR__ mcode __MODELFLAG__"$(__OPINPUT__ encode launch-brief < __BRIEF__)"' ;;
     *) return 1 ;;
   esac
 }
@@ -2289,6 +2345,15 @@ LAUNCH=${LAUNCH//__MCODEDIR__/$sq_mcodedir}
 # for a login. Only the config dir is per-task.
 sq_mcodedatadir=$(shell_quote "${MINIMAX_DATA_DIR:-${HOME:-/root}/.minimax}")
 LAUNCH=${LAUNCH//__MCODEDATADIR__/$sq_mcodedatadir}
+# The V8 old-space ceiling for this mcode lane. The value comes from the single
+# owner (mcode_heap_cap_opts), so it is never remembered per-lane, per-session
+# or per-host. A malformed override is refused here, before any endpoint or
+# pane is created, rather than silently launching an uncapped lane.
+MCODE_HEAP_OPTS=""
+if [ "$HARNESS" = minimax-code ]; then
+  MCODE_HEAP_OPTS=$(mcode_heap_cap_opts) || exit 1
+  LAUNCH=${LAUNCH//__MCODEHEAPOPTS__/$MCODE_HEAP_OPTS}
+fi
 # Crewmate panes are created by a long-lived tmux/herdr daemon that does not
 # inherit firstmate's current environment, so a bare `claude` in the pane falls
 # back to the default ~/.claude store even when firstmate itself runs under a
@@ -2311,7 +2376,10 @@ spawn_send_text_line "$T" "export GOTMPDIR=$TASK_TMP/gotmp"
 if [ "$HARNESS" = minimax-code ]; then
   # The data dir is the real one so mcode finds its OAuth credential, and the
   # config dir is the per-task one so permissionMode is bypassPermissions.
-  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_mcodedatadir MCODE_CONFIG_DIR=$sq_mcodedir"
+  # NODE_OPTIONS carries the SAME V8 old-space ceiling as the launch line, so an
+  # operator's own interactive `mcode` in this pane gets the same ceiling
+  # instead of the host default that killed the previous long-lived lane.
+  spawn_send_text_line "$T" "export MINIMAX_DATA_DIR=$sq_mcodedatadir MCODE_CONFIG_DIR=$sq_mcodedir NODE_OPTIONS=$MCODE_HEAP_OPTS"
 fi
 sleep 0.3
 spawn_send_literal "$T" "$LAUNCH"
