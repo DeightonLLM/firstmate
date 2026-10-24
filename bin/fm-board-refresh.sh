@@ -12,6 +12,20 @@
 # judges it. This script is that step and nothing else. It never weakens the
 # gate, never decides whether a lane may close, and never edits the gate.
 #
+# THE LEDGER IS PUBLISHED FIRST. The board is GENERATED from the machine lane
+# ledger, so a board built from a ledger that under-reports the lanes that
+# are running under-reports them too. The ledger publisher (bin/fm-lane-
+# ledger-publish.py) owns that file: it writes the row for a lane the moment
+# the lane spawns, so the ledger is true before the board is built from it.
+# This script therefore asks the publisher to publish the ledger first, and
+# then rebuilds the board from the ledger it published. A board can no longer
+# be built from a ledger that says no lane is in flight while one is.
+#
+# --no-publish-ledger skips that step. The publisher uses it when it calls
+# this script, so the two never call each other in a loop. The environment
+# variable does the same job, so the publisher can call this script even when
+# it ships an older copy of it.
+#
 # The board and the ledger are resolved with exactly the same order
 # bin/fm-todo-gate.sh uses, so the board this script refreshes is always the very
 # board the gate judges, and the ledger it compares against is always the very
@@ -29,6 +43,9 @@
 #   --ledger      the machine lane ledger the board is generated from.
 #   --board       the published to-do board to compare and refresh.
 #   --stale-days  how many days a lane may sit idle before the board calls it stale.
+#   --no-publish-ledger
+#                 do not publish the ledger first; build the board from the
+#                 ledger that is already there.
 #
 # Environment:
 #   FM_REPO        the firstmate home that owns the board
@@ -54,9 +71,15 @@ LEDGER_ARG=""
 BOARD_ARG=""
 STALE_DAYS=3
 CHECK_ONLY=0
+PUBLISH_LEDGER=1
+# The ledger publisher sets this when it calls this script, so the two never
+# call each other in a loop. An older copy of this script simply ignores it.
+if [ -n "${FM_LANE_LEDGER_PUBLISHED:-}" ]; then
+  PUBLISH_LEDGER=0
+fi
 
 usage() {
-  printf 'Usage: %s [--repo <path>] [--out <dir>] [--ledger <path>] [--board <path>] [--stale-days N] [--check]\n' \
+  printf 'Usage: %s [--repo <path>] [--out <dir>] [--ledger <path>] [--board <path>] [--stale-days N] [--check] [--no-publish-ledger]\n' \
     "$(basename "$0")"
 }
 
@@ -68,6 +91,7 @@ while [ $# -gt 0 ]; do
     --board) BOARD_ARG=${2:-}; shift 2 ;;
     --stale-days) STALE_DAYS=${2:-}; shift 2 ;;
     --check) CHECK_ONLY=1; shift ;;
+    --no-publish-ledger) PUBLISH_LEDGER=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; exit 2 ;;
   esac
@@ -110,6 +134,39 @@ resolve_ledger() {
 }
 
 BOARD=$(resolve_board)
+
+# Publish the machine lane ledger before the board is built from it. A lane
+# that spawned and is running must have a row, or the board that is generated
+# from this ledger will not carry it. The publisher owns that file; this
+# script only asks for it to be published.
+if [ "$PUBLISH_LEDGER" -eq 1 ] && [ "$CHECK_ONLY" -eq 0 ]; then
+  LEDGER_PUBLISHER="$SCRIPT_DIR/fm-lane-ledger-publish.py"
+  if [ ! -f "$LEDGER_PUBLISHER" ]; then
+    LEDGER_PUBLISHER="$FM_ROOT/bin/fm-lane-ledger-publish.py"
+  fi
+  if [ -f "$LEDGER_PUBLISHER" ]; then
+    publish_args=(--repo "$REPO" --no-refresh)
+    [ -n "$LEDGER_ARG" ] && publish_args+=(--ledger "$LEDGER_ARG")
+    [ -n "$BOARD_ARG" ] && publish_args+=(--board "$BOARD_ARG")
+    ledger_output=$(python3 "$LEDGER_PUBLISHER" reconcile "${publish_args[@]}" 2>&1)
+    ledger_rc=$?
+    if [ $ledger_rc -ne 0 ]; then
+      printf '%s\n' "$ledger_output" >&2
+      printf 'board-refresh: FAIL the machine lane ledger could not be published (exit %s)\n' \
+        "$ledger_rc" >&2
+      printf '  a board built from a ledger that under-reports the running lanes would lie\n' >&2
+      printf '  the published board was left untouched; the to-do gate still refuses it\n' >&2
+      exit 1
+    fi
+    printf '%s\n' "$ledger_output" | sed -n 's/^lane-ledger-publish: /board-refresh: ledger /p'
+  else
+    printf 'board-refresh: FAIL the machine lane ledger publisher is unavailable: %s\n' \
+      "$LEDGER_PUBLISHER" >&2
+    printf '  without it a lane that spawns never reaches the board\n' >&2
+    exit 3
+  fi
+fi
+
 LEDGER=$(resolve_ledger)
 OUT="${OUT_ARG:-${FM_OUT:-$(dirname "$BOARD")}}"
 

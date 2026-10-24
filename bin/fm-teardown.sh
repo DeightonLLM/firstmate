@@ -154,6 +154,53 @@ KIND=$(grep '^kind=' "$META" | cut -d= -f2- || true)
 [ -n "$KIND" ] || KIND=ship
 MODE=$(grep '^mode=' "$META" | cut -d= -f2- || true)
 [ -n "$MODE" ] || MODE=no-mistakes
+# The lane's identity on the machine lane ledger. The publisher keys a ledger
+# row by the endpoint task id the spawn record carries, falling back to the
+# task id itself. Read it BEFORE the spawn record is removed: after that the
+# lane's identity is gone, and a claim that is never withdrawn is a claim
+# whose scope never frees.
+LEDGER_IDENTITY=$(grep '^endpoint_task_id=' "$META" | tail -1 | cut -d= -f2- || true)
+[ -n "$LEDGER_IDENTITY" ] || LEDGER_IDENTITY=$ID
+
+# close_lane_ledger_claim <repo-root> <home> <state-dir> <lane-identity>
+#
+# Withdraw the lane's claim on the machine lane ledger through the publisher
+# that owns that file. A teardown and a claim withdrawal are ONE operation: a
+# lane that is torn down must never leave a live claim behind, because the
+# to-do board is GENERATED from that ledger and a stale claim is a board that
+# says a closed lane is still running.
+#
+# BEST EFFORT, ALWAYS. A failed ledger close must never block a legitimate
+# teardown: the crew is already gone and the worktree is already returned, so
+# refusing to finish would strand a finished lane and lose its unlanded work.
+# A failure is reported LOUDLY on stderr instead, because a board that keeps
+# a dead claim is still a board that lies.
+close_lane_ledger_claim() {
+  local root=$1 home=$2 state=$3 identity=$4 publisher output rc
+  [ -n "$identity" ] || return 0
+  publisher="$root/bin/fm-lane-ledger-publish.py"
+  if [ ! -f "$publisher" ]; then
+    echo "warning: the lane ledger publisher $publisher is missing: the ledger still claims $identity as live" >&2
+    echo "  run bin/fm-lane-ledger-publish.py reconcile once the publisher is in place" >&2
+    return 0
+  fi
+  # The exit code is captured through "|| rc=$?" because this script runs under
+  # "set -e": a plain assignment from a failing command substitution would
+  # abort the teardown, which is exactly what must never happen here.
+  output=""
+  rc=0
+  output=$(python3 "$publisher" close "$identity" --if-present --no-refresh --no-seed \
+    --repo "$home" --ledger "$home/ops/lane-ledger.tsv" \
+    --claims "$home/ops/LANE-CLAIMS.md" --state "$state" 2>&1) || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "warning: the lane ledger close for $identity FAILED (exit $rc): the ledger still claims it as live" >&2
+    printf '%s\n' "$output" | sed 's/^/  lane-ledger: /' >&2
+    return 0
+  fi
+  printf '%s\n' "$output" | sed -n 's/^lane-ledger-publish: /lane-ledger: /p'
+  return 0
+}
+
 PUBLIC_FOLLOWUP_HOME=$FM_HOME
 PUBLIC_FOLLOWUP_STATE=$STATE
 PUBLIC_FOLLOWUP_WORK_HOME=main
@@ -1499,9 +1546,14 @@ cleanup_firstmate_home_children() {
     # Archive the child's remaining state files (busy-gen/busy-state were already
     # retired by the call above; these are gone already, which is correct).
     archive_task_state "$sub_state" "$child_id"
+    child_identity=$(meta_value "$child_meta" endpoint_task_id)
+    [ -n "$child_identity" ] || child_identity=$child_id
     rm -f "$sub_state/$child_id.status" "$sub_state/$child_id.turn-ended" \
       "$sub_state/$child_id.meta" "$sub_state/$child_id.pi-ext.ts" \
       "$sub_state/$child_id.grok-turnend-token" "$sub_state/$child_id.kimi-turnend-token"
+    # The child's lane has ended in ITS home, so its claim on that home's
+    # machine lane ledger is withdrawn there. Best effort, never fatal.
+    close_lane_ledger_claim "$home" "$home" "$sub_state" "$child_identity"
   done
 }
 
@@ -1768,6 +1820,13 @@ retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 rm -f "$STATE/$ID.status" "$STATE/$ID.turn-ended" "$STATE/$ID.meta" \
   "$STATE/$ID.pi-ext.ts" "$STATE/$ID.grok-turnend-token" \
   "$STATE/$ID.kimi-turnend-token"
+# The lane is gone: withdraw its claim on the machine lane ledger, so the
+# to-do board stops claiming a closed lane is still running. The close runs
+# AFTER the spawn record is removed, because a claim may only be withdrawn
+# for a lane that has actually ended, and never before the endpoint is
+# confirmed gone, because a claim must never be withdrawn for a lane whose
+# crew is still running.
+close_lane_ledger_claim "$FM_ROOT" "$FM_HOME" "$STATE" "$LEDGER_IDENTITY"
 # --- lane registry retirement ------------------------------------------------
 # The lane is gone, so its registration goes with it. This is the RIGHT REASON
 # for a lane to stop counting as live work: the host safety net's other exit

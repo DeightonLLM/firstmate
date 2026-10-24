@@ -112,6 +112,50 @@ ledger, the ledger is right and the projection is stale. A human must never have
 list twice: it is regenerated from machine state on every lane cycle, and the gate says so when it
 is not.
 
+### 6a. A lane is not real until it is on the board, and the publisher owns that
+
+**The rule.** The ledger is written by the **publisher**, at the moment a lane spawns. The renderer
+never writes the ledger and never guesses: it is told what the machine truth is. So a lane that
+has spawned and is running has a row, and the board that is generated from the ledger counts it.
+
+**Why this rule exists.** On 2026-10-24 four lanes were dispatched and confirmed running — each
+with its own `state/<id>.meta` and `state/<id>.status` — and `ops/lane-ledger.tsv` held **zero** rows
+matching them. The board reported "no active lanes in the ledger" while four lanes were in flight.
+The board was not wrong about the ledger; **the ledger was wrong about reality**, and the board
+reported the ledger faithfully. That is still a board that lies to the Captain. The cause was that
+nothing in the fleet wrote the ledger: every tool that named `ops/lane-ledger.tsv` only read it, so
+the spawn of a lane — a machine-detectable event — never produced a row.
+
+**Who publishes the ledger.** `bin/fm-lane-ledger-publish.py` owns `ops/lane-ledger.tsv` and
+`ops/LANE-CLAIMS.md` in this home. It is the only writer of those two files here, so the ledger and
+the claims board cannot drift apart behind the gate's back.
+
+```bash
+# the spawn event, named: write the row for a lane and republish the board
+bin/fm-lane-ledger-publish.py register <lane-id> --repo <repo>
+# the spawn event, observed: block until a lane spawns, then publish it at once
+bin/fm-lane-ledger-publish.py watch --repo <repo>
+# the catch-up: publish every live lane that has no row, then republish the board
+bin/fm-lane-ledger-publish.py reconcile --repo <repo>
+```
+
+**The spawn event is the spawn record.** `bin/fm-spawn.sh` writes `state/<id>.meta` when the lane is
+created and prints `spawned <id> ...` once the agent is verified alive. That meta **is** the spawn
+record: it carries the lane's real identity (`endpoint_task_id`), its real spawn time, its harness
+and its worktree. The publisher reads it and writes a row that carries the lane's **real** state
+(`ACTIVE`), its real next action (the lane's last working note) and its real artifact path. A second
+mate is a standing worker with its own home, never a lane: it is never published as a lane claim.
+
+**The board publisher publishes the ledger first.** `bin/fm-board-refresh.sh` asks the publisher to
+publish the ledger before it builds a board, so a board can no longer be built from a ledger that
+under-reports the lanes that are running. If the ledger cannot be published, the refresh fails and
+leaves the published board untouched — a stale board is still a refusal, and that refusal is correct.
+
+**The publisher never deletes a row.** A row is a record of work that happened. The publisher adds
+rows, refreshes the rows it inherited from the published ledger, and keeps the claims board's state
+cell in step with the ledger. It never writes a lane's report, status or meta file, and it never
+weakens or edits the to-do gate.
+
 ---
 
 **VERDICT: PASS** — the NEXT contract is defined, the board generator is written and running
