@@ -77,7 +77,7 @@ fm_surface_census_lanes() {  # [state-dir] [session]
   local panes meta id endpoint window pane ws harness model kind live pane_full tab
   local -a meta_files=()
   local -A seen_endpoint_ids=()
-  panes=$(fm_surface_census_panes "$session") || panes=""
+  panes=$(fm_surface_census_panes "$session") || return 1
   for meta in "$state"/*.meta; do
     [ -f "$meta" ] && [ ! -L "$meta" ] || continue
     id=${meta##*/}

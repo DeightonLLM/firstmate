@@ -1817,10 +1817,11 @@ fm_backend_herdr_agent_alive() {  # <target>
 # 4th arg, so this function never even queries for a prune candidate in that
 # case. Echoes "<tab_id> <pane_id>" on success.
 fm_backend_herdr_create_task() {  # <container> <label> <cwd> <seeded_default_tab_id>
-  local container=$1 label=$2 cwd=$3 seeded_tab_id=${4:-} session wsid list dup_tabs dup dup_pane dup_tab_ids out tab_id pane_id remaining_dup_tabs
+  local container=$1 label=$2 cwd=$3 seeded_tab_id=${4:-} session wsid list dup_tabs dup dup_pane dup_tab_ids out tab_id pane_id remaining_dup_tabs task_count existing_task_count removed_task_count single_lane summary workspace_label
   session=${container%%:*}
   wsid=${container#*:}
   list=$(fm_backend_herdr_cli "$session" tab list --workspace "$wsid" 2>/dev/null) || return 1
+  existing_task_count=$(printf '%s' "$list" | jq -r '[.result.tabs[] | select((.label // "") | startswith("fm-"))] | length' 2>/dev/null) || return 1
   dup_tabs=$(printf '%s' "$list" | jq -r --arg want "$label" 'if (.result.tabs | type) == "array" then .result.tabs[] | select(.label == $want) | .tab_id else error("missing result.tabs") end' 2>/dev/null) || {
     echo "error: could not parse herdr tab list output for workspace $wsid (session $session)" >&2
     return 1
@@ -1870,6 +1871,16 @@ EOF
       return 1
     fi
   fi
+  removed_task_count=$(printf '%s' "$dup_tab_ids" | grep -c '[^[:space:]]' || true)
+  task_count=$((existing_task_count - removed_task_count + 1))
+  if [ "$task_count" -eq 1 ]; then
+    single_lane=${label#fm-}
+  else
+    single_lane=""
+  fi
+  summary=$(fm_surface_name_lane_summary "$task_count" "$single_lane") || return 1
+  workspace_label=$(fm_surface_name_workspace_label "$(fm_backend_herdr_workspace_label)" "$summary") || return 1
+  fm_backend_herdr_cli "$session" workspace rename "$wsid" "$workspace_label" >/dev/null 2>&1 || return 1
   printf '%s %s' "$tab_id" "$pane_id"
 }
 

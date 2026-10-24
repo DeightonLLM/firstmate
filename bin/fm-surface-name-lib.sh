@@ -20,7 +20,7 @@
 #   host             := "hetz" | "controller" | "hd2" | "local"
 #   home             := "primary" | "2ndmate-" <secondmate-id>
 #   role             := lowercase token, e.g. "afk", "older"
-#   workspace label  := scope " · " summary
+#   workspace label  := scope " · " summary | scope
 #   summary          := <lane-id>
 #                     | "<N> lanes"
 #                     | "no lanes"
@@ -227,6 +227,7 @@ fm_surface_name_legacy_scope() {  # <label>
     firstmate) printf 'firstmate'; return 0 ;;
     2ndmate-*)
       case "$1" in */*|*"$FM_SURFACE_NAME_SEP"*) return 1 ;; esac
+      [ -n "${1#2ndmate-}" ] || return 1
       printf '%s' "$1"
       return 0
       ;;
@@ -241,7 +242,9 @@ fm_surface_name_legacy_scope() {  # <label>
 fm_surface_name_legacy_home_label() {  # <scope>
   case "$1" in
     */primary) printf 'firstmate'; return 0 ;;
-    */2ndmate-*) printf '%s' "${1##*/}"; return 0 ;;
+    */2ndmate-*)
+      [ -n "${1##*/}" ] && [ -n "${1##*/2ndmate-}" ] || return 1
+      printf '%s' "${1##*/}"; return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -251,6 +254,7 @@ fm_surface_name_legacy_home_label() {  # <scope>
 fm_surface_name_legacy_afk() {  # <label>
   case "$1" in
     firstmate-afk-daemon-*|2ndmate-*-afk-daemon-*)
+      case "${1%%-afk-daemon-*}" in 2ndmate-) return 1 ;; esac
       printf '%s' "${1%%-afk-daemon-*}"
       return 0
       ;;
@@ -259,9 +263,9 @@ fm_surface_name_legacy_afk() {  # <label>
 }
 
 # fm_surface_name_workspace_conforms: does this workspace label satisfy the
-# rule? A scope alone is conforming (a container that has not been summarised
-# yet); a scope plus a summary is conforming when the summary is one of the
-# allowed forms.
+# rule? A scope alone is conforming only for a fresh, unsummarised container;
+# a scope plus a summary is conforming when the summary is one of the allowed
+# forms.
 fm_surface_name_workspace_conforms() {  # <label>
   local label=$1 scope summary
   [ -n "$label" ] || return 1

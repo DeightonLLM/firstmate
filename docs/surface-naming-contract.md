@@ -21,7 +21,7 @@ host             := "hetz" | "controller" | "hd2" | "local"
 home             := "primary" | "2ndmate-" <secondmate-id>
 role             := a lowercase role token, e.g. "afk", "older"
 
-workspace label  := scope " · " summary
+workspace label  := scope " · " summary | scope
 summary          := <lane-id>              the container hosts exactly one lane
                  | "<N> lanes"             the container hosts N task tabs
                  | "no lanes"              the container hosts no task tab
@@ -34,6 +34,10 @@ task tab label   := "fm-" <lane-id>
 
 The separator is `SPACE U+00B7 MIDDLE DOT SPACE`. The projection marker is
 `U+2514 BOX DRAWINGS LIGHT UP AND RIGHT` plus one space.
+
+A fresh workspace may temporarily use the scope-only form while it has no task
+lanes. The Herdr adapter adds the summary when the first task lane is created;
+once a workspace has a lane, its label always includes the summary.
 
 A **scope** is the machine-matchable half of a workspace label: everything
 before the first separator. The Herdr adapter resolves a home's container by

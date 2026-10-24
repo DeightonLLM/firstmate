@@ -3,24 +3,24 @@
 # One record per fingerprint: <file>\t<SCxxxx>\t<line>\t<column>\t<message>\t<count>, sorted by fingerprint.
 # bin/fm-lint.sh collects diagnostics; bin/fm-lint-ratchet.sh owns this format and comparison.
 #
-# Recorded: 266 diagnostics across 44 files.
+# Recorded: 290 diagnostics across 44 files.
 #
 # The ratchet only ratchets down; new fingerprints must be fixed before recording.
 bin/factory-health.sh	SC2010	68	34	Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.	1
 bin/factory-health.sh	SC2016	78	34	Expressions don't expand in single quotes, use double quotes for that.	1
-bin/fm-always-four.sh	SC1090	104	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1090	1493	9	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1090	1583	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1090	1842	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
-bin/fm-always-four.sh	SC1091	84	5	Not following: ./fm-crew-state.sh: openBinaryFile: does not exist (No such file or directory)	1
-bin/fm-always-four.sh	SC1091	85	3	Not following: ./fm-classify-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
-bin/fm-always-four.sh	SC1091	95	3	Not following: ./fm-backend.sh: openBinaryFile: does not exist (No such file or directory)	1
-bin/fm-always-four.sh	SC1091	96	3	Not following: ./fm-busy-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
-bin/fm-always-four.sh	SC1091	99	3	Not following: ./fm-wake-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
-bin/fm-always-four.sh	SC2034	128	1	CAP_REAP appears unused. Verify use (or export if used externally).	1
-bin/fm-always-four.sh	SC2034	1820	12	spawns_done appears unused. Verify use (or export if used externally).	1
-bin/fm-always-four.sh	SC2034	81	1	CONFIG appears unused. Verify use (or export if used externally).	1
-bin/fm-always-four.sh	SC2086	483	17	Double quote to prevent globbing and word splitting.	1
+bin/fm-always-four.sh	SC1090	1541	9	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1631	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1919	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	98	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1091	78	5	Not following: ./fm-crew-state.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC1091	79	3	Not following: ./fm-classify-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC1091	89	3	Not following: ./fm-backend.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC1091	90	3	Not following: ./fm-busy-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC1091	93	3	Not following: ./fm-wake-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC2034	122	1	CAP_REAP appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2034	1897	12	spawns_done appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2034	75	1	CONFIG appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2086	518	17	Double quote to prevent globbing and word splitting.	1
 bin/fm-campaign-worker-lib.sh	SC2174	103	36	When used with -p, -m only applies to the deepest directory.	1
 bin/fm-context-preflight.sh	SC2034	29	1	WAREHOUSE_DIR_DEFAULT appears unused. Verify use (or export if used externally).	1
 bin/fm-context-preflight.sh	SC2034	313	11	source_file appears unused. Verify use (or export if used externally).	1
@@ -65,31 +65,55 @@ tests/fm-agy-harness.test.sh	SC2016	285	23	Expressions don't expand in single qu
 tests/fm-agy-harness.test.sh	SC2016	288	19	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-agy-harness.test.sh	SC2016	401	11	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-agy-harness.test.sh	SC2016	402	6	Expressions don't expand in single quotes, use double quotes for that.	1
-tests/fm-always-four.test.sh	SC2030	1143	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1146	8	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1151	8	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1281	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1291	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1299	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2030	1307	5	Modification of PATH is local (to subshell caused by (..) group).	1
-tests/fm-always-four.test.sh	SC2031	1146	23	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1151	23	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1170	39	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1232	28	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1233	27	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1281	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1291	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1299	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1307	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2031	1310	20	PATH was modified in a subshell. That change might be lost.	1
-tests/fm-always-four.test.sh	SC2129	841	3	Consider using { cmd1; cmd2; } >> file instead of individual redirects.	1
-tests/fm-always-four.test.sh	SC2181	1144	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
-tests/fm-always-four.test.sh	SC2181	1282	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
-tests/fm-always-four.test.sh	SC2181	529	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
-tests/fm-always-four.test.sh	SC2181	602	5	Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?.	1
-tests/fm-always-four.test.sh	SC2181	676	5	Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?.	1
-tests/fm-always-four.test.sh	SC2181	716	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
-tests/fm-always-four.test.sh	SC2181	802	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2030	1036	5	Modification of PATH is local (to subshell caused by $(..) expansion).	1
+tests/fm-always-four.test.sh	SC2030	1169	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1172	8	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1177	8	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1280	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1343	65	Modification of FM_STATE_OVERRIDE is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1344	29	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	142	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1475	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1485	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1493	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1501	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2031	1001	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1013	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1018	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1036	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1058	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1064	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1095	27	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1147	27	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1169	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1172	23	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1177	23	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1196	39	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1225	70	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1280	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1344	44	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1426	28	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1427	27	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1444	12	FM_STATE_OVERRIDE was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1475	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1485	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1493	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1501	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1504	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	952	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	958	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	965	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	968	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	983	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	995	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2129	845	3	Consider using { cmd1; cmd2; } >> file instead of individual redirects.	1
+tests/fm-always-four.test.sh	SC2181	1170	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	1476	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	533	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	606	5	Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	680	5	Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	720	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	806	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
 tests/fm-brief.test.sh	SC2016	799	15	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-brief.test.sh	SC2016	826	15	Expressions don't expand in single quotes, use double quotes for that.	1
 tests/fm-brief.test.sh	SC2016	864	15	Expressions don't expand in single quotes, use double quotes for that.	1

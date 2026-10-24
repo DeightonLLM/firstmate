@@ -136,13 +136,13 @@ STUB
     DATA="$tmp_root/data"
     STATE="$tmp_root/state"
     SCAFFOLD_BRIEF=1
-    MINT_LANE_KEY=0
     FM_ALWAYS_FOUR_HARNESS=pi
     FAKE_BRIEF_ARGS="$tmp_root/brief.args"
     FAKE_SPAWN_ARGS="$tmp_root/spawn.args"
     PATH="$fakebin:$PATH"
     export DATA FAKE_BRIEF_ARGS FAKE_SPAWN_ARGS PATH
     scheduler_harness_guard codex || exit 1
+    lane_key_for_task() { printf 'codex-m3.1f-testhost-selected-harness'; }
     scaffold_lane_key_brief selected-harness-lane selected-harness-task || exit 1
     fm_raw_herdr_senpi_refuse_mutate() { :; }
     can_replace_lane() { return 0; }
@@ -1021,6 +1021,28 @@ test_count_active_worker_tasks_respects_task_status_verb() {
   pass "count_active_worker_tasks counts only tasks whose task log ends in a non-terminal verb"
 }
 
+test_count_active_worker_tasks_releases_terminal_stale_busy_transcript() {
+  local state_dir fakebin count
+  read -r state_dir fakebin <<< "$(fm_test_census_home always-four-census-terminal-busy)"
+  printf 'endpoint_task_id=task-terminal\nwindow=default:w1:p1\nbackend=herdr\nharness=codex\nmodel=%s\n' "$WORKER_MODEL" \
+    > "$state_dir/task-terminal.meta"
+  printf 'done: terminal\n' > "$state_dir/task-terminal.status"
+  cat > "$fakebin/herdr" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' '{"result":{"process_info":{"foreground_processes":[]}}}'
+STUB
+  chmod +x "$fakebin/herdr"
+  count=$(
+    PATH="$fakebin:$PATH" FM_STATE_OVERRIDE="$state_dir"
+    export PATH FM_STATE_OVERRIDE
+    fm_backend_target_exists() { return 0; }
+    fm_busy_classify_live() { printf 'busy stale'; }
+    lane_ids() { printf 'lane-001\n'; }
+    count_active_worker_tasks 2>/dev/null)
+  [ "$count" = "0" ] || fail "a terminal task with stale busy text must not count as active, got: $count"
+  pass "count_active_worker_tasks ignores stale busy text after terminal foreground exit"
+}
+
 test_lane_is_active_reads_the_task_status_log() {
   # D2: lane_is_active must read the TASK status log (state/<task-id>.status),
   # not the slot log (state/<lane-id>.status, which holds this scheduler's own
@@ -1194,11 +1216,14 @@ test_dispatch_ownership_requires_spawn_and_commits_success() {
 #!/usr/bin/env bash
 exit 7
 STUB
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$fakebin/tasks-axi"
   chmod +x "$fakebin/fm-spawn.sh"
+  chmod +x "$fakebin/tasks-axi"
   (
     SCRIPT_DIR="$fakebin" STATE="$failed_root/state" DATA="$failed_root/data" FM_STATE_OVERRIDE="$failed_root/state"
-    MINT_LANE_KEY=0 SCHEDULER_HARNESS=codex
-    export SCRIPT_DIR STATE DATA FM_STATE_OVERRIDE MINT_LANE_KEY SCHEDULER_HARNESS
+    SCHEDULER_HARNESS=codex
+    export SCRIPT_DIR STATE DATA FM_STATE_OVERRIDE SCHEDULER_HARNESS PATH
+    lane_key_for_task() { printf 'codex-m3.1f-testhost-failed-dispatch'; }
     fm_raw_herdr_senpi_refuse_mutate() { :; }
     can_replace_lane() { return 0; }
     reap_stale() { :; }
@@ -1249,8 +1274,9 @@ STUB
   chmod +x "$fakebin/fm-spawn.sh" "$fakebin/tasks-axi"
   (
     SCRIPT_DIR="$fakebin" STATE="$success_root/state" DATA="$success_root/data" FM_STATE_OVERRIDE="$success_root/state"
-    MINT_LANE_KEY=0 SCHEDULER_HARNESS=codex
-    export SCRIPT_DIR STATE DATA FM_STATE_OVERRIDE MINT_LANE_KEY SCHEDULER_HARNESS
+    SCHEDULER_HARNESS=codex
+    export SCRIPT_DIR STATE DATA FM_STATE_OVERRIDE SCHEDULER_HARNESS
+    lane_key_for_task() { printf 'codex-m3.1f-testhost-successful-dispatch'; }
     PATH="$fakebin:$PATH"; export PATH
     fm_raw_herdr_senpi_refuse_mutate() { :; }
     can_replace_lane() { return 0; }
@@ -1272,6 +1298,80 @@ STUB
     [ "$(count_active_lanes)" = 1 ]
   ) || fail "a successful spawn must move the row in flight and count one active lane"
   pass "dispatch ownership fails closed and commits one active lane after spawn"
+}
+
+test_dispatch_commit_failure_cleans_endpoint_and_requeues() {
+  local root fakebin
+  root=$(fm_test_tmproot always-four-dispatch-rollback)
+  fakebin="$root/bin"
+  mkdir -p "$fakebin" "$root/data" "$root/state"
+  printf '# Backlog\n\n## Queued\n- [ ] rollback-dispatch - a queued row\n\n## In flight\n' > "$root/data/backlog.md"
+  cat > "$fakebin/fm-spawn.sh" <<STUB
+#!/usr/bin/env bash
+cat > "$root/state/\$1.meta" <<META
+endpoint_task_id=\$1
+window=default:w1:p1
+backend=herdr
+harness=codex
+model=MiniMax-M3.1-Flash
+META
+STUB
+  cat > "$fakebin/tasks-axi" <<'STUB'
+#!/usr/bin/env bash
+if [ "$1" = start ]; then
+  cat > "$4" <<'BACKLOG'
+# Backlog
+
+## Queued
+
+## In flight
+- [ ] rollback-dispatch - a queued row
+BACKLOG
+else
+  cat > "$4" <<'BACKLOG'
+# Backlog
+
+## Queued
+- [ ] rollback-dispatch - a queued row
+
+## In flight
+BACKLOG
+fi
+STUB
+  chmod +x "$fakebin/fm-spawn.sh" "$fakebin/tasks-axi"
+  (
+    SCRIPT_DIR="$fakebin" STATE="$root/state" DATA="$root/data" FM_STATE_OVERRIDE="$root/state"
+    SCHEDULER_HARNESS=codex PATH="$fakebin:$PATH"
+    export SCRIPT_DIR STATE DATA FM_STATE_OVERRIDE SCHEDULER_HARNESS PATH
+    lane_key_for_task() { printf 'codex-m3.1f-testhost-rollback-dispatch'; }
+    fm_raw_herdr_senpi_refuse_mutate() { :; }
+    can_replace_lane() { return 0; }
+    reap_stale() { :; }
+    check_cap() { return 0; }
+    prepare_lane_key_brief() { return 0; }
+    backlog_task_to_project() { printf 'projects/%s\n' "$1"; }
+    lane_reset_attempts() { :; }
+    lane_inc_attempts() { :; }
+    lane_attempts() { printf '0\n'; }
+    emit_coordinator_wake() { :; }
+    sync_gbrain() { :; }
+    record_rollback_evidence() { :; }
+    record_lane_slot_binding() { return 1; }
+    fm_backend_of_meta() { printf 'herdr'; }
+    fm_backend_target_of_meta() { printf 'default:w1:p1'; }
+    fm_backend_target_exists() { [ ! -f "$root/killed" ]; }
+    fm_backend_kill() { : > "$root/killed"; }
+    fm_backend_herdr_endpoint_confirmed_gone() { [ -f "$root/killed" ]; }
+    if cmd_spawn spawn lane-001 rollback-dispatch --harness codex --model MiniMax-M3.1-Flash; then
+      exit 1
+    fi
+    [ -f "$root/killed" ] || exit 1
+    [ ! -f "$STATE/codex-m3.1f-testhost-rollback-dispatch.meta" ] || exit 1
+    [ ! -f "$STATE/lane-001.meta" ] || exit 1
+    [ ! -f "$STATE/codex-m3.1f-testhost-rollback-dispatch.planning-id" ] || exit 1
+    awk '/^## Queued/{q=1; next} /^## /{q=0} q && /rollback-dispatch/{found=1} END{exit !found}' "$DATA/backlog.md"
+  ) || fail "a post-spawn ownership failure must clean the endpoint and requeue the row"
+  pass "dispatch commit failure removes the endpoint and restores queued ownership"
 }
 
 test_tasks_axi_start_moves_the_row_and_is_idempotent() {
@@ -1469,6 +1569,7 @@ for _t in \
   test_count_active_worker_tasks_counts_distinct_endpoint_task_ids \
   test_count_active_worker_tasks_excludes_controller_metas \
   test_count_active_worker_tasks_respects_task_status_verb \
+  test_count_active_worker_tasks_releases_terminal_stale_busy_transcript \
   test_lane_is_active_reads_the_task_status_log \
   test_next_eligible_task_skips_captain_call_rows \
   test_lane_key_for_task_never_doubles_the_prefix \
@@ -1476,6 +1577,7 @@ for _t in \
   test_pane_foreground_harness_alive_matches_only_the_running_harness \
   test_scheduler_moves_a_dispatched_row_with_tasks_axi_start \
   test_dispatch_ownership_requires_spawn_and_commits_success \
+  test_dispatch_commit_failure_cleans_endpoint_and_requeues \
   test_tasks_axi_start_moves_the_row_and_is_idempotent \
   test_build_inflight_tmp_drops_a_finished_lanes_row \
   test_capacity_gate_counts_managed_lane_slots_not_crew \

@@ -82,9 +82,12 @@ command -v jq >/dev/null 2>&1 || {
 
 WORKSPACES=$(fm_surface_census_workspaces "$SESSION") || {
   echo "fm-surface-view.sh: could not read herdr workspaces in session '$SESSION'" >&2; exit 1; }
-TABS=$(fm_surface_census_tabs "$SESSION") || TABS=""
-PANES=$(fm_surface_census_panes "$SESSION") || PANES=""
-LANES=$(fm_surface_census_lanes "$STATE" "$SESSION") || LANES=""
+TABS=$(fm_surface_census_tabs "$SESSION") || {
+  echo "fm-surface-view.sh: could not read herdr tabs in session '$SESSION'" >&2; exit 1; }
+PANES=$(fm_surface_census_panes "$SESSION") || {
+  echo "fm-surface-view.sh: could not read herdr panes in session '$SESSION'" >&2; exit 1; }
+LANES=$(fm_surface_census_lanes "$STATE" "$SESSION") || {
+  echo "fm-surface-view.sh: could not read herdr lane metadata in session '$SESSION'" >&2; exit 1; }
 
 ws_label() {  # <workspace-id>
   printf '%s\n' "$WORKSPACES" | awk -F'\037' -v w="$1" '$1 == w { print $2; exit }'
@@ -104,7 +107,8 @@ tab_id_of_lane() {  # <lane-id> -> the id of the task tab carrying it
 # crew_state_line <lane-id> -> the house's current-state line, or empty.
 crew_state_line() {  # <lane-id>
   local out
-  out=$(timeout 20 bash "$SCRIPT_DIR/fm-crew-state.sh" "$1" 2>/dev/null | head -1) || out=""
+  out=$(FM_HOME="${HOME_ARG:-$FM_HOME}" FM_STATE_OVERRIDE="$STATE" \
+    timeout 20 bash "$SCRIPT_DIR/fm-crew-state.sh" "$1" 2>/dev/null | head -1) || out=""
   printf '%s' "$out"
 }
 

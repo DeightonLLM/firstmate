@@ -131,6 +131,11 @@ case "$cmd $sub" in
     printf '{"result":{"workspace":{"workspace_id":"%s","label":"%s"},"tab":{"tab_id":"%s"},"root_pane":{"pane_id":"%s"}}}\n' \
       "$wsid" "$label" "$wsid:t$dn" "$wsid:p$dn"
     ;;
+  "workspace rename")
+    ws=${3:-}; label=${4:-}
+    jq_state --arg w "$ws" --arg l "$label" \
+      '.workspaces |= map(if .workspace_id == $w then .label = $l else . end)' | save
+    ;;
   "tab list")
     jq_state --arg w "$ws" '{result:{tabs:[.tabs[]|select(.workspace_id==$w)]}}'
     ;;
@@ -275,6 +280,24 @@ test_workspace_label_different_secondmates_get_different_labels() {
   [ "$out2" = "testhost/2ndmate-bravo-b2" ] || fail "secondmate home2 label mismatch: $out2"
   [ "$out1" != "$out2" ] || fail "two different secondmate homes must not collide on the same label"
   pass "fm_backend_herdr_workspace_label: two different secondmate homes get two different, non-colliding labels"
+}
+
+test_create_task_summarises_a_fresh_workspace() {
+  local dir fb home out
+  dir="$TMP_ROOT/create-task-summary"; mkdir -p "$dir"; home="$dir/home"; mkdir -p "$home"
+  fb=$(make_herdr_statefake "$dir")
+  out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$dir/log" FM_FAKE_HERDR_STATE="$dir/state.json" \
+    FM_HOME="$home" FM_SURFACE_HOST=testhost bash -c '
+      . "$0/bin/backends/herdr.sh"
+      created=$(fm_backend_herdr_cli default workspace create --cwd /tmp --label "$(fm_backend_herdr_workspace_label)" --no-focus)
+      wsid=$(printf "%s" "$created" | jq -r ".result.workspace.workspace_id")
+      seeded=$(printf "%s" "$created" | jq -r ".result.tab.tab_id")
+      fm_backend_herdr_create_task "default:$wsid" fm-demo-lane /tmp "$seeded" >/dev/null
+      fm_backend_herdr_cli default workspace list | jq -r --arg ws "$wsid" ".result.workspaces[] | select(.workspace_id == \$ws) | .label"
+    ' "$ROOT")
+  [ "$out" = "testhost/primary · demo-lane" ] \
+    || fail "a fresh workspace must gain the first lane summary, got: $out"
+  pass "herdr create_task summarizes a fresh workspace after its first lane"
 }
 
 # --- fm_backend_herdr_cli: session targeting (2026-07-02 incident fix) -------
@@ -3436,7 +3459,7 @@ EOF
       || fail "cycle $i: kill failed"
   done
   # exactly one firstmate workspace survives three spawn/teardown cycles
-  wscount=$(jq -r '[.workspaces[]|select(.label=="testhost/primary")]|length' "$state")
+  wscount=$(jq -r '[.workspaces[]|select(.label=="testhost/primary · cycle3")]|length' "$state")
   [ "$wscount" = 1 ] || fail "expected exactly 1 primary workspace after 3 cycles, got $wscount: $(jq -c '.workspaces' "$state")"
   # and no orphaned workspaces of any label
   total=$(jq -r '.workspaces|length' "$state")
@@ -3894,6 +3917,7 @@ test_workspace_label_secondmate_home_uses_marker_id
 test_workspace_label_secondmate_marker_trims_whitespace
 test_workspace_label_empty_marker_falls_back_to_primary
 test_workspace_label_different_secondmates_get_different_labels
+test_create_task_summarises_a_fresh_workspace
 test_cli_helper_sets_env_and_appends_trailing_session_flag
 test_launcher_identity_absent_without_a_herdr_pane
 test_launcher_identity_absent_when_herdr_env_alone_is_set

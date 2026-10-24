@@ -146,6 +146,8 @@ pass "fm_surface_name_lane_of_tab: the lane id is the tab label without its pref
   || fail "the legacy primary label must be recognised"
 [ "$(fm_surface_name_legacy_scope "2ndmate-runner")" = "2ndmate-runner" ] \
   || fail "the legacy secondmate label must be recognised"
+fm_surface_name_legacy_scope "2ndmate-" \
+  && fail "an empty legacy secondmate id must be refused"
 fm_surface_name_legacy_scope "testhost/primary" \
   && fail "a scope-form label is not a legacy label"
 pass "fm_surface_name_legacy_scope: the legacy home labels are recognised"
@@ -154,6 +156,8 @@ pass "fm_surface_name_legacy_scope: the legacy home labels are recognised"
   || fail "a primary scope must map back to the legacy primary label"
 [ "$(fm_surface_name_legacy_home_label "testhost/2ndmate-runner")" = "2ndmate-runner" ] \
   || fail "a secondmate scope must map back to the legacy secondmate label"
+fm_surface_name_legacy_home_label "testhost/2ndmate-" \
+  && fail "a scope with an empty secondmate id must not map to a legacy label"
 pass "fm_surface_name_legacy_home_label: a scope maps back to its legacy label"
 
 # --- the census field discipline ---------------------------------------------

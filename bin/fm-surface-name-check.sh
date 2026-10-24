@@ -74,7 +74,7 @@ if [ -n "$HOME_ARG" ]; then
 fi
 FM_SURFACE_CENSUS_SESSION=$SESSION
 
-HOME_SCOPE=$(fm_surface_name_home_scope "$HOME_ARG")
+HOME_SCOPE=$(fm_surface_name_scope "$HOME_ARG")
 
 # --- evidence ---------------------------------------------------------------
 
@@ -99,8 +99,11 @@ else
     echo "fm-surface-name-check.sh: the herdr CLI is required (or pass --from-file)" >&2; exit 3; }
   WORKSPACES=$(fm_surface_census_workspaces "$SESSION") || {
     echo "fm-surface-name-check.sh: could not read herdr workspaces in session '$SESSION'" >&2; exit 3; }
-  TABS=$(fm_surface_census_tabs "$SESSION") || TABS=""
-  LANES=$(fm_surface_census_lanes "$STATE" "$SESSION") || LANES=""
+  TABS=$(fm_surface_census_tabs "$SESSION") || {
+    echo "fm-surface-name-check.sh: could not read herdr tabs in session '$SESSION'" >&2; exit 3; }
+  LANES=$(fm_surface_census_lanes "$STATE" "$SESSION") || {
+    echo "fm-surface-name-check.sh: could not read herdr panes or lane metadata" >&2; exit 3;
+  }
 fi
 
 # --- scope resolution -------------------------------------------------------
@@ -126,7 +129,7 @@ scope_map_scope() {  # <workspace-id>
 legacy_scope_to_scope() {  # <legacy-token>
   case "$1" in
     firstmate) printf 'primary' ;;
-    2ndmate-*) printf '%s' "$1" ;;
+    2ndmate-*) [ -n "${1#2ndmate-}" ] || return 1; printf '%s' "$1" ;;
     *) return 1 ;;
   esac
 }
@@ -314,7 +317,7 @@ while IFS=$'\037' read -r id _ pane ws _ _ kind _; do
   [ -n "$label" ] || continue
   scope=$(scope_for_label "$ws" "$label") || continue
   case "$scope" in
-    *"/$HOME_SCOPE"|*"/$HOME_SCOPE/"*) : ;;
+    "$HOME_SCOPE"|"$HOME_SCOPE/"*) : ;;
     *) report "lane $id" "$label" "sits in another home's container" "" ;;
   esac
 done <<< "$LANES"

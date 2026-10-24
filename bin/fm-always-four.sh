@@ -60,12 +60,6 @@
 #                                      unset, Pi, AGY, Gemini, and role aliases stop safely
 #   FM_ALWAYS_FOUR_DRY_RUN             set to 1 for dry-run mode (default: 0)
 #   FM_ALWAYS_FOUR_GBRAIN_SYNC         sync lane state to gbrain (default: 1)
-#   FM_ALWAYS_FOUR_MINT_LANE_KEY       mint a compliant lane key from the
-#                                      backlog planning id (default: 1). Set to 0
-#                                      to hand the planning id to fm-spawn.sh
-#                                      unchanged (the pre-2026-10-22 behaviour,
-#                                      which every backlog dispatch refused with
-#                                      exit 5).
 #   FM_ALWAYS_FOUR_SCAFFOLD_BRIEF      scaffold a brief from the backlog row
 #                                      when a queued task has none (default: 1).
 #                                      Set to 0 to dispatch only work whose brief
@@ -192,8 +186,6 @@ scheduler_harness_guard() {
 #
 # The minted key is used only when the naming owner accepts it, so this file
 # never carries a second copy of the naming rules.
-MINT_LANE_KEY="${FM_ALWAYS_FOUR_MINT_LANE_KEY:-1}"
-
 # Scaffold a brief for a queued row that has none, so a settled lane can take
 # genuinely new work. Set to 0 to dispatch only work whose brief already
 # exists.
@@ -278,10 +270,6 @@ lane_key_task_segment() {
 lane_key_for_task() {
   local lane_id=$1 planning_id=$2 model_id=${3:-}
   [ -n "$planning_id" ] || return 1
-  if [ "$MINT_LANE_KEY" != "1" ]; then
-    printf '%s' "$planning_id"
-    return 0
-  fi
   local harness model host prefix budget task key
   harness=$(lane_key_harness_segment "${SCHEDULER_HARNESS:-${FM_ALWAYS_FOUR_HARNESS:-}}")
   [ -n "$harness" ] || return 1
@@ -430,9 +418,10 @@ prepare_lane_key_brief() {
   if [ -f "$src" ]; then
     mkdir -p "$dst_dir" || return 1
     local tmp="$dst_dir/.brief.md.$$.tmp"
-    if sed -e "s|fm/$planning_id|fm/$lane_key|g" \
-           -e "s|$planning_id\.status|$lane_key.status|g" \
-           -e "s|$planning_id/report\.md|$lane_key/report.md|g" \
+    local escaped_planning_id=${planning_id//./\\.}
+    if sed -e "s|fm/$escaped_planning_id|$lane_key|g" \
+           -e "s|$escaped_planning_id\.status|$lane_key.status|g" \
+           -e "s|$escaped_planning_id/report\.md|$lane_key/report.md|g" \
            "$src" > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
       if mv "$tmp" "$dst" 2>/dev/null; then
         return 0
@@ -488,6 +477,38 @@ dispatch_ownership_commit() {
     return 1
   fi
   record_lane_slot_binding "$lane_id" "$lane_key" || return 1
+}
+
+dispatch_ownership_rollback() {
+  local lane_id=$1 lane_key=$2 planning_id=$3 slot_backup=$4 slot_was_present=$5
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}" data_dir="${FM_DATA_OVERRIDE:-$DATA}"
+  local meta="$state_dir/$lane_key.meta" backend target cleanup_rc=0
+
+  if [ -f "$meta" ]; then
+    backend=$(fm_backend_of_meta "$meta")
+    target=$(fm_backend_target_of_meta "$meta")
+    if [ -n "$target" ] && fm_backend_target_exists "$backend" "$target" "fm-$lane_key"; then
+      fm_backend_kill "$backend" "$target" || cleanup_rc=1
+      if [ "$cleanup_rc" -eq 0 ] && fm_backend_target_exists "$backend" "$target" "fm-$lane_key"; then
+        cleanup_rc=1
+      fi
+    fi
+    if [ "$backend" = herdr ] \
+       && declare -F fm_backend_herdr_endpoint_confirmed_gone >/dev/null 2>&1 \
+       && ! fm_backend_herdr_endpoint_confirmed_gone "$target"; then
+      cleanup_rc=1
+    fi
+  fi
+  [ "$cleanup_rc" -eq 0 ] || return 1
+  tasks-axi reopen "$planning_id" --file "$data_dir/backlog.md" >/dev/null 2>&1 || return 1
+  rm -f "$state_dir/$lane_key.meta" "$state_dir/$lane_key.status" \
+    "$state_dir/$lane_key.planning-id" "$state_dir/$lane_key.herdr-presentation"
+  if [ "$slot_was_present" = 1 ]; then
+    cp -p -- "$slot_backup" "$state_dir/$lane_id.meta" || return 1
+  else
+    rm -f "$state_dir/$lane_id.meta"
+  fi
+  rm -f -- "$slot_backup"
 }
 
 # --- Helpers ----------------------------------------------------------------
@@ -1117,6 +1138,7 @@ count_active_lanes() {
   # from the worker target; ship and scout kinds are real workers and count.
 count_active_worker_tasks() {
   local count=0 meta id model verdict kind backend target harness
+  local task_log term_last term_verb fg_state
   local counted_ids=""
   # Resolve the state dir at CALL time so an isolated home never reads the
   # live state directory.
@@ -1159,6 +1181,21 @@ count_active_worker_tasks() {
       *" $id "*) continue ;;
     esac
 
+    backend=$(fm_backend_of_meta "$meta")
+    target=$(fm_backend_target_of_meta "$meta")
+    harness=$(fm_meta_get "$meta" harness)
+    task_log="$state_dir/$id.status"
+    term_verb=""
+    if [ -f "$task_log" ]; then
+      term_last=$(last_status_line "$task_log" 2>/dev/null || true)
+      term_verb=$(status_verb_of_line "$term_last")
+    fi
+    if is_terminal_verb "$term_verb"; then
+      fg_state=0
+      fm_pane_foreground_harness_state "$backend" "$target" "$harness" || fg_state=$?
+      [ "$fg_state" = 1 ] && continue
+    fi
+
     # The busy contract stays the primary signal whenever it can classify the
     # harness; worker_task_is_working is the honest fallback for the harnesses
     # it cannot classify (minimax-code, codex -> "unknown").
@@ -1171,9 +1208,6 @@ count_active_worker_tasks() {
     # The busy verdict is read through the LIVE classification, so a gone
     # endpoint is never counted - the same gate lane_is_active applies.  The
     # two censuses must not be able to disagree.
-    backend=$(fm_backend_of_meta "$meta")
-    target=$(fm_backend_target_of_meta "$meta")
-    harness=$(fm_meta_get "$meta" harness)
     if [ -n "$target" ]; then
       verdict=$(fm_busy_classify_live "$backend" "$target" "$harness" "$id" "$state_dir" "fm-$id" 2>/dev/null || true)
       if [ "${verdict%% *}" = busy ]; then
@@ -1672,6 +1706,8 @@ cmd_spawn() {
   local task_id=$3
   shift 3
   local harness_arg="" model_arg="" effort_arg=""
+  local state_dir="${FM_STATE_OVERRIDE:-$STATE}" slot_meta slot_backup slot_was_present=0
+  local rollback_rc=0
 
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -1748,22 +1784,34 @@ cmd_spawn() {
     emit_coordinator_wake route-blocked "$lane_id" "$task_id" "tasks-axi unavailable"
     return 64
   fi
+  slot_meta="$state_dir/$lane_id.meta"
+  slot_backup="$state_dir/.$lane_id.meta.$$.rollback"
+  if [ -f "$slot_meta" ]; then
+    cp -p -- "$slot_meta" "$slot_backup" || return 1
+    slot_was_present=1
+  else
+    : > "$slot_backup" || return 1
+  fi
 
   "$SCRIPT_DIR/fm-spawn.sh" "${spawn_args[@]}" && spawn_rc=$? || spawn_rc=$?
 
   if [ "${spawn_rc:-0}" -eq 0 ]; then
     if ! dispatch_ownership_commit "$lane_id" "$lane_key" "$task_id"; then
-      record_rollback_evidence "$lane_id" "$task_id" "ownership-commit-failed" "lane_key=$lane_key"
+      dispatch_ownership_rollback "$lane_id" "$lane_key" "$task_id" "$slot_backup" "$slot_was_present" || rollback_rc=$?
+      record_rollback_evidence "$lane_id" "$task_id" "ownership-commit-failed" "lane_key=$lane_key rollback_rc=$rollback_rc"
       emit_coordinator_wake replacement "$lane_id" "$task_id" "ownership commit FAILED lane_key=$lane_key"
       return 1
     fi
+    rm -f -- "$slot_backup"
     lane_reset_attempts "$lane_id"
     emit_coordinator_wake replacement "$lane_id" "$task_id" "spawned ok lane_key=$lane_key"
     sync_gbrain
     printf 'always-four: spawned %s in %s (lane key %s)\n' "$task_id" "$lane_id" "$lane_key"
   else
+    rollback_rc=0
+    dispatch_ownership_rollback "$lane_id" "$lane_key" "$task_id" "$slot_backup" "$slot_was_present" || rollback_rc=$?
     lane_inc_attempts "$lane_id" "$task_id"
-    record_rollback_evidence "$lane_id" "$task_id" "spawn-failed" "rc=$spawn_rc model=$model_arg lane_key=$lane_key"
+    record_rollback_evidence "$lane_id" "$task_id" "spawn-failed" "rc=$spawn_rc rollback_rc=$rollback_rc model=$model_arg lane_key=$lane_key"
     emit_coordinator_wake replacement "$lane_id" "$task_id" "spawn FAILED rc=$spawn_rc lane_key=$lane_key"
     sync_gbrain
     printf 'always-four: spawn %s in %s FAILED (rc=%s, attempts=%s, lane key %s)\n' \
