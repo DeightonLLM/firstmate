@@ -1,9 +1,0 @@
-ask-user finding from no-mistakes review gate for fm/brief-compaction-preserve (run 01M37FE0KRAGN1HCNDSXNTNC8C, new since prior decisions):
-
----
-id: worker-brief-unrequired-lean-ctx-rule
-severity: warning
-file: .pi/extensions/lib/fm-worker-brief-fragment.ts
-line: 99
-description: The fragment introduces a separate lean-ctx operating rule at .pi/extensions/lib/fm-worker-brief-fragment.ts:99, but no stated requirement or generated worker-brief source requires this component. Remove it unless the product intent explicitly authorizes adding this unrelated durable instruction.
-authority: ask-user

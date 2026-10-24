@@ -398,6 +398,14 @@
     {
       "path": "docs/agent-policy/WATCHERS_AND_POLLS.md",
       "audience": "agent-runtime"
+    },
+    {
+      "path": "docs/next-board-token-and-chat-contract.md",
+      "audience": "maintainer-architecture"
+    },
+    {
+      "path": "docs/token-usage-surface-contract.md",
+      "audience": "maintainer-architecture"
     }
   ]
 }

@@ -32,9 +32,12 @@
 #
 # Candidate lists are per role because one relative location can hold different
 # documents on different homes. $FM_HOME/AGENTS.md is firstmate's own operating
-# contract, so it is deliberately not a policy candidate; and on a home whose
-# account-level agent-work/AGENTS.md holds the canonical agent policy, that file
-# is not a project-policy candidate either.
+# contract, so it is deliberately not a policy candidate. $HOME/AGENTS.md is not
+# a policy candidate either: on the Hetz lane that file is the lean-ctx
+# extension README, so accepting it would point the policy role at a document
+# that is not a policy. The account scope can hold the canonical policy at
+# $HOME/AGENT-POLICY.md or $HOME/agent-work/AGENT-POLICY.md, and both are
+# policy candidates.
 
 fm_baseline_role_override_var() {
   case "$1" in
@@ -54,6 +57,12 @@ fm_baseline_role_candidates() {
     policy)
       printf '%s\n' "$FM_HOME/AGENT-POLICY.md"
       [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/AGENT-POLICY.md"
+      # The account scope keeps the canonical policy under its own working
+      # directory as well, which is where the Hetz lane holds it. Without this
+      # candidate a home that is not a firstmate checkout has no account-scope
+      # policy at all, falls through to the cross-home scope, and is handed the
+      # Controller's policy for a role that does not own it.
+      [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/agent-work/AGENT-POLICY.md"
       printf '%s\n' "$root_scope/AGENTS.md"
       ;;
     project-policy)

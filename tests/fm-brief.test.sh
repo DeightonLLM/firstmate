@@ -26,6 +26,32 @@ mkdir -p "$BRIEF_HOME/data"
 # CI and locally, where the issue #958/#1069 parser bug does not fire, so this
 # is a weak guard on its own; test_no_heredoc_in_command_substitution and the
 # macos-stock-bash CI job carry the real cross-version enforcement.
+validate_todo_item_prefix() {
+  local item=$1
+  [[ "$item" =~ ^\[(mcode|agy|pi|pi-signed|codex|zai|glm|opencode)·(M31F|M31|M27|G38F|G31P|GLM53|Luna6)[[:space:]](h|m|l|xh|x)[[:space:]]@(Cont|HD2|Hetz)\][[:space:]].+$ ]]
+}
+
+test_todo_item_prefix_validator() {
+  local malformed
+  validate_todo_item_prefix '[codex·Luna6 h @Cont] do the thing' \
+    || fail "validator rejected a well-formed populated to-do item"
+
+  for malformed in \
+    'codex·Luna6 h @Cont] do the thing' \
+    '[codex·Luna6 h @Cont do the thing' \
+    '[bogus·Luna6 h @Cont] do the thing' \
+    '[codex·Unknown h @Cont] do the thing' \
+    '[codex·Luna6 @Cont] do the thing' \
+    '[codex·Luna6 q @Cont] do the thing' \
+    '[codex·Luna6 think:h @Cont] do the thing' \
+    '[codex·Luna6 h] do the thing'; do
+    if validate_todo_item_prefix "$malformed"; then
+      fail "validator accepted malformed to-do item: $malformed"
+    fi
+  done
+  pass "fm-brief.sh: populated to-do prefix validator accepts valid input and rejects malformed input"
+}
+
 test_script_parses() {
   local out rc
   out=$(bash -n "$ROOT/bin/fm-brief.sh" 2>&1); rc=$?
@@ -772,6 +798,18 @@ test_todo_breakdown_follows_harness_capability() {
     "To-Do-capable brief lost the literal To-Do blocker example"
   assert_grep 'your harness (`claude`) provides the To-Do List extension' "$brief" \
     "To-Do-capable brief did not state which requirement applies"
+  assert_grep '[<harness>·<ModelAbbrev> <effort> @<Host>]' "$brief" \
+    "To-Do-capable brief lost the Captain-locked Option C item prefix"
+  assert_grep 'data/captain.md' "$brief" \
+    "To-Do-capable brief must point to the canonical prefix-code table"
+  assert_grep 'Use bare effort codes h, m, l, xh, or x' "$brief" \
+    "To-Do-capable brief must specify bare effort codes"
+  assert_no_grep 'think:<level>' "$brief" \
+    "To-Do-capable brief retained the superseded think:<level> format"
+  assert_grep 'omit effort only when the runtime exposes none' "$brief" \
+    "To-Do-capable brief must not invent a missing effort value"
+  assert_grep 'The @Host tag names where the agent runs, never what it works on' "$brief" \
+    "To-Do-capable brief must distinguish runtime host from work target"
 
   FM_HOME="$home" "$ROOT/bin/fm-brief.sh" todo-fallback-a2 no-registry-proj \
     --harness agy >/dev/null 2>&1 \
@@ -787,6 +825,10 @@ test_todo_breakdown_follows_harness_capability() {
     "brief for a harness without To-Do support still refuses to start the task"
   assert_grep 'your harness (`agy`) has no To-Do List extension' "$brief" \
     "brief did not state which requirement applies to the unsupported harness"
+  assert_grep '[<harness>·<ModelAbbrev> <effort> @<Host>]' "$brief" \
+    "fallback brief lost the Captain-locked Option C item prefix"
+  assert_grep 'The @Host tag names where the agent runs, never what it works on' "$brief" \
+    "fallback brief must distinguish runtime host from work target"
   assert_grep 'at least five markdown checkbox items' "$brief" \
     "fallback discipline does not require a written five-item plan"
   assert_grep 'tick an item only once its work is actually complete' "$brief" \
@@ -839,6 +881,7 @@ test_todo_breakdown_follows_harness_capability() {
   pass "fm-brief.sh: every scaffold carries exactly one task-breakdown discipline"
 }
 
+test_todo_item_prefix_validator
 test_todo_breakdown_follows_harness_capability
 test_script_parses
 test_no_heredoc_in_command_substitution

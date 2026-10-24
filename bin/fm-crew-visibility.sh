@@ -76,12 +76,19 @@ LOG="$STATE/$ID.status"
 # reason to invent one. This is also what makes the check inert on an idle home.
 [ -f "$META" ] || exit 0
 
-# A full test suite legitimately runs 11+ minutes on this host, so the old
-# 300s first-report grace cried "silent" on healthy lanes roughly once a
-# minute. Raised to 900s; still far below the 1800s stale bound.
-GRACE=${FM_CREW_VISIBILITY_GRACE_SEC:-900}
+# The first-report grace is the default the whole fleet is told about: the
+# brief handed to every crewmate (bin/fm-brief.sh) says "default 300s", and
+# bin/fm-watch.sh falls back to 300s when it cannot read the bound out of the
+# breach line. Those two are the published contract, so the detector's default
+# is 300s too.
+#
+# A host whose own lanes legitimately run longer can raise it per-process with
+# FM_CREW_VISIBILITY_GRACE_SEC; that override existed before and is unchanged.
+# Changing the DEFAULT alone would silently contradict the contract the crew
+# was briefed on, which is how the bound drifted to 900s once already.
+GRACE=${FM_CREW_VISIBILITY_GRACE_SEC:-300}
 STALE=${FM_CREW_VISIBILITY_STALE_SEC:-1800}
-case "$GRACE" in ''|*[!0-9]*) GRACE=900 ;; esac
+case "$GRACE" in ''|*[!0-9]*) GRACE=300 ;; esac
 case "$STALE" in ''|*[!0-9]*) STALE=1800 ;; esac
 # Both halves disabled: the whole check is off.
 [ "$GRACE" -le 0 ] && [ "$STALE" -le 0 ] && exit 0

@@ -1,2 +1,0 @@
-needs-decision: baseline-root-fix - 3 of 5 policy-family roles (project-policy, routing, bounded) have no home-local equivalent on this host; need captain pick on manifest behavior. policy and lean-ctx resolve cleanly. Full evidence in final report.
-done: ready in branch fm/baseline-root-fix-20261015

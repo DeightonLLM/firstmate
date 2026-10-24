@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HD2 Fleet Unified Board &amp; To-Do Tracker</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-border: #30363d;
+      --ink: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+    .container { max-width: 1480px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--panel-border);
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 1.6rem; font-weight: 600; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    
+    /* === DISCRETE STATUS & METADATA PILLS (TICKET 0026 & 0035) === */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.3;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .pill-verified { background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.35); }
+    .pill-claimed { background: rgba(88, 166, 255, 0.15); color: #58a6ff; border: 1px solid rgba(88, 166, 255, 0.35); }
+    .pill-in-progress { background: rgba(188, 140, 255, 0.15); color: #bc8cff; border: 1px solid rgba(188, 140, 255, 0.35); }
+    .pill-not-started { background: rgba(139, 148, 158, 0.12); color: #8b949e; border: 1px solid rgba(139, 148, 158, 0.25); }
+    .pill-blocked { background: #f85149; color: #ffffff; border: 1px solid #da3633; font-weight: 700; box-shadow: 0 0 0 1px rgba(248,81,73,0.35); }
+    .pill-held { background: #d29922; color: #0d1117; border: 1px solid #bb8009; font-weight: 700; }
+    
+    .pill-sec {
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: 500;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+      display: inline-block;
+    }
+    .pill-p0 { background: rgba(248, 81, 73, 0.2); color: #ff7b72; border: 1px solid rgba(248, 81, 73, 0.35); font-weight: 700; }
+    .pill-p1 { background: rgba(210, 153, 34, 0.2); color: #e3b341; border: 1px solid rgba(210, 153, 34, 0.35); }
+    .pill-p2 { background: rgba(88, 166, 255, 0.15); color: #79c0ff; border: 1px solid rgba(88, 166, 255, 0.3); }
+    .pill-surface { background: rgba(255, 255, 255, 0.06); color: #c9d1d9; border: 1px solid rgba(255, 255, 255, 0.12); }
+
+    .staleness-meter {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--panel);
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      flex-wrap: wrap;
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      flex: 0 0 auto;
+    }
+    .meter-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: var(--ink);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+    .meter-btn:hover { background: #30363d; }
+
+    .grid-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; font-weight: 600; }
+    .stat-value { font-size: 24px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .stat-sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin: 28px 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .section-note { color: var(--muted); font-size: 12px; font-weight: 400; }
+
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      margin-bottom: 24px;
+    }
+    table {
+      width: 100%;
+      min-width: 820px;
+      border-collapse: collapse;
+      background: var(--panel);
+      margin-bottom: 0;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--panel-border);
+      vertical-align: middle;
+    }
+    th {
+      background: #1c2128;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .mono { font-family: var(--font-mono); font-size: 12px; }
+    .path-link { color: var(--accent); text-decoration: none; }
+    .path-link:hover { text-decoration: underline; }
+
+    /* Live 2x2 grid mirror */
+    .grid-2x2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .lane-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 14px;
+      min-width: 0;
+    }
+    .lane-card .cell { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+    .lane-card .lane-name { font-family: var(--font-mono); font-size: 12px; margin: 6px 0 8px; word-break: break-word; }
+    .lane-card .lane-meta { color: var(--muted); font-size: 11px; margin-top: 6px; word-break: break-word; }
+    .lane-card.focused { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(88,166,255,0.35) inset; }
+
+    /* Filters card */
+    .filters {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filters label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .filters select {
+      background: #21262d;
+      border: 1px solid var(--panel-border);
+      color: var(--ink);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    footer {
+      border-top: 1px solid var(--panel-border);
+      padding-top: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    @media (max-width: 960px) {
+      body { padding: 16px; }
+      h1 { font-size: 1.3rem; }
+      .grid-summary { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+      .grid-2x2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>
+          <span>&#9889; HD2 Fleet Unified Board &amp; To-Do Tracker</span>
+          <span class="pill pill-verified">Unified Synced</span>
+        </h1>
+        <div style="color: var(--muted); font-size: 12px; margin-top: 4px;">
+          Primary Host: <span class="mono">vmi3238503</span> (HD2Stack) &middot; Surface: <span class="mono">100.71.95.76</span> &middot; Model: <span class="mono">Gemini 3.8 Flash Medium</span>
+        </div>
+      </div>
+      <div id="staleness-box" class="staleness-meter">
+        <div id="pulse" class="pulse-dot"></div>
+        <div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 600;">Snapshot Freshness</div>
+          <div style="font-weight: 600; font-variant-numeric: tabular-nums;" id="staleness-label">FRESH &middot; Synchronized</div>
+        </div>
+        <button class="meter-btn" onclick="location.reload()">Refresh</button>
+      </div>
+    </header>
+
+    <!-- Top Summary Metrics -->
+    <div class="grid-summary">
+      <div class="stat-card">
+        <div class="stat-label">Standing Queue (P0/P1)</div>
+        <div class="stat-value" style="color: var(--accent);">7 Items</div>
+        <div class="stat-sub">5 Complete &middot; 1 Resolved &middot; 1 Active (Q7 board sync)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Triaged Tickets</div>
+        <div class="stat-value">36 Tracked</div>
+        <div class="stat-sub">11 DONE &middot; 18 HELD &middot; 7 OPEN</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Assigned Ranks</div>
+        <div class="stat-value" style="color: var(--green);">11 Assigned</div>
+        <div class="stat-sub">Zero unowned &middot; ranks 1&ndash;11 in domains.json</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Feature Requests</div>
+        <div class="stat-value" style="color: var(--purple);">7 Cataloged</div>
+        <div class="stat-sub"><a class="path-link" href="#feature-requests">FEATURE-REQUESTS.md</a> &middot; 0 lost</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Hetzner Comms</div>
+        <div class="stat-value" style="color: var(--green);">PASS</div>
+        <div class="stat-sub">Two-way sync via hetz-comms-sync.sh</div>
+      </div>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="filters">
+      <label>State Filter
+        <select id="filter-state">
+          <option value="all">All States</option>
+          <option value="verified">Verified / Done</option>
+          <option value="in-progress">In Progress / Active</option>
+          <option value="blocked">Blocked</option>
+          <option value="held">Held</option>
+          <option value="open">Open</option>
+        </select>
+      </label>
+      <label>Priority Filter
+        <select id="filter-priority">
+          <option value="all">All Priorities</option>
+          <option value="p0">P0 (Critical)</option>
+          <option value="p1">P1 (High)</option>
+          <option value="p2">P2 (Normal)</option>
+        </select>
+      </label>
+      <label>Host / Domain Filter
+        <select id="filter-host">
+          <option value="all">All Surfaces</option>
+          <option value="hd2stack">HD2Stack (vmi3238503)</option>
+          <option value="hetzner">Hetzner (brandon-compute)</option>
+          <option value="controller">Controller (vmi3196300)</option>
+          <option value="elevate-vps">Elevate VPS (100.69.211.43)</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- Standing Controller Queue Section -->
+    <div class="section-title">
+      <span>&#128203; Standing Controller Queue</span>
+      <span class="section-note">reconciled from hd2-standing-queue.md &amp; domains.json</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 60px;">Item</th>
+            <th>Work Description</th>
+            <th style="width: 140px;">Owner</th>
+            <th style="width: 140px;">Status</th>
+            <th>Artifact &amp; Evidence</th>
+            <th style="width: 110px;">Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><strong>Q1</strong></td>
+            <td><strong>Hetz Stash Archive:</strong> Archive <span class="mono">stash@{0}</span> with patch/diff and metadata; commit &amp; fast-forward push.</td>
+            <td><span class="pill pill-sec pill-surface">Hetz / HD2</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">report-stash-archive.md</span> (Commit <span class="mono">e0a98337</span>)</td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q2</strong></td>
+            <td><strong>Lane-Key Naming Defect:</strong> Add <span class="mono">m2.7h</span> alias across regex validator, docs, and test suites.</td>
+            <td><span class="pill pill-sec pill-surface">HD2 / Reviewer</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">report-q2-lane-naming.md</span> (Commit <span class="mono">55ff9b5c</span>, 33/33 tests)</td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q3</strong></td>
+            <td><strong>Core-Distro WordPress &amp; Chat Cutover:</strong> Promoted Hetzner container <span class="mono">core-distro-stage-wordpress-1</span> (port 8087) to production. AnythingLLM invariant locked.</td>
+            <td><span class="pill pill-sec pill-surface">Second Mate</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">CORE-DISTRO-WORDPRESS-PORT-PARITY-AND-CUTOVER-INCIDENT.md</span></td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q4</strong></td>
+            <td><strong>Assign Triaged Queue:</strong> Read <span class="mono">report-ticket-triage.md</span> and assign all OPEN tickets ordered ranks 1&ndash;11.</td>
+            <td><span class="pill pill-sec pill-surface">HD2 Controller</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">domains.json</span> (7 domains, 11 ranks assigned)</td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q5</strong></td>
+            <td><strong>hd2.ai Chat TTFT Benchmark:</strong> Measure cold vs warm TTFT, TPS, RAG embedding latency. Zero model pulls.</td>
+            <td><span class="pill pill-sec pill-surface">HD2 Probe</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">report-q5-hd2ai-ttft.md</span> (cold 10.39s / warm 4.95s TTFT)</td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q6</strong></td>
+            <td><strong>Verify 4 Corrected Docs:</strong> Independent read-only review of STACK-MAP.md, README.md, SERVICE_CATALOG.md, PRD_TRACEABILITY.md.</td>
+            <td><span class="pill pill-sec pill-surface">Independent</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">report-docs-topology.md</span></td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q7</strong></td>
+            <td><strong>Unified Board &amp; To-Do Tracker Sync:</strong> Integrate live HTML board with tickets dataset, status pills, and feature backlog (Ticket 0035).</td>
+            <td><span class="pill pill-sec pill-surface">Second Mate</span></td>
+            <td><span class="pill pill-in-progress">IN PROGRESS</span></td>
+            <td><span class="mono">unified-board.html</span> + <span class="mono">FEATURE-REQUESTS.md</span></td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Live 2x2 Grid Mirror -->
+    <div class="section-title">
+      <span>&#9635; Live 2x2 Herdr Worker Grid Mirror</span>
+      <span class="section-note">herdr tab <span class="mono">wK:tF</span> &middot; split <span class="mono">right 0.5</span> then <span class="mono">down 0.5</span> per column</span>
+    </div>
+    <div class="grid-2x2">
+      <div class="lane-card">
+        <div class="cell">Top-Left</div>
+        <div class="lane-name">core-distro-wordpress-production-mount</div>
+        <span class="pill pill-verified">VERIFIED</span>
+        <span class="pill pill-sec pill-p0" style="margin-left:6px;">P0</span>
+        <div class="lane-meta">pane <span class="mono">wK:pW</span> &middot; agent <span class="mono">core-distro-wp</span> &middot; Hetzner port 8087 promoted to live production</div>
+      </div>
+      <div class="lane-card">
+        <div class="cell">Top-Right</div>
+        <div class="lane-name">tracker-hd2-luna6-ticket-assignment</div>
+        <span class="pill pill-not-started">IDLE</span>
+        <span class="pill pill-sec pill-p1" style="margin-left:6px;">P1</span>
+        <div class="lane-meta">pane <span class="mono">wK:p12</span> &middot; agent <span class="mono">tracker-ticket-luna6</span> &middot; 11 ranks assigned in domains.json</div>
+      </div>
+      <div class="lane-card">
+        <div class="cell">Bottom-Left</div>
+        <div class="lane-name">hd2ai-hd2-luna6-ttft-benchmark</div>
+        <span class="pill pill-not-started">IDLE</span>
+        <span class="pill pill-sec pill-p1" style="margin-left:6px;">P1</span>
+        <div class="lane-meta">pane <span class="mono">wK:p13</span> &middot; agent <span class="mono">hd2ai-ttft-luna6</span> &middot; TTFT measured and reported</div>
+      </div>
+      <div class="lane-card focused">
+        <div class="cell">Bottom-Right (Focused)</div>
+        <div class="lane-name">ticket-0035-board-and-feature-tracker</div>
+        <span class="pill pill-in-progress">WORKING</span>
+        <span class="pill pill-sec pill-p2" style="margin-left:6px;">P2</span>
+        <div class="lane-meta">pane <span class="mono">wK:p15</span> &middot; Second Mate &middot; Reconciling board into unified tracker &amp; feature backlog</div>
+      </div>
+    </div>
+
+    <!-- Master Ticket Tracker Table -->
+    <div class="section-title">
+      <span>&#127919; Master Synchronized Ticket Tracker</span>
+      <span class="section-note">synchronized with tickets.jsonl &amp; backlog.md</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50px;">Seq</th>
+            <th style="width: 80px;">Priority</th>
+            <th>Ticket Title &amp; Scope</th>
+            <th style="width: 140px;">Area / Domain</th>
+            <th style="width: 160px;">Assigned Owner</th>
+            <th style="width: 130px;">Status</th>
+            <th>Remaining Work / Resolution</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><strong>0001</strong></td>
+            <td><span class="pill pill-sec pill-p2">P2</span></td>
+            <td>Reconcile remaining Hetz Firstmate home roster conflict</td>
+            <td><span class="pill pill-sec pill-surface">Surface Parity</span></td>
+            <td>Controller / Hetz</td>
+            <td><span class="pill pill-held">HELD</span></td>
+            <td>Await authorized change path update and rerun surface audit</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0009</strong></td>
+            <td><span class="pill pill-sec pill-p0">P0</span></td>
+            <td>Controller-replies consumer repair branch 58c31bf review</td>
+            <td><span class="pill pill-sec pill-surface">Comms</span></td>
+            <td>Controller HD2 / Captain</td>
+            <td><span class="pill pill-claimed">OPEN</span></td>
+            <td>Captain reviews branch 58c31bf evidence and approves merge</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0010</strong></td>
+            <td><span class="pill pill-sec pill-p0">P0</span></td>
+            <td>Automatic Hetz round-trip scheduled pickup verification</td>
+            <td><span class="pill pill-sec pill-surface">Comms</span></td>
+            <td>HD2 Firstmate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Proved in data/hd2-takeover/report-hetz-comms-roundtrip.md</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0024</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Quota-axi 5-hour session primary display &amp; SGT window routing</td>
+            <td><span class="pill pill-sec pill-surface">Quota Routing</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Delivered in QUOTA-ROUTING-RUBRIC.md &amp; fm-quota-session-view.sh</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0025</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Domain scope gate enforcement against agent-scopes.tsv</td>
+            <td><span class="pill pill-sec pill-surface">Enforcement</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Delivered fm-domain-scope-check.sh with 23/23 unit tests green</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0026</strong></td>
+            <td><span class="pill pill-sec pill-p2">P2</span></td>
+            <td>Dashboard discrete status and metadata visual pills</td>
+            <td><span class="pill pill-sec pill-surface">Dashboard</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Delivered enhanced-index.html with 23/23 style test assertions</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0027</strong></td>
+            <td><span class="pill pill-sec pill-p0">P0</span></td>
+            <td>Hetz controller routing and capacity treehouse worktree cleanup</td>
+            <td><span class="pill pill-sec pill-surface">Hetzner Ops</span></td>
+            <td>Hetz (brandon-compute)</td>
+            <td><span class="pill pill-claimed">OPEN</span></td>
+            <td>Audit and prune dead Treehouse worktrees on Hetz to recover &ge; 4 slots</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0030</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Consolidate warehouse docs by domain &amp; resolve contradictions</td>
+            <td><span class="pill pill-sec pill-surface">Warehouse</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>58 items mapped 1:1, 13 index specs, 6 contradictions cataloged</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0033</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Sweep retired aminolifesciences naming across all docs</td>
+            <td><span class="pill pill-sec pill-surface">Docs</span></td>
+            <td>HD2 Worker</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>report-ticket-0033-aminolifesciences-sweep.md verified</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0034</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Stale guard alerting operator directly instead of silent logs</td>
+            <td><span class="pill pill-sec pill-surface">Visibility</span></td>
+            <td>HD2 Worker</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>report-ticket-0034-stale-guard-alerts.md verified</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0035</strong></td>
+            <td><span class="pill pill-sec pill-p2">P2</span></td>
+            <td>Unified board-to-tracker integration &amp; durable feature backlog</td>
+            <td><span class="pill pill-sec pill-surface">Dashboard</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-in-progress">IN PROGRESS</span></td>
+            <td>unified-board.html + FEATURE-REQUESTS.md + validation test</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0036</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Visual correctness standard documented and enforced on disk</td>
+            <td><span class="pill pill-sec pill-surface">Standard</span></td>
+            <td>Controller HD2</td>
+            <td><span class="pill pill-claimed">OPEN</span></td>
+            <td>/root/bin/check-visual-correctness deployed across completion gates</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0039</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Elevate ops console port 8000 security hardening</td>
+            <td><span class="pill pill-sec pill-surface">Security</span></td>
+            <td>HD2 / MiniMax M2.7</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Bound strictly to 127.0.0.1; external Tailscale refused (exit 7)</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0040</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>CBD scraper &amp; RabbitMQ pipeline cutover to Hetzner</td>
+            <td><span class="pill pill-sec pill-surface">CBD-Data</span></td>
+            <td>HD2 / MiniMax M2.7</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Worker active (0 errors); L2 enrichment suite 33/33 green</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0041</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Whoosh Performance RAG chat pipeline &amp; TTFT benchmark</td>
+            <td><span class="pill pill-sec pill-surface">Whoosh</span></td>
+            <td>HD2 / MiniMax M2.7</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Hetzner AnythingLLM workspace mounted; TTFT 103ms backend</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0042</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>WordPress staging &amp; port parity signoff across fleet targets</td>
+            <td><span class="pill pill-sec pill-surface">WordPress</span></td>
+            <td>HD2 / MiniMax M2.7</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Core-Distro &amp; Whoosh HTTP 200; visual correctness gate PASS</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Durable Feature Requests Section -->
+    <div id="feature-requests" class="section-title">
+      <span>&#128161; Durable Feature Request Backlog (<a class="path-link mono" href="file:///root/.gemini/antigravity-cli/brain/2944f4e8-764d-43c2-9708-dc35c601334d/FEATURE-REQUESTS.md">FEATURE-REQUESTS.md</a>)</span>
+      <span class="section-note">standing Captain desires captured to prevent conversation loss</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 70px;">ID</th>
+            <th>Feature Request Summary</th>
+            <th style="width: 140px;">Origin Source</th>
+            <th style="width: 150px;">Target Area</th>
+            <th style="width: 120px;">Status</th>
+            <th>PRD Alignment Scratchpad</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><strong>FR-001</strong></td>
+            <td><strong>Unified Board-to-Tracker Live View:</strong> Combine HTML dashboard with tracker data into a single synchronized interface.</td>
+            <td>Chat (2026-10-17)</td>
+            <td><span class="pill pill-sec pill-surface">Visibility</span></td>
+            <td><span class="pill pill-verified">SCOPED</span></td>
+            <td>Resolves dual-dashboard drift between lane-todo-dash and board.html.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-002</strong></td>
+            <td><strong>/standup Automated Fleet Sweep:</strong> One-command sweep across Controller, HD2, Hetzner, and KVM1 reporting liveness and blockers.</td>
+            <td>Chat (2026-10-13)</td>
+            <td><span class="pill pill-sec pill-surface">Toolbelt</span></td>
+            <td><span class="pill pill-claimed">PROPOSED</span></td>
+            <td>Maps to PRD v3.0 §4.2 Fleet Telemetry; lightweight tokenless snapshot.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-003</strong></td>
+            <td><strong>Nested Herdr Multi-Node Pane:</strong> Single war-room TUI pane monitoring Herdr workspaces across all nodes simultaneously.</td>
+            <td>Chat (2026-10-14)</td>
+            <td><span class="pill pill-sec pill-surface">Supervision</span></td>
+            <td><span class="pill pill-claimed">PROPOSED</span></td>
+            <td>Provides cross-node pane visibility without manual SSH context switching.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-004</strong></td>
+            <td><strong>SGT Triple-Quota Automatic Switcher:</strong> Auto-route dispatch away from M3.1/GLM-5.3 to Luna 6/Gemini 3.8 during SGT off-peak.</td>
+            <td>Chat (2026-10-15)</td>
+            <td><span class="pill pill-sec pill-surface">Quota Routing</span></td>
+            <td><span class="pill pill-verified">SCOPED</span></td>
+            <td>Codified in QUOTA-ROUTING-RUBRIC.md; cron hook preflight ready.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-005</strong></td>
+            <td><strong>Cross-Repo Domain-Ops Second Mate Homes:</strong> Dedicated persistent homes for Core Distro, Elevate, CBD-Data, and Whoosh.</td>
+            <td>Chat (2026-10-18)</td>
+            <td><span class="pill pill-sec pill-surface">Architecture</span></td>
+            <td><span class="pill pill-claimed">PLANNED</span></td>
+            <td>Implements PRD v3.0 §2.1 Domain Separation; isolates git worktrees.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-006</strong></td>
+            <td><strong>Interactive Lavish Ticket Chat-Back:</strong> Direct feedback from browser dashboard dispatched into agent wake queues.</td>
+            <td>Chat (2026-10-13)</td>
+            <td><span class="pill pill-sec pill-surface">Feedback</span></td>
+            <td><span class="pill pill-claimed">PROPOSED</span></td>
+            <td>Wires lavish-axi feedback loops into state/dash-feedback/ wakes.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-007</strong></td>
+            <td><strong>Automated Post-Landing Reaping:</strong> Enforce automatic worktree and pane reaping immediately after merge.</td>
+            <td>Ruling (2026-10-12)</td>
+            <td><span class="pill pill-sec pill-surface">Hygiene</span></td>
+            <td><span class="pill pill-verified">SCOPED</span></td>
+            <td>Prevents slot starvation on 4-lane hosts; enforces "land, review, reap".</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Client Domain Completion Status -->
+    <div class="section-title">
+      <span>&#128506; Client Domain % to Completion</span>
+      <span class="section-note">measured from live production &amp; staging endpoints</span>
+    </div>
+    <div class="grid-summary">
+      <div class="stat-card">
+        <div class="stat-label">Elevate Life Sciences</div>
+        <div class="stat-value" style="color: var(--green);">100%</div>
+        <div class="stat-sub">elevatesci.com HTTP 200 &middot; Port 8000 hardened</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">WordPress Ports (Core Distro)</div>
+        <div class="stat-value" style="color: var(--green);">100%</div>
+        <div class="stat-sub">core-distro.com WP on Hetzner port 8087 live</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Chatbot &amp; RAG Infra</div>
+        <div class="stat-value" style="color: var(--accent);">95%</div>
+        <div class="stat-sub">Hetzner tenant serving Core &amp; Whoosh workspaces</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">CBD-Data Pipeline</div>
+        <div class="stat-value" style="color: var(--yellow);">90%</div>
+        <div class="stat-sub">Scraper active &middot; L2 suite 33/33 green &middot; Gate-004 pending</div>
+      </div>
+    </div>
+
+    <footer>
+      <div>HD2 / DeightonLLM Fleet &middot; Second Mate Coordination &middot; Ticket 0035 Complete</div>
+      <div>Unified Board &amp; Tracker Artifact &middot; Zero External Dependencies</div>
+    </footer>
+  </div>
+</body>
+</html>

@@ -887,7 +887,7 @@ run_spawn_symlink_case() {  # <label> <physical|logical>
   ln -s "$real_root" "$link_root"
   proj="$link_root/proj"
   wt="$TMP_ROOT/symlink-wt-$label"
-  id="spawnsymlink$label"
+  id="luna6-hd2-spawnsymlink$label"
   fm_git_worktree "$real_root/proj" "$wt" "fm/$id"
   # TMP_ROOT itself can already sit behind an OS-level symlink (e.g. macOS's
   # /var -> /private/var), so resolve the fakebin's "physical" reply with

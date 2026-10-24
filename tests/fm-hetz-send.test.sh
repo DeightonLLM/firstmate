@@ -52,6 +52,35 @@ run_send() {  # <fakebin> <rc> <message...>
     "$SEND" "$@" 2>&1
 }
 
+# A fake herdr that reports one idle, interactively ready agent and records
+# every prompt it is asked to submit. The real recipient is a live agent, so a
+# test must never prompt one.
+make_herdr_stub() {  # <fakebin> <prompt-log>
+  local fakebin=$1 log=$2
+  cat >"$fakebin/herdr" <<SH
+#!/usr/bin/env bash
+set -u
+case "\${1:-}" in
+agent)
+  case "\${2:-}" in
+  list)
+    cat <<'JSON'
+{"id":"cli:agent:list","result":{"agents":[{"name":"hetz-recipient","pane_id":"w1:p1","agent_status":"idle","interactive_ready":true,"label":"worker"}]},"type":"agent_list"}
+JSON
+    exit 0
+    ;;
+  prompt)
+    printf '%s\t%s\n' "\${3:-}" "\${4:-}" >>"$log"
+    exit 0
+    ;;
+  esac
+  ;;
+esac
+exit 0
+SH
+  chmod +x "$fakebin/herdr"
+}
+
 # A successful transfer reports sent, and the message actually left.
 test_success_reports_sent() {
   local fakebin out code
@@ -178,6 +207,52 @@ test_explicit_override_is_honoured() {
   pass "an explicit FM_HETZ_INBOUND override is honoured"
 }
 
+# ---------------------------------------------------------------------------
+# The notify feature: a delivered message must trigger the immediate guarded
+# inter-home notification, and the notification must name the message file
+# that was actually written.
+#
+# The notification is observed through a hermetic fake herdr that records the
+# prompt it is asked to submit. The real recipient is a live agent, so a test
+# must never prompt one.
+# ---------------------------------------------------------------------------
+
+test_send_triggers_post_delivery_notification() {
+  local fakebin home out code prompts
+  fakebin=$(make_ssh_stub 0)
+  prompts="$TMP_ROOT/notify/prompts.log"
+  mkdir -p "$TMP_ROOT/notify"
+  make_herdr_stub "$fakebin" "$prompts"
+
+  # A registry entry for the hetz route, because the notification resolves its
+  # recipient from the registry and never from a hardcoded pane.
+  home="$TMP_ROOT/notify/home"
+  mkdir -p "$home/data" "$home/state"
+  cat >"$home/data/secondmates.md" <<REG
+- hetz - Hetz controller lane (home: $home; scope: inter-home comms relay; projects: none; added 2026-10-21)
+REG
+
+  out=$(PATH="$fakebin:$PATH" \
+    FM_HOME="$home" \
+    FM_HETZ_LOG="$TMP_ROOT/outbound.log" \
+    FM_HETZ_HOST=temp-target.test \
+    FM_HETZ_INBOUND="$(inbox_for 0)" \
+    FM_HETZ_MSG_NAME="msg-test-notify.msg" \
+    "$SEND" "hello to hetz" 2>&1)
+  code=$?
+  expect_code 0 "$code" "a delivered send must exit 0"
+  assert_contains "$out" "sent at" "a delivered send must still report delivery"
+
+  assert_present "$prompts" "no notification was submitted after a delivered send"
+  assert_grep "msg-test-notify.msg" "$prompts" \
+    "the notification does not name the message file that was written"
+  assert_grep "hello to hetz" "$prompts" \
+    "the notification does not carry the delivered message"
+  assert_grep "msg-test-notify.msg" "$home/state/comms-notify-ledger.tsv" \
+    "the notification ledger does not record the delivered message"
+  pass "a delivered send triggers the immediate guarded notification"
+}
+
 test_success_reports_sent
 test_failure_must_not_report_sent
 test_failure_names_the_real_rc
@@ -186,3 +261,4 @@ test_default_inbox_is_the_folder_hetz_reads
 test_absent_inbox_fails_closed_with_remediation
 test_transport_failure_still_reports_real_rc
 test_explicit_override_is_honoured
+test_send_triggers_post_delivery_notification

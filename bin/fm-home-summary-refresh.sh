@@ -112,7 +112,10 @@ home_summary_refresh_once() {
   if [ "$HOME_SUMMARY_IF_IDLE" -eq 1 ]; then
     fm_lock_try_acquire "$REFRESH_LOCK" || return 0
   else
-    fm_lock_acquire_wait "$REFRESH_LOCK"
+    fm_lock_acquire_wait "$REFRESH_LOCK" || {
+      home_summary_fail "could not take the refresh lock $REFRESH_LOCK (holder pid ${FM_LOCK_HELD_PID:-unknown})"
+      return 1
+    }
   fi
   HOME_SUMMARY_LOCK_HELD=1
   HOME_SUMMARY_TMP=$(umask 077; mktemp "$STATE/.home-summary.json.XXXXXX") || {

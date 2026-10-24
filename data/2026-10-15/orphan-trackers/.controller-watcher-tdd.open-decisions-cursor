@@ -1,4 +1,0 @@
-version=9:ship
-offset=3275
-ident=strong:2306:27671118:2026-10-03 17:09:56.961267185 +0100
-default	needs-decision	No-mistakes lint still reports four out-of-scope warnings; green PR checks also need the skipped publication stages. See report for the two required authorizations.

@@ -1,2 +1,0 @@
-ln: failed to create symbolic link '/tmp/controller-inbox-repair-test-1791907261/sym-inbox2/link.md': File exists
-controller inbox update: real.md sha256=b951fe82cd9948c65f1c2a146392a427269eaf715bf2fe01a98251765d861e6c

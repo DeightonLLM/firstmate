@@ -1,2 +1,0 @@
-blocked: decision-hold completion command was permanently denied by the lean-ctx shell allowlist; report has findings but is not complete
-blocked: [key=enforcement-admission] exact Controller source handoff is absent and current source/delivery admission remains unresolved; private evidence report available at data/durable-recovery-20261013/enforcement-admission.md

@@ -1,9 +1,0 @@
-# Scoped tracker outcome - partial acceptance, rollback blocked
-
-Primary independently read actual child session.jsonl and copied its original bytes to tracker-child-original-session.jsonl. Actual child toolsAdded includes todo; five real task objects, four addBlockedBy updates, list/get textual dependencies, expected cycle rejection with identical graph snapshot before/after. Single MiniMax-M2.7-highspeed / medium run, no source investigation or second attempt. The chain was added via updates, not blockedBy on create. Tasks3-5 completed directly pending→completed; full per-phase start-before-work discipline NOT demonstrated. Configuration/provider capability is proven only for tested cases, not enforcement or full lifecycle closeout.
-
-Rollback NOT executed: first native edit matched no text (settings had been reformatted), no mutation. Fresh exact settings read found intended scout values unchanged, but pi-codex-fast had independently changed from fast/enabled=true to off/enabled=false. Actor/cause unknown; do not revert unrelated changes. Saved actual immediate pre-rollback bytes as pi-settings.immediate-pre-rollback.json.
-
-Next guarded ctx_edit call refused with MCP -32602: path escapes project root: /home/hd2admin/.pi/agent/settings.json (root /home/hd2admin/kun-agent-workspace). No mutation occurred. Stop per captain's no alternate-tool bypass rule; no native fallback, broader root, CLI workaround or replay. Config remains applied. Source/permission-owner must supply authorized narrow route for scout-only rollback/reapply. Original primary tool outputs are retained in session history; no fabricated rollback transcript. Todo52 records blocker;45 remains incomplete.
-
-Five parked original agents and original recovery scout remain unfinished. No shared source, merge, cleanup, inbound receipt or communication-closeout claim follows from this tracker test.

@@ -6,14 +6,17 @@ Durable rules, root-cause explanations, enforcement mechanisms, and honest enfor
 
 ## 1. Writing a file into the outbox being treated as delivery when it was never transmitted
 
-**Durable rule:** Published ≠ Transmitted. A file placed in the outbox directory is not evidence of delivery. The file must also be recorded in the outbound hash ledger.
+**Durable rule:** Published ≠ Transmitted. A file placed in the outbox directory is not evidence of delivery. A transmission is recorded by MESSAGE NAME, and the SHA-256 hash is kept as the evidence of the bytes that were transmitted.
 
 **Why it keeps happening:** The outbox is a plain directory. Anyone can write a file there and report "it's in the outbox" as if it were sent. The writing step is cheap and looks like completion.
 
+A second shape of the same failure appeared when the ledger was keyed by content hash. A note that was transmitted and then reissued has bytes that are not the bytes that went out, so the hash on record was the old one and the note was reported as never sent on every cycle. A permanently unsent backlog made the watcher exit with an actionable reason on every cycle, so supervision never held.
+
 **Mechanism that now enforces it:**
 
-- `bin/fm-to-controller.sh` performs write-and-send as one atomic step. It copies the file to both the local mirror and the shared exchange directory, records the SHA-256 hash in `state/.controller-inbox-outbound`, and only then reports success. Writing without running this helper leaves the hash absent from the ledger.
-- `bin/fm-controller-pending.sh` detects the gap: it scans every `.md` file in the outbox, computes its SHA-256, and checks whether that hash appears in `state/.controller-inbox-outbound`. If the hash is absent, it prints `unsent-to-controller:` and exits 1.
+- `bin/fm-to-controller.sh` performs write-and-send as one atomic step. It copies the file to both the local mirror and the shared exchange directory, records the message name and the SHA-256 hash in `state/.controller-inbox-outbound`, and only then reports success. Writing without running this helper leaves the name absent from the ledger.
+- `bin/fm-controller-pending.sh` detects the gap. It resolves a note by name, then by the hash ledger, then by the delivery route. A name that was transmitted is TRANSMITTED even when its bytes changed since, and the change is reported as a reissue carrying the old and the new hash without blocking. A name that was never transmitted is UNSENT and still reports, so a note that only looks like a reissue is never suppressed.
+- The reissue report is written to a durable log rather than to stdout, because a stdout line re-arms the watcher on every cycle.
 
 **Enforcement strength:** CONVENTION-ONLY, with a supplemental advisory check. The atomic helper is the documented path, but nothing blocks a bare write to the outbox directory. `fm-controller-pending.sh` is an advisory detector — it surfaces the problem when run, but it is not wired as a hard gate in the delivery path. A worker who writes a file and claims it was sent without running `fm-to-controller.sh` will not be stopped by code.
 
@@ -50,18 +53,18 @@ Durable rules, root-cause explanations, enforcement mechanisms, and honest enfor
 
 ## 4. Lanes showing as anonymous "worker" in the operator's async panel
 
-**Durable rule:** Every async lane must carry a named key in the format `<model>-<surface>-<task>` so the operator can identify it in the panel. An unnamed lane is invisible to the operator.
+**Durable rule:** Every async lane must carry a named key in the format `<harness>-<model>-<host>-<task>` so the operator can identify it in the panel. An unnamed lane is invisible to the operator.
 
 **Why it keeps happening:** Direct single-child dispatch shows only the agent kind in the panel. Without a deliberate per-child key, the panel renders "worker" or nothing.
 
 **Mechanism that now enforces it:**
 
-- `bin/fm-spawn.sh` lines 938–945: before any endpoint, worktree, or state mutation, `fm-spawn` validates the task ID against the `<model>-<surface>-<task>` convention using `bin/fm-lane-naming-check.sh`. If validation fails, spawn exits 5 with an explicit error message. Grandfather clause: existing tasks with pre-existing `state/<id>.meta` are exempt so recovery cases are not stranded.
-- `bin/fm-lane-naming-check.sh`: validates lane key format, To-Do board line format, and the `data/async-lanes.tsv` registry file structure including cross-checking lane-key segments against model and surface columns.
+- `bin/fm-spawn.sh`, the lane naming gate: before any endpoint, worktree, or state mutation, `fm-spawn` validates the task ID against the canonical `<harness>-<model>-<host>-<task>` convention using `bin/fm-lane-naming-check.sh`. If validation fails, spawn exits 5 with an explicit error message naming the expected shape. Grandfather clause: existing tasks with pre-existing `state/<id>.meta` are exempt so recovery cases are not stranded.
+- `bin/fm-todo-prefix-check.sh`, the single owner of the naming vocabulary: validates the lane key shape, the To-Do board row format, and the `data/async-lanes.tsv` registry file structure, including cross-checking the lane-key model and host segments against the model and surface columns and requiring every `run_id` to be a UUID unique to one row. `bin/fm-lane-naming-check.sh` delegates to it and keeps no second copy of the alias table or the pattern.
 
-**Enforcement strength:** TESTED AND BLOCKING (spawn level). The lane key must be valid before `fm-spawn` creates the endpoint. An invalid lane key causes an immediate exit 5. The advisory `fm-lane-naming-check.sh` that checks registry files is not wired into a launcher and cannot block on its own, but the spawn-level enforcement is hard and blocks the bad key from ever reaching the panel.
+**Enforcement strength:** TESTED AND BLOCKING (spawn level). The lane key must be valid before `fm-spawn` creates the endpoint. An invalid lane key causes an immediate exit 5. The registry and board-row checks are advisory-only enforcement: they are not wired into a launcher and cannot block on their own, but the spawn-level enforcement is hard and blocks the bad key from ever reaching the panel.
 
-**Remaining gap:** The registry file (`data/async-lanes.tsv`) and To-Do board line format are advisory-only enforcement. A lane spawned with a valid key can still have malformed board lines that go undetected until manual inspection.
+**Remaining gap:** The registry file (`data/async-lanes.tsv`) and To-Do board line format are advisory-only enforcement. A lane spawned with a valid key can still have malformed board lines that go undetected until manual inspection. The registry also does not enforce lane-key uniqueness: two rows may share a lane key as long as their run ids differ.
 
 ---
 

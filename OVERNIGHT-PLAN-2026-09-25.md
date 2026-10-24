@@ -15,7 +15,7 @@ Operator AFK/asleep. Controller coordinates; hetz away-plan executes brandon-sid
 
 ## ACTIVE: HETZ AWAY PLAN — GO (activated on operator delegation)
 
-Terms accepted: authorized work only; MiniMax M2.7 default lane; hetz agent reviews; ≤25 workers; non-overlap (brandon-side = hetz, controller workspace = controller); llm.hd2.ai prod on vmi3238503 untouched; no captain panes; anything needing Dubz waits (no phone channel, no ETA).
+Terms accepted: authorized work only; MiniMax default lane; hetz agent reviews; ≤25 workers; non-overlap (brandon-side = hetz, controller workspace = controller); llm.hd2.ai prod on vmi3238503 untouched; no captain panes; anything needing Dubz waits (no phone channel, no ETA).
 
 Queue (independent, parallelizable):
 1. **HD2Stack install on brandon** — AnythingLLM; primary LFM2.5 localhost:8081, MiniMax fallback; per warehouse `anythingllm/` contract (STACK-MAP, RAG-METADATA-CONTRACT, projection-manifest.yaml); report URL/port.

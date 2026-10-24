@@ -1,3 +1,0 @@
-Pre-mutation backup record for /home/hd2admin/kun-agent-workspace/data/audit/2026-10-18-build-whoosh-coordinates.md
-
-At 2026-10-18T02:39Z the target did not exist (verified with `ls -la ...2026-10-18-build-whoosh-coordinates.md*`, which returned No such file or directory). This sibling records the pre-change absence; there were no prior target bytes to copy.

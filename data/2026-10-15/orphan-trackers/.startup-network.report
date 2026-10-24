@@ -1,4 +1,0 @@
-BOOTSTRAP_INFO: secondmate elevate-p0-repair relaunched after recorded endpoint confidently missing (backend=herdr)
-SECONDMATE_LIVENESS: secondmate system-ops: respawn failed after recorded endpoint confidently missing: error: this home's task set is locked by another operation (a forced teardown is enumerating or removing its tasks); refusing to create task system-ops rather than racing it
-SECONDMATE_SYNC: secondmate elevate-p0-repair: skipped: dirty working tree
-SECONDMATE_SYNC: secondmate system-ops: skipped: dirty working tree

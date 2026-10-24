@@ -389,15 +389,128 @@ test_propagate_lib() {
 
 # A tmux stub that accepts every subcommand and prints nothing, so no window
 # pre-exists and the spawn proceeds to write its meta. Echoes the fakebin dir.
-make_noop_tmux() {
+# write_tmux_stub <dir>: write a tmux stub into <dir>/fakebin/tmux that MODELS
+# WINDOW CREATION - `new-window` records the window under its session and
+# `list-windows` reports the recorded inventory - and echoes the fakebin dir.
+#
+# The inventory is what the spawn's own endpoint verification reads
+# (bin/backends/tmux.sh fm_backend_tmux_agent_state reads
+# `tmux list-windows -t <session> -F '#{window_name}'` and then the pane's
+# command). A stub that logged window ops but never REPORTED them made every
+# freshly spawned secondmate look MISSING, so the spawn failed its own
+# readiness gate - a fixture defect, not a spawn defect. FM_FAKE_PANE_CMD is
+# the command the pane reports (a harness name, so the agent reads as alive);
+# FM_FAKE_PANE_PATH answers the worktree-discovery probe, and
+# FM_FAKE_LAUNCH_LOG captures the literal launch command sent with `-l`.
+write_tmux_stub() {
   local dir=$1 fakebin="$1/fakebin"
   mkdir -p "$fakebin"
+  : > "$dir/windows.tsv"
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
+set -u
+LOG="${FM_FAKE_TMUX_LOG:-/dev/null}"
+fake_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd) || exit 1
+WINDOWS="$fake_root/windows.tsv"
+parse_targets() {
+  target_session=
+  target_name=
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -t) target_session=${2:-}; shift 2 ;;
+      -t*) target_session=${1#-t}; shift ;;
+      -n) target_name=${2:-}; shift 2 ;;
+      -n*) target_name=${1#-n}; shift ;;
+      -F|-c) shift 2 ;;
+      -*) shift ;;
+      *) shift ;;
+    esac
+  done
+}
+case "${1:-}" in
+  display-message)
+    case "$*" in
+      *'#{cursor_y}'*) printf '0\n' ;;
+      *'#{pane_current_path}'*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}" ;;
+      *'#{pane_current_command}'*) printf '%s\n' "${FM_FAKE_PANE_CMD:-claude}" ;;
+      *) printf 'firstmate\n' ;;
+    esac
+    exit 0
+    ;;
+  new-window)
+    printf '%s\n' "$*" >> "$LOG"
+    shift
+    parse_targets "$@"
+    # tmux targets the session with a trailing colon ("<session>:"); strip it.
+    session=${target_session%:}
+    [ -n "$session" ] || session=firstmate
+    name=${target_name:-window}
+    printf '%s\t%s\n' "$session" "$name" >> "$WINDOWS"
+    printf '@%s\n' "$(wc -l < "$WINDOWS" | tr -d ' ')"
+    exit 0
+    ;;
+  list-windows)
+    shift
+    parse_targets "$@"
+    if [ -n "${FM_FAKE_TMUX_WINDOW:-}" ]; then
+      printf '%s\n' "$FM_FAKE_TMUX_WINDOW"
+    elif [ -n "$target_session" ] && [ -f "$WINDOWS" ]; then
+      awk -F'\t' -v s="$target_session" '$1==s {print $2}' "$WINDOWS"
+    fi
+    exit 0
+    ;;
+  kill-window)
+    printf '%s\n' "$*" >> "$LOG"
+    shift
+    target=
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -t) target=${2:-}; shift 2 ;;
+        -t*) target=${1#-t}; shift ;;
+        *) shift ;;
+      esac
+    done
+    session=${target#*=}
+    session=${session%%:*}
+    window=${target##*:}
+    window=${window#=}
+    if [ -n "$session" ] && [ -n "$window" ] && [ -f "$WINDOWS" ]; then
+      awk -F'\t' -v s="$session" -v w="$window" '!($1==s && $2==w)' "$WINDOWS" > "$WINDOWS.new" \
+        && mv "$WINDOWS.new" "$WINDOWS"
+    fi
+    exit 0
+    ;;
+  send-keys)
+    if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
+      prev=
+      for a in "$@"; do
+        if [ "$prev" = "-l" ]; then
+          printf '%s\n' "$a" >> "$FM_FAKE_LAUNCH_LOG"
+        fi
+        prev=$a
+      done
+    fi
+    printf '%s\n' "$*" >> "$LOG"
+    exit 0
+    ;;
+  has-session|new-session|set-window-option|rename-window)
+    printf '%s\n' "$*" >> "$LOG"
+    exit 0
+    ;;
+  capture-pane)
+    printf '%s\n' "$*" >> "$LOG"
+    [ -n "${FM_FAKE_TMUX_CAPTURE:-}" ] && cat "$FM_FAKE_TMUX_CAPTURE"
+    exit 0
+    ;;
+esac
 exit 0
 SH
   chmod +x "$fakebin/tmux"
   printf '%s\n' "$fakebin"
+}
+
+make_noop_tmux() {
+  write_tmux_stub "$1"
 }
 
 # A minimal seeded secondmate home (validate_firstmate_home_for_spawn needs the
@@ -411,21 +524,29 @@ make_seeded_home() {
   printf 'charter\n' > "$home/data/charter.md"
 }
 
-# spawn_secondmate <world> <id> <home> [explicit-harness]
+# spawn_secondmate <world> <id> <home> [explicit-harness] [model]
 # Runs fm-spawn.sh in secondmate mode. FM_ROOT is the real repo (so fm-harness.sh
 # resolves), the primary config dir is <world>/home/config, and CLAUDECODE pins
 # detect_own. stderr is discarded (the local-HEAD ff sync harmlessly skips a
 # non-worktree home). Inspect <world>/home/state/<id>.meta and <home>/config after.
+#
+# The optional model is the concrete model the dispatch guard demands for a
+# codex spawn: codex defaults to the banned gpt-6.1-sol, so a codex spawn with
+# an unresolved model is refused before anything is written. A case that pins
+# the model through config/secondmate-harness's own model token does not need
+# this argument; a case that resolves codex through another route (the crew
+# harness fallback) has no config token to carry it and must pass it here.
 spawn_secondmate() {
-  local world=$1 id=$2 home=$3 harness=${4:-} fakebin
+  local world=$1 id=$2 home=$3 harness=${4:-} model=${5:-} fakebin
   mkdir -p "$world/home/state" "$world/home/data"
   fakebin=$(make_noop_tmux "$world/tmux-$id")
   # An empty harness must contribute zero args, not an empty positional; build the
   # arg list explicitly so the optional harness is omitted cleanly.
   local spawn_args=("$id" "$home")
   [ -n "$harness" ] && spawn_args+=("$harness")
+  [ -n "$model" ] && spawn_args+=(--model "$model")
   spawn_args+=(--secondmate)
-  PATH="$fakebin:$BASE_PATH" TMUX='' CLAUDECODE=1 \
+  PATH="$fakebin:$BASE_PATH" TMUX='' ANTIGRAVITY_AGENT=1 \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$world/home" \
     FM_STATE_OVERRIDE="$world/home/state" FM_DATA_OVERRIDE="$world/home/data" \
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
@@ -445,7 +566,11 @@ test_spawn_split_and_inherit() {
   mkdir -p "$w/home/config"
   printf '{"default":{"harness":"claude","model":"haiku","effort":"low"}}\n' > "$w/home/config/crew-dispatch.json"
   printf 'claude\n' > "$w/home/config/crew-harness"
-  printf 'codex\n' > "$w/home/config/secondmate-harness"
+  # codex plus its concrete model: codex defaults to the banned gpt-6.1-sol, so
+  # the dispatch guard refuses a codex spawn with no resolved model. The model
+  # token is exactly what config/secondmate-harness carries for this route, so
+  # the pin is durable across every respawn of this secondmate.
+  printf 'codex gpt-6-luna\n' > "$w/home/config/secondmate-harness"
   printf 'manual\n' > "$w/home/config/backlog-backend"
   printf 'zellij\n' > "$w/home/config/backend"
   make_seeded_home "$sm" sm
@@ -480,7 +605,7 @@ test_spawn_backward_compat_crew_fallback() {
   printf 'codex\n' > "$w/home/config/crew-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate "$w" sm "$sm"
+  spawn_secondmate "$w" sm "$sm" "" gpt-6-luna
 
   meta="$w/home/state/sm.meta"
   [ "$(meta_harness "$meta")" = codex ] \
@@ -491,7 +616,7 @@ test_spawn_backward_compat_crew_fallback() {
 }
 
 # Bare backward-compat: no config at all. The secondmate falls through to its own
-# harness (claude here), and with no inheritable file the home is left untouched -
+# harness (agy here), and with no inheritable file the home is left untouched -
 # no config/ side effects.
 test_spawn_bare_backward_compat() {
   local w sm meta
@@ -502,8 +627,8 @@ test_spawn_bare_backward_compat() {
   spawn_secondmate "$w" sm "$sm"
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_harness "$meta")" = claude ] \
-    || fail "bare: secondmate launched on '$(meta_harness "$meta")', expected own harness claude"
+  [ "$(meta_harness "$meta")" = agy ] \
+    || fail "bare: secondmate launched on '$(meta_harness "$meta")', expected own harness agy"
   [ -e "$sm/config/crew-dispatch.json" ] && fail "bare: an unset primary still created a home crew-dispatch.json"
   [ -e "$sm/config/crew-harness" ] && fail "bare: an unset primary still created a home crew-harness"
   pass "B4 spawn: no config at all -> own harness and no propagation side effects"
@@ -518,11 +643,11 @@ test_spawn_explicit_harness_wins() {
   printf 'codex\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate "$w" sm "$sm" claude
+  spawn_secondmate "$w" sm "$sm" agy
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_harness "$meta")" = claude ] \
-    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit claude over config codex"
+  [ "$(meta_harness "$meta")" = agy ] \
+    || fail "explicit: launched on '$(meta_harness "$meta")', expected explicit agy over config codex"
   pass "B5 spawn: an explicit per-spawn harness arg overrides config/secondmate-harness"
 }
 
@@ -568,35 +693,7 @@ meta_field() { grep "^$2=" "$1" 2>/dev/null | tail -1 | cut -d= -f2-; }
 # `#{pane_current_path}` probe from FM_FAKE_PANE_PATH so this same stub works
 # for a crew/scout (non-secondmate) spawn's treehouse-worktree wait loop.
 make_launch_capturing_tmux() {
-  local dir=$1 fakebin="$1/fakebin"
-  mkdir -p "$fakebin"
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|kill-window) exit 0 ;;
-  send-keys)
-    if [ -n "${FM_FAKE_LAUNCH_LOG:-}" ]; then
-      prev=
-      for a in "$@"; do
-        if [ "$prev" = "-l" ]; then
-          printf '%s\n' "$a" >> "$FM_FAKE_LAUNCH_LOG"
-        fi
-        prev=$a
-      done
-    fi
-    exit 0
-    ;;
-esac
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
-  printf '%s\n' "$fakebin"
+  write_tmux_stub "$1"
 }
 
 # spawn_secondmate_capture <world> <id> <home> <launchlog> [extra fm-spawn.sh args...]
@@ -608,7 +705,7 @@ spawn_secondmate_capture() {
   mkdir -p "$world/home/state" "$world/home/data"
   fakebin=$(make_launch_capturing_tmux "$world/tmux-$id")
   : > "$launchlog"
-  PATH="$fakebin:$BASE_PATH" TMUX='' CLAUDECODE=1 \
+  PATH="$fakebin:$BASE_PATH" TMUX='' ANTIGRAVITY_AGENT=1 \
     FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$world/home" \
     FM_STATE_OVERRIDE="$world/home/state" FM_DATA_OVERRIDE="$world/home/data" \
     FM_PROJECTS_OVERRIDE="$world/home/projects" FM_CONFIG_OVERRIDE="$world/home/config" \
@@ -669,7 +766,7 @@ test_spawn_bare_harness_no_model_effort_flag() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude\n' > "$w/home/config/secondmate-harness"
+  printf 'agy\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   out=$(spawn_secondmate_capture "$w" sm "$sm" "$launchlog" 2>&1); status=$?
@@ -692,17 +789,17 @@ test_spawn_secondmate_harness_model_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = claude ] || fail "model-token: meta harness not claude"
+  [ "$(meta_field "$meta" harness)" = agy ] || fail "model-token: meta harness not agy"
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-token: meta model not opus (got '$(meta_field "$meta" model)')"
   [ "$(meta_field "$meta" effort)" = default ] || fail "model-token: meta effort not default (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions --model 'opus'" \
+  assert_contains "$launch" "agy --model 'opus'" \
     "model-token: launch did not carry --model opus"
   assert_not_contains "$launch" "--effort" "model-token: launch must not carry an --effort flag"
   pass "C3 spawn: config/secondmate-harness's model token threads --model into the launch and meta"
@@ -715,7 +812,7 @@ test_spawn_secondmate_harness_model_and_effort_tokens() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" >/dev/null 2>&1
@@ -724,7 +821,7 @@ test_spawn_secondmate_harness_model_and_effort_tokens() {
   [ "$(meta_field "$meta" model)" = opus ] || fail "model-effort-tokens: meta model not opus"
   [ "$(meta_field "$meta" effort)" = high ] || fail "model-effort-tokens: meta effort not high (got '$(meta_field "$meta" effort)')"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "claude --dangerously-skip-permissions --model 'opus' --effort 'high'" \
+  assert_contains "$launch" "agy --model 'opus' --effort 'high'" \
     "model-effort-tokens: launch did not carry both --model opus and --effort high"
   pass "C4 spawn: config/secondmate-harness's model+effort tokens thread into the launch and meta"
 }
@@ -736,7 +833,7 @@ test_spawn_explicit_model_overrides_secondmate_harness_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --model sonnet >/dev/null 2>&1
@@ -758,7 +855,7 @@ test_spawn_explicit_effort_overrides_secondmate_harness_token() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --effort low >/dev/null 2>&1
@@ -779,21 +876,37 @@ test_spawn_explicit_harness_does_not_inherit_secondmate_harness_tokens() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
-  spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness codex >/dev/null 2>&1
+  # The explicit harness is agy, not codex: a codex spawn with no concrete
+  # model is refused by the dispatch guard (codex defaults to the banned
+  # gpt-6.1-sol, captain ruling 2026-10-11, no bypass), and an explicit
+  # --harness deliberately leaves the file's model token behind - so codex
+  # could not reach a launch here at all. The case still proves the same rule,
+  # and more sharply: the file names agy WITH model and effort tokens, and
+  # an explicitly named harness must start with clean defaults anyway.
+  #
+  # agy is a DISPATCHABLE adapter here: the claude, grok, kimi and opencode
+  # harness families are leave-refused on this fleet (captain ruling
+  # 2026-10-21, quota-provider-binding=leave-refused), so a secondmate
+  # launch on one of them is refused in code before it can spend an
+  # unmeasured surface. These cases test the config plumbing, not the
+  # admission, so they run on an adapter the fleet may actually dispatch.
+  spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness agy >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = codex ] || fail "explicit-harness-no-tokens: meta harness not codex"
+  [ "$(meta_field "$meta" harness)" = agy ] || fail "explicit-harness-no-tokens: meta harness not agy"
   [ "$(meta_field "$meta" model)" = default ] || fail "explicit-harness-no-tokens: meta model should stay default"
   [ "$(meta_field "$meta" effort)" = default ] || fail "explicit-harness-no-tokens: meta effort should stay default"
   launch=$(cat "$launchlog")
-  assert_contains "$launch" "codex --dangerously-bypass-approvals-and-sandbox" \
-    "explicit-harness-no-tokens: launch did not use codex"
+  assert_contains "$launch" "agy --dangerously-skip-permissions --prompt-interactive" \
+    "explicit-harness-no-tokens: launch did not use agy"
   assert_not_contains "$launch" "--model" "explicit-harness-no-tokens: launch must not carry a --model flag"
-  assert_not_contains "$launch" "model_reasoning_effort" \
-    "explicit-harness-no-tokens: launch must not carry a codex effort flag"
+  assert_not_contains "$launch" "opus" \
+    "explicit-harness-no-tokens: launch must not carry the file's model token"
+  assert_not_contains "$launch" "high" \
+    "explicit-harness-no-tokens: launch must not carry the file's effort token"
   pass "C7 spawn: an explicit --harness starts with clean model/effort defaults"
 }
 
@@ -803,7 +916,7 @@ test_spawn_explicit_harness_uses_explicit_profile_axes() {
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'claude opus high\n' > "$w/home/config/secondmate-harness"
+  printf 'agy opus high\n' > "$w/home/config/secondmate-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" --harness codex --model gpt-5.5 --effort xhigh >/dev/null 2>&1
@@ -829,26 +942,48 @@ test_spawn_explicit_harness_uses_explicit_profile_axes() {
 # crew/scout (non-secondmate) launch is entirely unaffected by this feature: no
 # model/effort is invented for it even though its own project has no profile set.
 test_spawn_fallback_chain_and_crew_scout_unaffected() {
-  local w sm meta home proj wt fakebin launchlog id launch
+  local w sm meta home proj wt fakebin launchlog id launch quota_stub
   w="$TMP_ROOT/spawn-fallback-and-crew"
   sm="$w/sm"
   launchlog="$w/launch.log"
   mkdir -p "$w/home/config"
-  printf 'codex\n' > "$w/home/config/crew-harness"
+  # minimax-code, not codex: this case is about the chain carrying NO model
+  # token, and a codex spawn with no concrete model is refused outright by the
+  # dispatch guard (codex defaults to the banned gpt-6.1-sol, captain ruling
+  # 2026-10-11, no bypass). minimax-code is still a different harness from the
+  # own harness (agy under ANTIGRAVITY_AGENT=1), so the assertion still proves the
+  # crew-harness file was consulted rather than the own-harness fallback.
+  printf 'minimax-code\n' > "$w/home/config/crew-harness"
   make_seeded_home "$sm" sm
 
   spawn_secondmate_capture "$w" sm "$sm" "$launchlog" >/dev/null 2>&1
 
   meta="$w/home/state/sm.meta"
-  [ "$(meta_field "$meta" harness)" = codex ] \
-    || fail "fallback: secondmate harness did not fall back to crew-harness codex"
+  [ "$(meta_field "$meta" harness)" = minimax-code ] \
+    || fail "fallback: secondmate harness did not fall back to crew-harness minimax-code"
   [ "$(meta_field "$meta" model)" = default ] || fail "fallback: meta model should stay default with no tokens anywhere"
   [ "$(meta_field "$meta" effort)" = default ] || fail "fallback: meta effort should stay default with no tokens anywhere"
 
   # Crew/scout launch: same crew-harness config, no --secondmate. Must resolve
   # the crew harness and record no model/effort - this codepath must never read
   # config/secondmate-harness's tokens at all.
-  id="crew-unaffected-z1"
+  #
+  # The quota admission gate measures the provider's window before any crew
+  # dispatch (captain ruling 2026-10-13), so a crew spawn needs a measurable
+  # spend surface: the stub quota-axi below reports a fresh minimax provider.
+  quota_stub="$w/fake-quota-axi"
+  cat > "$quota_stub" <<'SH'
+#!/usr/bin/env bash
+cat <<'JSON'
+{"providers":[{"provider":"minimax","state":{"status":"fresh"},"quotaSemantics":{"status":"known","effectiveAvailability":[{"scope":"model:general","status":"known","effectivePercentRemaining":50,"runway":{"status":"through_reset","usableRunwaySeconds":null}}]},"windows":[]}]}
+JSON
+SH
+  chmod +x "$quota_stub"
+  # A lane key, not a free-form name: the lane naming check refuses a crew
+  # spawn whose id is not the canonical <harness>-<model>-<host>-<task> with a
+  # known harness token, a live model alias and a valid host
+  # (bin/fm-lane-naming-check.sh -> bin/fm-todo-prefix-check.sh).
+  id="mcode-m3.1f-hd2-crew-unaffected-z1"
   home="$w/home"
   proj="$w/crew-project"
   wt="$w/crew-wt"
@@ -862,10 +997,11 @@ test_spawn_fallback_chain_and_crew_scout_unaffected() {
     FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
     FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$wt" FM_FAKE_LAUNCH_LOG="$launchlog" \
+    FM_QUOTA_AXI_BIN="$quota_stub" \
     "$ROOT/bin/fm-spawn.sh" "$id" "$proj" >/dev/null 2>&1
   meta="$home/state/$id.meta"
   [ "$(meta_field "$meta" kind)" = ship ] || fail "crew-unaffected: expected an ordinary ship task"
-  [ "$(meta_field "$meta" harness)" = codex ] || fail "crew-unaffected: crew harness resolution changed"
+  [ "$(meta_field "$meta" harness)" = minimax-code ] || fail "crew-unaffected: crew harness resolution changed"
   [ "$(meta_field "$meta" model)" = default ] || fail "crew-unaffected: crew task must not invent a model"
   [ "$(meta_field "$meta" effort)" = default ] || fail "crew-unaffected: crew task must not invent an effort"
   launch=$(cat "$launchlog")
@@ -924,6 +1060,9 @@ make_fake_toolchain() {
   fm_fake_exit0 "$fakebin" node gh-axi chrome-devtools-axi lavish-axi
   # tmux fake supports fm-send's composer-verified submit path and optional
   # FM_FAKE_TMUX_LOG / FM_FAKE_TMUX_FAIL_LITERAL for reread-nudge assertions.
+  # FM_FAKE_TMUX_COMPOSER_PENDING=1 makes the submit unverifiable: the literal
+  # still reaches the target, but the composer keeps reading as pending, so
+  # fm-send reports "delivered but unconfirmed" instead of a confirmed submit.
   cat > "$fakebin/tmux" <<'SH'
 #!/usr/bin/env bash
 if [ -n "${FM_FAKE_TMUX_LOG:-}" ]; then
@@ -932,8 +1071,16 @@ fi
 case "$*" in
   *display-message*'#{pane_current_command}'*) printf '%s\n' codex; exit 0 ;;
   *display-message*'#{pane_id}'*) printf '%s\n' '%1'; exit 0 ;;
-  *display-message*'#{cursor_y}'*) printf '%s\n' 0; exit 0 ;;
-  *capture-pane*) printf '\n'; exit 0 ;;
+  *display-message*'#{cursor_y}'*)
+    if [ "${FM_FAKE_TMUX_COMPOSER_PENDING:-0}" = 1 ]; then printf '%s\n' 1; else printf '%s\n' 0; fi
+    exit 0 ;;
+  *capture-pane*)
+    if [ "${FM_FAKE_TMUX_COMPOSER_PENDING:-0}" = 1 ]; then
+      printf '╭─────────────────╮\n│ > CONFIG_REREAD │\n╰─────────────────╯\n'
+    else
+      printf '\n'
+    fi
+    exit 0 ;;
   *'send-keys'*' -l '*)
     [ "${FM_FAKE_TMUX_FAIL_LITERAL:-0}" = 1 ] && exit 1
     exit 0
@@ -1696,6 +1843,61 @@ test_config_reread_isolation_and_absent_and_send_failure() {
   pass "B16 config reread isolation, ABSENT, generation safety, send failure, and retry"
 }
 
+test_config_reread_unconfirmed_delivery_retires_pointer() {
+  # A pointer that was DELIVERED but could not be CONFIRMED must not be
+  # re-queued forever. The pointer reached the secondmate; only the submit
+  # acknowledgement is missing. The pending marker is retired and the
+  # inconclusive state is recorded. A genuine non-delivery still re-marks the
+  # pointer and still reports failure.
+  local w head log out err status instr pointer second_log second_out second_status
+  local fail_log fail_out fail_status fail_instr fail_pointer
+  w=$(new_world config-reread-unconfirmed)
+  head=$(git -C "$w/main" rev-parse HEAD)
+  add_sm_worktree "$w" alpha "$head"
+  mkdir -p "$w/alpha/config" "$w/alpha/state"
+  printf 'pi\n' > "$w/alpha/config/crew-harness"
+  printf 'codex\n' > "$w/home/config/crew-harness"
+  printf 'tmux\n' > "$w/home/config/backend"
+  printf 'tasks-axi\n' > "$w/home/config/backlog-backend"
+
+  # 1. The pointer is delivered, but the submit cannot be confirmed.
+  log="$w/unconfirmed.tmux.log"
+  err="$w/unconfirmed.err"
+  export FM_FAKE_TMUX_COMPOSER_PENDING=1
+  out=$(run_config_push "$w" "$log" 2>"$err"); status=$?
+  unset FM_FAKE_TMUX_COMPOSER_PENDING
+  expect_code 0 "$status" "a delivered-but-unconfirmed reread must not fail the config push"
+  instr=$(reread_instruction_path "$w/alpha") || fail "alpha instruction missing after the unconfirmed send"
+  pointer="CONFIG_REREAD: $instr"
+  assert_contains "$(cat "$log")" "$pointer" "the unconfirmed send must still have typed the pointer"
+  assert_contains "$out" "delivered but unconfirmed" \
+    "the config push must record the inconclusive delivery state"
+  assert_no_reread_pending "$w/alpha"
+
+  # 2. The retired pointer is not re-queued by the next pass.
+  second_log="$w/unconfirmed-second.tmux.log"
+  second_out=$(run_config_push "$w" "$second_log" 2>"$err"); second_status=$?
+  expect_code 0 "$second_status" "the pass after an unconfirmed delivery should succeed"
+  assert_no_reread_pending "$w/alpha"
+  assert_no_reread_retry_stages "$w/home" alpha
+  if [ -e "$second_log" ] && grep -Fq "CONFIG_REREAD:" "$second_log"; then
+    fail "the retired pointer must not be re-queued after a delivered-but-unconfirmed send"
+  fi
+
+  # 3. A genuine non-delivery still re-marks the pointer and still fails.
+  printf 'grok\n' > "$w/home/config/crew-harness"
+  fail_log="$w/not-delivered.tmux.log"
+  fail_out=$(FM_FAKE_TMUX_FAIL_LITERAL=1 run_config_push "$w" "$fail_log" 2>"$err"); fail_status=$?
+  expect_code 1 "$fail_status" "a genuine non-delivery must make the config push fail"
+  assert_contains "$fail_out" "send failed" "a genuine non-delivery must report the failure"
+  fail_instr=$(reread_instruction_path "$w/alpha") || fail "alpha instruction missing after the failed send"
+  fail_pointer="CONFIG_REREAD: $fail_instr"
+  assert_contains "$(cat "$fail_log")" "$fail_pointer" "the failed send must have typed the pointer"
+  assert_present "$(reread_pending_path "$w/alpha")" \
+    "a genuine non-delivery must re-mark the pointer for redelivery"
+  pass "B17 config reread retires a delivered-but-unconfirmed pointer and still re-marks a genuine non-delivery"
+}
+
 test_config_reread_publication_failure_retries_exact_generation() {
   local w head fakebin real_mv alpha_state out status stage log instr retry_out retry_status
   w=$(new_world config-reread-publication-retry)
@@ -2277,7 +2479,7 @@ SH
     FM_STATE_OVERRIDE="$w/home/state" FM_DATA_OVERRIDE="$w/home/data" \
     FM_PROJECTS_OVERRIDE="$w/home/projects" FM_CONFIG_OVERRIDE="$w/home/config" \
     FM_SPAWN_NO_GUARD=1 FM_FAKE_LAUNCH_LOG="$launchlog" \
-    "$ROOT/bin/fm-spawn.sh" sm "$sm" --secondmate 2>&1); status=$?
+    "$ROOT/bin/fm-spawn.sh" sm "$sm" --model gpt-6-luna --secondmate 2>&1); status=$?
   expect_code 0 "$status" "spawn should remain available after reread cleanup failure"
   assert_contains "$out" "CONFIG_REREAD: secondmate sm: quarantined pre-relaunch generations" \
     "spawn cleanup failure did not emit a CONFIG_REREAD quarantine diagnostic"
@@ -2341,6 +2543,7 @@ test_config_push_exits_nonzero_on_copy_error
 test_config_push_rereads_after_partial_propagation
 test_config_reread_per_home_changed_sets_and_exact_bytes
 test_config_reread_isolation_and_absent_and_send_failure
+test_config_reread_unconfirmed_delivery_retires_pointer
 test_config_reread_publication_failure_retries_exact_generation
 test_config_reread_write_failure_retains_exact_retry_generation
 test_config_reread_exact_temp_survives_adoption_failure

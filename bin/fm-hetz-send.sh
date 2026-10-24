@@ -238,4 +238,12 @@ if [ "$ssh_rc" -ne 0 ]; then
   exit "$ssh_rc"
 fi
 
+if [ "${FM_COMMS_NO_NOTIFY:-0}" != 1 ] && [ -x "$SCRIPT_DIR/fm-comms-notify.sh" ]; then
+  FM_HOME="$FM_HOME" FM_ROOT_OVERRIDE="$FM_ROOT" \
+    "$SCRIPT_DIR/fm-comms-notify.sh" notify \
+      --route hetz \
+      --file "$MSG_NAME" \
+      --content "$MESSAGE" >/dev/null 2>&1 || true
+fi
+
 printf 'sent at %s (%s)\n' "$TS2" "$MSG_NAME"

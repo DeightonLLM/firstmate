@@ -1,2 +1,0 @@
-PASS: INBOX symlink correctly rejected with safe error
-EXIT=0

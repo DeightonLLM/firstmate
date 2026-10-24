@@ -436,7 +436,7 @@ test_worktree_create_removes_worktree_when_path_missing() {
 
 test_spawn_preserves_orca_metadata_when_pathless_worktree_cleanup_fails() {
   local proj data state config id out status
-  id="orcapathlessz6"
+  id="luna6-hd2-orcapathlessz6"
   proj="$TMP_ROOT/pathless-cleanup-project"
   data="$TMP_ROOT/pathless-cleanup-data"
   state="$TMP_ROOT/pathless-cleanup-state"
@@ -471,7 +471,7 @@ test_spawn_preserves_orca_metadata_when_pathless_worktree_cleanup_fails() {
 
 test_spawn_writes_orca_metadata_and_launches_harness() {
   local proj wt data state config id out log
-  id="orcaspawnz1"
+  id="luna6-hd2-orcaspawnz1"
   proj="$TMP_ROOT/spawn-project"
   wt="$TMP_ROOT/spawn-wt"
   data="$TMP_ROOT/spawn-data"
@@ -500,7 +500,7 @@ test_spawn_writes_orca_metadata_and_launches_harness() {
   assert_grep "worktree=$wt" "$state/$id.meta" "meta missing Orca worktree path"
   assert_not_contains "$(cat "$log")" $'orca\x1f''terminal'$'\x1f''create' \
     "spawn should reuse the implicit terminal returned by Orca worktree creation"
-  assert_contains "$(cat "$log")" $'orca\x1f''terminal'$'\x1f''send'$'\x1f''--terminal'$'\x1f''term-spawn'$'\x1f''--text'$'\x1f''export GOTMPDIR=/tmp/fm-orcaspawnz1/gotmp'$'\x1f''--enter'$'\x1f''--json' \
+  assert_contains "$(cat "$log")" $'orca\x1f''terminal'$'\x1f''send'$'\x1f''--terminal'$'\x1f''term-spawn'$'\x1f''--text'$'\x1f''export GOTMPDIR=/tmp/fm-luna6-hd2-orcaspawnz1/gotmp'$'\x1f''--enter'$'\x1f''--json' \
     "spawn did not export GOTMPDIR through the Orca terminal"
   assert_contains "$(cat "$log")" "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false claude --dangerously-skip-permissions" \
     "spawn did not send the selected harness launch command through Orca"

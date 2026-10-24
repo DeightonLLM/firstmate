@@ -1,2 +1,0 @@
-working: preflight complete; starting branch and review-history discovery
-blocked: [key=secret-scan] required pre-session secret scan was refused by lean-ctx shell allowlist (exit 126); policy forbids tool/path bypass, so branch inspection and report are not started

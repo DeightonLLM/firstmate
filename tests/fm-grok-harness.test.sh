@@ -38,7 +38,10 @@ make_spawn_case() {
   wt="$case_dir/wt"
   fakebin=$(make_spawn_fakebin "$case_dir/fake")
   grok_home="$case_dir/grok"
-  id="grok-$name-x1"
+  # The canonical lane key shape is <harness>-<model>-<host>-<task>: the
+  # lane naming check refuses a task id that is not one (bin/fm-lane-naming-check.sh
+  # -> bin/fm-todo-prefix-check.sh), and the task id IS the lane key.
+  id="grok-luna6-hd2-$name-x1"
   mkdir -p "$home/data/$id" "$home/projects" "$home/state" "$home/config" "$grok_home"
   printf 'brief\n' > "$home/data/$id/brief.md"
   fm_git_worktree "$proj" "$wt" "fm/$id"

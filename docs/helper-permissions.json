@@ -93,7 +93,8 @@
       "quota-axi",
       "read",
       "uptime"
-    ]
+    ],
+    "required": false
   },
   "lean_ctx_contabo": {
     "config_path": "/root/.config/lean-ctx-contabo/config.toml",
@@ -119,19 +120,35 @@
       "ctx_search",
       "ctx_session",
       "ctx_tree",
+      "curl",
       "df",
+      "find",
+      "fm-context-preflight.sh",
+      "fm-doc-audience-check.sh",
       "fm-install-shellcheck.sh",
       "fm-lint.sh",
       "fm-session-start.sh",
       "fm-test-run.sh",
       "free",
+      "grep",
+      "kill",
+      "lane-todo-dash.sh",
+      "lavish-axi",
       "ls",
       "node",
       "npm",
+      "pgrep",
+      "ps",
+      "sha256sum",
+      "ss",
       "ssh",
+      "systemctl",
+      "touch",
       "uptime",
+      "wc",
       "xargs"
-    ]
+    ],
+    "required": true
   },
   "minimax": {
     "config_path": "/root/.minimax/permission.json",
@@ -155,6 +172,7 @@
       "/root/.zcode/cli/rollout/**",
       "/root/bin/**",
       "/root/firstmate-hd2stack/firstmate/**",
+      "/root/migration-0043/schema/**",
       "/root/tools/pi-agent/node_modules/.bin/pi --version 2>&1",
       "/usr/lib/node_modules/@minimax-ai/code/**",
       "/usr/local/bin/**",
@@ -167,6 +185,7 @@
       "/root/.local/bin/zcode doctor:*",
       "/root/bin/**",
       "/root/firstmate-hd2stack/firstmate/**",
+      "/root/migration-0043/**",
       "/root/tools/pi-agent/node_modules/.bin/pi --version 2>&1",
       "/tmp/**",
       "/usr/local/bin/**"
@@ -178,7 +197,28 @@
       "/root/.codex/auth.json",
       "/root/.pi/sessions/**",
       "/root/.bash_history"
-    ]
+    ],
+    "required": true,
+    "prohibited_write_roots": [
+      "/root/.ssh/id_*",
+      "/root/.secrets/**",
+      "/root/secret-quarantine/**",
+      "/root/.codex/auth.json",
+      "/root/.pi/sessions/**",
+      "/root/.bash_history"
+    ],
+    "prohibited_write_roots_note": "The prohibited secret roots apply to write_roots as well as read_roots. A blanket write to a secret root is never admissible; the drift check fails closed on it.",
+    "deny_rules": [
+      {
+        "tool_name": "bash",
+        "matcher": {
+          "kind": "command",
+          "pattern": "herdr:*"
+        },
+        "why": "An agent must never call the herdr CLI directly. Splitting the coordinator pane stacks worker panes on the operator's visible screen, and raw send-text/send-keys into a pane bypasses the sanctioned send path. This is the documented rule in docs/audits-20260928/AGENTSEC.md 3.5, and it also closes the HIGH gap 5.1 (the Pi hook only intercepted 'herdr pane split', never send-text/send-keys). Use the wrapper scripts instead: bin/fm-spawn.sh creates a worker pane and bin/fm-herdr-agent-report.sh reports the agent state."
+      }
+    ],
+    "deny_rules_note": "The mcode permission matcher treats a command pattern as a prefix on the FIRST command token, so 'herdr:*' refuses every direct herdr invocation from an agent turn. Script-file invocations such as 'bash bin/fm-herdr-agent-report.sh' are NOT affected, because their first token is 'bash'. This was proven in a live mcode run: 'herdr pane list' was refused by the rule and 'bash bin/fm-herdr-agent-report.sh working' ran normally."
   },
   "pi": {
     "rules_path": "/root/.pi/rules/lean-ctx.md",

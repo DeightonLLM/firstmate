@@ -96,16 +96,29 @@ collect_enforcements() {
     dg_status="inactive"
     dg_details="Bypassed via FM_DISPATCH_GUARD_BYPASS=1"
   else
-    local dg_cap="4"
-    if [ -r "$CONFIG/dispatch-max-lanes" ]; then
+    # The live-lane ceiling resolves from config/dispatch.json .max_lanes, then
+    # the legacy config/dispatch-max-lanes, then the built-in default. The
+    # schema and the fallback order belong to bin/fm-harness.sh; the read is
+    # spelled out here so the row can name the file the value came from.
+    local dg_cap="4" dg_cap_src=" (default)"
+    local dg_dispatch_cap=""
+    if [ -r "$CONFIG/dispatch.json" ]; then
+      dg_dispatch_cap=$(jq -r '
+        if (.max_lanes | type) == "number" then (.max_lanes | floor | tostring)
+        elif (.max_lanes | type) == "string" and (.max_lanes | test("^[0-9]+$")) then .max_lanes
+        else empty end' "$CONFIG/dispatch.json" 2>/dev/null || true)
+    fi
+    if [ -n "$dg_dispatch_cap" ]; then
+      dg_cap="$dg_dispatch_cap"
+      dg_cap_src=" from config/dispatch.json"
+    elif [ -r "$CONFIG/dispatch-max-lanes" ]; then
       dg_cap=$(tr -dc '0-9' < "$CONFIG/dispatch-max-lanes")
       [ -n "$dg_cap" ] || dg_cap="4"
-      dg_details="Active: live-lane cap=${dg_cap} from config/dispatch-max-lanes; Sol banned; load ceiling enforced"
-    else
-      dg_details="Active: live-lane cap=4 (default); Sol banned; load ceiling enforced"
+      dg_cap_src=" from config/dispatch-max-lanes"
     fi
+    dg_details="Active: live-lane cap=${dg_cap}${dg_cap_src}; Sol banned; retired MCode preview slug banned; configured-route gate enforced; load ceiling enforced"
   fi
-  printf 'fm-dispatch-guard\tbin/fm-dispatch-guard.sh\tBlocks banned model gpt-6.1-sol (no bypass), host CPU saturation (load >= cores), live lanes exceeding ceiling, exhausted provider quota\tconfig/dispatch-max-lanes, FM_DISPATCH_GUARD_MAX_LANES, FM_DISPATCH_GUARD_BYPASS\t%d\t%s\t%s\tEnsure FM_DISPATCH_GUARD_BYPASS is unset; set cap in config/dispatch-max-lanes\tSet FM_DISPATCH_GUARD_BYPASS=1 (Sol ban cannot be bypassed)\n' \
+  printf 'fm-dispatch-guard\tbin/fm-dispatch-guard.sh\tBlocks banned model gpt-6.1-sol (no bypass), the retired MCode preview slug minimax/MiniMax-M3.1-Flash-Preview (no bypass), a Pi spawn while the configured route is minimax-code, host CPU saturation (load >= cores), live lanes exceeding ceiling, exhausted provider quota\tconfig/dispatch.json, config/dispatch-max-lanes, FM_DISPATCH_GUARD_MAX_LANES, FM_DISPATCH_GUARD_ROUTE_BYPASS, FM_DISPATCH_GUARD_BYPASS\t%d\t%s\t%s\tEnsure FM_DISPATCH_GUARD_BYPASS is unset; set the cap in config/dispatch.json .max_lanes\tSet FM_DISPATCH_GUARD_BYPASS=1 (the Sol ban and the retired-slug ban cannot be bypassed)\n' \
     "$dg_active" "$dg_status" "$dg_details"
 
   # 2. fm-project-capacity

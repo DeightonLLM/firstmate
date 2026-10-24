@@ -1,6 +1,6 @@
 ---
 name: harness-adapters
-description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, kimi, and agy.
+description: Agent-only reference for firstmate harness operations. Use before spawning or recovering a crewmate or secondmate, handling a trust dialog, sending a harness-specific skill invocation, interrupting or exiting an agent, resuming an exited agent, or verifying a new harness adapter. Contains verified facts for claude, codex, opencode, pi, pi-signed, grok, kimi, agy, and minimax-code.
 user-invocable: false
 metadata:
   internal: true
@@ -128,6 +128,7 @@ The supported launch-profile flags below are verified locally; each row records 
 | opencode | `--model <provider/model>` | none for firstmate's interactive launch | Verified on opencode 1.17.6. `opencode run` has `--variant`, but firstmate launches the interactive `opencode --prompt` path, which has no verified effort flag. |
 | kimi | `--model <model>` | none | Verified 2026-07-25 on Kimi Code CLI 0.29.1. |
 | agy | `--model <model>` | `--effort <low\|medium\|high\|xhigh\|max>` | Verified 2026-10-11 against the installed AGY binary's own flag help and flag parser. agy model slugs (for example `gemini-3.1-pro-high`) also encode a reasoning tier in the name, so `--model` and `--effort` are independent axes and both are threaded. |
+| minimax-code | `-m, --model <provider/model>` | none | Verified 2026-10-21 against the installed `mcode` 0.6.12 binary's own `--help`. `-m, --model <provider/model>` selects the model for that Session only, and the binary documents no effort or thinking flag, so firstmate never threads one. |
 
 The concrete `harness` field owns adapter identity independently of the model provider: `harness=pi` with `model=xai/grok-*` is Pi using xAI, not `harness=grok`, and does not require Grok CLI login; `harness=grok` remains the standalone Grok Build CLI adapter.
 No script resolves that split for you: establish which credential store a tuple reads from the discovery surfaces below plus `quota-axi auth --json`'s per-provider sources, and show that reasoning rather than inferring it from a harness, model, or source name.
@@ -146,6 +147,7 @@ Use the discovery surface in the current authenticated environment because suppo
 | grok | Run `grok models`, which lists the models available to the current Grok installation and account. |
 | kimi | Run `kimi provider list --json`, which lists the current provider and model configuration. |
 | agy | Run `agy models`, which lists the models available to the current AGY installation and account. |
+| minimax-code | Run `mcode provider list`, which lists the configured model providers and their models for the current installation and account. |
 
 For an unfamiliar harness or model namespace, establish support and provider identity from that harness's authoritative CLI help, model listing, or current documentation rather than guessing from a name or prefix.
 A listing that reaches the account and does not contain the model is concrete evidence the model is unsupported: block that candidate and quote the result.
@@ -166,6 +168,7 @@ Natural language is acceptable if uncertain.
 - grok: `/<skill>`, for example `/no-mistakes` (same form as claude). Verified end to end: grok discovers the user-level `no-mistakes` skill, `/no-mistakes` invokes it, and grok drives a real `no-mistakes axi run`. Like codex's `$`/`/` popups, typing `/<skill>` opens grok's slash-autocomplete, so a too-fast Enter selects the popup entry instead of sending, and for an argument-taking command (like `/no-mistakes`'s optional task-first argument) that first Enter only expands the popup selection into an argument-hint placeholder rather than submitting - a genuine second Enter is required (see the grok section below for the 2026-07-03 incident and fix). `fm_tmux_submit_core`'s retried Enter (used by `fm-send` on the tmux backend) handles this through the structural composer reader; the herdr backend needed a dedicated fix (`fm_backend_herdr_composer_state`, docs/herdr-backend.md) because its prior delta-based verification false-positived on that same popup-close content change.
 - kimi: `/<skill>`, for example `/no-mistakes`.
 - agy: not verified. The AGY binary ships a `/skills` slash command and agent skills, but no `/<skill>` invocation form has been live-confirmed, so use natural language.
+- minimax-code: not verified. The `mcode` binary ships a `plugin` command, but no `/<skill>` invocation form has been live-confirmed, so use natural language.
 
 ## Submission acknowledgement hazards
 
@@ -453,3 +456,38 @@ actually delivers the `Stop` event to this hook in the interactive TUI. Establis
 requires launching an agy agent, which the implementing task forbade. Treat agy's turn-end
 signal as schema-verified and logic-verified but NOT live-verified; confirm it on the
 first real dispatch before relying on it for supervision.
+
+## minimax-code (VERIFIED 2026-10-21, mcode 0.6.12 binary at /home/hd2admin/.minimax-code/bin/mcode)
+
+MCode is the standalone `mcode` CLI, a MiniMax fork of pi.dev. Its process comm is
+`minimax-code`. The installed binary's own `--help` is the authoritative source for
+every flag fact below, and `bin/fm-harness.sh` plus `tests/fm-mcode-harness.test.sh`
+are the authoritative source for the detection facts.
+
+| Fact | Value |
+|---|---|
+| Busy state | PARTIAL, and the honest reading is narrower than "credits a real semantic source". The mcode self-report path works where the session's mcode runtime dir can load the local `mcode-herdr-agent` package; that package then reports `idle` / `working` / `blocked` to herdr, and `herdr pane list` shows the pane's agent state. A spawned lane's plugin root is physical so the local package can load, and every other runtime entry stays a symlink into the base runtime: the MCode CLI refuses a symlinked plugin root with `PLUGIN_ROOT_SYMLINK` and refuses a symlinked v2 as well, so both are real directories in the per-task runtime dir. MCode also runs lifecycle hooks with a fixed environment whitelist that carries no `HERDR_*` variable, so the reporter shim recovers the pane identity from the process that spawned it; without that recovery every hook is a silent no-op and the lane never registers with herdr at all. `unknown` therefore means the self-report path is unavailable for that pane, NEVER that the lane is idle, and the authoritative liveness read for a spawned lane is the pane's own process state. |
+| Status transport | Native append: `echo "<state>: <one short line>" >> state/<id>.status`. mcode is NOT in the lean-ctx replace-mode set - `bin/fm-brief.sh` carries `FM_HARNESS_LEAN_CTX_REPLACE="codex"`, and that set deliberately excludes every other verified harness. Never tell an mcode lane to use `ctx_shell`. |
+| Exit command | Not verified. No live minimax-code session has been exercised for its exit form, so treat it as unknown rather than guessing one. |
+| Interrupt | `ctrl+c`, by the binary's ordinary terminal convention. A live interrupt was NOT exercised, so treat it as unverified. |
+| Skill invocation | Not verified. Use natural language until a `/<skill>` form is live-confirmed. |
+| Autonomy | No autonomy flag. The binary exposes no permission-bypass option, so `fm-spawn.sh` launches it with a per-task isolated config dir (`MCODE_CONFIG_DIR` set to `/tmp/fm-<task-id>/mcode`) whose `permissionMode` is `bypassPermissions`. The data dir and the config dir are deliberately different paths: mcode binds its OAuth credential to the literal auth-home path, so `MINIMAX_DATA_DIR` stays the real one and a per-task data dir would make every spawned agent ask for a login. |
+| Headless | The binary DOES have a headless path: `mcode exec` runs a prompt non-interactively, and the harness caps it at one hour (3600000 ms), so a run that reaches the cap is killed mid-flight and any long task must preserve its raw data as it is produced. A crewmate lane is still spawned visibly through `bin/fm-spawn.sh`; the headless path is for a bounded measurement run, not for a supervised lane. |
+| Launch | `mcode [options] [command] [prompt]`. The brief is the POSITIONAL prompt argument, not a flag value, and `-m, --model <provider/model>` selects the model for that Session only. `bin/fm-spawn.sh <lane-key> <project-dir> --harness minimax-code --model minimax/MiniMax-M3.1-Flash --backend herdr [--scout]` spawns it. |
+| Env marker | None found. Detection is by process ancestry on the `minimax-code` process name, exercised by `tests/fm-mcode-harness.test.sh`. |
+| Model | `minimax/MiniMax-M3.1-Flash` is the routed M3.1 Flash model. Lane-key alias `m3.1f`. Never route GLM, and never route M3.1 through Pi. |
+| Label formats | THREE different ones: preflight label `<domain>-<surface>-<model>-<taskslug>`, spawn task id (lane key) `<harness>-<model>-<host>-<task>`, To-Do row prefix `[<harness>·<ModelAbbrev> <effort> @<Host>]`. Mixing them is the common dispatch failure. The lane key's host segment is the host where the owner runs - `controller` for the main firstmate home, `brandon` for this host - and `docs/todo-prefix-canonical-format.md` owns the contract and the alias table. |
+| Supervision | `bash bin/fm-watch-arm.sh` as a tracked background task, re-armed every turn. |
+
+**Turn-end signal: none is installed.** `fm-spawn.sh` installs no turn-end hook for
+minimax-code, so no firstmate-owned `state/<id>.turn-ended` marker is produced for its
+turns. A minimax-code task's busy record therefore reflects only the launch-brief turn
+seeded at spawn.
+
+**What is verified and what is not.** Verified here: the installed binary's version
+(0.6.12), its documented `--help` surface, the launch template and model-flag threading
+covered by `tests/fm-minimax-code-launch-template.test.sh`, and the detection, lock
+ancestry, liveness, and supervision-protocol selection covered by
+`tests/fm-mcode-harness.test.sh`. NOT verified: busy-state semantics, the exit command,
+a live interrupt, the skill invocation form, and a live turn-end delivery. Establish
+those on the first real dispatch before relying on them for supervision.

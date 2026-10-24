@@ -32,6 +32,7 @@ case "${1:-}" in
       esac
     done
     printf 'send-keys target=%s literal=%s arg=%s\n' "$target" "$literal" "${1:-}" >> "$FM_TMUX_LOG"
+    [ "${FM_FAKE_TMUX_SEND_FAIL:-0}" = 1 ] && exit 1
     exit 0 ;;
   display-message)
     target=
@@ -50,7 +51,14 @@ case "${1:-}" in
     printf '%%1\n'
     exit 0 ;;
   capture-pane)
-    printf '╭────╮\n│    │\n╰────╯\n'
+    if [ "${FM_FAKE_TMUX_COMPOSER_PENDING:-0}" = 1 ]; then
+      # A composer that still holds typed text: the submit was never
+      # acknowledged, so the verdict is pending, not empty. A bare "> " glyph
+      # would read as an empty composer by design, so real text is required.
+      printf '╭─────────────────╮\n│ > hello captain │\n╰─────────────────╯\n'
+    else
+      printf '╭────╮\n│    │\n╰────╯\n'
+    fi
     exit 0 ;;
   list-windows)
     printf 'foreign:%s\n' "${FM_FAKE_TMUX_WINDOW:-fm-lost}"
@@ -163,9 +171,46 @@ test_healthy_fm_id_send_still_works() {
   pass "fm-send strict: healthy fm-<id> sends still type once and submit"
 }
 
+test_delivery_outcomes_use_distinct_exit_codes() {
+  # Delivery and confirmation are separate facts. fm-send must never collapse
+  # "delivered but unconfirmed" into the same code as "not delivered",
+  # otherwise a caller re-sends a steer that already landed.
+  local dir fb home err log rc
+  dir="$TMP_ROOT/outcomes"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); home=$(setup_home outcomes); err="$dir/send.err"; log="$dir/tmux.log"; : > "$log"
+
+  # 1. Delivered and confirmed.
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 FM_SEND_SLEEP=0 \
+    "$SEND" sess:win "hello captain" >/dev/null 2>"$err"; rc=$?
+  expect_code 0 "$rc" "a confirmed delivery should exit 0"
+
+  # 2. Delivered but unconfirmed: the text reached the target, the submit was
+  #    not acknowledged. This must be a DISTINCT non-zero code, never 1.
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 FM_SEND_SLEEP=0 \
+    FM_FAKE_TMUX_COMPOSER_PENDING=1 \
+    "$SEND" sess:win "hello captain" >/dev/null 2>"$err"; rc=$?
+  expect_code 2 "$rc" "a delivered-but-unconfirmed send must exit with the distinct unconfirmed code"
+  assert_contains "$(cat "$err")" "delivered but unconfirmed" \
+    "the unconfirmed outcome must name itself in the diagnostic"
+  assert_contains "$(cat "$err")" "verdict=pending" \
+    "the unconfirmed outcome must preserve the backend verdict"
+  assert_not_contains "$(cat "$err")" "text not sent" \
+    "an unconfirmed delivery must not be reported as a non-delivery"
+
+  # 3. Not delivered: the literal never reached the target.
+  PATH="$fb:$PATH" FM_HOME="$home" FM_ROOT_OVERRIDE="$home" FM_TMUX_LOG="$log" FM_SEND_SETTLE=0 FM_SEND_SLEEP=0 \
+    FM_FAKE_TMUX_SEND_FAIL=1 \
+    "$SEND" sess:win "hello captain" >/dev/null 2>"$err"; rc=$?
+  expect_code 1 "$rc" "a genuine non-delivery must exit 1"
+  assert_contains "$(cat "$err")" "text not sent" \
+    "a genuine non-delivery must say the text was not sent"
+  pass "fm-send strict: delivered-and-confirmed, delivered-but-unconfirmed and not-delivered use three distinct exit codes"
+}
+
 test_exact_lane_id_send_still_works
 test_unset_fm_home_fails
 test_unresolvable_target_does_not_tmux_fallback
 test_prefixless_herdr_pane_id_fails
 test_unmatched_single_colon_target_must_exist
 test_healthy_fm_id_send_still_works
+test_delivery_outcomes_use_distinct_exit_codes

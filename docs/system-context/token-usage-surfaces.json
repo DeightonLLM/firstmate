@@ -1,0 +1,66 @@
+{
+  "schema": "firstmate-token-surfaces/v1",
+  "owner": "docs/token-usage-surface-contract.md",
+  "purpose": "The fleet-wide roster of coding surfaces that report token usage, and the providers each surface is expected to report. A surface that publishes nothing is still listed here, so its absence is visible as unknown coverage instead of silently missing from the total.",
+  "expected_basis": "Captain order 2026-10-21: 'I want all tokens used aggregated', 'every token, every account, every surface'. The provider set {agy, codex, glm, minimax} is the fleet's coding-provider set; the Captain named codex (two accounts across surfaces), minimax (two accounts), the Gemini/Antigravity account and glm.",
+  "surfaces": [
+    {
+      "surface": "controller",
+      "label": "Controller (Crisp-R)",
+      "host": "vmi3196300",
+      "aliases": ["crisp-r", "vmi3196300", "local-controller"],
+      "role": "captain_surface",
+      "expected_providers": ["agy", "codex", "glm", "minimax"],
+      "collection": {
+        "method": "owner_ledger",
+        "path": "data/tracker-tokens-20261019/ledger/usage.json"
+      },
+      "notes": "The Captain's own surface and the one the board runs on. 'Crisp-R' is the Captain's name for this session; it is an alias of this surface, not a separate host, so it never gets its own row in a total."
+    },
+    {
+      "surface": "hd2stack",
+      "label": "HD2Stack",
+      "host": "vmi3238503",
+      "aliases": ["hd2stack", "vmi3238503", "hd2"],
+      "role": "execution_surface",
+      "expected_providers": ["agy", "codex", "glm", "minimax"],
+      "collection": {
+        "method": "published_surface_usage"
+      },
+      "notes": "The fleet's primary firstmate and execution surface. Usage rows for this surface already exist inside the Controller's owner ledger; a published surface-usage document adds the days that ledger does not carry."
+    },
+    {
+      "surface": "brandon-compute",
+      "label": "Hetz (brandon-compute)",
+      "host": "brandon-compute.tailddbb4d.ts.net",
+      "aliases": ["brandon-compute", "hetz", "brandon-compute.tailddbb4d.ts.net"],
+      "role": "worker_surface",
+      "expected_providers": ["agy", "codex", "glm", "minimax"],
+      "collection": {
+        "method": "published_surface_usage"
+      },
+      "notes": "Reached over the sanctioned comms route only. This lane never reads or writes the Hetz host."
+    },
+    {
+      "surface": "elevatesVPS",
+      "label": "Elevate VPS (KVM1)",
+      "host": "srv1137994-elevatesci",
+      "aliases": ["elevatesVPS", "elevatesci-vps", "srv1137994", "srv1137994-elevatesci", "kvm1"],
+      "role": "worker_surface",
+      "expected_providers": ["agy", "codex", "glm", "minimax"],
+      "collection": {
+        "method": "published_surface_usage"
+      },
+      "notes": "The fourth coding surface in the roster. Listed so its absence from the token total is visible as unknown coverage, not as a quiet omission."
+    }
+  ],
+  "provider_labels": {
+    "agy": "Antigravity (Gemini)",
+    "codex": "Codex",
+    "glm": "GLM",
+    "minimax": "MiniMax"
+  },
+  "provider_notes": {
+    "agy": "no local usage metadata surface exposes Gemini/Antigravity token counts, so this provider has no usage source on any surface; quota-axi reports its windows, which is a different field"
+  }
+}

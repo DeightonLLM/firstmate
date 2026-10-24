@@ -46,7 +46,10 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 
 mkdir -p "$STATE"
 LEASE_COMMAND_LOCK="$STATE/.fm-lease-command.lock"
-fm_lock_acquire_wait "$LEASE_COMMAND_LOCK"
+if ! fm_lock_acquire_wait "$LEASE_COMMAND_LOCK"; then
+  echo "error: could not take the lease command lock $LEASE_COMMAND_LOCK (holder pid ${FM_LOCK_HELD_PID:-unknown})" >&2
+  exit 1
+fi
 trap 'fm_lock_release "$LEASE_COMMAND_LOCK"' EXIT
 
 usage() {

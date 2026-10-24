@@ -94,28 +94,28 @@ runtime model or lane result.
 
 ## 5. Runtime routing
 
-The intended work fleet uses **MiniMax M2.7**, including OMP work panes. Verify
+The intended work fleet uses **MiniMax M3.1 Flash**, including OMP work panes. Verify
 the model visibly loaded in each pane before every dispatch. If a pane label says
-M2.7 but the terminal reports another model, the terminal wins: do not send M2.7
+MiniMax M3.1 Flash but the terminal reports another model, the terminal wins: do not send MiniMax M3.1 Flash
 work there until the runtime or label is corrected.
 
 Routing order from canonical policy:
 
 | Runtime model | Use |
 |---|---|
-| MiniMax M2.7 | Primary bounded work, browser QA, functional QA, visual checks |
+| MiniMax M3.1 Flash Preview | Primary bounded work, browser QA, functional QA, visual checks |
 | GLM 5.2 | Independent checker and small bounded planning only |
 | GLM 5.2 | Small bounded planning only |
 | GLM 5 Turbo | Operator-directed special case only |
 | Codex | Coordinator and final reviewer |
 
 Browser work never goes to MiniMax M3, GLM 5.2, or GLM 5 Turbo. If no verified
-M2.7 browser pane is idle, queue the lane; do not silently downgrade it.
+MiniMax M3.1 Flash Preview browser pane is idle, queue the lane; do not silently downgrade it.
 
 ### Live-state lesson from 2026-08-02
 
 The workspace `browser-primary-minimax27-pi-a` visibly reported MiniMax M3,
-while inspected OMP panes reported MiniMax M2.7. This proves why labels cannot
+while inspected OMP panes reported MiniMax. This proves why labels cannot
 replace runtime inspection.
 
 ## 5A. Operator visual awareness and war-room layout
@@ -196,9 +196,9 @@ required runtimes are live-verified:
 
 | Slot | Runtime | Best use | Constraint |
 |---|---|---|---|
-| Pi A | MiniMax M2.7 | Primary bounded execution, QA, or source archaeology | Use lean-ctx + To-Do List extension |
-| Pi B | MiniMax M2.7 | Independent corroboration, docs/indexing, or a non-overlapping lane | Must not duplicate Pi A's write/live boundary |
-| Pi C | MiniMax M2.7 | Third independent bounded lane | Prefer this over OMP for generic work |
+| Pi A | MiniMax M3.1 Flash | Primary bounded execution, QA, or source archaeology | Use lean-ctx + To-Do List extension |
+| Pi B | MiniMax M3.1 Flash | Independent corroboration, docs/indexing, or a non-overlapping lane | Must not duplicate Pi A's write/live boundary |
+| Pi C | MiniMax M3.1 Flash | Third independent bounded lane | Prefer this over OMP for generic work |
 | Claude | Verified Claude runtime | Read-only review, adversarial challenge, or second opinion | Never substitute until CLI/session authentication and live runtime are verified |
 
 The Pi lanes should be given different evidence sources or acceptance

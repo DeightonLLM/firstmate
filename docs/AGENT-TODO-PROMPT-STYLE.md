@@ -21,7 +21,7 @@ or
 
 ### Component Definitions:
 - **`<ModelAbbrev>`**: Short model identifier:
-  - `M2.7` / `M3.1F` (MiniMax M2.7 / M3.1 Flash)
+  - `M3.1F` (MiniMax M3.1 Flash)
   - `G38F` / `Gemini 3.8` (Gemini 3.8 Flash Medium)
   - `GLM53` (GLM 5.3 Flash)
   - `Luna6` (Codex Luna 6 MAX)
@@ -41,11 +41,11 @@ or
 
 ```
 Updated Plan
-└ [•] [M2.7 HS @ Dubz] Async tracker test-only repair dispatch
+└ [•] [M3.1F m @ Dubz] Async tracker test-only repair dispatch
   [✓] [M3.1F @ Dubz] Fast review and independent check
   [ ] [G38F m @ HD2] Bounded policy and baseline verification
   [ ] [GLM53 h @ Hetz] Independent checker and verification pass
-  [ ] [M2.7 HS @ Dubz] Closeout reconciliation and roadmap sync
+  [ ] [M3.1F m @ Dubz] Closeout reconciliation and roadmap sync
 ```
 
 ---
@@ -58,7 +58,7 @@ Every dispatched prompt to a subagent, Second Mate, or Herdr lane MUST include t
 Use the To-Do List extension before your first task action.
 Every item MUST start with the left-hand metadata prefix:
 [<ModelAbbrev> <Speed/Effort> @ <Host>] <Action>
-(e.g., [M2.7 HS @ HD2] or [G38F m @ HD2])
+(e.g., [M3.1F m @ HD2] or [G38F m @ HD2])
 At least 5 visible items with a dependency chain (t1 → t2 → t3 → t4 → t5).
 Filesystem TODO trackers are strictly forbidden.
 ```

@@ -1,0 +1,1819 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HD2 Fleet Unified Board &amp; To-Do Tracker</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-border: #30363d;
+      --ink: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --yellow: #d29922;
+      --red: #f85149;
+      --purple: #bc8cff;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+    .container { max-width: 1480px; margin: 0 auto; }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--panel-border);
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 1.6rem; font-weight: 600; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    
+    /* === DISCRETE STATUS & METADATA PILLS (TICKET 0026 & 0035) === */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.3;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .pill-verified { background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.35); }
+    .pill-claimed { background: rgba(88, 166, 255, 0.15); color: #58a6ff; border: 1px solid rgba(88, 166, 255, 0.35); }
+    .pill-in-progress { background: rgba(188, 140, 255, 0.15); color: #bc8cff; border: 1px solid rgba(188, 140, 255, 0.35); }
+    .pill-not-started { background: rgba(139, 148, 158, 0.12); color: #8b949e; border: 1px solid rgba(139, 148, 158, 0.25); }
+    .pill-blocked { background: #f85149; color: #ffffff; border: 1px solid #da3633; font-weight: 700; box-shadow: 0 0 0 1px rgba(248,81,73,0.35); }
+    .pill-held { background: #d29922; color: #0d1117; border: 1px solid #bb8009; font-weight: 700; }
+    
+    .pill-sec {
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: 500;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+      display: inline-block;
+    }
+    .pill-p0 { background: rgba(248, 81, 73, 0.2); color: #ff7b72; border: 1px solid rgba(248, 81, 73, 0.35); font-weight: 700; }
+    .pill-p1 { background: rgba(210, 153, 34, 0.2); color: #e3b341; border: 1px solid rgba(210, 153, 34, 0.35); }
+    .pill-p2 { background: rgba(88, 166, 255, 0.15); color: #79c0ff; border: 1px solid rgba(88, 166, 255, 0.3); }
+    .pill-surface { background: rgba(255, 255, 255, 0.06); color: #c9d1d9; border: 1px solid rgba(255, 255, 255, 0.12); }
+
+    .staleness-meter {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--panel);
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      flex-wrap: wrap;
+    }
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      flex: 0 0 auto;
+    }
+    .meter-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: var(--ink);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+    .meter-btn:hover { background: #30363d; }
+
+    .grid-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; font-weight: 600; }
+    .stat-value { font-size: 24px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .stat-sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin: 28px 0 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .section-note { color: var(--muted); font-size: 12px; font-weight: 400; }
+
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      margin-bottom: 24px;
+    }
+    table {
+      width: 100%;
+      min-width: 820px;
+      border-collapse: collapse;
+      background: var(--panel);
+      margin-bottom: 0;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--panel-border);
+      vertical-align: middle;
+    }
+    th {
+      background: #1c2128;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .mono { font-family: var(--font-mono); font-size: 12px; }
+    .path-link { color: var(--accent); text-decoration: none; }
+    .path-link:hover { text-decoration: underline; }
+
+    /* Live 2x2 grid mirror */
+    .grid-2x2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .lane-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 14px;
+      min-width: 0;
+    }
+    .lane-card .cell { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+    .lane-card .lane-name { font-family: var(--font-mono); font-size: 12px; margin: 6px 0 8px; word-break: break-word; }
+    .lane-card .lane-meta { color: var(--muted); font-size: 11px; margin-top: 6px; word-break: break-word; }
+    .lane-card.focused { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(88,166,255,0.35) inset; }
+
+    /* Filters card */
+    .filters {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filters label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .filters select {
+      background: #21262d;
+      border: 1px solid var(--panel-border);
+      color: var(--ink);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    footer {
+      border-top: 1px solid var(--panel-border);
+      padding-top: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    @media (max-width: 960px) {
+      body { padding: 16px; }
+      h1 { font-size: 1.3rem; }
+      .grid-summary { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+      .grid-2x2 { grid-template-columns: 1fr; }
+    }
+  /* HD2_QUOTA_BAND_CSS_BEGIN */
+    /* === HD2 QUOTA + AGGREGATE TOKEN BAND (added 2026-10-21, lane p1-leadlists/lane-q-quota-board) ===
+       Additive only: every rule below is new. No existing rule was edited or removed. */
+    .qb {
+      margin: 0 0 22px;
+      background: linear-gradient(180deg, #131a23 0%, #10161d 100%);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 14px 16px 16px;
+    }
+    .qb-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+    .qb-title { margin: 0 0 6px; font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .qb-agg { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .qb-agg-label { color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: .06em; }
+    .qb-agg-value { font-size: 30px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--green); }
+    .qb-agg-value.qb-unknown { color: var(--muted); }
+    .qb-agg-meta { color: var(--muted); font-size: 12px; }
+    .qb-agg-note { color: var(--muted); font-size: 11.5px; margin-top: 6px; max-width: 100ch; line-height: 1.55; }
+    .qb-agg-note b { color: var(--ink); font-weight: 600; }
+    .qb-meta { text-align: right; color: var(--muted); font-size: 11px; line-height: 1.65; }
+    .qb-meta .qb-mono { font-family: var(--font-mono); }
+    .qb-flag { display: inline-block; margin-top: 5px; padding: 1px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; background: rgba(210,153,34,.16); color: #e3b341; border: 1px solid rgba(210,153,34,.35); }
+    .qb-flag.qb-fresh { background: rgba(63,185,80,.15); color: var(--green); border-color: rgba(63,185,80,.35); }
+    .qb-legend { display: flex; flex-wrap: wrap; gap: 5px 16px; padding: 8px 10px; margin-bottom: 12px; background: rgba(255,255,255,.02); border: 1px solid var(--panel-border); border-radius: 8px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+    .qb-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+    .qb-legend-item b { color: var(--ink); font-weight: 600; }
+    .qb-sw { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+    .qb-sw-ok { background: var(--green); }
+    .qb-sw-warn { background: var(--yellow); }
+    .qb-sw-bad { background: var(--red); }
+    .qb-sw-unknown { background: repeating-linear-gradient(45deg,#30363d,#30363d 2px,#161b22 2px,#161b22 4px); border: 1px dashed #6e7681; }
+    .qb-sw-notset { background: #21262d; border: 1px dashed #6e7681; }
+    .qb-sw-detail { background: repeating-linear-gradient(90deg,#8b949e,#8b949e 2px,transparent 2px,transparent 4px); }
+    .qb-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .qb-tile { background: var(--panel); border: 1px solid var(--panel-border); border-left: 3px solid var(--qb-accent, var(--accent)); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+    .qb-tile:hover { border-color: var(--qb-accent, var(--accent)); }
+    .qb-tile:focus-visible { outline: 2px solid var(--qb-accent, var(--accent)); outline-offset: 2px; }
+    .qb-tile-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .qb-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--qb-accent, var(--accent)); flex: 0 0 auto; box-shadow: 0 0 6px var(--qb-accent, var(--accent)); }
+    .qb-name { font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; }
+    .qb-badge { margin-left: auto; font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; font-weight: 700; color: var(--muted); border: 1px solid var(--panel-border); border-radius: 4px; padding: 0 5px; }
+    .qb-tile-sub { color: var(--muted); font-size: 10.5px; margin: 3px 0 7px; }
+    .qb-wrow { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+    .qb-surf { flex: 0 0 28px; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .04em; color: var(--muted); }
+    .qb-wlabel { flex: 1 1 auto; min-width: 0; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qb-meter { flex: 0 0 60px; height: 6px; border-radius: 3px; background: #21262d; overflow: hidden; }
+    .qb-meter > i { display: block; height: 100%; background: var(--qb-health, #6e7681); }
+    .qb-meter.qb-ok > i { background: var(--green); }
+    .qb-meter.qb-warn > i { background: var(--yellow); }
+    .qb-meter.qb-bad > i { background: var(--red); }
+    .qb-meter.qb-unknown { background: repeating-linear-gradient(45deg,#21262d,#21262d 3px,#161b22 3px,#161b22 6px); outline: 1px dashed #6e7681; outline-offset: -1px; }
+    .qb-meter.qb-unknown > i { background: transparent; }
+    .qb-pct { flex: 0 0 36px; text-align: right; font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .qb-pct.qb-unknown { color: var(--muted); }
+    .qb-pct.qb-bad { color: var(--red); }
+    .qb-pct.qb-warn { color: var(--yellow); }
+    .qb-reset { flex: 0 0 auto; font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+    .qb-stale-tag { flex: 0 0 auto; font-size: 8.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #e3b341; border: 1px solid rgba(210,153,34,.4); background: rgba(210,153,34,.14); border-radius: 3px; padding: 0 3px; }
+    .qb-others { margin-top: 5px; font-size: 10px; color: var(--muted); }
+    .qb-tokens { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--panel-border); display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+    .qb-tok-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; }
+    .qb-tok-value { font-family: var(--font-mono); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .qb-tok-value.qb-unknown { color: var(--muted); font-weight: 600; }
+    .qb-tok-note { font-size: 10px; color: var(--muted); }
+    .qb-empty { grid-column: 1 / -1; border: 1px dashed var(--panel-border); border-radius: 8px; padding: 14px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .qb-empty b { color: var(--ink); }
+    .qb-pop { position: fixed; z-index: 60; background: #10161d; border: 1px solid var(--qb-accent, #30363d); border-radius: 8px; padding: 10px 12px; box-shadow: 0 12px 34px rgba(0,0,0,.6); font-size: 11.5px; color: var(--ink); max-width: min(430px, calc(100vw - 24px)); max-height: min(72vh, 560px); overflow: auto; }
+    .qb-pop h4 { margin: 0 0 6px; font-size: 12px; display: flex; align-items: center; gap: 6px; font-weight: 600; }
+    .qb-pop table { width: 100%; min-width: 0; border-collapse: collapse; font-size: 10.5px; margin: 0 0 4px; background: transparent; }
+    .qb-pop th, .qb-pop td { padding: 3px 5px; text-align: left; border-bottom: 1px solid var(--panel-border); white-space: nowrap; background: transparent; }
+    .qb-pop th { background: transparent; color: var(--muted); font-size: 9.5px; }
+    .qb-pop .qb-pop-title { font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; margin: 8px 0 3px; }
+    .qb-day { display: flex; align-items: center; gap: 7px; margin-top: 3px; }
+    .qb-day-date { flex: 0 0 72px; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+    .qb-day-bar { flex: 1 1 auto; height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; }
+    .qb-day-bar > i { display: block; height: 100%; background: var(--qb-accent, var(--accent)); }
+    .qb-day-bar.qb-unknown { background: repeating-linear-gradient(45deg,#21262d,#21262d 3px,#161b22 3px,#161b22 6px); outline: 1px dashed #6e7681; outline-offset: -1px; }
+    .qb-day-val { flex: 0 0 96px; text-align: right; font-family: var(--font-mono); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+    .qb-day-val.qb-unknown { color: var(--muted); }
+    .qb-pop-note { color: var(--muted); font-size: 10.5px; margin-top: 6px; line-height: 1.5; }
+    .qb-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    /* === v2 additions (2026-10-21, lane p1-leadlists/lane-t-quota-band-v2) ===
+       The two measured windows (previous completed day, last 7 completed days),
+       the account / provider-detail tables, and the freshness strip. */
+    .qb-measure { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .qb-measure-card { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+    .qb-measure-label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 700; }
+    .qb-measure-range { font-size: 10.5px; color: var(--muted); font-family: var(--font-mono); margin-top: 1px; }
+    .qb-measure-value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--green); margin: 4px 0 3px; line-height: 1.15; }
+    .qb-measure-value.qb-unknown { color: var(--muted); }
+    .qb-measure-break { font-size: 11px; color: var(--muted); line-height: 1.6; }
+    .qb-measure-break b { color: var(--ink); font-weight: 600; }
+    .qb-measure-break .qb-detail { color: var(--yellow); }
+    .qb-measure-break .qb-excluded { color: #e3b341; }
+    .qb-fresh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 12px; background: rgba(255,255,255,.02); border: 1px solid var(--panel-border); border-radius: 8px; font-size: 11px; color: var(--muted); line-height: 1.5; }
+    .qb-fresh-state { font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 10px; padding: 1px 8px; border-radius: 9999px; border: 1px solid rgba(63,185,80,.35); background: rgba(63,185,80,.15); color: var(--green); flex: 0 0 auto; }
+    .qb-fresh-state[data-freshness="stale"] { border-color: rgba(210,153,34,.45); background: rgba(210,153,34,.16); color: #e3b341; }
+    .qb-fresh-state[data-freshness="unknown"] { border-color: #6e7681; background: #21262d; color: var(--muted); }
+    .qb-fresh-btn { margin-left: auto; background: var(--panel); color: var(--ink); border: 1px solid var(--panel-border); border-radius: 6px; padding: 4px 10px; font-size: 10.5px; cursor: pointer; font-family: inherit; flex: 0 0 auto; }
+    .qb-fresh-btn:hover { border-color: var(--accent); }
+    .qb-fresh-refresh { margin: -6px 0 12px; padding: 0 10px; font-size: 10.5px; color: var(--muted); line-height: 1.55; }
+    .qb-stale-banner { margin-bottom: 12px; padding: 9px 12px; border-radius: 8px; border: 1px solid rgba(210,153,34,.45); background: rgba(210,153,34,.14); color: #e3b341; font-size: 12px; line-height: 1.55; }
+    .qb-stale-banner[hidden] { display: none; }
+    .qb-table-wrap { overflow-x: auto; margin-bottom: 12px; }
+    .qb-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .qb-table th, .qb-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--panel-border); white-space: nowrap; background: transparent; }
+    .qb-table th { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+    .qb-table td.qb-num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .qb-table td.qb-unknown { color: var(--muted); }
+    .qb-table td.qb-detail-cell { color: var(--yellow); }
+    .qb-table td.qb-excluded-cell { color: #e3b341; }
+    .qb-table tr.qb-total td { font-weight: 700; border-top: 1px solid var(--panel-border); }
+    .qb-sub { display: block; font-size: 9.5px; color: var(--muted); font-weight: 400; white-space: normal; }
+    .qb-sub.qb-detail { color: var(--yellow); }
+    .qb-sub.qb-excluded { color: #e3b341; }
+    .qb-table-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
+    .qb-accounts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    @media (max-width: 1200px) { .qb-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 880px) { .qb-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .qb-meta { text-align: left; } .qb-measure { grid-template-columns: 1fr; } .qb-accounts { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) { .qb-tiles { grid-template-columns: 1fr; } .qb-pop { left: 8px !important; right: 8px; max-width: none; width: auto; } }
+    /* HD2_QUOTA_BAND_CSS_END */
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>
+          <span>&#9889; HD2 Fleet Unified Board &amp; To-Do Tracker</span>
+          <span class="pill pill-verified">Unified Synced</span>
+        </h1>
+        <div style="color: var(--muted); font-size: 12px; margin-top: 4px;">
+          Primary Host: <span class="mono">vmi3238503</span> (HD2Stack) &middot; Surface: <span class="mono">100.71.95.76</span> &middot; Model: <span class="mono">Gemini 3.8 Flash Medium</span>
+        </div>
+      </div>
+      <div id="staleness-box" class="staleness-meter">
+        <div id="pulse" class="pulse-dot"></div>
+        <div>
+          <div style="font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 600;">Snapshot Freshness</div>
+          <div style="font-weight: 600; font-variant-numeric: tabular-nums;" id="staleness-label">FRESH &middot; Synchronized</div>
+        </div>
+        <button class="meter-btn" onclick="location.reload()">Refresh</button>
+      </div>
+    </header>
+    <!-- HD2_QUOTA_BAND_BEGIN -->
+    <!-- =====================================================================
+         HD2 QUOTA + AGGREGATE TOKEN USE BAND
+         Added 2026-10-21 by lane p1-leadlists/lane-q-quota-board.
+         Additive insert: nothing above or below this block was removed,
+         and no existing element was replaced. The band renders from the
+         inline snapshot below; if that snapshot is missing, empty or
+         unreadable the band says so instead of showing a fake zero.
+         ===================================================================== -->
+    <section id="quota-band" class="qb" aria-labelledby="qb-title" data-freshness="unknown">
+      <div class="qb-top">
+        <div class="qb-top-main">
+          <h2 id="qb-title" class="qb-title"><span aria-hidden="true">&#128202;</span> Quota &amp; Measured Token Use</h2>
+          <div class="qb-agg">
+            <span class="qb-agg-label" id="qb-agg-label">Grand measured total &mdash; last 7 completed days</span>
+            <span class="qb-agg-value qb-unknown" id="qb-agg-value">&mdash;</span>
+            <span class="qb-agg-meta" id="qb-agg-meta">not collected yet</span>
+          </div>
+          <div class="qb-agg-note" id="qb-agg-note">No snapshot has been collected for this band yet, so no figure is shown. An unmeasured value is shown as <b>unknown</b>, never as <b>0</b>.</div>
+        </div>
+        <div class="qb-meta" id="qb-meta">
+          <div class="qb-mono">snapshot: not collected</div>
+          <span class="qb-flag" id="qb-flag">no data</span>
+        </div>
+      </div>
+
+      <div class="qb-stale-banner" id="qb-stale-banner" role="status" hidden></div>
+
+      <div class="qb-fresh" id="qb-fresh">
+        <span class="qb-fresh-state" id="qb-fresh-state" data-freshness="unknown">unknown</span>
+        <span class="qb-fresh-text" id="qb-fresh-text">no snapshot yet.</span>
+        <button type="button" class="qb-fresh-btn" id="qb-reload">Reload this snapshot</button>
+      </div>
+      <div class="qb-fresh-refresh" id="qb-fresh-refresh"></div>
+
+      <div class="qb-measure" id="qb-measure">
+        <div class="qb-measure-card">
+          <div class="qb-measure-label">Previous completed day</div>
+          <div class="qb-measure-range" id="qb-prev-range">&mdash;</div>
+          <div class="qb-measure-value qb-unknown" id="qb-prev-value">&mdash;</div>
+          <div class="qb-measure-break" id="qb-prev-break"></div>
+        </div>
+        <div class="qb-measure-card">
+          <div class="qb-measure-label">Last 7 completed days</div>
+          <div class="qb-measure-range" id="qb-week-range">&mdash;</div>
+          <div class="qb-measure-value qb-unknown" id="qb-week-value">&mdash;</div>
+          <div class="qb-measure-break" id="qb-week-break"></div>
+        </div>
+      </div>
+
+      <div class="qb-accounts">
+        <div>
+          <p class="qb-table-title">Tokens by account</p>
+          <div class="qb-table-wrap">
+            <table class="qb-table" id="qb-account-table">
+              <thead>
+                <tr><th>account</th><th>previous day</th><th>last 7 days</th><th>latest known</th></tr>
+              </thead>
+              <tbody id="qb-account-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <p class="qb-table-title">Measured at provider level (never added to an account)</p>
+          <div class="qb-table-wrap">
+            <table class="qb-table" id="qb-detail-table">
+              <thead>
+                <tr><th>provider detail</th><th>previous day</th><th>last 7 days</th><th>whole series</th></tr>
+              </thead>
+              <tbody id="qb-detail-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="qb-legend" id="qb-legend" role="group" aria-label="Band legend">
+        <span class="qb-legend-item" data-legend-key="account_colour"><span class="qb-sw qb-sw-ok" style="background:#58a6ff"></span><b>account colour</b> &mdash; one colour per real account; two accounts of the same provider stay separate</span>
+        <span class="qb-legend-item" data-legend-key="meter_green"><span class="qb-sw qb-sw-ok"></span><b>50% or more left</b></span>
+        <span class="qb-legend-item" data-legend-key="meter_amber"><span class="qb-sw qb-sw-warn"></span><b>20-49% left</b></span>
+        <span class="qb-legend-item" data-legend-key="meter_red"><span class="qb-sw qb-sw-bad"></span><b>under 20% left</b></span>
+        <span class="qb-legend-item" data-legend-key="meter_grey"><span class="qb-sw qb-sw-unknown"></span><b>unknown</b> &mdash; no reading was available; unknown is never a zero</span>
+        <span class="qb-legend-item" data-legend-key="not_set_up"><span class="qb-sw qb-sw-notset"></span><b>not set up</b> &mdash; no credentials on that surface; a configuration state, not a usage number</span>
+        <span class="qb-legend-item" data-legend-key="stale"><span class="qb-sw qb-sw-warn"></span><b>stale</b> &mdash; older than the stated bound; the age is shown, the figure is still the measured one</span>
+        <span class="qb-legend-item" data-legend-key="unattributed"><span class="qb-sw qb-sw-detail"></span><b>provider detail</b> &mdash; measured at provider level only; never added to an account</span>
+        <span class="qb-legend-item" data-legend-key="excluded"><span class="qb-sw qb-sw-warn"></span><b>excluded</b> &mdash; a local subset an official total supersedes; in no total at all</span>
+        <span class="qb-legend-item" data-legend-key="zero_vs_unknown"><span class="qb-sw qb-sw-ok"></span><b>0</b> &mdash; a measured zero; <b>unknown</b> is grey and labelled</span>
+      </div>
+
+      <div class="qb-tiles" id="qb-tiles">
+        <div class="qb-empty" id="qb-empty">
+          <b>Quota and token data have not been collected for this board yet.</b>
+          Run <span class="qb-mono">bin/fm-quota-board-collect.sh</span> on the HD2Stack surface to populate this band from
+          <span class="qb-mono">quota-axi</span> (every reachable fleet host) and the usage ledger.
+          Nothing is displayed as zero: every unmeasured value stays <b>unknown</b> until it is actually measured.
+        </div>
+      </div>
+
+      <div class="qb-pop" id="qb-pop" role="tooltip" hidden></div>
+      <div class="qb-sr-only" id="qb-console-errors" hidden></div>
+    </section>
+
+    <!-- HD2_QUOTA_BAND_SNAPSHOT_BEGIN -->
+    <script id="quota-board-snapshot" type="application/json">
+    {"accounts":[{"id":"codex-home","label":"codex-home","provider":"codex","provider_label":"Codex","quota":{"account_key":"codex-home","account_key_surfaces":["brandon-compute","vmi3196300"],"basis":"codex provider windows, read on the surfaces where the codex-home account key is present","not_set_up_surfaces":[],"reason":null,"source_provider":"codex","status":"known","surfaces":[{"account_keys":["codex-home","openai-codex"],"error":null,"label":"Hetzner","stale":false,"status":"fresh","surface":"brandon-compute"},{"account_keys":["codex-home","openai-codex"],"error":null,"label":"Controller","stale":false,"status":"fresh","surface":"vmi3196300"}],"windows":[{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":81.0,"resets_at":"2026-10-21T07:36:13.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":68.0,"resets_at":"2026-10-21T06:50:19.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"five_hour","key":"five_hour@2026-10-21","kind":"session","label":"session","label_full":"session","percent_remaining":81.0,"resets_at":"2026-10-21T07:36:13.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":96.0,"resets_at":"2026-10-27T07:06:40.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":82.0,"resets_at":"2026-10-27T06:34:19.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"weekly","key":"weekly@2026-10-27","kind":"weekly","label":"week","label_full":"week","percent_remaining":96.0,"resets_at":"2026-10-27T07:06:40.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"}]},"tokens":{"attribution":"none","coverage":null,"date":null,"days":[{"coverage":null,"date":"2026-10-13","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-14","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-15","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-16","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-17","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-18","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-19","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null}],"identity_status":null,"note":"no account-level token measurement exists; the codex local subset is provider-level detail and is not attributable to either codex account","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"source_kind":null,"status":"unknown","value":null,"week":{"coverage":"unknown","days":7,"days_known":0,"days_unknown":7,"end":"2026-10-20","reason":"not measured in this window","start":"2026-10-14","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}}},{"id":"openai-codex","label":"openai-codex","provider":"codex","provider_label":"Codex","quota":{"account_key":"openai-codex","account_key_surfaces":["vmi3238503","brandon-compute","vmi3196300"],"basis":"codex provider windows, read on the surfaces where the openai-codex account key is present","not_set_up_surfaces":[],"reason":null,"source_provider":"codex","status":"known","surfaces":[{"account_keys":["openai-codex"],"error":"Codex quota unavailable","label":"HD2Stack","stale":true,"status":"stale","surface":"vmi3238503"},{"account_keys":["codex-home","openai-codex"],"error":null,"label":"Hetzner","stale":false,"status":"fresh","surface":"brandon-compute"},{"account_keys":["codex-home","openai-codex"],"error":null,"label":"Controller","stale":false,"status":"fresh","surface":"vmi3196300"}],"windows":[{"entries":[{"error":"Codex quota unavailable","pace_reason":"stale","pace_status":"unknown","percent_remaining":11.0,"resets_at":"2026-10-24T20:44:26.000Z","stale":true,"status":"stale","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"}],"id":"weekly","key":"weekly@2026-10-24","kind":"weekly","label":"week","label_full":"week (resets 2026-10-24)","percent_remaining":11.0,"resets_at":"2026-10-24T20:44:26.000Z","stale":true,"status":"stale","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":81.0,"resets_at":"2026-10-21T07:36:13.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":68.0,"resets_at":"2026-10-21T06:50:19.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"five_hour","key":"five_hour@2026-10-21","kind":"session","label":"session","label_full":"session","percent_remaining":81.0,"resets_at":"2026-10-21T07:36:13.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":96.0,"resets_at":"2026-10-27T07:06:40.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":82.0,"resets_at":"2026-10-27T06:34:19.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"weekly","key":"weekly@2026-10-27","kind":"weekly","label":"week","label_full":"week (resets 2026-10-27)","percent_remaining":96.0,"resets_at":"2026-10-27T07:06:40.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"}]},"tokens":{"attribution":"none","coverage":null,"date":null,"days":[{"coverage":null,"date":"2026-10-13","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-14","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-15","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-16","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-17","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-18","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-19","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null}],"identity_status":null,"note":"no account-level token measurement exists; the codex local subset is provider-level detail and is not attributable to either codex account","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"source_kind":null,"status":"unknown","value":null,"week":{"coverage":"unknown","days":7,"days_known":0,"days_unknown":7,"end":"2026-10-20","reason":"not measured in this window","start":"2026-10-14","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}}},{"id":"minimax-account-1","label":"minimax account 1","provider":"minimax","provider_label":"MiniMax","quota":{"account_key":null,"account_key_surfaces":["vmi3238503","brandon-compute","vmi3196300"],"basis":"minimax provider model windows (shared provider quota); account identity is an operator alias","not_set_up_surfaces":[],"reason":null,"source_provider":"minimax","status":"known","surfaces":[{"account_keys":["default"],"error":null,"label":"HD2Stack","stale":false,"status":"fresh","surface":"vmi3238503"},{"account_keys":["default"],"error":null,"label":"Hetzner","stale":false,"status":"fresh","surface":"brandon-compute"},{"account_keys":["default"],"error":null,"label":"Controller","stale":false,"status":"fresh","surface":"vmi3196300"}],"windows":[{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":100.0,"resets_at":"2026-10-21T10:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":100.0,"resets_at":"2026-10-21T10:00:00.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":100.0,"resets_at":"2026-10-21T10:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"model:general:5h","key":"model:general:5h@2026-10-21","kind":"model","label":"general 5h","label_full":"general 5h","percent_remaining":100.0,"resets_at":"2026-10-21T10:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":73.0,"resets_at":"2026-10-26T00:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":54.0,"resets_at":"2026-10-26T00:00:00.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":73.0,"resets_at":"2026-10-26T00:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"model:general:7d","key":"model:general:7d@2026-10-26","kind":"model","label":"general 7d","label_full":"general 7d","percent_remaining":73.0,"resets_at":"2026-10-26T00:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"}]},"tokens":{"attribution":"account","coverage":"reported","date":"2026-10-19","days":[{"coverage":null,"date":"2026-10-13","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-14","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-15","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-16","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-17","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-18","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":"reported","date":"2026-10-19","reason":null,"source_kind":"operator_reported","status":"known","value":281720000},{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null}],"identity_status":"operator_alias","note":"operator-reported total, seeded once and dated","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"source_kind":"operator_reported","status":"known","value":281720000,"week":{"coverage":"partial","days":7,"days_known":1,"days_unknown":6,"end":"2026-10-20","reason":null,"start":"2026-10-14","status":"known","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-20"],"value":281720000}}},{"id":"minimax-account-2","label":"minimax account 2","provider":"minimax","provider_label":"MiniMax","quota":{"account_key":null,"account_key_surfaces":["vmi3238503","brandon-compute","vmi3196300"],"basis":"minimax provider model windows (shared provider quota); account identity is an operator alias","not_set_up_surfaces":[],"reason":null,"source_provider":"minimax","status":"known","surfaces":[{"account_keys":["default"],"error":null,"label":"HD2Stack","stale":false,"status":"fresh","surface":"vmi3238503"},{"account_keys":["default"],"error":null,"label":"Hetzner","stale":false,"status":"fresh","surface":"brandon-compute"},{"account_keys":["default"],"error":null,"label":"Controller","stale":false,"status":"fresh","surface":"vmi3196300"}],"windows":[{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":100.0,"resets_at":"2026-10-21T10:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":100.0,"resets_at":"2026-10-21T10:00:00.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":100.0,"resets_at":"2026-10-21T10:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"model:general:5h","key":"model:general:5h@2026-10-21","kind":"model","label":"general 5h","label_full":"general 5h","percent_remaining":100.0,"resets_at":"2026-10-21T10:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":73.0,"resets_at":"2026-10-26T00:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":54.0,"resets_at":"2026-10-26T00:00:00.000Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":73.0,"resets_at":"2026-10-26T00:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"model:general:7d","key":"model:general:7d@2026-10-26","kind":"model","label":"general 7d","label_full":"general 7d","percent_remaining":73.0,"resets_at":"2026-10-26T00:00:00.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"}]},"tokens":{"attribution":"account","coverage":"reported","date":"2026-10-19","days":[{"coverage":null,"date":"2026-10-13","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-14","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-15","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-16","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-17","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-18","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":"reported","date":"2026-10-19","reason":null,"source_kind":"operator_reported","status":"known","value":5840000},{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null}],"identity_status":"operator_alias","note":"operator-reported total, seeded once and dated","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"source_kind":"operator_reported","status":"known","value":5840000,"week":{"coverage":"partial","days":7,"days_known":1,"days_unknown":6,"end":"2026-10-20","reason":null,"start":"2026-10-14","status":"known","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-20"],"value":5840000}}},{"id":"glm","label":"glm (local Pi runtime)","provider":"glm","provider_label":"GLM","quota":{"account_key":null,"account_key_surfaces":["vmi3238503","brandon-compute","vmi3196300"],"basis":"zai (Z.AI) provider windows - GLM is a local runtime, so its headroom is the vendor window","not_set_up_surfaces":[],"reason":null,"source_provider":"zai","status":"known","surfaces":[{"account_keys":["default"],"error":null,"label":"HD2Stack","stale":false,"status":"fresh","surface":"vmi3238503"},{"account_keys":["default"],"error":null,"label":"Hetzner","stale":false,"status":"fresh","surface":"brandon-compute"},{"account_keys":["default"],"error":null,"label":"Controller","stale":false,"status":"fresh","surface":"vmi3196300"}],"windows":[{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":96.0,"resets_at":"2026-10-21T07:00:21.253Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":96.0,"resets_at":"2026-10-21T07:00:21.253Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":96.0,"resets_at":"2026-10-21T07:00:21.253Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"five_hour","key":"five_hour@2026-10-21","kind":"session","label":"session","label_full":"session","percent_remaining":96.0,"resets_at":"2026-10-21T07:00:21.253Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":97.0,"resets_at":"2026-10-27T14:39:36.983Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":97.0,"resets_at":"2026-10-27T14:39:36.983Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":97.0,"resets_at":"2026-10-27T14:39:36.983Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"weekly","key":"weekly@2026-10-27","kind":"weekly","label":"week","label_full":"week","percent_remaining":97.0,"resets_at":"2026-10-27T14:39:36.983Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"entries":[{"error":null,"pace_reason":"missing_cycle","pace_status":"unknown","percent_remaining":89.0,"resets_at":"2026-11-06T20:30:03.984Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":null,"pace_reason":"missing_cycle","pace_status":"unknown","percent_remaining":89.0,"resets_at":"2026-11-06T20:30:03.984Z","stale":false,"status":"fresh","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":"missing_cycle","pace_status":"unknown","percent_remaining":89.0,"resets_at":"2026-11-06T20:30:03.984Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"mcp_month","key":"mcp_month@2026-11-06","kind":"monthly","label":"MCP month","label_full":"MCP month","percent_remaining":89.0,"resets_at":"2026-11-06T20:30:03.984Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"}]},"tokens":{"attribution":"local_subset","coverage":"local_metadata","date":"2026-10-20","days":[{"coverage":"local_metadata","date":"2026-10-13","reason":null,"source_kind":"local_metadata","status":"known","value":52021917},{"coverage":"local_metadata","date":"2026-10-14","reason":null,"source_kind":"local_metadata","status":"known","value":0},{"coverage":null,"date":"2026-10-15","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-16","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":"local_metadata","date":"2026-10-17","reason":null,"source_kind":"local_metadata","status":"known","value":129565},{"coverage":null,"date":"2026-10-18","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":"local_metadata","date":"2026-10-19","reason":null,"source_kind":"local_metadata","status":"known","value":8874849},{"coverage":"local_metadata","date":"2026-10-20","reason":null,"source_kind":"local_metadata","status":"known","value":0}],"identity_status":"unknown_local_subset","note":"local Pi-runtime subset; identity is not a vendor account, so the figure is a local subset","previous_day":{"coverage":"local_metadata","date":"2026-10-20","reason":null,"source_kind":"local_metadata","status":"known","value":0},"source_kind":"local_metadata","status":"known","value":0,"week":{"coverage":"partial","days":7,"days_known":4,"days_unknown":3,"end":"2026-10-20","reason":null,"start":"2026-10-14","status":"known","unknown_days":["2026-10-15","2026-10-16","2026-10-18"],"value":9004414}}},{"id":"agy-gemini","label":"agy gemini","provider":"agy","provider_label":"Antigravity (agy)","quota":{"account_key":null,"account_key_surfaces":["vmi3238503","brandon-compute","vmi3196300"],"basis":"agy provider gemini windows (gemini_5h, gemini_weekly)","not_set_up_surfaces":[],"reason":null,"source_provider":"agy","status":"known","surfaces":[{"account_keys":["default"],"error":null,"label":"HD2Stack","stale":false,"status":"fresh","surface":"vmi3238503"},{"account_keys":["default"],"error":"Antigravity/agy is not running","label":"Hetzner","stale":true,"status":"stale","surface":"brandon-compute"},{"account_keys":["default"],"error":null,"label":"Controller","stale":false,"status":"fresh","surface":"vmi3196300"}],"windows":[{"entries":[{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":100.0,"resets_at":"2026-10-21T09:51:18.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":"Antigravity/agy is not running","pace_reason":"stale","pace_status":"unknown","percent_remaining":100.0,"resets_at":"2026-10-21T09:51:18.000Z","stale":true,"status":"stale","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"behind","percent_remaining":100.0,"resets_at":"2026-10-21T09:51:18.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"gemini_5h","key":"gemini_5h@2026-10-21","kind":"session","label":"Gemini 5-hour","label_full":"Gemini 5-hour","percent_remaining":100.0,"resets_at":"2026-10-21T09:51:18.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":0.0,"resets_at":"2026-10-23T22:00:13.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":"Antigravity/agy is not running","pace_reason":"stale","pace_status":"unknown","percent_remaining":0.0,"resets_at":"2026-10-23T22:00:13.000Z","stale":true,"status":"stale","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":0.0,"resets_at":"2026-10-23T22:00:13.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"gemini_weekly","key":"gemini_weekly@2026-10-23","kind":"weekly","label":"Gemini weekly","label_full":"Gemini weekly (resets 2026-10-23)","percent_remaining":0.0,"resets_at":"2026-10-23T22:00:13.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":76.0,"resets_at":"2026-10-26T22:28:42.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":"Antigravity/agy is not running","pace_reason":"stale","pace_status":"unknown","percent_remaining":76.0,"resets_at":"2026-10-26T22:28:42.000Z","stale":true,"status":"stale","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":76.0,"resets_at":"2026-10-26T22:28:42.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"gemini_weekly","key":"gemini_weekly@2026-10-26","kind":"weekly","label":"Gemini weekly","label_full":"Gemini weekly (resets 2026-10-26)","percent_remaining":76.0,"resets_at":"2026-10-26T22:28:42.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"}]},"tokens":{"attribution":"none","coverage":null,"date":null,"days":[{"coverage":null,"date":"2026-10-13","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-14","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-15","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-16","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-17","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-18","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-19","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null}],"identity_status":null,"note":"no local token counter exists for the agy account","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"source_kind":null,"status":"unknown","value":null,"week":{"coverage":"unknown","days":7,"days_known":0,"days_unknown":7,"end":"2026-10-20","reason":"not measured in this window","start":"2026-10-14","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}}},{"id":"agy-claude-gpt","label":"agy claude/gpt","provider":"agy","provider_label":"Antigravity (agy)","quota":{"account_key":null,"account_key_surfaces":["vmi3238503","brandon-compute","vmi3196300"],"basis":"agy provider claude/gpt windows (claude_gpt_5h, claude_gpt_weekly)","not_set_up_surfaces":[],"reason":null,"source_provider":"agy","status":"known","surfaces":[{"account_keys":["default"],"error":null,"label":"HD2Stack","stale":false,"status":"fresh","surface":"vmi3238503"},{"account_keys":["default"],"error":"Antigravity/agy is not running","label":"Hetzner","stale":true,"status":"stale","surface":"brandon-compute"},{"account_keys":["default"],"error":null,"label":"Controller","stale":false,"status":"fresh","surface":"vmi3196300"}],"windows":[{"entries":[{"error":null,"pace_reason":null,"pace_status":"on_pace","percent_remaining":100.0,"resets_at":"2026-10-21T10:13:39.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":"Antigravity/agy is not running","pace_reason":"stale","pace_status":"unknown","percent_remaining":100.0,"resets_at":"2026-10-21T10:09:24.000Z","stale":true,"status":"stale","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"on_pace","percent_remaining":100.0,"resets_at":"2026-10-21T10:13:44.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"claude_gpt_5h","key":"claude_gpt_5h@2026-10-21","kind":"session","label":"Claude/GPT 5-hour","label_full":"Claude/GPT 5-hour","percent_remaining":100.0,"resets_at":"2026-10-21T10:13:39.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"entries":[{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":18.0,"resets_at":"2026-10-26T21:49:44.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"},{"error":"Antigravity/agy is not running","pace_reason":"stale","pace_status":"unknown","percent_remaining":18.0,"resets_at":"2026-10-26T21:49:44.000Z","stale":true,"status":"stale","surface":"brandon-compute","surface_label":"Hetzner","surface_short":"HETZ"},{"error":null,"pace_reason":null,"pace_status":"ahead","percent_remaining":18.0,"resets_at":"2026-10-26T21:49:44.000Z","stale":false,"status":"fresh","surface":"vmi3196300","surface_label":"Controller","surface_short":"CTRL"}],"id":"claude_gpt_weekly","key":"claude_gpt_weekly@2026-10-26","kind":"weekly","label":"Claude/GPT weekly","label_full":"Claude/GPT weekly","percent_remaining":18.0,"resets_at":"2026-10-26T21:49:44.000Z","stale":false,"status":"fresh","surface":"vmi3238503","surface_label":"HD2Stack","surface_short":"HD2"}]},"tokens":{"attribution":"none","coverage":null,"date":null,"days":[{"coverage":null,"date":"2026-10-13","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-14","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-15","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-16","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-17","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-18","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-19","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null}],"identity_status":null,"note":"no local token counter exists for the agy account","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"source_kind":null,"status":"unknown","value":null,"week":{"coverage":"unknown","days":7,"days_known":0,"days_unknown":7,"end":"2026-10-20","reason":"not measured in this window","start":"2026-10-14","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}}}],"aggregate":{"account_split":[{"account_id":"codex-home","attribution":"none","latest_known":null,"note":"no account-level token measurement exists; the codex local subset is provider-level detail and is not attributable to either codex account","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"reason":"no ledger row for this account on this day","status":"unknown","value":null,"week":{"coverage":"unknown","days":7,"days_known":0,"days_unknown":7,"end":"2026-10-20","reason":"not measured in this window","start":"2026-10-14","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}},{"account_id":"openai-codex","attribution":"none","latest_known":null,"note":"no account-level token measurement exists; the codex local subset is provider-level detail and is not attributable to either codex account","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"reason":"no ledger row for this account on this day","status":"unknown","value":null,"week":{"coverage":"unknown","days":7,"days_known":0,"days_unknown":7,"end":"2026-10-20","reason":"not measured in this window","start":"2026-10-14","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}},{"account_id":"minimax-account-1","attribution":"account","latest_known":{"coverage":"reported","date":"2026-10-19","source_kind":"operator_reported","value":281720000},"note":"operator-reported total, seeded once and dated","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"reason":"no ledger row for this account on this day","status":"unknown","value":null,"week":{"coverage":"partial","days":7,"days_known":1,"days_unknown":6,"end":"2026-10-20","reason":null,"start":"2026-10-14","status":"known","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-20"],"value":281720000}},{"account_id":"minimax-account-2","attribution":"account","latest_known":{"coverage":"reported","date":"2026-10-19","source_kind":"operator_reported","value":5840000},"note":"operator-reported total, seeded once and dated","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"reason":"no ledger row for this account on this day","status":"unknown","value":null,"week":{"coverage":"partial","days":7,"days_known":1,"days_unknown":6,"end":"2026-10-20","reason":null,"start":"2026-10-14","status":"known","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-20"],"value":5840000}},{"account_id":"glm","attribution":"local_subset","latest_known":{"coverage":"local_metadata","date":"2026-10-20","source_kind":"local_metadata","value":0},"note":"local Pi-runtime subset; identity is not a vendor account, so the figure is a local subset","previous_day":{"coverage":"local_metadata","date":"2026-10-20","reason":null,"source_kind":"local_metadata","status":"known","value":0},"reason":null,"status":"known","value":0,"week":{"coverage":"partial","days":7,"days_known":4,"days_unknown":3,"end":"2026-10-20","reason":null,"start":"2026-10-14","status":"known","unknown_days":["2026-10-15","2026-10-16","2026-10-18"],"value":9004414}},{"account_id":"agy-gemini","attribution":"none","latest_known":null,"note":"no local token counter exists for the agy account","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"reason":"no ledger row for this account on this day","status":"unknown","value":null,"week":{"coverage":"unknown","days":7,"days_known":0,"days_unknown":7,"end":"2026-10-20","reason":"not measured in this window","start":"2026-10-14","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}},{"account_id":"agy-claude-gpt","attribution":"none","latest_known":null,"note":"no local token counter exists for the agy account","previous_day":{"coverage":null,"date":"2026-10-20","reason":"no ledger row for this account on this day","source_kind":null,"status":"unknown","value":null},"reason":"no ledger row for this account on this day","status":"unknown","value":null,"week":{"coverage":"unknown","days":7,"days_known":0,"days_unknown":7,"end":"2026-10-20","reason":"not measured in this window","start":"2026-10-14","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}}],"coverage":"partial","day":"2026-10-20","missing_sources":[],"reason":null,"series":[{"coverage":"partial","date":"2026-10-13","source":"measured","status":"known","surfaces_reporting":1,"surfaces_with_ledger":2,"total_tokens":158656541},{"coverage":"partial","date":"2026-10-14","source":"measured","status":"known","surfaces_reporting":1,"surfaces_with_ledger":2,"total_tokens":188772598},{"coverage":"unknown","date":"2026-10-15","source":"unknown","status":"unknown","surfaces_reporting":1,"surfaces_with_ledger":2,"total_tokens":null},{"coverage":"unknown","date":"2026-10-16","source":"unknown","status":"unknown","surfaces_reporting":1,"surfaces_with_ledger":2,"total_tokens":null},{"coverage":"partial","date":"2026-10-17","source":"measured","status":"known","surfaces_reporting":1,"surfaces_with_ledger":2,"total_tokens":5014524},{"coverage":"partial","date":"2026-10-18","source":"measured","status":"known","surfaces_reporting":1,"surfaces_with_ledger":2,"total_tokens":25749837},{"coverage":"partial","date":"2026-10-19","source":"mixed","status":"known","surfaces_reporting":1,"surfaces_with_ledger":2,"total_tokens":527038662},{"coverage":"partial","date":"2026-10-20","source":"measured","status":"known","surfaces_reporting":1,"surfaces_with_ledger":2,"total_tokens":368332076}],"source":"measured","status":"known","timezone":"Europe/London","token_surfaces":[{"error":null,"label":"HD2Stack","latest_day":"2026-10-19","ledger_generated_at":"2026-10-19T07:52:10+01:00","ok":true,"surface":"vmi3238503"},{"error":"no usage ledger on this surface","label":"Hetzner","latest_day":null,"ledger_generated_at":null,"ok":false,"surface":"vmi3238503"},{"error":null,"label":"Controller","latest_day":"2026-10-20","ledger_generated_at":"2026-10-20T09:35:50+01:00","ok":true,"surface":"vmi3238503"}],"total_tokens":368332076,"unattributed_detail":[{"bucket":"provider_detail","days":[{"date":"2026-10-13","value":91313643},{"date":"2026-10-14","value":52321461},{"date":"2026-10-17","value":613203},{"date":"2026-10-19","value":230603813},{"date":"2026-10-20","value":200007247}],"provider":"codex","reason":"provider-level local subset; the ledger cannot attribute it to a named account, so it is never folded into an account","total_tokens":574859367},{"bucket":"provider_detail","days":[{"date":"2026-10-13","value":15320981},{"date":"2026-10-14","value":135832221},{"date":"2026-10-17","value":4271756},{"date":"2026-10-18","value":25749837},{"date":"2026-10-20","value":168324829}],"provider":"minimax","reason":"provider-level local subset; the ledger cannot attribute it to a named account, so it is never folded into an account","total_tokens":349499624},{"bucket":"superseded_local_subset","days":[{"date":"2026-10-19","value":186558154}],"provider":"minimax","reason":"local subset superseded by an official operator-reported total; it is excluded from every total and shown as detail only","total_tokens":186558154},{"bucket":"provider_detail","days":[{"date":"2026-10-14","value":618916}],"provider":"unknown","reason":"provider-level local subset; the ledger cannot attribute it to a named account, so it is never folded into an account","total_tokens":618916}],"windows":{"previous_day":{"account_split":[{"account_id":"codex-home","attribution":"none","coverage":"unknown","days_known":0,"days_unknown":1,"note":"no account-level token measurement exists; the codex local subset is provider-level detail and is not attributable to either codex account","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-20"],"value":null},{"account_id":"openai-codex","attribution":"none","coverage":"unknown","days_known":0,"days_unknown":1,"note":"no account-level token measurement exists; the codex local subset is provider-level detail and is not attributable to either codex account","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-20"],"value":null},{"account_id":"minimax-account-1","attribution":"account","coverage":"unknown","days_known":0,"days_unknown":1,"note":"operator-reported total, seeded once and dated","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-20"],"value":null},{"account_id":"minimax-account-2","attribution":"account","coverage":"unknown","days_known":0,"days_unknown":1,"note":"operator-reported total, seeded once and dated","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-20"],"value":null},{"account_id":"glm","attribution":"local_subset","coverage":"complete","days_known":1,"days_unknown":0,"note":"local Pi-runtime subset; identity is not a vendor account, so the figure is a local subset","reason":null,"status":"known","unknown_days":[],"value":0},{"account_id":"agy-gemini","attribution":"none","coverage":"unknown","days_known":0,"days_unknown":1,"note":"no local token counter exists for the agy account","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-20"],"value":null},{"account_id":"agy-claude-gpt","attribution":"none","coverage":"unknown","days_known":0,"days_unknown":1,"note":"no local token counter exists for the agy account","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-20"],"value":null}],"accounts_known":1,"accounts_total":7,"accounts_unknown":6,"attributable_coverage":"partial","attributable_status":"known","attributable_total_tokens":0,"coverage":"complete","days":1,"days_known":1,"days_unknown":0,"end":"2026-10-20","excluded":[],"grand_total_tokens":368332076,"reason":null,"start":"2026-10-20","status":"known","unattributed_detail":[{"bucket":"provider_detail","days":[{"date":"2026-10-20","value":200007247}],"provider":"codex","reason":"provider-level local subset; the ledger cannot attribute it to a named account, so it is never folded into an account","total_tokens":200007247},{"bucket":"provider_detail","days":[{"date":"2026-10-20","value":168324829}],"provider":"minimax","reason":"provider-level local subset; the ledger cannot attribute it to a named account, so it is never folded into an account","total_tokens":168324829}],"unattributed_status":"known","unattributed_total_tokens":368332076,"unknown_days":[]},"week":{"account_split":[{"account_id":"codex-home","attribution":"none","coverage":"unknown","days_known":0,"days_unknown":7,"note":"no account-level token measurement exists; the codex local subset is provider-level detail and is not attributable to either codex account","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null},{"account_id":"openai-codex","attribution":"none","coverage":"unknown","days_known":0,"days_unknown":7,"note":"no account-level token measurement exists; the codex local subset is provider-level detail and is not attributable to either codex account","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null},{"account_id":"minimax-account-1","attribution":"account","coverage":"partial","days_known":1,"days_unknown":6,"note":"operator-reported total, seeded once and dated","reason":null,"status":"known","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-20"],"value":281720000},{"account_id":"minimax-account-2","attribution":"account","coverage":"partial","days_known":1,"days_unknown":6,"note":"operator-reported total, seeded once and dated","reason":null,"status":"known","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-20"],"value":5840000},{"account_id":"glm","attribution":"local_subset","coverage":"partial","days_known":4,"days_unknown":3,"note":"local Pi-runtime subset; identity is not a vendor account, so the figure is a local subset","reason":null,"status":"known","unknown_days":["2026-10-15","2026-10-16","2026-10-18"],"value":9004414},{"account_id":"agy-gemini","attribution":"none","coverage":"unknown","days_known":0,"days_unknown":7,"note":"no local token counter exists for the agy account","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null},{"account_id":"agy-claude-gpt","attribution":"none","coverage":"unknown","days_known":0,"days_unknown":7,"note":"no local token counter exists for the agy account","reason":"not measured in this window","status":"unknown","unknown_days":["2026-10-14","2026-10-15","2026-10-16","2026-10-17","2026-10-18","2026-10-19","2026-10-20"],"value":null}],"accounts_known":3,"accounts_total":7,"accounts_unknown":4,"attributable_coverage":"partial","attributable_status":"known","attributable_total_tokens":296564414,"coverage":"partial","days":7,"days_known":5,"days_unknown":2,"end":"2026-10-20","excluded":[{"bucket":"superseded_local_subset","days":[{"date":"2026-10-19","value":186558154}],"provider":"minimax","reason":"local subset superseded by an official operator-reported total; it is excluded from every total and shown as detail only","total_tokens":186558154}],"grand_total_tokens":1114907697,"reason":null,"start":"2026-10-14","status":"known","unattributed_detail":[{"bucket":"provider_detail","days":[{"date":"2026-10-14","value":52321461},{"date":"2026-10-17","value":613203},{"date":"2026-10-19","value":230603813},{"date":"2026-10-20","value":200007247}],"provider":"codex","reason":"provider-level local subset; the ledger cannot attribute it to a named account, so it is never folded into an account","total_tokens":483545724},{"bucket":"provider_detail","days":[{"date":"2026-10-14","value":135832221},{"date":"2026-10-17","value":4271756},{"date":"2026-10-18","value":25749837},{"date":"2026-10-20","value":168324829}],"provider":"minimax","reason":"provider-level local subset; the ledger cannot attribute it to a named account, so it is never folded into an account","total_tokens":334178643},{"bucket":"superseded_local_subset","days":[{"date":"2026-10-19","value":186558154}],"provider":"minimax","reason":"local subset superseded by an official operator-reported total; it is excluded from every total and shown as detail only","total_tokens":186558154},{"bucket":"provider_detail","days":[{"date":"2026-10-14","value":618916}],"provider":"unknown","reason":"provider-level local subset; the ledger cannot attribute it to a named account, so it is never folded into an account","total_tokens":618916}],"unattributed_status":"known","unattributed_total_tokens":818343283,"unknown_days":["2026-10-15","2026-10-16"]}}},"collector":{"name":"fm-quota-board-snapshot.py","version":2},"freshness":{"newest_ledger_day":"2026-10-20","newest_ledger_generated_at":"2026-10-20T09:35:50+01:00","previous_completed_day":"2026-10-20","refresh":{"quota_command":"bin/fm-quota-board-collect.sh","quota_note":"quota readings come from quota-axi and can be re-read on demand with the collect command","quota_refreshable":true,"tokens_note":"token usage comes from the usage-ledger exports; there is no live endpoint, so these figures are only as fresh as the newest ledger export.","tokens_refreshable":false},"snapshot_generated_at":"2026-10-21T05:13:44Z","snapshot_stale_after_seconds":21600,"today":"2026-10-21","token_stale_after_seconds":86400,"week_end":"2026-10-20","week_start":"2026-10-14"},"generated_at":"2026-10-21T05:13:44Z","generated_from":{"host":"vmi3238503","role":"hd2stack","surface":"vmi3238503"},"ledger_contract_version":1,"legend":[{"key":"account_colour","label":"account colour","meaning":"one colour per real account. Two accounts of the same provider stay separate accounts; they are never merged, even when their readings are identical."},{"key":"meter_green","label":"50% or more left","meaning":"the quota window has at least half its allowance remaining."},{"key":"meter_amber","label":"20-49% left","meaning":"the window is below half but above a fifth."},{"key":"meter_red","label":"under 20% left","meaning":"the window is nearly exhausted."},{"key":"meter_grey","label":"unknown","meaning":"no reading was available. Unknown means the value is not known - it is never a zero. A grey meter is not an empty meter."},{"key":"not_set_up","label":"not set up","meaning":"the provider has no credentials configured on that surface, so there is nothing to read. That is a configuration state, not a usage number."},{"key":"stale","label":"stale","meaning":"the reading is older than the provider's own refresh, or the provider reported it as stale. The number is shown as measured but the age is flagged."},{"key":"unattributed","label":"provider detail","meaning":"token use the ledger measures at provider level only. It is shown as detail and never added to an account, so no total is inflated."}],"not_set_up":[{"label":"Claude","provider":"claude","reason":"credentials_missing","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"Cursor","provider":"cursor","reason":"Cursor sign-in required","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"GitHub Copilot","provider":"copilot","reason":"GitHub Copilot sign-in required","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"}]},{"label":"Grok","provider":"grok","reason":"Grok sign-in required","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"Kimi","provider":"kimi","reason":"kimi_credential_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"Alibaba Coding Plan","provider":"alibaba","reason":"bl_cli_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"OpenCode Go","provider":"opencode-go","reason":"opencode_go_credential_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"Command Code","provider":"commandcode","reason":"commandcode_sign_in_required","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"MiMo","provider":"mimo","reason":"mimo_credential_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"DeepSeek","provider":"deepseek","reason":"deepseek_credential_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"OpenRouter","provider":"openrouter","reason":"openrouter_credential_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"ElevenLabs","provider":"elevenlabs","reason":"elevenlabs_credential_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"Devin","provider":"devin","reason":"devin_credential_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"Muse","provider":"muse","reason":"muse_credential_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"},{"surface":"brandon-compute","surface_label":"Hetzner"},{"surface":"vmi3196300","surface_label":"Controller"}]},{"label":"Higgsfield","provider":"higgsfield","reason":"higgsfield_cli_unavailable","surfaces":[{"surface":"vmi3238503","surface_label":"HD2Stack"}]}],"quota_sources":[{"error":null,"generated_at":"2026-10-21T05:13:40.255Z","label":"HD2Stack","ok":true,"origin":"local","schema_version":5,"short":"HD2","surface":"vmi3238503","target":"vmi3238503"},{"error":null,"generated_at":"2026-10-21T05:13:41.304Z","label":"Hetzner","ok":true,"origin":"ssh","schema_version":5,"short":"HETZ","surface":"brandon-compute","target":"hd2admin@100.106.6.22"},{"error":null,"generated_at":"2026-10-21T05:13:44.772Z","label":"Controller","ok":true,"origin":"ssh","schema_version":5,"short":"CTRL","surface":"vmi3196300","target":"root@100.117.47.27"}],"schema":"hd2-quota-board-snapshot/v1","stale_after_seconds":21600,"timezone":"Europe/London","token_sources":[{"day_count":7,"error":null,"label":"HD2Stack","latest_day":"2026-10-19","ledger_generated_at":"2026-10-19T07:52:10+01:00","ok":true,"origin":"local","short":"HD2","surface":"vmi3238503","timezone":"Europe/London"},{"day_count":0,"error":"no usage ledger on this surface","label":"Hetzner","latest_day":null,"ledger_generated_at":null,"ok":false,"origin":"ssh","short":"HETZ","surface":"vmi3238503","timezone":"Europe/London"},{"day_count":8,"error":null,"label":"Controller","latest_day":"2026-10-20","ledger_generated_at":"2026-10-20T09:35:50+01:00","ok":true,"origin":"ssh","short":"CTRL","surface":"vmi3238503","timezone":"Europe/London"}],"warnings":["token ledger unusable on Hetzner: no usage ledger on this surface"]}
+    </script>
+    <!-- HD2_QUOTA_BAND_SNAPSHOT_END -->
+
+    <script>
+    (function () {
+      'use strict';
+
+      /* ---- error sink: the browser gate reads this element ---------------- */
+      var errors = [];
+      window.__QB_ERRORS__ = errors;
+      function noteError(message) {
+        errors.push(String(message));
+        var sink = document.getElementById('qb-console-errors');
+        if (sink) { sink.textContent = errors.join(' | '); sink.hidden = false; }
+      }
+      window.addEventListener('error', function (event) { noteError(event.message || 'window error'); });
+      window.addEventListener('unhandledrejection', function () { noteError('unhandled rejection'); });
+      var nativeConsoleError = console.error;
+      console.error = function () {
+        try { noteError(Array.prototype.map.call(arguments, function (a) { return String(a); }).join(' ')); }
+        catch (e) { /* never let the sink itself throw */ }
+        nativeConsoleError.apply(console, arguments);
+      };
+
+      /* ---- one colour per real account; never merged --------------------- */
+      var ACCENTS = {
+        'codex-home': '#58a6ff',
+        'openai-codex': '#a371f7',
+        'minimax-account-1': '#3fb950',
+        'minimax-account-2': '#d29922',
+        'glm': '#ff7b72',
+        'agy-gemini': '#79c0ff',
+        'agy-claude-gpt': '#f778ba'
+      };
+      var ACCENT_FALLBACK = ['#58a6ff', '#a371f7', '#3fb950', '#d29922', '#ff7b72', '#79c0ff', '#f778ba'];
+
+      function accentFor(index, id) {
+        if (id && ACCENTS[id]) { return ACCENTS[id]; }
+        return ACCENT_FALLBACK[index % ACCENT_FALLBACK.length];
+      }
+
+      /* ---- formatting: null is unknown, never zero ----------------------- */
+      function isNumber(value) { return typeof value === 'number' && isFinite(value); }
+
+      function compactTokens(value) {
+        if (!isNumber(value)) { return 'unknown'; }
+        if (value === 0) { return '0'; }
+        var abs = Math.abs(value);
+        if (abs >= 1e9) { return (value / 1e9).toFixed(2) + 'B'; }
+        if (abs >= 1e6) { return (value / 1e6).toFixed(2) + 'M'; }
+        if (abs >= 1e3) { return (value / 1e3).toFixed(1) + 'k'; }
+        return String(value);
+      }
+
+      function exactTokens(value) {
+        if (!isNumber(value)) { return 'unknown'; }
+        return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      }
+
+      function stamp(iso) {
+        if (!iso) { return 'no reset time'; }
+        var text = String(iso);
+        if (text.length >= 16) { return text.slice(5, 10) + ' ' + text.slice(11, 16) + 'Z'; }
+        return text;
+      }
+
+      function healthClass(percent) {
+        if (!isNumber(percent)) { return 'qb-unknown'; }
+        if (percent >= 50) { return 'qb-ok'; }
+        if (percent >= 20) { return 'qb-warn'; }
+        return 'qb-bad';
+      }
+
+      function el(tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) { node.className = className; }
+        if (text !== undefined && text !== null) { node.textContent = String(text); }
+        return node;
+      }
+
+      /* ---- snapshot ------------------------------------------------------- */
+      function readSnapshot() {
+        var node = document.getElementById('quota-board-snapshot');
+        if (!node) { return { state: 'missing', reason: 'this board carries no quota snapshot block' }; }
+        var text = (node.textContent || '').trim();
+        if (!text) { return { state: 'missing', reason: 'the quota snapshot block is empty' }; }
+        var data = null;
+        try { data = JSON.parse(text); }
+        catch (err) { return { state: 'invalid', reason: 'the quota snapshot is not readable JSON (' + err.message + ')' }; }
+        if (!data || typeof data !== 'object') { return { state: 'invalid', reason: 'the quota snapshot is not an object' }; }
+        if (data.schema !== 'hd2-quota-board-snapshot/v1') {
+          return { state: 'invalid', reason: 'unexpected snapshot schema (' + String(data.schema) + ')' };
+        }
+        if (!data.accounts || !data.accounts.length) { return { state: 'invalid', reason: 'the snapshot carries no accounts' }; }
+        return { state: 'ok', data: data };
+      }
+
+      /* ---- render --------------------------------------------------------- */
+      var pop = document.getElementById('qb-pop');
+      var tilesHost = document.getElementById('qb-tiles');
+      var emptyBox = document.getElementById('qb-empty');
+
+      /* ---- the two measured windows -------------------------------------- */
+      function windowById(data, name) {
+        var windows = (data.aggregate && data.aggregate.windows) || {};
+        return windows[name] || null;
+      }
+
+      function coverageText(window) {
+        if (!window) { return ''; }
+        var bits = [];
+        if (window.attributable_coverage) { bits.push(window.attributable_coverage + ' account coverage'); }
+        if (isNumber(window.accounts_known) && isNumber(window.accounts_total)) {
+          bits.push(window.accounts_known + ' of ' + window.accounts_total + ' accounts measured');
+        }
+        if (isNumber(window.days_known) && isNumber(window.days)) {
+          bits.push(window.days_known + ' of ' + window.days + ' days measured');
+        }
+        return bits.join(' \u00b7 ');
+      }
+
+      function providerDetailRows(window) {
+        var out = [];
+        ((window && window.unattributed_detail) || []).forEach(function (detail) {
+          if (detail.bucket === 'provider_detail') { out.push(detail); }
+        });
+        return out;
+      }
+
+      function excludedRows(window) {
+        var out = [];
+        ((window && window.excluded) || []).forEach(function (detail) {
+          out.push(detail);
+        });
+        return out;
+      }
+
+      function renderMeasureCard(prefix, window) {
+        var rangeNode = document.getElementById(prefix + '-range');
+        var valueNode = document.getElementById(prefix + '-value');
+        var breakNode = document.getElementById(prefix + '-break');
+        if (!rangeNode || !valueNode || !breakNode) { return; }
+        if (!window) {
+          rangeNode.textContent = 'no window';
+          valueNode.textContent = 'unknown';
+          valueNode.className = 'qb-measure-value qb-unknown';
+          breakNode.textContent = 'No ledger window is available for this scope.';
+          return;
+        }
+        rangeNode.textContent = window.start + ' \u2192 ' + window.end;
+        var total = window.grand_total_tokens;
+        valueNode.textContent = isNumber(total) ? exactTokens(total) : 'unknown';
+        valueNode.className = isNumber(total) ? 'qb-measure-value' : 'qb-measure-value qb-unknown';
+        valueNode.setAttribute('title', isNumber(total)
+          ? exactTokens(total) + ' tokens measured in this window'
+          : 'the total for this window is unknown, not zero');
+        breakNode.innerHTML = '';
+        var line = el('span');
+        line.appendChild(document.createTextNode('attributable to an account '));
+        line.appendChild(el('b', null, isNumber(window.attributable_total_tokens)
+          ? exactTokens(window.attributable_total_tokens) : 'unknown'));
+        line.appendChild(document.createTextNode(' + provider detail '));
+        line.appendChild(el('b', 'qb-detail', isNumber(window.unattributed_total_tokens)
+          ? exactTokens(window.unattributed_total_tokens) : 'unknown'));
+        line.appendChild(document.createTextNode(' = the grand measured total.'));
+        breakNode.appendChild(line);
+        var coverage = el('span', 'qb-sub', coverageText(window));
+        breakNode.appendChild(coverage);
+        var details = providerDetailRows(window);
+        if (details.length) {
+          var detailLine = el('span', 'qb-sub qb-detail', 'provider detail: ' + details.map(function (detail) {
+            return detail.provider + ' ' + exactTokens(detail.total_tokens);
+          }).join(' \u00b7 '));
+          breakNode.appendChild(detailLine);
+        }
+        var excluded = excludedRows(window);
+        if (excluded.length) {
+          var excludedLine = el('span', 'qb-sub qb-excluded', 'excluded from every total (a superseded local subset): '
+            + excluded.map(function (detail) {
+              return detail.provider + ' ' + exactTokens(detail.total_tokens);
+            }).join(' \u00b7 '));
+          breakNode.appendChild(excludedLine);
+        }
+      }
+
+      function windowCell(entry) {
+        var cell = el('td', 'qb-num');
+        if (!entry || !isNumber(entry.value)) {
+          cell.className = 'qb-num qb-unknown';
+          cell.textContent = 'unknown';
+          if (entry && entry.reason) { cell.appendChild(el('span', 'qb-sub', entry.reason)); }
+          return cell;
+        }
+        cell.appendChild(document.createTextNode(exactTokens(entry.value)));
+        var bits = [];
+        if (isNumber(entry.days_known) && isNumber(entry.days_unknown)) {
+          bits.push(entry.days_known + ' day' + (entry.days_known === 1 ? '' : 's')
+            + ' known, ' + entry.days_unknown + ' unknown');
+        }
+        if (entry.coverage) { bits.push(entry.coverage + ' coverage'); }
+        if (bits.length) { cell.appendChild(el('span', 'qb-sub', bits.join(' \u00b7 '))); }
+        return cell;
+      }
+
+      function renderAccountTable(data) {
+        var body = document.getElementById('qb-account-body');
+        if (!body) { return; }
+        body.innerHTML = '';
+        var split = (data.aggregate && data.aggregate.account_split) || [];
+        var prevWindow = windowById(data, 'previous_day');
+        var weekWindow = windowById(data, 'week');
+        var prevById = {};
+        ((prevWindow && prevWindow.account_split) || []).forEach(function (entry) { prevById[entry.account_id] = entry; });
+        var weekById = {};
+        ((weekWindow && weekWindow.account_split) || []).forEach(function (entry) { weekById[entry.account_id] = entry; });
+
+        split.forEach(function (entry) {
+          var row = el('tr');
+          row.setAttribute('data-account', entry.account_id);
+          var name = el('td');
+          name.appendChild(el('span', 'qb-name', entry.account_id));
+          if (entry.note) { name.appendChild(el('span', 'qb-sub', entry.note)); }
+          row.appendChild(name);
+          row.appendChild(windowCell(prevById[entry.account_id]));
+          row.appendChild(windowCell(weekById[entry.account_id]));
+          var latest = el('td', 'qb-num');
+          if (entry.latest_known && isNumber(entry.latest_known.value)) {
+            latest.appendChild(document.createTextNode(exactTokens(entry.latest_known.value)));
+            var sub = el('span', 'qb-sub', entry.latest_known.date
+              + (entry.latest_known.source_kind === 'operator_reported' ? ' \u00b7 operator reported' : ''));
+            latest.appendChild(sub);
+          } else {
+            latest.className = 'qb-num qb-unknown';
+            latest.textContent = 'unknown';
+          }
+          row.appendChild(latest);
+          body.appendChild(row);
+        });
+      }
+
+      function detailCell(entry) {
+        var cell = el('td', 'qb-num');
+        if (!entry || !isNumber(entry.total_tokens)) {
+          cell.className = 'qb-num qb-unknown';
+          cell.textContent = 'unknown';
+          return cell;
+        }
+        cell.appendChild(document.createTextNode(exactTokens(entry.total_tokens)));
+        var days = (entry.days || []).length;
+        if (days) { cell.appendChild(el('span', 'qb-sub', days + ' day' + (days === 1 ? '' : 's'))); }
+        return cell;
+      }
+
+      function renderDetailTable(data) {
+        var body = document.getElementById('qb-detail-body');
+        if (!body) { return; }
+        body.innerHTML = '';
+        var prevWindow = windowById(data, 'previous_day');
+        var weekWindow = windowById(data, 'week');
+        var whole = (data.aggregate && data.aggregate.unattributed_detail) || [];
+
+        function pick(list, provider) {
+          for (var i = 0; i < list.length; i += 1) {
+            if (list[i].provider === provider && list[i].bucket === 'provider_detail') { return list[i]; }
+          }
+          return null;
+        }
+
+        var providers = [];
+        whole.forEach(function (detail) {
+          if (detail.bucket === 'provider_detail' && providers.indexOf(detail.provider) < 0) {
+            providers.push(detail.provider);
+          }
+        });
+        providers.forEach(function (provider) {
+          var row = el('tr');
+          row.setAttribute('data-provider-detail', provider);
+          var name = el('td');
+          name.appendChild(el('span', 'qb-name', provider));
+          name.appendChild(el('span', 'qb-sub', 'measured at provider level; never added to an account'));
+          row.appendChild(name);
+          row.appendChild(detailCell(pick(providerDetailRows(prevWindow), provider)));
+          row.appendChild(detailCell(pick(providerDetailRows(weekWindow), provider)));
+          row.appendChild(detailCell(pick(whole, provider)));
+          body.appendChild(row);
+        });
+
+        var excluded = [];
+        whole.forEach(function (detail) {
+          if (detail.bucket !== 'provider_detail') { excluded.push(detail); }
+        });
+        excluded.forEach(function (detail) {
+          var row = el('tr');
+          row.setAttribute('data-excluded-detail', detail.provider);
+          var name = el('td');
+          name.appendChild(el('span', 'qb-name', detail.provider));
+          name.appendChild(el('span', 'qb-sub qb-excluded', 'excluded \u2014 a local subset an official total supersedes; in no total at all'));
+          row.appendChild(name);
+          /* The excluded subset has its OWN figures. They never borrow the
+             provider-detail row, or the excluded line would show a number that
+             is in a total somewhere else. */
+          var prev = null;
+          var week = null;
+          excludedRows(prevWindow).forEach(function (entry) { if (entry.provider === detail.provider) { prev = entry; } });
+          excludedRows(weekWindow).forEach(function (entry) { if (entry.provider === detail.provider) { week = entry; } });
+          row.appendChild(detailCell(prev));
+          row.appendChild(detailCell(week));
+          row.appendChild(detailCell(detail));
+          body.appendChild(row);
+        });
+      }
+
+      function renderAggregate(data) {
+        var aggregate = data.aggregate || {};
+        var aggValue = document.getElementById('qb-agg-value');
+        var aggMeta = document.getElementById('qb-agg-meta');
+        var aggNote = document.getElementById('qb-agg-note');
+        var aggLabel = document.getElementById('qb-agg-label');
+
+        var week = windowById(data, 'week');
+        var prev = windowById(data, 'previous_day');
+        var headline = week || prev;
+        var value = headline ? headline.grand_total_tokens : null;
+
+        if (aggLabel) {
+          aggLabel.textContent = headline
+            ? 'Grand measured total \u2014 ' + (week ? 'last 7 completed days' : 'previous completed day')
+            : 'Grand measured total';
+        }
+        aggValue.textContent = isNumber(value) ? compactTokens(value) : 'unknown';
+        aggValue.className = isNumber(value) ? 'qb-agg-value' : 'qb-agg-value qb-unknown';
+        aggValue.setAttribute('title', isNumber(value)
+          ? exactTokens(value) + ' tokens measured'
+          : 'the grand measured total is unknown, not zero');
+
+        var meta = [];
+        if (headline) {
+          meta.push(headline.start + ' \u2192 ' + headline.end);
+          if (headline.coverage) { meta.push(headline.coverage + ' coverage'); }
+        }
+        if (aggregate.day) { meta.push('latest ledger day ' + aggregate.day); }
+        if (aggregate.timezone) { meta.push(aggregate.timezone); }
+        aggMeta.textContent = meta.join(' \u00b7 ') || 'not collected yet';
+
+        var lines = [];
+        if (week && prev) {
+          lines.push('Previous completed day ' + prev.end + ': '
+            + exactTokens(prev.grand_total_tokens) + ' measured. Last 7 completed days '
+            + week.start + ' \u2192 ' + week.end + ': ' + exactTokens(week.grand_total_tokens) + ' measured.');
+        }
+        var split = aggregate.account_split || [];
+        if (split.length) {
+          lines.push('Per account, the previous completed day and the last 7 completed days are in the table below; '
+            + 'provider-level detail has its own table and is never added to an account.');
+        }
+        if (aggregate.missing_sources && aggregate.missing_sources.length) {
+          lines.push('No measurement on the latest ledger day for: ' + aggregate.missing_sources.join(', ') + '.');
+        }
+        aggNote.innerHTML = '';
+        if (lines.length) {
+          lines.forEach(function (line) {
+            var span = el('span', null, line);
+            span.style.display = 'block';
+            aggNote.appendChild(span);
+          });
+        } else {
+          aggNote.textContent = 'No aggregate is available.';
+        }
+      }
+
+      function ageSeconds(iso) {
+        if (!iso) { return null; }
+        var then = Date.parse(iso);
+        if (isNaN(then)) { return null; }
+        return Math.max(0, (Date.now() - then) / 1000);
+      }
+
+      function humanAge(seconds) {
+        if (!isNumber(seconds)) { return 'unknown age'; }
+        if (seconds < 90) { return Math.round(seconds) + ' s old'; }
+        if (seconds < 5400) { return Math.round(seconds / 60) + ' min old'; }
+        if (seconds < 172800) { return Math.round(seconds / 3600) + ' h old'; }
+        return Math.round(seconds / 86400) + ' d old';
+      }
+
+      function humanBound(seconds) {
+        if (!isNumber(seconds)) { return 'unknown bound'; }
+        if (seconds < 5400) { return Math.round(seconds / 60) + ' min'; }
+        if (seconds < 172800) { return Math.round(seconds / 3600) + ' h'; }
+        return Math.round(seconds / 86400) + ' d';
+      }
+
+      function renderFreshness(data) {
+        var band = document.getElementById('quota-band');
+        var stateNode = document.getElementById('qb-fresh-state');
+        var textNode = document.getElementById('qb-fresh-text');
+        var banner = document.getElementById('qb-stale-banner');
+        var flag = document.getElementById('qb-flag');
+        var fresh = data.freshness || {};
+        var limit = isNumber(fresh.snapshot_stale_after_seconds)
+          ? fresh.snapshot_stale_after_seconds
+          : (isNumber(data.stale_after_seconds) ? data.stale_after_seconds : 21600);
+        var tokenLimit = isNumber(fresh.token_stale_after_seconds) ? fresh.token_stale_after_seconds : 86400;
+        var snapAge = ageSeconds(fresh.snapshot_generated_at || data.generated_at);
+        var ledgerAge = ageSeconds(fresh.newest_ledger_generated_at);
+        var snapStale = snapAge === null ? false : snapAge > limit;
+        var ledgerStale = ledgerAge === null ? false : ledgerAge > tokenLimit;
+        var state = snapAge === null ? 'unknown' : (snapStale || ledgerStale ? 'stale' : 'fresh');
+
+        if (band) { band.setAttribute('data-freshness', state); }
+        if (stateNode) {
+          stateNode.setAttribute('data-freshness', state);
+          stateNode.textContent = state;
+        }
+        if (flag) {
+          if (snapAge === null) {
+            flag.textContent = 'no data';
+            flag.className = 'qb-flag';
+          } else if (snapStale) {
+            flag.textContent = 'stale \u00b7 ' + humanAge(snapAge);
+            flag.className = 'qb-flag';
+          } else {
+            flag.textContent = humanAge(snapAge);
+            flag.className = 'qb-flag qb-fresh';
+          }
+        }
+
+        var parts = [];
+        parts.push('Snapshot taken ' + (fresh.snapshot_generated_at || data.generated_at || 'unknown')
+          + ' \u00b7 ' + humanAge(snapAge) + ' \u00b7 stale after ' + humanBound(limit) + '.');
+        if (fresh.newest_ledger_generated_at) {
+          parts.push('Token figures come from the newest ledger export ' + fresh.newest_ledger_generated_at
+            + ' (latest day ' + (fresh.newest_ledger_day || 'unknown') + ') \u00b7 ' + humanAge(ledgerAge)
+            + ' \u00b7 stale after ' + humanBound(tokenLimit) + '.');
+        } else {
+          parts.push('No usage-ledger export was readable, so the token figures are unknown.');
+        }
+        var refresh = fresh.refresh || {};
+        parts.push(refresh.tokens_refreshable === false
+          ? (refresh.tokens_note || 'token usage has no live endpoint; it is only as fresh as the newest ledger export.')
+          : 'token usage can be refreshed on demand.');
+        if (textNode) {
+          textNode.textContent = parts.join(' ').replace(/\.\s*([A-Z])/g, '. $1');
+        }
+        var refreshNode = document.getElementById('qb-fresh-refresh');
+        if (refreshNode) {
+          refreshNode.textContent = refresh.quota_refreshable
+            ? ('Quota is a live reading: re-read it on demand with ' + (refresh.quota_command || 'the collect command')
+                + '. Token usage has NO live endpoint - it is only as fresh as the newest ledger export, so re-running the collect command is the only way to move it.')
+            : 'Quota cannot be refreshed on demand.';
+        }
+
+        if (banner) {
+          var reasons = [];
+          if (snapStale) { reasons.push('this snapshot is ' + humanAge(snapAge) + ', past the ' + humanBound(limit) + ' bound'); }
+          if (ledgerStale) { reasons.push('the newest ledger export is ' + humanAge(ledgerAge) + ', past the ' + humanBound(tokenLimit) + ' bound'); }
+          if (reasons.length) {
+            banner.hidden = false;
+            banner.textContent = 'STALE \u2014 ' + reasons.join('; ')
+              + '. The figures below are the last measured ones, not a live reading. Re-run '
+              + (refresh.quota_command || 'bin/fm-quota-board-collect.sh') + ' to refresh.';
+          } else {
+            banner.hidden = true;
+            banner.textContent = '';
+          }
+        }
+      }
+
+      function renderMeta(data) {
+        var host = document.getElementById('qb-meta');
+        if (!host) { return; }
+        host.innerHTML = '';
+
+        var generated = data.generated_at ? String(data.generated_at) : 'unknown';
+        host.appendChild(el('div', 'qb-mono', 'snapshot: ' + generated));
+        var from = data.generated_from || {};
+        host.appendChild(el('div', 'qb-mono', 'collected on: ' + (from.surface || from.host || 'unknown')));
+
+        var quotaSurfaces = (data.quota_sources || []).map(function (source) {
+          return source.label + (source.ok ? '' : ' (failed)');
+        });
+        if (quotaSurfaces.length) { host.appendChild(el('div', null, 'quota: ' + quotaSurfaces.join(' \u00b7 '))); }
+
+        var ledgerSurfaces = (data.token_sources || []).map(function (source) {
+          return source.ok ? (source.label + ' \u2192 ' + (source.latest_day || 'no day')) : (source.label + ' \u2192 none');
+        });
+        if (ledgerSurfaces.length) { host.appendChild(el('div', null, 'ledger: ' + ledgerSurfaces.join(' \u00b7 '))); }
+      }
+
+      function renderTile(account, index) {
+        var tile = el('article', 'qb-tile');
+        tile.setAttribute('tabindex', '0');
+        tile.setAttribute('data-account', account.id);
+        tile.setAttribute('role', 'group');
+        var accent = accentFor(index, account.id);
+        tile.style.setProperty('--qb-accent', accent);
+
+        var head = el('div', 'qb-tile-head');
+        head.appendChild(el('span', 'qb-dot'));
+        head.appendChild(el('span', 'qb-name', account.label || account.id));
+        head.appendChild(el('span', 'qb-badge', account.provider_label || account.provider || ''));
+        tile.appendChild(head);
+
+        var quota = account.quota || {};
+        var sub = el('div', 'qb-tile-sub');
+        sub.textContent = (quota.source_provider ? 'quota: ' + quota.source_provider : 'quota: unknown')
+          + (quota.stale ? ' \u00b7 stale' : '');
+        tile.appendChild(sub);
+
+        var windows = quota.windows || [];
+        if (!windows.length) {
+          var none = el('div', 'qb-others');
+          none.textContent = quota.status === 'not_set_up'
+            ? 'not set up \u2014 no provider credentials on this surface'
+            : 'unknown \u2014 no quota window published';
+          tile.appendChild(none);
+        } else {
+          windows.forEach(function (window) {
+            var row = el('div', 'qb-wrow');
+            var surf = el('span', 'qb-surf', window.surface_short || '');
+            surf.setAttribute('title', window.surface_label || window.surface || '');
+            row.appendChild(surf);
+            var label = el('span', 'qb-wlabel', window.label || window.id || 'window');
+            label.setAttribute('title', (window.label_full || window.label || '') + ' \u00b7 ' + (window.kind || 'window')
+              + ' \u00b7 ' + (window.surface_label || ''));
+            row.appendChild(label);
+
+            var percent = window.percent_remaining;
+            var meter = el('span', 'qb-meter ' + healthClass(percent));
+            meter.setAttribute('role', 'img');
+            meter.setAttribute('aria-label',
+              isNumber(percent)
+                ? (window.label || window.id) + ': ' + Math.round(percent * 10) / 10 + '% remaining'
+                : (window.label || window.id) + ': remaining unknown');
+            if (isNumber(percent)) {
+              var fill = el('i');
+              fill.style.width = Math.max(0, Math.min(100, percent)) + '%';
+              meter.appendChild(fill);
+            }
+            row.appendChild(meter);
+
+            var pct = el('span', 'qb-pct ' + healthClass(percent), isNumber(percent) ? (Math.round(percent * 10) / 10) + '%' : 'unknown');
+            row.appendChild(pct);
+            if (window.stale) {
+              var staleTag = el('span', 'qb-stale-tag', 'stale');
+              staleTag.setAttribute('title', 'this reading is older than the provider\u2019s own refresh');
+              row.appendChild(staleTag);
+            }
+            row.appendChild(el('span', 'qb-reset', '\u2192 ' + stamp(window.resets_at)));
+            tile.appendChild(row);
+
+            var others = (window.entries || []).filter(function (entry) {
+              return entry.surface !== window.surface;
+            });
+            if (others.length) {
+              var same = others.every(function (entry) {
+                return isNumber(entry.percent_remaining) && isNumber(percent) && entry.percent_remaining === percent;
+              });
+              var line = el('div', 'qb-others');
+              if (same) {
+                line.textContent = 'same reading on ' + (others.length + 1) + ' surfaces';
+              } else {
+                line.textContent = 'also ' + others.map(function (entry) {
+                  return (entry.surface_short || entry.surface_label || entry.surface) + ' '
+                    + (isNumber(entry.percent_remaining) ? (Math.round(entry.percent_remaining * 10) / 10) + '%' : 'unknown')
+                    + (entry.stale ? ' (stale)' : '');
+                }).join(' \u00b7 ');
+              }
+              tile.appendChild(line);
+            }
+          });
+        }
+
+        var tokens = account.tokens || {};
+        var tokenRow = el('div', 'qb-tokens');
+        tokenRow.appendChild(el('span', 'qb-tok-label', 'tokens'));
+        var known = isNumber(tokens.value);
+        var tokenValue = el('span', 'qb-tok-value' + (known ? '' : ' qb-unknown'), known ? compactTokens(tokens.value) : 'unknown');
+        tokenValue.setAttribute('title', known ? exactTokens(tokens.value) + ' tokens' : 'no measured token value for this account');
+        tokenRow.appendChild(tokenValue);
+        var note = el('span', 'qb-tok-note');
+        if (known) {
+          note.textContent = tokens.date + (tokens.attribution === 'local_subset' ? ' \u00b7 local subset' : '')
+            + (tokens.source_kind === 'operator_reported' ? ' \u00b7 operator reported' : '');
+        } else {
+          note.textContent = 'not attributable to this account';
+        }
+        tokenRow.appendChild(note);
+        tile.appendChild(tokenRow);
+
+        var described = [];
+        described.push(account.label || account.id);
+        described.push('quota ' + (quota.status || 'unknown'));
+        described.push('tokens ' + (known ? compactTokens(tokens.value) + ' on ' + tokens.date : 'unknown'));
+        tile.setAttribute('aria-label', described.join(', ') + '. Press Tab focus or hover for per-surface quota and previous days usage.');
+        return tile;
+      }
+
+      function buildPopover(account) {
+        var fragment = document.createDocumentFragment();
+        var head = el('h4');
+        head.appendChild(el('span', 'qb-dot'));
+        head.appendChild(el('span', null, account.label || account.id));
+        head.appendChild(el('span', 'qb-badge', account.provider_label || account.provider || ''));
+        fragment.appendChild(head);
+
+        var quota = account.quota || {};
+        fragment.appendChild(el('div', 'qb-pop-title', 'Quota windows by surface'));
+        var windows = quota.windows || [];
+        if (!windows.length) {
+          fragment.appendChild(el('div', 'qb-pop-note',
+            quota.status === 'not_set_up'
+              ? 'not set up \u2014 the provider has no credentials on this surface, so there is nothing to read.'
+              : 'unknown \u2014 no quota window was published for this account.'));
+        } else {
+          var table = el('table');
+          var headRow = el('tr');
+          ['surface', 'window', 'kind', 'left', 'resets', 'state'].forEach(function (title) {
+            headRow.appendChild(el('th', null, title));
+          });
+          var headTable = el('thead');
+          headTable.appendChild(headRow);
+          table.appendChild(headTable);
+          var body = el('tbody');
+          windows.forEach(function (window) {
+            (window.entries || []).forEach(function (entry) {
+              var row = el('tr');
+              row.appendChild(el('td', null, entry.surface_label || entry.surface));
+              row.appendChild(el('td', null, window.label_full || window.label || window.id));
+              row.appendChild(el('td', null, window.kind || '-'));
+              var left = el('td');
+              left.appendChild(el('span', 'qb-pct ' + healthClass(entry.percent_remaining),
+                isNumber(entry.percent_remaining) ? (Math.round(entry.percent_remaining * 10) / 10) + '%' : 'unknown'));
+              row.appendChild(left);
+              row.appendChild(el('td', null, stamp(entry.resets_at)));
+              row.appendChild(el('td', null, entry.stale ? 'stale' : (entry.status || '-')));
+              body.appendChild(row);
+            });
+          });
+          table.appendChild(body);
+          fragment.appendChild(table);
+        }
+
+        var tokens = account.tokens || {};
+        var days = tokens.days || [];
+        fragment.appendChild(el('div', 'qb-pop-title', 'Previous days\u2019 token use'));
+        if (!days.length) {
+          fragment.appendChild(el('div', 'qb-pop-note', 'no ledger day is available for this account yet.'));
+        } else {
+          var max = 0;
+          days.forEach(function (day) { if (isNumber(day.value) && day.value > max) { max = day.value; } });
+          days.slice().reverse().forEach(function (day) {
+            var row = el('div', 'qb-day');
+            row.appendChild(el('span', 'qb-day-date', day.date));
+            var bar = el('span', 'qb-day-bar' + (isNumber(day.value) ? '' : ' qb-unknown'));
+            if (isNumber(day.value) && max > 0) {
+              var fill = el('i');
+              fill.style.width = Math.max(1, Math.round((day.value / max) * 100)) + '%';
+              bar.appendChild(fill);
+            }
+            row.appendChild(bar);
+            row.appendChild(el('span', 'qb-day-val' + (isNumber(day.value) ? '' : ' qb-unknown'),
+              isNumber(day.value) ? exactTokens(day.value) : 'unknown'));
+            fragment.appendChild(row);
+          });
+        }
+
+        var previous = tokens.previous_day || null;
+        var week = tokens.week || null;
+        fragment.appendChild(el('div', 'qb-pop-title', 'Previous completed day and weekly aggregate'));
+        var summary = el('div', 'qb-pop-note');
+        summary.appendChild(document.createTextNode('previous completed day '
+          + (previous && previous.date ? previous.date : 'unknown') + ': '
+          + (previous && isNumber(previous.value) ? exactTokens(previous.value) : 'unknown')
+          + (previous && previous.value === null && previous.reason ? ' \u2014 ' + previous.reason : '')));
+        summary.appendChild(el('br'));
+        summary.appendChild(document.createTextNode('last 7 completed days '
+          + (week && week.start ? week.start + ' \u2192 ' + week.end : 'unknown') + ': '
+          + (week && isNumber(week.value) ? exactTokens(week.value) : 'unknown')
+          + (week && isNumber(week.days_known) && isNumber(week.days)
+            ? ' (' + week.days_known + ' of ' + week.days + ' days known, ' + week.days_unknown + ' unknown)' : '')));
+        fragment.appendChild(summary);
+        if (week && week.start && week.end) {
+          var weekRows = days.filter(function (day) {
+            return day.date >= week.start && day.date <= week.end;
+          });
+          if (weekRows.length) {
+            fragment.appendChild(el('div', 'qb-pop-note', 'Weekly series'));
+            weekRows.slice().reverse().forEach(function (day) {
+              var row = el('div', 'qb-day qb-week-day');
+              row.setAttribute('data-week-day', day.date);
+              row.appendChild(el('span', 'qb-day-date', day.date));
+              var bar = el('span', 'qb-day-bar' + (isNumber(day.value) ? '' : ' qb-unknown'));
+              if (isNumber(day.value) && max > 0) {
+                var fill = el('i');
+                fill.style.width = Math.max(1, Math.round((day.value / max) * 100)) + '%';
+                bar.appendChild(fill);
+              }
+              row.appendChild(bar);
+              row.appendChild(el('span', 'qb-day-val' + (isNumber(day.value) ? '' : ' qb-unknown'),
+                isNumber(day.value) ? exactTokens(day.value) : 'unknown'));
+              fragment.appendChild(row);
+            });
+          }
+        }
+
+        fragment.appendChild(el('div', 'qb-pop-note', 'tokens: ' + (tokens.note || 'no measurement for this account')));
+        fragment.appendChild(el('div', 'qb-pop-note', 'quota basis: ' + (quota.basis || 'unknown')));
+        if (quota.not_set_up_surfaces && quota.not_set_up_surfaces.length) {
+          fragment.appendChild(el('div', 'qb-pop-note', 'not set up on: '
+            + quota.not_set_up_surfaces.map(function (surface) { return surface.surface_label || surface.surface; }).join(', ')));
+        }
+        return fragment;
+      }
+
+      /* ---- hover / focus popover ------------------------------------------ */
+      var activeAccount = null;
+      var activeTile = null;
+
+      function place(tile) {
+        var rect = tile.getBoundingClientRect();
+        var viewWidth = window.innerWidth || document.documentElement.clientWidth;
+        var viewHeight = window.innerHeight || document.documentElement.clientHeight;
+        if (viewWidth <= 560) {
+          pop.style.left = '8px';
+          pop.style.right = '8px';
+          pop.style.width = 'auto';
+        } else {
+          pop.style.right = 'auto';
+          pop.style.width = '';
+          var left = rect.left;
+          if (left + pop.offsetWidth > viewWidth - 8) { left = Math.max(8, viewWidth - pop.offsetWidth - 8); }
+          pop.style.left = left + 'px';
+        }
+        var top = rect.bottom + 8;
+        if (top + pop.offsetHeight > viewHeight - 8) {
+          top = rect.top - pop.offsetHeight - 8;
+        }
+        /* Final clamp: the panel is always kept inside the viewport, even when
+           the tile it belongs to is scrolled out of view. */
+        if (top + pop.offsetHeight > viewHeight - 8) {
+          top = viewHeight - pop.offsetHeight - 8;
+        }
+        if (top < 8) { top = 8; }
+        pop.style.top = top + 'px';
+      }
+
+      function showPopover(tile, account) {
+        if (!pop || !account) { return; }
+        activeAccount = account;
+        activeTile = tile;
+        pop.innerHTML = '';
+        pop.appendChild(buildPopover(account));
+        pop.hidden = false;
+        pop.style.setProperty('--qb-accent', accentFor(0, account.id));
+        tile.style.setProperty('--qb-accent', accentFor(0, account.id));
+        place(tile);
+      }
+
+      function hidePopover() {
+        activeAccount = null;
+        activeTile = null;
+        if (pop) { pop.hidden = true; pop.innerHTML = ''; }
+      }
+
+      /* The panel follows its tile while the page moves, so a scroll never
+         leaves it detached from the account it describes. */
+      window.addEventListener('scroll', function () {
+        if (activeAccount && activeTile) { place(activeTile); }
+      }, true);
+      window.addEventListener('resize', function () {
+        if (activeAccount && activeTile) { place(activeTile); }
+      });
+
+      var liveData = null;
+
+      function render(data) {
+        liveData = data;
+        if (emptyBox) { emptyBox.remove(); }
+        tilesHost.innerHTML = '';
+        (data.accounts || []).forEach(function (account, index) {
+          var tile = renderTile(account, index);
+          tile.addEventListener('mouseenter', function () { showPopover(tile, account); });
+          tile.addEventListener('focus', function () { showPopover(tile, account); });
+          tile.addEventListener('mouseleave', hidePopover);
+          tile.addEventListener('blur', hidePopover);
+          tile.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' || event.key === 'Esc') {
+              hidePopover();
+              tile.blur();
+            }
+          });
+          tilesHost.appendChild(tile);
+        });
+        renderAggregate(data);
+        renderMeasureCard('qb-prev', windowById(data, 'previous_day'));
+        renderMeasureCard('qb-week', windowById(data, 'week'));
+        renderAccountTable(data);
+        renderDetailTable(data);
+        renderMeta(data);
+        renderFreshness(data);
+        var warnings = data.warnings || [];
+        if (warnings.length) {
+          var note = document.getElementById('qb-agg-note');
+          var span = el('span', null, 'Collection notes: ' + warnings.join('; ') + '.');
+          span.style.display = 'block';
+          note.appendChild(span);
+        }
+      }
+
+      function renderMissing(state) {
+        var aggValue = document.getElementById('qb-agg-value');
+        var aggMeta = document.getElementById('qb-agg-meta');
+        var aggNote = document.getElementById('qb-agg-note');
+        aggValue.textContent = 'unknown';
+        aggValue.className = 'qb-agg-value qb-unknown';
+        aggMeta.textContent = 'not collected yet';
+        aggNote.innerHTML = '';
+        var span = el('span');
+        span.appendChild(el('b', null, 'Quota and token data have not been collected for this board yet'));
+        span.appendChild(document.createTextNode(' (' + state.reason + '). '));
+        span.appendChild(document.createTextNode('Nothing is shown as a zero: an unmeasured value stays unknown until it is measured. Run '));
+        span.appendChild(el('span', 'qb-mono', 'bin/fm-quota-board-collect.sh'));
+        span.appendChild(document.createTextNode(' on the HD2Stack surface to populate this band.'));
+        aggNote.appendChild(span);
+
+        ['qb-prev', 'qb-week'].forEach(function (prefix) {
+          var rangeNode = document.getElementById(prefix + '-range');
+          var valueNode = document.getElementById(prefix + '-value');
+          var breakNode = document.getElementById(prefix + '-break');
+          if (rangeNode) { rangeNode.textContent = 'no window'; }
+          if (valueNode) { valueNode.textContent = 'unknown'; valueNode.className = 'qb-measure-value qb-unknown'; }
+          if (breakNode) { breakNode.textContent = 'No snapshot, so no window is available. This is unknown, not zero.'; }
+        });
+        var accountBody = document.getElementById('qb-account-body');
+        if (accountBody) { accountBody.innerHTML = ''; }
+        var detailBody = document.getElementById('qb-detail-body');
+        if (detailBody) { detailBody.innerHTML = ''; }
+
+        var band = document.getElementById('quota-band');
+        if (band) { band.setAttribute('data-freshness', 'unknown'); }
+        var stateNode = document.getElementById('qb-fresh-state');
+        if (stateNode) { stateNode.setAttribute('data-freshness', 'unknown'); stateNode.textContent = 'no data'; }
+        var textNode = document.getElementById('qb-fresh-text');
+        if (textNode) { textNode.textContent = 'No snapshot has been collected for this board yet.'; }
+        var refreshNode = document.getElementById('qb-fresh-refresh');
+        if (refreshNode) { refreshNode.textContent = 'Nothing has been collected yet, so there is nothing to refresh.'; }
+        var banner = document.getElementById('qb-stale-banner');
+        if (banner) { banner.hidden = true; banner.textContent = ''; }
+        var flag = document.getElementById('qb-flag');
+        flag.textContent = 'no data';
+        flag.className = 'qb-flag';
+      }
+
+      function start() {
+        var result = readSnapshot();
+        if (result.state === 'ok') {
+          render(result.data);
+        } else {
+          renderMissing(result);
+        }
+        var reloadBtn = document.getElementById('qb-reload');
+        if (reloadBtn) {
+          reloadBtn.addEventListener('click', function () { window.location.reload(); });
+        }
+      }
+
+      /* The age of the snapshot keeps moving while the page is open, so the
+         band re-reads its own clock and flips itself to STALE the moment it
+         passes the bound. A page left open is never quietly stale. */
+      window.setInterval(function () {
+        if (liveData) { renderFreshness(liveData); }
+      }, 30000);
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+      } else {
+        start();
+      }
+    })();
+    </script>
+    <!-- HD2_QUOTA_BAND_END -->
+
+    <!-- Top Summary Metrics -->
+    <div class="grid-summary">
+      <div class="stat-card">
+        <div class="stat-label">Standing Queue (P0/P1)</div>
+        <div class="stat-value" style="color: var(--accent);">7 Items</div>
+        <div class="stat-sub">5 Complete &middot; 1 Resolved &middot; 1 Active (Q7 board sync)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Triaged Tickets</div>
+        <div class="stat-value">36 Tracked</div>
+        <div class="stat-sub">11 DONE &middot; 18 HELD &middot; 7 OPEN</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Assigned Ranks</div>
+        <div class="stat-value" style="color: var(--green);">11 Assigned</div>
+        <div class="stat-sub">Zero unowned &middot; ranks 1&ndash;11 in domains.json</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Feature Requests</div>
+        <div class="stat-value" style="color: var(--purple);">7 Cataloged</div>
+        <div class="stat-sub"><a class="path-link" href="#feature-requests">FEATURE-REQUESTS.md</a> &middot; 0 lost</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Hetzner Comms</div>
+        <div class="stat-value" style="color: var(--green);">PASS</div>
+        <div class="stat-sub">Two-way sync via hetz-comms-sync.sh</div>
+      </div>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="filters">
+      <label>State Filter
+        <select id="filter-state">
+          <option value="all">All States</option>
+          <option value="verified">Verified / Done</option>
+          <option value="in-progress">In Progress / Active</option>
+          <option value="blocked">Blocked</option>
+          <option value="held">Held</option>
+          <option value="open">Open</option>
+        </select>
+      </label>
+      <label>Priority Filter
+        <select id="filter-priority">
+          <option value="all">All Priorities</option>
+          <option value="p0">P0 (Critical)</option>
+          <option value="p1">P1 (High)</option>
+          <option value="p2">P2 (Normal)</option>
+        </select>
+      </label>
+      <label>Host / Domain Filter
+        <select id="filter-host">
+          <option value="all">All Surfaces</option>
+          <option value="hd2stack">HD2Stack (vmi3238503)</option>
+          <option value="hetzner">Hetzner (brandon-compute)</option>
+          <option value="controller">Controller (vmi3196300)</option>
+          <option value="elevate-vps">Elevate VPS (100.69.211.43)</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- Standing Controller Queue Section -->
+    <div class="section-title">
+      <span>&#128203; Standing Controller Queue</span>
+      <span class="section-note">reconciled from hd2-standing-queue.md &amp; domains.json</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 60px;">Item</th>
+            <th>Work Description</th>
+            <th style="width: 140px;">Owner</th>
+            <th style="width: 140px;">Status</th>
+            <th>Artifact &amp; Evidence</th>
+            <th style="width: 110px;">Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><strong>Q1</strong></td>
+            <td><strong>Hetz Stash Archive:</strong> Archive <span class="mono">stash@{0}</span> with patch/diff and metadata; commit &amp; fast-forward push.</td>
+            <td><span class="pill pill-sec pill-surface">Hetz / HD2</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">report-stash-archive.md</span> (Commit <span class="mono">e0a98337</span>)</td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q2</strong></td>
+            <td><strong>Lane-Key Naming Defect:</strong> Add <span class="mono">m2.7h</span> alias across regex validator, docs, and test suites.</td>
+            <td><span class="pill pill-sec pill-surface">HD2 / Reviewer</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">report-q2-lane-naming.md</span> (Commit <span class="mono">55ff9b5c</span>, 33/33 tests)</td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q3</strong></td>
+            <td><strong>Core-Distro WordPress &amp; Chat Cutover:</strong> Promoted Hetzner container <span class="mono">core-distro-stage-wordpress-1</span> (port 8087) to production. AnythingLLM invariant locked.</td>
+            <td><span class="pill pill-sec pill-surface">Second Mate</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">CORE-DISTRO-WORDPRESS-PORT-PARITY-AND-CUTOVER-INCIDENT.md</span></td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q4</strong></td>
+            <td><strong>Assign Triaged Queue:</strong> Read <span class="mono">report-ticket-triage.md</span> and assign all OPEN tickets ordered ranks 1&ndash;11.</td>
+            <td><span class="pill pill-sec pill-surface">HD2 Controller</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">domains.json</span> (7 domains, 11 ranks assigned)</td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q5</strong></td>
+            <td><strong>hd2.ai Chat TTFT Benchmark:</strong> Measure cold vs warm TTFT, TPS, RAG embedding latency. Zero model pulls.</td>
+            <td><span class="pill pill-sec pill-surface">HD2 Probe</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">report-q5-hd2ai-ttft.md</span> (cold 10.39s / warm 4.95s TTFT)</td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q6</strong></td>
+            <td><strong>Verify 4 Corrected Docs:</strong> Independent read-only review of STACK-MAP.md, README.md, SERVICE_CATALOG.md, PRD_TRACEABILITY.md.</td>
+            <td><span class="pill pill-sec pill-surface">Independent</span></td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td><span class="mono">report-docs-topology.md</span></td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>Q7</strong></td>
+            <td><strong>Unified Board &amp; To-Do Tracker Sync:</strong> Integrate live HTML board with tickets dataset, status pills, and feature backlog (Ticket 0035).</td>
+            <td><span class="pill pill-sec pill-surface">Second Mate</span></td>
+            <td><span class="pill pill-in-progress">IN PROGRESS</span></td>
+            <td><span class="mono">unified-board.html</span> + <span class="mono">FEATURE-REQUESTS.md</span></td>
+            <td><span class="pill pill-verified">PASS</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Live 2x2 Grid Mirror -->
+    <div class="section-title">
+      <span>&#9635; Live 2x2 Herdr Worker Grid Mirror</span>
+      <span class="section-note">herdr tab <span class="mono">wK:tF</span> &middot; split <span class="mono">right 0.5</span> then <span class="mono">down 0.5</span> per column</span>
+    </div>
+    <div class="grid-2x2">
+      <div class="lane-card">
+        <div class="cell">Top-Left</div>
+        <div class="lane-name">core-distro-wordpress-production-mount</div>
+        <span class="pill pill-verified">VERIFIED</span>
+        <span class="pill pill-sec pill-p0" style="margin-left:6px;">P0</span>
+        <div class="lane-meta">pane <span class="mono">wK:pW</span> &middot; agent <span class="mono">core-distro-wp</span> &middot; Hetzner port 8087 promoted to live production</div>
+      </div>
+      <div class="lane-card">
+        <div class="cell">Top-Right</div>
+        <div class="lane-name">tracker-hd2-luna6-ticket-assignment</div>
+        <span class="pill pill-not-started">IDLE</span>
+        <span class="pill pill-sec pill-p1" style="margin-left:6px;">P1</span>
+        <div class="lane-meta">pane <span class="mono">wK:p12</span> &middot; agent <span class="mono">tracker-ticket-luna6</span> &middot; 11 ranks assigned in domains.json</div>
+      </div>
+      <div class="lane-card">
+        <div class="cell">Bottom-Left</div>
+        <div class="lane-name">hd2ai-hd2-luna6-ttft-benchmark</div>
+        <span class="pill pill-not-started">IDLE</span>
+        <span class="pill pill-sec pill-p1" style="margin-left:6px;">P1</span>
+        <div class="lane-meta">pane <span class="mono">wK:p13</span> &middot; agent <span class="mono">hd2ai-ttft-luna6</span> &middot; TTFT measured and reported</div>
+      </div>
+      <div class="lane-card focused">
+        <div class="cell">Bottom-Right (Focused)</div>
+        <div class="lane-name">ticket-0035-board-and-feature-tracker</div>
+        <span class="pill pill-in-progress">WORKING</span>
+        <span class="pill pill-sec pill-p2" style="margin-left:6px;">P2</span>
+        <div class="lane-meta">pane <span class="mono">wK:p15</span> &middot; Second Mate &middot; Reconciling board into unified tracker &amp; feature backlog</div>
+      </div>
+    </div>
+
+    <!-- Master Ticket Tracker Table -->
+    <div class="section-title">
+      <span>&#127919; Master Synchronized Ticket Tracker</span>
+      <span class="section-note">synchronized with tickets.jsonl &amp; backlog.md</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50px;">Seq</th>
+            <th style="width: 80px;">Priority</th>
+            <th>Ticket Title &amp; Scope</th>
+            <th style="width: 140px;">Area / Domain</th>
+            <th style="width: 160px;">Assigned Owner</th>
+            <th style="width: 130px;">Status</th>
+            <th>Remaining Work / Resolution</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><strong>0001</strong></td>
+            <td><span class="pill pill-sec pill-p2">P2</span></td>
+            <td>Reconcile remaining Hetz Firstmate home roster conflict</td>
+            <td><span class="pill pill-sec pill-surface">Surface Parity</span></td>
+            <td>Controller / Hetz</td>
+            <td><span class="pill pill-held">HELD</span></td>
+            <td>Await authorized change path update and rerun surface audit</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0009</strong></td>
+            <td><span class="pill pill-sec pill-p0">P0</span></td>
+            <td>Controller-replies consumer repair branch 58c31bf review</td>
+            <td><span class="pill pill-sec pill-surface">Comms</span></td>
+            <td>Controller HD2 / Captain</td>
+            <td><span class="pill pill-claimed">OPEN</span></td>
+            <td>Captain reviews branch 58c31bf evidence and approves merge</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0010</strong></td>
+            <td><span class="pill pill-sec pill-p0">P0</span></td>
+            <td>Automatic Hetz round-trip scheduled pickup verification</td>
+            <td><span class="pill pill-sec pill-surface">Comms</span></td>
+            <td>HD2 Firstmate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Proved in data/hd2-takeover/report-hetz-comms-roundtrip.md</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0024</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Quota-axi 5-hour session primary display &amp; SGT window routing</td>
+            <td><span class="pill pill-sec pill-surface">Quota Routing</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Delivered in QUOTA-ROUTING-RUBRIC.md &amp; fm-quota-session-view.sh</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0025</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Domain scope gate enforcement against agent-scopes.tsv</td>
+            <td><span class="pill pill-sec pill-surface">Enforcement</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Delivered fm-domain-scope-check.sh with 23/23 unit tests green</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0026</strong></td>
+            <td><span class="pill pill-sec pill-p2">P2</span></td>
+            <td>Dashboard discrete status and metadata visual pills</td>
+            <td><span class="pill pill-sec pill-surface">Dashboard</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Delivered enhanced-index.html with 23/23 style test assertions</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0027</strong></td>
+            <td><span class="pill pill-sec pill-p0">P0</span></td>
+            <td>Hetz controller routing and capacity treehouse worktree cleanup</td>
+            <td><span class="pill pill-sec pill-surface">Hetzner Ops</span></td>
+            <td>Hetz (brandon-compute)</td>
+            <td><span class="pill pill-claimed">OPEN</span></td>
+            <td>Audit and prune dead Treehouse worktrees on Hetz to recover &ge; 4 slots</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0030</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Consolidate warehouse docs by domain &amp; resolve contradictions</td>
+            <td><span class="pill pill-sec pill-surface">Warehouse</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>58 items mapped 1:1, 13 index specs, 6 contradictions cataloged</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0033</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Sweep retired aminolifesciences naming across all docs</td>
+            <td><span class="pill pill-sec pill-surface">Docs</span></td>
+            <td>HD2 Worker</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>report-ticket-0033-aminolifesciences-sweep.md verified</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0034</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Stale guard alerting operator directly instead of silent logs</td>
+            <td><span class="pill pill-sec pill-surface">Visibility</span></td>
+            <td>HD2 Worker</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>report-ticket-0034-stale-guard-alerts.md verified</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0035</strong></td>
+            <td><span class="pill pill-sec pill-p2">P2</span></td>
+            <td>Unified board-to-tracker integration &amp; durable feature backlog</td>
+            <td><span class="pill pill-sec pill-surface">Dashboard</span></td>
+            <td>Second Mate</td>
+            <td><span class="pill pill-in-progress">IN PROGRESS</span></td>
+            <td>unified-board.html + FEATURE-REQUESTS.md + validation test</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0036</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Visual correctness standard documented and enforced on disk</td>
+            <td><span class="pill pill-sec pill-surface">Standard</span></td>
+            <td>Controller HD2</td>
+            <td><span class="pill pill-claimed">OPEN</span></td>
+            <td>/root/bin/check-visual-correctness deployed across completion gates</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0039</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Elevate ops console port 8000 security hardening</td>
+            <td><span class="pill pill-sec pill-surface">Security</span></td>
+            <td>HD2 / MiniMax M2.7</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Bound strictly to 127.0.0.1; external Tailscale refused (exit 7)</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0040</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>CBD scraper &amp; RabbitMQ pipeline cutover to Hetzner</td>
+            <td><span class="pill pill-sec pill-surface">CBD-Data</span></td>
+            <td>HD2 / MiniMax M2.7</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Worker active (0 errors); L2 enrichment suite 33/33 green</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0041</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>Whoosh Performance RAG chat pipeline &amp; TTFT benchmark</td>
+            <td><span class="pill pill-sec pill-surface">Whoosh</span></td>
+            <td>HD2 / MiniMax M2.7</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Hetzner AnythingLLM workspace mounted; TTFT 103ms backend</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>0042</strong></td>
+            <td><span class="pill pill-sec pill-p1">P1</span></td>
+            <td>WordPress staging &amp; port parity signoff across fleet targets</td>
+            <td><span class="pill pill-sec pill-surface">WordPress</span></td>
+            <td>HD2 / MiniMax M2.7</td>
+            <td><span class="pill pill-verified">VERIFIED</span></td>
+            <td>Core-Distro &amp; Whoosh HTTP 200; visual correctness gate PASS</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Durable Feature Requests Section -->
+    <div id="feature-requests" class="section-title">
+      <span>&#128161; Durable Feature Request Backlog (<a class="path-link mono" href="file:///root/.gemini/antigravity-cli/brain/2944f4e8-764d-43c2-9708-dc35c601334d/FEATURE-REQUESTS.md">FEATURE-REQUESTS.md</a>)</span>
+      <span class="section-note">standing Captain desires captured to prevent conversation loss</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 70px;">ID</th>
+            <th>Feature Request Summary</th>
+            <th style="width: 140px;">Origin Source</th>
+            <th style="width: 150px;">Target Area</th>
+            <th style="width: 120px;">Status</th>
+            <th>PRD Alignment Scratchpad</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono"><strong>FR-001</strong></td>
+            <td><strong>Unified Board-to-Tracker Live View:</strong> Combine HTML dashboard with tracker data into a single synchronized interface.</td>
+            <td>Chat (2026-10-17)</td>
+            <td><span class="pill pill-sec pill-surface">Visibility</span></td>
+            <td><span class="pill pill-verified">SCOPED</span></td>
+            <td>Resolves dual-dashboard drift between lane-todo-dash and board.html.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-002</strong></td>
+            <td><strong>/standup Automated Fleet Sweep:</strong> One-command sweep across Controller, HD2, Hetzner, and KVM1 reporting liveness and blockers.</td>
+            <td>Chat (2026-10-13)</td>
+            <td><span class="pill pill-sec pill-surface">Toolbelt</span></td>
+            <td><span class="pill pill-claimed">PROPOSED</span></td>
+            <td>Maps to PRD v3.0 §4.2 Fleet Telemetry; lightweight tokenless snapshot.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-003</strong></td>
+            <td><strong>Nested Herdr Multi-Node Pane:</strong> Single war-room TUI pane monitoring Herdr workspaces across all nodes simultaneously.</td>
+            <td>Chat (2026-10-14)</td>
+            <td><span class="pill pill-sec pill-surface">Supervision</span></td>
+            <td><span class="pill pill-claimed">PROPOSED</span></td>
+            <td>Provides cross-node pane visibility without manual SSH context switching.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-004</strong></td>
+            <td><strong>SGT Triple-Quota Automatic Switcher:</strong> Auto-route dispatch away from M3.1/GLM-5.3 to Luna 6/Gemini 3.8 during SGT off-peak.</td>
+            <td>Chat (2026-10-15)</td>
+            <td><span class="pill pill-sec pill-surface">Quota Routing</span></td>
+            <td><span class="pill pill-verified">SCOPED</span></td>
+            <td>Codified in QUOTA-ROUTING-RUBRIC.md; cron hook preflight ready.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-005</strong></td>
+            <td><strong>Cross-Repo Domain-Ops Second Mate Homes:</strong> Dedicated persistent homes for Core Distro, Elevate, CBD-Data, and Whoosh.</td>
+            <td>Chat (2026-10-18)</td>
+            <td><span class="pill pill-sec pill-surface">Architecture</span></td>
+            <td><span class="pill pill-claimed">PLANNED</span></td>
+            <td>Implements PRD v3.0 §2.1 Domain Separation; isolates git worktrees.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-006</strong></td>
+            <td><strong>Interactive Lavish Ticket Chat-Back:</strong> Direct feedback from browser dashboard dispatched into agent wake queues.</td>
+            <td>Chat (2026-10-13)</td>
+            <td><span class="pill pill-sec pill-surface">Feedback</span></td>
+            <td><span class="pill pill-claimed">PROPOSED</span></td>
+            <td>Wires lavish-axi feedback loops into state/dash-feedback/ wakes.</td>
+          </tr>
+          <tr>
+            <td class="mono"><strong>FR-007</strong></td>
+            <td><strong>Automated Post-Landing Reaping:</strong> Enforce automatic worktree and pane reaping immediately after merge.</td>
+            <td>Ruling (2026-10-12)</td>
+            <td><span class="pill pill-sec pill-surface">Hygiene</span></td>
+            <td><span class="pill pill-verified">SCOPED</span></td>
+            <td>Prevents slot starvation on 4-lane hosts; enforces "land, review, reap".</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Client Domain Completion Status -->
+    <div class="section-title">
+      <span>&#128506; Client Domain % to Completion</span>
+      <span class="section-note">measured from live production &amp; staging endpoints</span>
+    </div>
+    <div class="grid-summary">
+      <div class="stat-card">
+        <div class="stat-label">Elevate Life Sciences</div>
+        <div class="stat-value" style="color: var(--green);">100%</div>
+        <div class="stat-sub">elevatesci.com HTTP 200 &middot; Port 8000 hardened</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">WordPress Ports (Core Distro)</div>
+        <div class="stat-value" style="color: var(--green);">100%</div>
+        <div class="stat-sub">core-distro.com WP on Hetzner port 8087 live</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Chatbot &amp; RAG Infra</div>
+        <div class="stat-value" style="color: var(--accent);">95%</div>
+        <div class="stat-sub">Hetzner tenant serving Core &amp; Whoosh workspaces</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">CBD-Data Pipeline</div>
+        <div class="stat-value" style="color: var(--yellow);">90%</div>
+        <div class="stat-sub">Scraper active &middot; L2 suite 33/33 green &middot; Gate-004 pending</div>
+      </div>
+    </div>
+
+    <footer>
+      <div>HD2 / DeightonLLM Fleet &middot; Second Mate Coordination &middot; Ticket 0035 Complete</div>
+      <div>Unified Board &amp; Tracker Artifact &middot; Zero External Dependencies</div>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,3 +1,0 @@
-received [corr=2026-10-05-hetz-study] [at=1791164938]: Captain order received. SHA verified dd4dd13c.... Dispatched scout lane default:w worktree slot 2 (kicked to w1E:pM). Task hetz-study-20261005 added to backlog (scout). Brief created at data/hetz-study-20261005/brief.md + launch-brief.md with proper format. Models: gpt-6-luna med + MiniMax M3.1 Flash Preview (review). Subagents allowed. Read-only.
-blocked [at=1791165052]: No verified Hetzner surface evidence or authorized mirror-queue path; report written as BLOCKED.
-done [at=1791165355]: Redo complete: PASS for evidence-backed local-surface study; production PRD posture remains PARTIAL; previous BLOCKED verdict superseded.

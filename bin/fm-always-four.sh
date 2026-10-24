@@ -643,10 +643,11 @@ emit_coordinator_wake() {
     # Fallback: append to the global wake queue
     local q="$STATE/.wake-queue"
     local qlock="$STATE/.wake-queue.lock"
-    fm_lock_acquire_wait "$qlock" 2>/dev/null || true
-    printf '%s\t%d\tsignal\t%s\t%s\n' \
-      "$(date +%s)" "0" "$wake_key" "$msg" >> "$q" 2>/dev/null || true
-    fm_lock_release "$qlock" 2>/dev/null || true
+    if fm_lock_acquire_wait "$qlock" 5 2>/dev/null; then
+      printf '%s\t%d\tsignal\t%s\t%s\n' \
+        "$(date +%s)" "0" "$wake_key" "$msg" >> "$q" 2>/dev/null || true
+      fm_lock_release "$qlock" 2>/dev/null || true
+    fi
   fi
 
   return 0
