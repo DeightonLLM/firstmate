@@ -686,6 +686,16 @@ families_for_changed_path() {
     bin/fm-pr-*|bin/fm-merge-local.sh|bin/fm-teardown.sh|bin/fm-review-diff.sh|\
     bin/fm-x-*|bin/fm-check*)
       printf '%s\n' pr-forge
+      # The teardown withdraws a lane's claim on the machine lane ledger, so
+      # the ledger publisher's suite is part of its coverage.
+      printf '%s\n' "__script__:fm-lane-ledger-publish.test.sh"
+      ;;
+    bin/fm-lane-ledger-publish.py)
+      printf '%s\n' "__script__:fm-lane-ledger-publish.test.sh"
+      ;;
+    bin/fm-board-refresh.sh)
+      printf '%s\n' "__script__:fm-board-refresh.test.sh"
+      printf '%s\n' "__script__:fm-lane-ledger-publish.test.sh"
       ;;
     bin/fm-spawn.sh|bin/fm-send.sh|bin/fm-harness.sh|\
     bin/fm-peek.sh|bin/fm-composer*)

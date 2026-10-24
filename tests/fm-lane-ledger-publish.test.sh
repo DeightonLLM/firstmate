@@ -154,8 +154,66 @@ ledger_row() {  # <lane-id>
   grep -a "^$1	" "$LEDGER" 2>/dev/null | head -1
 }
 
+# ledger_row_in / ledger_field_in: the same reads against an explicit ledger,
+# for the cases that drive the real teardown in their own sandbox home.
+ledger_row_in() {  # <ledger-path> <lane-id>
+  awk -F'\t' -v id="$2" '$1 == id { print; exit }' "$1" 2>/dev/null
+}
+
+ledger_field_in() {  # <ledger-path> <lane-id> <column-number>
+  ledger_row_in "$1" "$2" | awk -F'\t' -v n="$3" '{ print $n }'
+}
+
+ledger_field() {  # <lane-id> <column-number>
+  ledger_row "$1" | awk -F'\t' -v n="$2" '{ print $n }'
+}
+
 claims_row() {  # <lane-id>
   grep -a "^| \`$1\`" "$CLAIMS" 2>/dev/null | head -1
+}
+
+# age_lane <lane-id> <seconds>: make the lane look like it spawned <seconds>
+# ago. A lane's claim is anchored on when it spawned, so a lane that is only
+# seconds old holds a lease that has nothing to renew yet. The exact spawn
+# stamp is published in AGE_LANE_SPAWNED_AT so a test can assert on it.
+age_lane() {  # <lane-id> <seconds>
+  local lane_id=$1 seconds=$2 meta="$STATE_DIR/$1.meta" now
+  now=$(date +%s)
+  AGE_LANE_SPAWNED_AT=$((now - seconds))
+  grep -v '^spawned_at=' "$meta" > "$meta.new"
+  printf 'spawned_at=%s\n' "$AGE_LANE_SPAWNED_AT" >> "$meta.new"
+  mv "$meta.new" "$meta"
+}
+
+# tear_down_lane <lane-id>: the part of a teardown that ends a lane. The
+# teardown copies the lane's own state into data/teardown-archives/<id>/<date>/
+# and then removes its spawn record, and that removal is the only thing in the
+# fleet that unregisters a lane.
+tear_down_lane() {  # <lane-id>
+  local lane_id=$1
+  local archive="$HOME_DIR/data/teardown-archives/$lane_id/20261024"
+  mkdir -p "$archive"
+  if [ -f "$STATE_DIR/$lane_id.meta" ]; then
+    cp -p "$STATE_DIR/$lane_id.meta" "$archive/meta"
+  fi
+  if [ -f "$STATE_DIR/$lane_id.status" ]; then
+    cp -p "$STATE_DIR/$lane_id.status" "$archive/status"
+  fi
+  rm -f "$STATE_DIR/$lane_id.meta" "$STATE_DIR/$lane_id.status"
+}
+
+# write_slot <slot-id> <target-task-id>: the always-four scheduler's record
+# of which task a lane slot runs. The slot record survives the task it names.
+write_slot() {  # <slot-id> <target-task-id>
+  fm_write_meta "$STATE_DIR/$1.meta" \
+    "endpoint_task_id=$2" \
+    "window=default:w1:p1" \
+    "backend=herdr" \
+    "herdr_pane_id=w1:p1" \
+    "model=minimax/MiniMax-M3.1-Flash" \
+    "harness=minimax-code" \
+    "worktree=$HOME_DIR" \
+    "project=$HOME_DIR"
 }
 
 # assert_row_present / assert_row_absent: a ledger row is a line of text, not
@@ -391,6 +449,322 @@ test_closing_a_lane_keeps_the_row_and_frees_the_scope() {
   pass "closing a lane keeps the row and frees the scope"
 }
 
+# --------------------------------------------------------------------------
+# the real teardown, in a sandbox of its own
+# --------------------------------------------------------------------------
+
+# make_teardown_case <name>: a sandbox in which the REAL bin/fm-teardown.sh
+# runs to completion. The teardown needs a project clone with an origin, a
+# task worktree whose branch is pushed somewhere reachable, and the backend
+# mocks it drives. The home is the case directory, so the teardown never
+# touches the checkout this suite runs from.
+make_teardown_case() {
+  local name=$1 case_dir fakebin
+  case_dir="$TMP_ROOT/$name"
+  fakebin="$case_dir/fakebin"
+  mkdir -p "$case_dir/home/state" "$case_dir/home/data/tracker" \
+           "$case_dir/home/config" "$case_dir/home/ops" "$fakebin"
+
+  cat > "$fakebin/treehouse" <<'SH'
+#!/usr/bin/env bash
+# `treehouse return --force <wt>`: succeed silently.
+exit 0
+SH
+  cat > "$fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+# every tmux call the teardown makes: succeed silently.
+exit 0
+SH
+  cat > "$fakebin/gh-axi" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  "pr list") printf '%s\n' "count: 0 (showing first 0)" "pull_requests[]: []" ; exit 0 ;;
+  "pr view") echo "error: pull request not found" >&2 ; exit 1 ;;
+esac
+exit 0
+SH
+  cat > "$fakebin/gh" <<'SH'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  "pr view") echo "error: pull request not found" >&2 ; exit 1 ;;
+esac
+exit 0
+SH
+  chmod +x "$fakebin/treehouse" "$fakebin/tmux" "$fakebin/gh-axi" "$fakebin/gh"
+
+  # A bare origin with one commit, a clone of it as the project, and a task
+  # worktree on a branch of its own.
+  git init -q --bare "$case_dir/origin.git"
+  git -C "$case_dir/origin.git" symbolic-ref HEAD refs/heads/main
+  git clone -q "$case_dir/origin.git" "$case_dir/_seed" 2>/dev/null
+  git -C "$case_dir/_seed" -c user.email=t@t -c user.name=t \
+    commit -q --allow-empty -m "origin baseline"
+  git -C "$case_dir/_seed" push -q origin main
+  rm -rf "$case_dir/_seed"
+  git clone -q "$case_dir/origin.git" "$case_dir/project"
+  git -C "$case_dir/project" remote set-head origin main 2>/dev/null || true
+  git -C "$case_dir/project" worktree add -q -b fm/task-x1 "$case_dir/wt" main
+
+  # A fork the task branch is pushed to: the landed-work check accepts
+  # local-only work that is reachable from a remote.
+  git init -q --bare "$case_dir/fork.git"
+  git -C "$case_dir/project" remote add fork "$case_dir/fork.git"
+  git -C "$case_dir/wt" -c user.email=t@t -c user.name=t \
+    commit -q --allow-empty -m "the work"
+  git -C "$case_dir/wt" push -q fork fm/task-x1
+
+  # A fresh watcher beacon so fm-guard stays quiet.
+  touch "$case_dir/home/state/.last-watcher-beat"
+  printf '%s\n' "$case_dir"
+}
+
+# write_teardown_meta <case_dir>: the spawn record of the lane to tear down.
+write_teardown_meta() {
+  local case_dir=$1
+  fm_write_meta "$case_dir/home/state/task-x1.meta" \
+    "window=firstmate:fm-task-x1" \
+    "endpoint_task_id=task-x1" \
+    "spawned_at=$(date +%s)" \
+    "worktree=$case_dir/wt" \
+    "project=$case_dir/project" \
+    "harness=minimax-code" \
+    "kind=ship" \
+    "mode=local-only" \
+    "yolo=on"
+}
+
+# run_teardown_in <case_dir> [extra args...]: the real teardown, against the
+# sandbox home. FM_HOME is the sandbox, so the ledger the teardown closes is
+# the sandbox ledger and never the checkout this suite runs from.
+run_teardown_in() {
+  local case_dir=$1; shift
+  FM_ROOT_OVERRIDE="$ROOT" \
+  FM_HOME="$case_dir/home" \
+  PATH="$case_dir/fakebin:$PATH" \
+    "$ROOT/bin/fm-teardown.sh" task-x1 "$@"
+}
+
+# make_failing_publisher_root <case_dir>: a firstmate root whose bin/ is the
+# real bin/ except that the lane ledger publisher always fails. The teardown
+# finds the publisher through FM_ROOT, so this is how a test makes the
+# publisher fail without touching the checkout the suite runs from.
+make_failing_publisher_root() {
+  local case_dir=$1 entry name
+  mkdir -p "$case_dir/fakeroot/bin"
+  for entry in "$ROOT"/bin/*; do
+    name=$(basename "$entry")
+    if [ "$name" = "fm-lane-ledger-publish.py" ]; then
+      cat > "$case_dir/fakeroot/bin/$name" <<'PY'
+#!/usr/bin/env python3
+import sys
+print("lane-ledger-publish: FAIL the ledger could not be written", file=sys.stderr)
+sys.exit(1)
+PY
+      chmod +x "$case_dir/fakeroot/bin/$name"
+    else
+      ln -sfn "$entry" "$case_dir/fakeroot/bin/$name"
+    fi
+  done
+}
+
+# run_teardown_in_with_root <case_dir> <root> [extra args...]: the real
+# teardown, with FM_ROOT pointed at a different root.
+run_teardown_in_with_root() {
+  local case_dir=$1 root=$2; shift 2
+  FM_ROOT_OVERRIDE="$root" \
+  FM_HOME="$case_dir/home" \
+  PATH="$case_dir/fakebin:$PATH" \
+    "$ROOT/bin/fm-teardown.sh" task-x1 "$@"
+}
+
+# --------------------------------------------------------------------------
+# the regressions
+# --------------------------------------------------------------------------
+
+# DEFECT 1: reconcile never closed a row for a lane that has ended. Four lanes
+# were torn down on 2026-10-24 and the ledger still carried all four as
+# ACTIVE: there was no code path that moved a row to DONE.
+test_reconcile_closes_the_row_of_a_lane_that_has_ended() {
+  make_fixture
+  write_lane "demo-lane-a" "working: measuring the thing"
+  run_publish register demo-lane-a
+  expect_code 0 $? "the publisher must publish the lane"
+
+  # The lane is torn down: its spawn record is removed and its state is
+  # archived, exactly as bin/fm-teardown.sh does.
+  tear_down_lane "demo-lane-a"
+
+  run_publish reconcile
+  expect_code 0 $? "the publisher must reconcile"
+
+  local row
+  row=$(ledger_row "demo-lane-a")
+  assert_contains "$row" "DONE" "the ended lane's row must say DONE"
+  assert_equals "" "$(ledger_field "demo-lane-a" 6)" \
+    "the ended lane's row must have an empty expiry"
+  assert_contains "$row" "closed - the lane finished" \
+    "the ended lane's row must carry the closed note"
+  assert_contains "$(claims_row "demo-lane-a")" "**DONE**" \
+    "the claims row must say DONE too"
+  pass "reconcile closes the row of a lane that has ended"
+}
+
+# A lane that is still alive keeps its claim. The drift checker reads a
+# lapsed ACTIVE claim as a violation, so the lease of a live lane is renewed.
+test_reconcile_renews_the_claim_of_a_lane_that_is_still_alive() {
+  make_fixture
+  write_lane "demo-lane-a" "working: measuring the thing"
+  # The lane is old enough that its lease has something to renew.
+  age_lane "demo-lane-a" 600
+  run_publish register demo-lane-a
+  expect_code 0 $? "the publisher must publish the lane"
+
+  local before
+  before=$(ledger_field "demo-lane-a" 6)
+
+  run_publish reconcile
+  expect_code 0 $? "the publisher must reconcile"
+
+  local row after
+  row=$(ledger_row "demo-lane-a")
+  assert_contains "$row" "ACTIVE" "a lane that is still alive must keep its row ACTIVE"
+  after=$(ledger_field "demo-lane-a" 6)
+  assert_not_equals "$before" "$after" \
+    "the claim of a lane that is still alive must be renewed"
+  assert_contains "$row" "measuring the thing" \
+    "the renewed row must carry the lane's real next action"
+  pass "reconcile renews the claim of a lane that is still alive"
+}
+
+# A lane that is still alive is never closed, even when its own claim has
+# lapsed: the close needs positive evidence that the lane ENDED. A lane that
+# still HAS its spawn record is renewed, not withdrawn.
+test_reconcile_never_closes_the_row_of_a_lane_that_is_still_registered() {
+  make_fixture
+  write_lane "demo-lane-a" "working: measuring the thing"
+  # The lane is alive but its claim has lapsed: the record is still there.
+  age_lane "demo-lane-a" 100000
+  run_publish register demo-lane-a
+  expect_code 0 $? "the publisher must publish the lane"
+  local before
+  before=$(ledger_field "demo-lane-a" 6)
+
+  run_publish reconcile
+  expect_code 0 $? "the publisher must reconcile"
+
+  assert_contains "$(ledger_row "demo-lane-a")" "ACTIVE" \
+    "a lane that is still registered must never be closed"
+  assert_not_equals "$before" "$(ledger_field "demo-lane-a" 6)" \
+    "the lapsed claim of a lane that is still registered must be renewed"
+  pass "reconcile never closes the row of a lane that is still registered"
+}
+
+# DEFECT 2: a stale alias slot published a closed task as ACTIVE. The
+# always-four scheduler keeps state/lane-<N>.meta naming the task a slot runs,
+# and that record survives the task. Five closed tasks were published that way
+# on 2026-10-24.
+test_a_slot_naming_a_task_that_is_gone_publishes_no_row() {
+  make_fixture
+  # The slot still names the task, but the task's own spawn record is gone:
+  # the task was torn down and the slot was never refilled.
+  write_slot "lane-001" "demo-closed-task"
+
+  run_publish reconcile
+  expect_code 0 $? "the publisher must reconcile"
+
+  assert_row_absent "demo-closed-task" \
+    "a slot whose target task has no spawn record of its own must never publish a row"
+  assert_not_contains "$(cat "$CLAIMS")" "demo-closed-task" \
+    "a slot whose target task has no spawn record of its own must never publish a claim"
+  pass "a slot naming a task that is gone publishes no row"
+}
+
+# A slot that names a task that IS registered is that task's lane: the slot
+# and the task are one lane, not two, and the row carries the LANE's real
+# identity and spawn time rather than the slot's.
+#
+# The lane has posted no wake event of its own, and the slot log holds the
+# scheduler's note for it. The task log is read first and the slot log is the
+# fallback, exactly as bin/fm-always-four.sh resolves a lane's log.
+test_a_slot_naming_a_live_task_publishes_that_task_once() {
+  make_fixture
+  write_lane "demo-lane-a"
+  age_lane "demo-lane-a" 600
+  write_slot "lane-001" "demo-lane-a"
+  printf '%s\n' "working: the slot knows this lane is working" \
+    > "$STATE_DIR/lane-001.status"
+
+  run_publish reconcile
+  expect_code 0 $? "the publisher must reconcile"
+
+  local row
+  row=$(ledger_row "demo-lane-a")
+  assert_contains "$row" "ACTIVE" "the slot's task must be published as ACTIVE"
+  assert_equals "1" "$(grep -ac "^demo-lane-a	" "$LEDGER" 2>/dev/null || echo 0)" \
+    "the slot and the task must publish ONE row, not two"
+  local expected_opened
+  expected_opened=$(date -u -d "@$AGE_LANE_SPAWNED_AT" +%Y-%m-%dT%H:%M:%SZ)
+  assert_equals "$expected_opened" "$(ledger_field "demo-lane-a" 4)" \
+    "the row must carry the lane's real spawn time, not the slot's"
+  assert_contains "$row" "the slot knows this lane is working" \
+    "the slot log must be the fallback for a lane that has no task log yet"
+  pass "a slot naming a live task publishes that task once"
+}
+
+# DEFECT 3: a teardown left the ledger claiming work was live. The teardown
+# and the withdrawal of the claim are one operation.
+test_a_teardown_closes_the_row_of_the_lane_it_tore_down() {
+  local case_dir rc
+  case_dir=$(make_teardown_case teardown-closes-row)
+  write_teardown_meta "$case_dir"
+
+  # The lane holds a claim on the machine lane ledger.
+  python3 "$PUBLISHER" register task-x1 --repo "$case_dir/home" --no-seed \
+    --no-refresh >/dev/null 2>&1
+  local ledger="$case_dir/home/ops/lane-ledger.tsv"
+  assert_contains "$(ledger_row_in "$ledger" task-x1)" "ACTIVE" \
+    "the lane must hold a claim before the teardown"
+
+  set +e
+  run_teardown_in "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "the teardown must succeed (stderr: $(cat "$case_dir/stderr"))"
+
+  local row
+  row=$(ledger_row_in "$ledger" task-x1)
+  assert_contains "$row" "DONE" "the teardown must close the lane's ledger row"
+  assert_equals "" "$(ledger_field_in "$ledger" task-x1 6)" \
+    "the teardown must empty the closed lane's expiry"
+  pass "a teardown closes the row of the lane it tore down"
+}
+
+# A failed ledger close must never block a legitimate teardown: the crew is
+# already gone and the worktree is already returned. The failure is loud.
+test_a_teardown_still_succeeds_when_the_ledger_close_fails() {
+  local case_dir rc
+  case_dir=$(make_teardown_case teardown-ledger-failure)
+  write_teardown_meta "$case_dir"
+  make_failing_publisher_root "$case_dir"
+
+  python3 "$PUBLISHER" register task-x1 --repo "$case_dir/home" --no-seed \
+    --no-refresh >/dev/null 2>&1
+
+  set +e
+  run_teardown_in_with_root "$case_dir" "$case_dir/fakeroot" \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "a failed ledger close must never block a legitimate teardown"
+  assert_contains "$(cat "$case_dir/stderr")" "lane ledger close" \
+    "a failed ledger close must be reported loudly"
+  assert_absent "$case_dir/home/state/task-x1.meta" \
+    "the teardown must still have removed the lane's spawn record"
+  pass "a teardown still succeeds when the ledger close fails, and says so loudly"
+}
+
 make_fixture
 test_a_spawned_lane_is_missing_from_the_board_without_the_publisher
 test_the_publisher_writes_the_ledger_row_at_spawn_time
@@ -403,3 +777,10 @@ test_the_board_publisher_publishes_the_ledger_before_it_builds_the_board
 test_the_publisher_catches_up_a_lane_that_spawned_while_it_was_down
 test_the_publisher_publishes_a_lane_that_spawns_while_it_watches
 test_closing_a_lane_keeps_the_row_and_frees_the_scope
+test_reconcile_closes_the_row_of_a_lane_that_has_ended
+test_reconcile_renews_the_claim_of_a_lane_that_is_still_alive
+test_reconcile_never_closes_the_row_of_a_lane_that_is_still_registered
+test_a_slot_naming_a_task_that_is_gone_publishes_no_row
+test_a_slot_naming_a_live_task_publishes_that_task_once
+test_a_teardown_closes_the_row_of_the_lane_it_tore_down
+test_a_teardown_still_succeeds_when_the_ledger_close_fails
