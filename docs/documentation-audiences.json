@@ -304,6 +304,10 @@
       "audience": "agent-runtime"
     },
     {
+      "path": "docs/surface-naming-contract.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/ticket-board.md",
       "audience": "operator-current"
     },

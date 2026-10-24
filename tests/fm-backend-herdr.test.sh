@@ -25,6 +25,10 @@ herdr_forget_inherited_pane
 TMP_ROOT=$(fm_test_tmproot fm-backend-herdr-tests)
 export FM_BACKEND_HERDR_SUBMIT_MIN_SLEEP=0
 
+# The visible surface-name grammar resolves the host token from the hostname.
+# Pin it here so every expected scope is deterministic on any machine.
+export FM_SURFACE_HOST=testhost
+
 # make_herdr_fakebin: a `herdr` stub that logs every invocation (one line,
 # unit-separated args, to $FM_HERDR_LOG) and returns the canned response for
 # that call read from $FM_HERDR_RESPONSES/<n>.out, consumed IN ORDER (call 1
@@ -126,6 +130,11 @@ case "$cmd $sub" in
        | .next = (.next + 2)' | save
     printf '{"result":{"workspace":{"workspace_id":"%s","label":"%s"},"tab":{"tab_id":"%s"},"root_pane":{"pane_id":"%s"}}}\n' \
       "$wsid" "$label" "$wsid:t$dn" "$wsid:p$dn"
+    ;;
+  "workspace rename")
+    ws=${3:-}; label=${4:-}
+    jq_state --arg w "$ws" --arg l "$label" \
+      '.workspaces |= map(if .workspace_id == $w then .label = $l else . end)' | save
     ;;
   "tab list")
     jq_state --arg w "$ws" '{result:{tabs:[.tabs[]|select(.workspace_id==$w)]}}'
@@ -230,8 +239,8 @@ test_workspace_label_primary_home_no_marker() {
   local home
   home="$TMP_ROOT/primary-home-no-marker"; mkdir -p "$home"
   out=$( FM_HOME="$home" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
-  [ "$out" = "firstmate" ] || fail "a primary home (no .fm-secondmate-home marker) should resolve to label 'firstmate', got '$out'"
-  pass "fm_backend_herdr_workspace_label: a primary home (no marker) resolves to 'firstmate'"
+  [ "$out" = "testhost/primary" ] || fail "a primary home (no .fm-secondmate-home marker) should resolve to scope 'testhost/primary', got '$out'"
+  pass "fm_backend_herdr_workspace_label: a primary home (no marker) resolves to 'testhost/primary'"
 }
 
 test_workspace_label_secondmate_home_uses_marker_id() {
@@ -239,8 +248,8 @@ test_workspace_label_secondmate_home_uses_marker_id() {
   home="$TMP_ROOT/secondmate-home"; mkdir -p "$home"
   printf 'sshhip-h7\n' > "$home/.fm-secondmate-home"
   out=$( FM_HOME="$home" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
-  [ "$out" = "2ndmate-sshhip-h7" ] || fail "a secondmate home should resolve to '2ndmate-<id>', got '$out'"
-  pass "fm_backend_herdr_workspace_label: a secondmate home (.fm-secondmate-home) resolves to '2ndmate-<id>'"
+  [ "$out" = "testhost/2ndmate-sshhip-h7" ] || fail "a secondmate home should resolve to 'testhost/2ndmate-<id>', got '$out'"
+  pass "fm_backend_herdr_workspace_label: a secondmate home (.fm-secondmate-home) resolves to 'testhost/2ndmate-<id>'"
 }
 
 test_workspace_label_secondmate_marker_trims_whitespace() {
@@ -248,7 +257,7 @@ test_workspace_label_secondmate_marker_trims_whitespace() {
   home="$TMP_ROOT/secondmate-home-ws"; mkdir -p "$home"
   printf '  sshhip-h7  \n\n' > "$home/.fm-secondmate-home"
   out=$( FM_HOME="$home" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
-  [ "$out" = "2ndmate-sshhip-h7" ] || fail "the marker id should be trimmed of surrounding whitespace, got '$out'"
+  [ "$out" = "testhost/2ndmate-sshhip-h7" ] || fail "the marker id should be trimmed of surrounding whitespace, got '$out'"
   pass "fm_backend_herdr_workspace_label: trims whitespace around the marker's secondmate id"
 }
 
@@ -257,7 +266,7 @@ test_workspace_label_empty_marker_falls_back_to_primary() {
   home="$TMP_ROOT/secondmate-home-empty"; mkdir -p "$home"
   : > "$home/.fm-secondmate-home"
   out=$( FM_HOME="$home" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
-  [ "$out" = "firstmate" ] || fail "an empty/unreadable marker should fall back to 'firstmate', got '$out'"
+  [ "$out" = "testhost/primary" ] || fail "an empty/unreadable marker should fall back to 'testhost/primary', got '$out'"
   pass "fm_backend_herdr_workspace_label: an empty marker file falls back to the primary label 'firstmate'"
 }
 
@@ -267,10 +276,28 @@ test_workspace_label_different_secondmates_get_different_labels() {
   home2="$TMP_ROOT/secondmate-b"; mkdir -p "$home2"; printf 'bravo-b2\n' > "$home2/.fm-secondmate-home"
   out1=$( FM_HOME="$home1" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
   out2=$( FM_HOME="$home2" bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_label' "$ROOT" )
-  [ "$out1" = "2ndmate-alpha-a1" ] || fail "secondmate home1 label mismatch: $out1"
-  [ "$out2" = "2ndmate-bravo-b2" ] || fail "secondmate home2 label mismatch: $out2"
+  [ "$out1" = "testhost/2ndmate-alpha-a1" ] || fail "secondmate home1 label mismatch: $out1"
+  [ "$out2" = "testhost/2ndmate-bravo-b2" ] || fail "secondmate home2 label mismatch: $out2"
   [ "$out1" != "$out2" ] || fail "two different secondmate homes must not collide on the same label"
   pass "fm_backend_herdr_workspace_label: two different secondmate homes get two different, non-colliding labels"
+}
+
+test_create_task_summarises_a_fresh_workspace() {
+  local dir fb home out
+  dir="$TMP_ROOT/create-task-summary"; mkdir -p "$dir"; home="$dir/home"; mkdir -p "$home"
+  fb=$(make_herdr_statefake "$dir")
+  out=$(PATH="$fb:$PATH" FM_HERDR_LOG="$dir/log" FM_FAKE_HERDR_STATE="$dir/state.json" \
+    FM_HOME="$home" FM_SURFACE_HOST=testhost bash -c '
+      . "$0/bin/backends/herdr.sh"
+      created=$(fm_backend_herdr_cli default workspace create --cwd /tmp --label "$(fm_backend_herdr_workspace_label)" --no-focus)
+      wsid=$(printf "%s" "$created" | jq -r ".result.workspace.workspace_id")
+      seeded=$(printf "%s" "$created" | jq -r ".result.tab.tab_id")
+      fm_backend_herdr_create_task "default:$wsid" fm-demo-lane /tmp "$seeded" >/dev/null
+      fm_backend_herdr_cli default workspace list | jq -r --arg ws "$wsid" ".result.workspaces[] | select(.workspace_id == \$ws) | .label"
+    ' "$ROOT")
+  [ "$out" = "testhost/primary · demo-lane" ] \
+    || fail "a fresh workspace must gain the first lane summary, got: $out"
+  pass "herdr create_task summarizes a fresh workspace after its first lane"
 }
 
 # --- fm_backend_herdr_cli: session targeting (2026-07-02 incident fix) -------
@@ -462,7 +489,7 @@ test_workspace_ensure_refuses_an_ambiguous_label_with_no_launcher() {
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_workspace_ensure fmtest /tmp' "$ROOT" 2>&1 )
   status=$?
   expect_code 3 "$status" "two same-labeled home workspaces with no launcher identity must refuse"
-  assert_contains "$out" "labeled 'firstmate'" "the ambiguity refusal did not name the duplicated label"
+  assert_contains "$out" "carry the scope 'testhost/primary'" "the ambiguity refusal did not name the duplicated scope"
   assert_contains "$out" "w1 w7" "the ambiguity refusal did not name the candidate workspaces"
   assert_not_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create' "an ambiguous placement must not mint a third same-labeled workspace"
   pass "fm_backend_herdr_workspace_ensure: refuses to guess between two same-labeled home workspaces"
@@ -492,7 +519,7 @@ test_container_ensure_refuses_an_ambiguous_home_label() {
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" 2>&1 )
   status=$?
   [ "$status" -ne 0 ] || fail "container_ensure must fail when the home workspace is ambiguous"
-  assert_contains "$out" "labeled 'firstmate'" "container_ensure buried the specific ambiguity it refused"
+  assert_contains "$out" "carry the scope 'testhost/primary'" "container_ensure buried the specific ambiguity it refused"
   assert_not_contains "$out" "failed to ensure herdr workspace" "container_ensure added a generic message over the specific one"
   pass "fm_backend_herdr_container_ensure: surfaces the exact ambiguous-placement refusal instead of a generic failure"
 }
@@ -519,7 +546,7 @@ test_container_ensure_starts_server_and_workspace() {
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" )
   [ "$out" = $'fmtest:w1\tw1:t9' ] || fail "container_ensure should echo '<session>:<workspace_id>\\t<seeded_default_tab_id>', got '$out'"
   assert_contains "$(cat "$log")" "HERDR_SESSION=fmtest"$'\x1f''server' "container_ensure did not start the herdr server"
-  assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''firstmate' \
+  assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''testhost/primary' \
     "container_ensure did not create the firstmate workspace with the given cwd"
   pass "fm_backend_herdr_container_ensure: version-gates, starts the server, ensures the firstmate workspace, echoes session:workspace_id + the seeded default tab id"
 }
@@ -795,7 +822,7 @@ test_container_ensure_creates_with_no_focus_flag() {
   out=$( PATH="$fb:$PATH" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 HERDR_SESSION=fmtest \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" )
   [ "$out" = $'fmtest:w1\tw1:t1' ] || fail "container_ensure should still echo '<session>:<workspace_id>\\t<seeded_default_tab_id>', got '$out'"
-  assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''firstmate'$'\x1f''--no-focus' \
+  assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''testhost/primary'$'\x1f''--no-focus' \
     "container_ensure's workspace create did not pass --no-focus (focus-safety: never steal the captain's attention on spawn)"
   pass "fm_backend_herdr_container_ensure: workspace create passes --no-focus"
 }
@@ -812,7 +839,7 @@ test_container_ensure_uses_secondmate_home_label() {
   out=$( PATH="$fb:$PATH" FM_HOME="$home" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" FM_HERDR_SCRIPT_STATUS=1 HERDR_SESSION=fmtest \
     bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_container_ensure /tmp' "$ROOT" )
   [ "$out" = $'fmtest:w9\tw9:t1' ] || fail "container_ensure did not echo the expected session:workspace_id + seeded default tab id, got '$out'"
-  assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''2ndmate-sshhip-h7' \
+  assert_contains "$(cat "$log")" $'\x1f''workspace'$'\x1f''create'$'\x1f''--cwd'$'\x1f''/tmp'$'\x1f''--label'$'\x1f''testhost/2ndmate-sshhip-h7' \
     "container_ensure did not create the workspace under this secondmate home's own label"
   pass "fm_backend_herdr_container_ensure: creates the workspace under the SECONDMATE home's own label, not 'firstmate'"
 }
@@ -883,7 +910,8 @@ test_projection_journal_v2_binds_and_advances_exact_endpoint() {
     printf "%s|%s\n" "$FM_BACKEND_HERDR_JOURNAL_TAB_ID" "$FM_BACKEND_HERDR_JOURNAL_PANE_ID"
   ' "$ROOT" "$state" "$home") || fail "version 2 projection journal binding failed"
   token=$(sed -n 's/^projection_id=//p' "$state/fm-hibit-r1.herdr-presentation")
-  [ "$(printf '%s\n' "$out" | sed -n '1p')" = "2|$home_real|w2|w2:t2|w2:p2|w1|└ hibit-r1 · p:$token" ] \
+  journal_label=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label fm-hibit-r1 "$1"' "$ROOT" "$token")
+  [ "$(printf '%s\n' "$out" | sed -n '1p')" = "2|$home_real|w2|w2:t2|w2:p2|w1|$journal_label" ] \
     || fail "version 2 projection journal did not retain exact home/endpoint/parent binding: $out"
   [ "$(printf '%s\n' "$out" | sed -n '2p')" = "w2:t3|w2:p3" ] \
     || fail "version 2 projection journal did not advance the exact replacement endpoint: $out"
@@ -933,7 +961,7 @@ test_projection_create_uses_exact_response_ids_and_leaves_one_task_pane() {
   journal="$state/task-p2.herdr-presentation"
   token=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_journal_token "$1" task-p2' "$ROOT" "$journal") \
     || fail "projection journal was not readable"
-  assert_contains "$(cat "$log")" $'workspace\x1fcreate\x1f--cwd\x1f/tmp/proj\x1f--label\x1f└ task-p2 · p:'"$token"$'\x1f--no-focus' \
+  assert_contains "$(cat "$log")" $'workspace\x1fcreate\x1f--cwd\x1f/tmp/proj\x1f--label\x1f└ testhost/primary · task-p2 · p:'"$token"$'\x1f--no-focus' \
     "projection workspace create did not use the corner label, full token, and --no-focus"
   assert_contains "$(cat "$log")" $'tab\x1fcreate\x1f--workspace\x1fw9\x1f--cwd\x1f/tmp/proj\x1f--label\x1ffm-task-p2\x1f--no-focus' \
     "projection task tab did not target the exact new workspace"
@@ -1856,22 +1884,22 @@ test_projection_label_builder_uses_corner_and_strips_owner_prefixes() {
   token='AbCdEfGhIjKlMnOpQrStUv'
   [ "${#token}" -eq 22 ] || fail "fixture token must be 22 characters"
   primary=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label task-p2 '"$token" "$ROOT")
-  [ "$primary" = "└ task-p2 · p:$token" ] \
+  [ "$primary" = "└ testhost/primary · task-p2 · p:$token" ] \
     || fail "primary child label was wrong: $primary"
   secondmate=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label secondmate-child-demo '"$token" "$ROOT")
-  [ "$secondmate" = "└ secondmate-child-demo · p:$token" ] \
+  [ "$secondmate" = "└ testhost/primary · secondmate-child-demo · p:$token" ] \
     || fail "secondmate child label was wrong: $secondmate"
   primary=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label firstmate/task-p2 '"$token" "$ROOT")
-  [ "$primary" = "└ task-p2 · p:$token" ] \
+  [ "$primary" = "└ testhost/primary · task-p2 · p:$token" ] \
     || fail "firstmate/ owner prefix was not stripped: $primary"
   secondmate=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label 2ndmate-fmdev-f2/child '"$token" "$ROOT")
-  [ "$secondmate" = "└ child · p:$token" ] \
+  [ "$secondmate" = "└ testhost/primary · child · p:$token" ] \
     || fail "2ndmate owner prefix was not stripped: $secondmate"
   primary=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label fm-task-p2 '"$token" "$ROOT")
-  [ "$primary" = "└ task-p2 · p:$token" ] \
+  [ "$primary" = "└ testhost/primary · task-p2 · p:$token" ] \
     || fail "presentation fm- owner prefix was not stripped: $primary"
   case "$primary" in $'└ '*) ;; *) fail "label must start with U+2514 and one space" ;; esac
-  pass "herdr presentation labels: └ concise-task · p:<full-token> for primary and secondmate children"
+  pass "herdr presentation labels: └ scope · concise-task · p:<full-token> for primary and secondmate children"
 }
 
 test_projection_order_moves_only_exact_new_workspace_and_preserves_relative_order() {
@@ -2270,7 +2298,7 @@ test_projection_reclaim_refusal_matrix_is_non_mutating() {
     printf "%s" "$token"
   ' "$ROOT" "$state" "$home_real") || fail "could not create reclaim refusal fixture"
   journal="$state/refusal-r1.herdr-presentation"
-  label="└ refusal-r1 · p:$token"
+  label=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label refusal-r1 "$1"' "$ROOT" "$token")
   mkdir -p "$state/legacy"
   bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_journal_create "$1" refusal-r1 >/dev/null' \
     "$ROOT" "$state/legacy" || fail "could not create legacy reclaim fixture"
@@ -2320,6 +2348,31 @@ test_projection_reclaim_refusal_matrix_is_non_mutating() {
   pass "herdr presentation reclaim: legacy, cross-home, ambiguous, live/unknown, and focus-unknown cases refuse without mutation"
 }
 
+test_projection_binding_accepts_renamed_parent_workspace() {
+  local dir response out rc token projection
+  dir="$TMP_ROOT/projection-renamed-parent"; mkdir -p "$dir"
+  response="$dir/workspaces.json"
+  token='AbCdEfGhIjKlMnOpQrStUv'
+  projection="└ testhost/primary · task-p2 · p:$token"
+  printf '%s\n' '{"result":{"workspaces":[{"workspace_id":"w1","label":"testhost/primary · 2 lanes"},{"workspace_id":"w2","label":"'"$projection"'"}]}}' > "$response"
+  out=$(ROOT="$ROOT" RESPONSE="$response" PROJECTION="$projection" TOKEN="$token" bash -c '
+    . "$ROOT/bin/backends/herdr.sh"
+    fm_backend_herdr_cli() {
+      case "$*" in
+        *"workspace list"*) cat "$RESPONSE" ;;
+        *"tab list"*) printf "%s\n" "{\"result\":{\"tabs\":[{\"tab_id\":\"w2:t1\",\"label\":\"fm-task-p2\"}]}}" ;;
+        *"pane list"*) printf "%s\n" "{\"result\":{\"panes\":[{\"pane_id\":\"w2:p1\",\"tab_id\":\"w2:t1\"}]}}" ;;
+      esac
+    }
+    rc=0
+    fm_backend_herdr_projection_live_binding_matches \
+      fmtest "$TOKEN" w2 w2:t1 w2:p1 w1 testhost/primary "$PROJECTION" fm-task-p2 || rc=$?
+    printf "%s\n" "$rc"
+  ')
+  [ "$out" = 0 ] || fail "a renamed parent workspace rejected a stable-ID projection binding: $out"
+  pass "herdr presentation binding follows the stable parent workspace ID after a rename"
+}
+
 test_projection_reclaim_replaces_only_exact_husk_and_advances_binding() {
   local dir state home home_real log resp fb journal token label out calls create_line close_line agent_line boundary_mutations
   dir="$TMP_ROOT/projection-reclaim-exact"; state="$dir/state"; home="$dir/home"
@@ -2336,7 +2389,7 @@ test_projection_reclaim_replaces_only_exact_husk_and_advances_binding() {
     printf "%s" "$token"
   ' "$ROOT" "$state" "$home_real") || fail "could not create exact reclaim journal fixture"
   journal="$state/fm-hibit-r1.herdr-presentation"
-  label="└ hibit-r1 · p:$token"
+  label=$(bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_projection_workspace_label fm-hibit-r1 "$1"' "$ROOT" "$token")
   printf '%s\n' "{\"result\":{\"workspaces\":[{\"workspace_id\":\"w0\",\"label\":\"firstmate\",\"focused\":false,\"active_tab_id\":\"w0:t1\"},{\"workspace_id\":\"w1\",\"label\":\"firstmate\",\"focused\":true,\"active_tab_id\":\"w1:t1\"},{\"workspace_id\":\"w2\",\"label\":\"$label\",\"focused\":false,\"active_tab_id\":\"w2:t2\"}]}}" > "$resp/1.out"
   printf '%s\n' '{"result":{"tabs":[{"tab_id":"w2:t2","label":"fm-fm-hibit-r1"}]}}' > "$resp/2.out"
   printf '%s\n' '{"result":{"panes":[{"pane_id":"w2:p2","tab_id":"w2:t2"}]}}' > "$resp/3.out"
@@ -3406,8 +3459,8 @@ EOF
       || fail "cycle $i: kill failed"
   done
   # exactly one firstmate workspace survives three spawn/teardown cycles
-  wscount=$(jq -r '[.workspaces[]|select(.label=="firstmate")]|length' "$state")
-  [ "$wscount" = 1 ] || fail "expected exactly 1 firstmate workspace after 3 cycles, got $wscount: $(jq -c '.workspaces' "$state")"
+  wscount=$(jq -r '[.workspaces[]|select(.label=="testhost/primary · cycle3")]|length' "$state")
+  [ "$wscount" = 1 ] || fail "expected exactly 1 primary workspace after 3 cycles, got $wscount: $(jq -c '.workspaces' "$state")"
   # and no orphaned workspaces of any label
   total=$(jq -r '.workspaces|length' "$state")
   [ "$total" = 1 ] || fail "expected no orphaned workspaces after 3 cycles, got $total total: $(jq -c '.workspaces' "$state")"
@@ -3864,6 +3917,7 @@ test_workspace_label_secondmate_home_uses_marker_id
 test_workspace_label_secondmate_marker_trims_whitespace
 test_workspace_label_empty_marker_falls_back_to_primary
 test_workspace_label_different_secondmates_get_different_labels
+test_create_task_summarises_a_fresh_workspace
 test_cli_helper_sets_env_and_appends_trailing_session_flag
 test_launcher_identity_absent_without_a_herdr_pane
 test_launcher_identity_absent_when_herdr_env_alone_is_set
@@ -3942,6 +3996,7 @@ test_presentation_session_lock_path_is_shared_across_homes
 test_presentation_session_lock_path_rejects_malformed_socket
 test_projection_order_rejects_malformed_socket
 test_projection_reclaim_refusal_matrix_is_non_mutating
+test_projection_binding_accepts_renamed_parent_workspace
 test_projection_reclaim_replaces_only_exact_husk_and_advances_binding
 test_projection_recovery_is_read_only_and_refuses_live_duplicate_risk
 test_workspace_find_matches_only_this_homes_own_label

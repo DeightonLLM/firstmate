@@ -18,7 +18,7 @@
 #   is how the suite is proved RED-capable against the pre-change script.
 set -u
 ORIG_PWD=$PWD
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 REPO_ROOT=$PWD
 GATE=${1:-}
 if [ -z "$GATE" ]; then

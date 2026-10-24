@@ -76,6 +76,12 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 # shellcheck source=bin/fm-composer-lib.sh
 . "$FM_BACKEND_HERDR_ROOT/bin/fm-composer-lib.sh"
 
+# The visible surface-name grammar (docs/surface-naming-contract.md). This
+# adapter builds every Herdr label it writes through it, so the label a human
+# reads and the label the matcher resolves by cannot drift apart.
+# shellcheck source=bin/fm-surface-name-lib.sh
+. "$FM_BACKEND_HERDR_ROOT/bin/fm-surface-name-lib.sh"
+
 # Shared, backend-neutral normalized-transition shape and the single-owner
 # status->action policy table (bin/fm-transition-lib.sh). This adapter's event
 # subscriber (fm_backend_herdr_wait_transition) normalizes every
@@ -107,7 +113,6 @@ FM_BACKEND_HERDR_ESCALATED_PREFIX=".herdr-escalated-"
 # .fm-secondmate-home is written by bin/fm-home-seed.sh (AGENTS.md section 6)
 # at a seeded secondmate home's root, containing exactly that secondmate's id.
 # The primary firstmate home never carries this marker.
-FM_BACKEND_HERDR_SECONDMATE_MARKER=".fm-secondmate-home"
 # The default-off presentation projection is intentionally separate from the
 # authoritative task endpoint record.
 # A per-task journal lives under state/ as <id>.herdr-presentation.
@@ -118,29 +123,44 @@ FM_BACKEND_HERDR_SECONDMATE_MARKER=".fm-secondmate-home"
 # No send, capture, Treehouse, or general task-ownership path reads it.
 FM_BACKEND_HERDR_PRESENTATION_JOURNAL_SUFFIX=".herdr-presentation"
 
-# fm_backend_herdr_workspace_label: the per-firstmate-HOME herdr workspace
-# label (docs/herdr-backend.md "Default task container shape"). The PRIMARY home (no
-# secondmate marker) resolves to the constant "firstmate", byte-identical to
-# every pre-existing task's recorded label - no forced migration. A SECONDMATE
-# home resolves to "2ndmate-<secondmate-id>", so its tasks land in their own
-# workspace, obviously distinguishable from the primary's (and from every
-# other secondmate's) in herdr's spaces sidebar. Read fresh from FM_HOME on
-# every call rather than cached at source time: FM_HOME is the home's own
-# durable identity, not env plumbing threaded through a call chain, so the
-# label is automatically stable across every respawn/recovery for the life of
-# that home. fm-spawn.sh briefly shadows FM_HOME to a secondmate's own home
-# when the PRIMARY spawns that secondmate (its own process's FM_HOME still
-# names the primary at that point) - see fm-spawn.sh's herdr case arm.
+# The exact endpoint fm_backend_herdr_create_task created, published so its
+# ONE rollback path can remove it.  These are set by the create path and
+# reset by every call to it, so a caller never sees a stale endpoint.
+#   FM_BACKEND_HERDR_CREATED_TAB_ID   - the tab id read back from the create
+#   FM_BACKEND_HERDR_CREATED_PANE_ID  - the pane id read back from the create
+#   FM_BACKEND_HERDR_CREATE_OWNED     - 1 once `tab create` SUCCEEDED, even
+#                                       when its response could not be parsed:
+#                                       ownership of a live endpoint started
+#   FM_BACKEND_HERDR_PRE_CREATE_TAB_IDS - the tab ids the workspace held
+#                                       BEFORE this create, so the rollback
+#                                       can identify the created tab exactly
+#                                       when the response cannot be parsed
+FM_BACKEND_HERDR_CREATED_TAB_ID=""
+FM_BACKEND_HERDR_CREATED_PANE_ID=""
+FM_BACKEND_HERDR_CREATE_OWNED=0
+FM_BACKEND_HERDR_PRE_CREATE_TAB_IDS=""
+
+# fm_backend_herdr_workspace_label: the SCOPE of the per-firstmate-HOME herdr
+# workspace (docs/surface-naming-contract.md, docs/herdr-backend.md "Watching
+# and task containers").
+#
+# The scope is "<host>/<home>": "hetz/primary" for the primary home and
+# "hetz/2ndmate-<secondmate-id>" for a secondmate home. It is the machine
+# matchable half of a visible workspace label: everything before the first
+# " . " separator. A container's label may therefore say how many lanes it
+# holds without changing WHICH home owns it, and the matcher resolves the
+# home's container by scope instead of by a whole label that a lane count
+# would invalidate.
+#
+# Read fresh from FM_HOME on every call rather than cached at source time:
+# FM_HOME is the home's own durable identity, not env plumbing threaded
+# through a call chain, so the scope is automatically stable across every
+# respawn/recovery for the life of that home. fm-spawn.sh briefly shadows
+# FM_HOME to a secondmate's own home when the PRIMARY spawns that secondmate
+# (its own process's FM_HOME still names the primary at that point) - see
+# fm-spawn.sh's herdr case arm.
 fm_backend_herdr_workspace_label() {
-  local marker="$FM_HOME/$FM_BACKEND_HERDR_SECONDMATE_MARKER" id
-  if [ -f "$marker" ]; then
-    id=$(tr -d '[:space:]' < "$marker" 2>/dev/null)
-    if [ -n "$id" ]; then
-      printf '2ndmate-%s' "$id"
-      return 0
-    fi
-  fi
-  printf 'firstmate'
+  fm_surface_name_scope "$FM_HOME"
 }
 
 # fm_backend_herdr_cli: run `herdr <args...>` scoped to <session>, setting
@@ -444,10 +464,23 @@ fm_backend_herdr_projection_concise_task_label() {  # <task-id>
 
 # fm_backend_herdr_projection_workspace_label: presentation-only child label.
 # Format is literal U+2514 BOX DRAWINGS LIGHT UP AND RIGHT, one space, the
-# concise task label, then the unchanged · p:<full-22-char-token> suffix.
+# owning home's SCOPE, the concise task label, then the unchanged
+# · p:<full-22-char-token> suffix.
+#
+# The scope is what makes the space name the SURFACE as well as the lane: a
+# disposable one-task space used to read as the lane alone, so the Captain
+# could not tell which surface was running it.
+#
+# The trailing " · p:<token>" grammar is unchanged on purpose: the locked
+# session-start cleanup in bin/fm-herdr-session-cleanup.sh discovers these
+# spaces by exactly that grammar, and the projection ordering predicates
+# match "MARK .+ · p:<22 chars>".
+#
 # Labels and tokens remain non-authoritative correlators only.
 fm_backend_herdr_projection_workspace_label() {  # <task-id> <projection-id>
-  printf '└ %s · p:%s' "$(fm_backend_herdr_projection_concise_task_label "$1")" "$2"
+  fm_surface_name_projection_label \
+    "$(fm_surface_name_scope "$FM_HOME")" \
+    "$(fm_backend_herdr_projection_concise_task_label "$1")" "$2"
 }
 
 # fm_backend_herdr_presentation_session_lock_path: one machine-private lock
@@ -1057,25 +1090,38 @@ fm_backend_herdr_pane_idle_shell_sample() {  # <session> <pane-id>
 # After a successful move, every pre-existing workspace id sequence excluding
 # the new id must be byte-identical to the pre-move sequence.
 fm_backend_herdr_projection_order_best_effort() {  # <session> <created-workspace-id> <parent-label> [<parent-workspace-id>]
-  local session=$1 created=$2 parent=$3 parent_ws=${4:-} list analysis current desired socket mover response move_status focus_before move_capable
+  local session=$1 created=$2 parent=$3 parent_ws=${4:-} list analysis current desired socket mover response move_status focus_before move_capable parent_scope
   local before_existing after_existing
   [ -n "$parent" ] || {
     echo "warning: herdr presentation ordering missing owning parent label; leaving worker in Herdr's current order" >&2
     return 0
   }
+  parent_scope=$(fm_surface_name_scope_of "$parent")
   list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || {
     echo "warning: herdr presentation ordering could not list workspaces; leaving worker in Herdr's current order" >&2
     return 0
   }
-  analysis=$(printf '%s' "$list" | jq -c --arg created "$created" --arg parent "$parent" --arg parent_ws "$parent_ws" '
+  analysis=$(printf '%s' "$list" | jq -c --arg created "$created" --arg parent "$parent" --arg parent_ws "$parent_ws" --arg parent_scope "$parent_scope" '
+    def scope_of($l): ($l | split(" · ")[0]);
+    def is_projection($l): ($l | startswith("└ "));
+    # A scope-form container label: "<host>/<home>[/<role>]", optionally with a
+    # summary after the separator. A legacy CHILD label ("<owner>/<task> . p:
+    # <token>") is not a container: its owner segment is not a host.
+    def is_scope_label($l):
+      ($l | test("^[a-z0-9.-]+/[a-z0-9._-]+(/[a-z0-9._-]+)?( · .*)?$"));
     def is_parent:
       if ($parent_ws | length) > 0
       then .workspace_id == $parent_ws
-      else (.label | type) == "string" and .label == $parent
+      else (.label | type) == "string"
+           and (is_projection(.label) | not)
+           and ((.label == $parent) or (scope_of(.label) == scope_of($parent)))
       end;
     def is_top_level_parent:
       (.label | type) == "string"
-      and ((.label == "firstmate") or (.label | test("^2ndmate-[^/]+$")));
+      and (is_projection(.label) | not)
+      and ((.label == "firstmate")
+           or (.label | test("^2ndmate-[^/]+$"))
+           or (is_scope_label(.label) and ((.label | test(" · p:")) | not)));
     def is_new_child:
       (.label | type) == "string"
       and (.label | test("^└ .+ · p:[A-Za-z0-9_-]{22}$"));
@@ -1256,16 +1302,36 @@ fm_backend_herdr_server_ensure() {  # <session>
 # which one is the caller's, while the read-only recovery path below keeps its
 # historical first-match behavior.
 fm_backend_herdr_workspace_find_all() {  # <session>
-  local session=$1 label list
-  label=$(fm_backend_herdr_workspace_label)
-  list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || return 0
+  local session=$1 scope legacy list
+  scope=$(fm_backend_herdr_workspace_label)
+  legacy=$(fm_surface_name_legacy_home_label "$scope" 2>/dev/null || printf '')
+  # A workspace list that could not be READ is not an empty list of owners:
+  # the caller has to be able to tell "this home owns no container here" from
+  # "the surface could not be read".  The second one is a FAILURE, and a
+  # caller that treats it as an empty list acts on a surface it never read.
+  list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || return 1
   # NOTE: the jq variable is $want, NOT $label - `label` is a jq reserved
   # keyword (label/break), so declaring a jq variable named "label" is a
   # compile error that `2>/dev/null` would silently swallow, making this find
   # ALWAYS return empty and every spawn mint a fresh "firstmate" workspace
   # (the workspace leak).
-  printf '%s' "$list" | jq -r --arg want "$label" \
-    '.result.workspaces[]? | select(.label == $want) | .workspace_id' 2>/dev/null
+  #
+  # A workspace belongs to a home when its label's SCOPE field equals the
+  # home's scope. A projection space ("MARK <scope> . ...") is NEVER a home
+  # container: it is a disposable one-lane child of one, and adopting it as
+  # the home's container would put a task in the wrong place.
+  #
+  # The legacy home label ("firstmate", "2ndmate-<id>") is still accepted so a
+  # fleet that has not been renamed yet keeps resolving to the same
+  # workspace. It is a transitional match, not a conforming name.
+  printf '%s' "$list" | jq -r --arg want "$scope" --arg legacy "$legacy" '
+    def scope_of($l): ($l | split(" · ")[0]);
+    .result.workspaces[]?
+    | select((.label | type) == "string")
+    | select((.label | startswith("└ ")) | not)
+    | select((scope_of(.label) == $want)
+             or (($legacy | length) > 0 and .label == $legacy))
+    | .workspace_id' 2>/dev/null
 }
 
 # fm_backend_herdr_workspace_find: this HOME's own workspace id inside
@@ -1545,10 +1611,14 @@ fm_backend_herdr_workspace_ensure() {  # <session> <cwd> [<launcher-relationship
     esac
   fi
   label=$(fm_backend_herdr_workspace_label)
-  matches=$(fm_backend_herdr_workspace_find_all "$session")
+  # The spawn path mints a container when it cannot see one - that behaviour is
+  # unchanged - but the failed read must not abort the caller (bin/fm-spawn.sh
+  # runs under `set -e`), so the status is consumed HERE instead of being
+  # inherited by the assignment.
+  matches=$(fm_backend_herdr_workspace_find_all "$session") || matches=""
   count=$(printf '%s' "$matches" | grep -c '[^[:space:]]' || true)
   if [ "$count" -gt 1 ]; then
-    echo "error: ${count} herdr workspaces in session '$session' are labeled '$label' (${matches//$'\n'/ }) and this spawn has no herdr parent pane to identify which one is its own; rename or close the extras, or run firstmate inside the workspace its workers belong in" >&2
+    echo "error: ${count} herdr workspaces in session '$session' carry the scope '$label' (${matches//$'\n'/ }) and this spawn has no herdr parent pane to identify which one is its own; rename or close the extras, or run firstmate inside the workspace its workers belong in" >&2
     return 3
   fi
   wsid=${matches%%$'\n'*}
@@ -1772,10 +1842,233 @@ fm_backend_herdr_agent_alive() {  # <target>
 # 4th arg, so this function never even queries for a prune candidate in that
 # case. Echoes "<tab_id> <pane_id>" on success.
 fm_backend_herdr_create_task() {  # <container> <label> <cwd> <seeded_default_tab_id>
-  local container=$1 label=$2 cwd=$3 seeded_tab_id=${4:-} session wsid list dup_tabs dup dup_pane dup_tab_ids out tab_id pane_id remaining_dup_tabs
+  local container=$1 label=$2 cwd=$3 seeded_tab_id=${4:-} session wsid
+  session=${container%%:*}
+  wsid=${container#*:}
+  FM_BACKEND_HERDR_CREATED_TAB_ID=""
+  FM_BACKEND_HERDR_CREATED_PANE_ID=""
+  FM_BACKEND_HERDR_CREATE_OWNED=0
+  FM_BACKEND_HERDR_PRE_CREATE_TAB_IDS=""
+  if fm_backend_herdr_create_task_inner "$container" "$label" "$cwd" "$seeded_tab_id"; then
+    return 0
+  fi
+  # ONE checked rollback path.  It runs only when ownership actually started
+  # (the `tab create` succeeded), and it removes the EXACT endpoint this
+  # call created before the failure is returned.
+  #
+  # Why this matters: `tab create` is the moment a live herdr endpoint comes
+  # into existence.  Every step after it can fail - the id check, the
+  # husk-removal verification, the remaining-duplicate check, the summary
+  # build, the workspace rename - and a failure that returned WITHOUT
+  # removing the tab left a LIVE pane with NO owner: bin/fm-spawn.sh exits
+  # before it writes the task meta (the meta is written much later), so the
+  # scheduler's rollback saw no meta and cleaned nothing.
+  if [ "$FM_BACKEND_HERDR_CREATE_OWNED" = 1 ]; then
+    fm_backend_herdr_create_task_rollback "$session" "$wsid" "$label" \
+      "$FM_BACKEND_HERDR_CREATED_TAB_ID" "$FM_BACKEND_HERDR_CREATED_PANE_ID" \
+      "$FM_BACKEND_HERDR_PRE_CREATE_TAB_IDS" || true
+    # The rollback removed a tab from this container, so the container's LIVE
+    # lane count changed and its label must be refreshed.  Without this a
+    # container whose create failed (and whose husk was already removed)
+    # keeps a "scope + N lanes" label that counts a lane which is gone.  A
+    # failed refresh is reported, never swallowed.
+    fm_backend_herdr_workspace_refresh_lane_summary "$session" "$wsid" \
+      "the rolled back task tab '$label'" || true
+  fi
+  return 1
+}
+
+# fm_backend_herdr_create_task_rollback: remove the endpoint THIS create
+# actually made.
+#
+# It removes only an endpoint it can name exactly:
+#   - the tab id read back from the create response, when it was readable;
+#   - otherwise the pane id from the same response (closing a tab's only
+#     pane closes the tab too, so the pane names the same endpoint);
+#   - otherwise, when NEITHER id could be parsed, the ONE tab that carries
+#     this call's label and was NOT in the tab list read before the create.
+#     That is an exact identification, never a guess: when the diff does not
+#     resolve to exactly one tab, nothing is closed.
+# When no endpoint can be named at all, the ambiguity is reported and
+# nothing is closed - closing a tab this call did not create would be worse
+# than leaving one for the orphan sweeper to find.
+#
+# <session> <workspace_id> <label> <tab_id> <pane_id> <pre_create_tab_ids>
+fm_backend_herdr_create_task_rollback() {
+  local session=$1 wsid=$2 label=$3 tab_id=$4 pane_id=$5 pre_ids=$6
+  local target_tab="" closed=0 list candidate
+  if [ -n "$tab_id" ]; then
+    target_tab=$tab_id
+  elif [ -n "$pane_id" ]; then
+    if fm_backend_herdr_cli "$session" pane close "$pane_id" >/dev/null 2>&1; then
+      closed=1
+    else
+      echo "warning: herdr rollback could not close the pane '$pane_id' it created for '$label' in workspace $wsid (session $session)" >&2
+    fi
+  else
+    list=$(fm_backend_herdr_cli "$session" tab list --workspace "$wsid" 2>/dev/null) || list=""
+    if [ -n "$list" ]; then
+      candidate=$(printf '%s' "$list" | jq -r --arg want "$label" --arg pre "$pre_ids" '
+        [ .result.tabs[]?
+          | select((.label // "") == $want)
+          | select((.tab_id // "") as $id | (($pre | split("\n")) | index($id)) == null)
+          | .tab_id ]
+        | if length == 1 then .[0] else empty end' 2>/dev/null)
+      [ -n "$candidate" ] && target_tab=$candidate
+    fi
+    if [ -z "$target_tab" ]; then
+      echo "warning: herdr tab create for '$label' in workspace $wsid (session $session) succeeded but its ids could not be parsed and no exact new tab could be identified; an orphan endpoint may remain" >&2
+      return 1
+    fi
+  fi
+  if [ "$closed" = 0 ]; then
+    if fm_backend_herdr_cli "$session" tab close "$target_tab" >/dev/null 2>&1; then
+      closed=1
+    else
+      echo "warning: herdr rollback could not close the tab '$target_tab' it created for '$label' in workspace $wsid (session $session)" >&2
+    fi
+  fi
+  [ "$closed" = 1 ]
+}
+
+# fm_backend_herdr_workspace_lane_label: the visible label of a container,
+# computed from the LIVE count of the task tabs it holds right now.
+#
+# The summary is a LIVE COUNT, not a snapshot.  The create path writes it
+# when a lane is added and the shared close path rewrites it when a lane is
+# removed, so "scope + N lanes" is never a number the running surface has
+# stopped believing.  A stale count on a live surface is a FALSE statement
+# about the fleet, and the naming check cannot catch it: a stale label is
+# syntactically valid, so it reads as conforming.
+#
+# Zero task tabs restores the SCOPE-ONLY form - the exact label a fresh
+# workspace of this home carries - because a container with no lane says
+# "no lanes" by saying nothing at all.
+#
+# <session> <workspace_id>
+fm_backend_herdr_workspace_lane_label() {
+  local session=$1 wsid=$2 list count scope summary lane single
+  list=$(fm_backend_herdr_cli "$session" tab list --workspace "$wsid" 2>/dev/null) || return 1
+  printf '%s' "$list" | jq -e '(.result.tabs | type) == "array"' >/dev/null 2>&1 || return 1
+  count=$(printf '%s' "$list" | jq -r '[.result.tabs[]? | select((.label // "") | startswith("fm-"))] | length' 2>/dev/null) || return 1
+  case "$count" in ''|*[!0-9]*) return 1 ;; esac
+  scope=$(fm_backend_herdr_workspace_label) || return 1
+  [ -n "$scope" ] || return 1
+  if [ "$count" -eq 0 ]; then
+    printf '%s' "$scope"
+    return 0
+  fi
+  single=""
+  if [ "$count" -eq 1 ]; then
+    lane=$(printf '%s' "$list" | jq -r '[.result.tabs[]? | select((.label // "") | startswith("fm-")) | (.label // "")] | .[0]' 2>/dev/null)
+    single=${lane#fm-}
+  fi
+  summary=$(fm_surface_name_lane_summary "$count" "$single") || return 1
+  fm_surface_name_workspace_label "$scope" "$summary"
+}
+
+# fm_backend_herdr_workspace_relabel_lanes: rewrite a container's label so
+# its lane summary matches the lanes it holds RIGHT NOW.
+#
+# Only THIS home's own container may be relabeled by this home: the gate is
+# the same scope matcher the spawn path uses to resolve a home's container,
+# so a close inside another home's container can never silently take that
+# container over.  Such a container is left exactly as it is - the naming
+# check reports it instead.
+#
+# Every READ this helper depends on is checked.  A failed read is a FAILURE,
+# never a successful "nothing to do": the lane count in a container label is
+# a LIVE statement about the fleet, and a container whose count could not be
+# read keeps a STALE count that nothing downstream can catch (a stale label is
+# syntactically valid, so the naming check reads it as conforming).
+#
+# <session> <workspace_id>
+fm_backend_herdr_workspace_relabel_lanes() {
+  local session=$1 wsid=$2 owners current_label current_raw new_label
+  [ -n "$wsid" ] || return 0
+  # A failed OWNER read is not "this container is not mine": it is an
+  # unreadable surface.  Reporting success there leaves a stale lane summary
+  # behind and tells the caller the summary is correct when nobody checked.
+  owners=$(fm_backend_herdr_workspace_find_all "$session") || {
+    echo "warning: herdr could not read the workspace list in session $session; the lane summary of workspace $wsid was not refreshed" >&2
+    return 1
+  }
+  if ! printf '%s\n' "$owners" | grep -qx -- "$wsid"; then
+    return 0
+  fi
+  # The current label is its own read: a failed read is not an empty label,
+  # and comparing a computed label against an empty one renames on a guess.
+  current_raw=$(fm_backend_herdr_cli "$session" workspace get "$wsid" 2>/dev/null) || {
+    echo "warning: herdr could not read the label of workspace $wsid (session $session); the lane summary was not refreshed" >&2
+    return 1
+  }
+  if ! printf '%s' "$current_raw" | jq -e '
+        (.result.workspace | type) == "object"
+        and (.result.workspace.label | type) == "string"
+      ' >/dev/null 2>&1; then
+    echo "warning: herdr could not parse the label of workspace $wsid (session $session); the lane summary was not refreshed" >&2
+    return 1
+  fi
+  current_label=$(printf '%s' "$current_raw" | jq -r '.result.workspace.label' 2>/dev/null)
+  # The NEW label carries the LIVE lane count.  A failed lane-count read is
+  # UNKNOWN, never zero: a "no lanes" label on a container that still holds
+  # two lanes is a false statement about the fleet.
+  new_label=$(fm_backend_herdr_workspace_lane_label "$session" "$wsid") || {
+    echo "warning: herdr could not read the lane count of workspace $wsid (session $session); the lane summary was not refreshed" >&2
+    return 1
+  }
+  [ -n "$new_label" ] || {
+    echo "warning: herdr computed an empty lane summary for workspace $wsid (session $session); the lane summary was not refreshed" >&2
+    return 1
+  }
+  if [ "$new_label" = "$current_label" ]; then
+    return 0
+  fi
+  if fm_backend_herdr_cli "$session" workspace rename "$wsid" "$new_label" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "warning: herdr could not refresh the lane summary of workspace $wsid (session $session)" >&2
+  return 1
+}
+
+# fm_backend_herdr_workspace_refresh_lane_summary: refresh the lane summary of
+# the container a lane was removed from, and REPORT a failed refresh.
+#
+# The lane summary is a LIVE count.  Removing a lane from a container changes
+# that count, and a container whose count was not refreshed keeps a stale
+# "scope + N lanes" label - a false statement about the running fleet that
+# the naming check cannot catch, because a stale label is syntactically
+# valid.  An UNKNOWN container (the pane lookup failed) means the summary
+# cannot be refreshed at all, which is reported too.
+#
+# The refresh never changes the caller's own status: the lane IS gone, and a
+# caller that treats a failed refresh as a failed close would retry a close
+# that already happened.  The failure is reported on stderr instead.
+#
+# <session> <workspace_id> <what-removed>
+fm_backend_herdr_workspace_refresh_lane_summary() {  # <session> <workspace_id> <what>
+  local session=$1 wsid=$2 what=$3
+  if [ -z "$wsid" ]; then
+    echo "warning: herdr could not read the container of $what (session $session); its lane summary was not refreshed and may still show the old lane count" >&2
+    return 1
+  fi
+  if ! fm_backend_herdr_workspace_relabel_lanes "$session" "$wsid"; then
+    echo "warning: herdr could not refresh the lane summary of workspace $wsid after removing $what (session $session); its label may still show the old lane count" >&2
+    return 1
+  fi
+  return 0
+}
+
+fm_backend_herdr_create_task_inner() {  # <container> <label> <cwd> <seeded_default_tab_id>
+  local container=$1 label=$2 cwd=$3 seeded_tab_id=${4:-} session wsid list dup_tabs dup dup_pane dup_tab_ids out tab_id pane_id remaining_dup_tabs task_count existing_task_count removed_task_count single_lane summary workspace_label
   session=${container%%:*}
   wsid=${container#*:}
   list=$(fm_backend_herdr_cli "$session" tab list --workspace "$wsid" 2>/dev/null) || return 1
+  # The tab ids this workspace held BEFORE the create.  They are what makes
+  # the rollback's identification of "the tab this call created" exact when
+  # the create response itself cannot be parsed.
+  FM_BACKEND_HERDR_PRE_CREATE_TAB_IDS=$(printf '%s' "$list" | jq -r '.result.tabs[]? | .tab_id // empty' 2>/dev/null)
+  existing_task_count=$(printf '%s' "$list" | jq -r '[.result.tabs[] | select((.label // "") | startswith("fm-"))] | length' 2>/dev/null) || return 1
   dup_tabs=$(printf '%s' "$list" | jq -r --arg want "$label" 'if (.result.tabs | type) == "array" then .result.tabs[] | select(.label == $want) | .tab_id else error("missing result.tabs") end' 2>/dev/null) || {
     echo "error: could not parse herdr tab list output for workspace $wsid (session $session)" >&2
     return 1
@@ -1795,8 +2088,13 @@ $dup_tabs
 EOF
   fi
   out=$(fm_backend_herdr_cli "$session" tab create --workspace "$wsid" --cwd "$cwd" --label "$label" --no-focus 2>/dev/null) || return 1
+  # OWNERSHIP STARTS HERE.  From this point a live tab and pane exist, and
+  # every failure below must go through the rollback.
+  FM_BACKEND_HERDR_CREATE_OWNED=1
   tab_id=$(printf '%s' "$out" | jq -r '.result.tab.tab_id // empty' 2>/dev/null)
   pane_id=$(printf '%s' "$out" | jq -r '.result.root_pane.pane_id // empty' 2>/dev/null)
+  FM_BACKEND_HERDR_CREATED_TAB_ID=$tab_id
+  FM_BACKEND_HERDR_CREATED_PANE_ID=$pane_id
   if [ -z "$tab_id" ] || [ -z "$pane_id" ]; then
     echo "error: could not parse tab/pane id from herdr tab create output" >&2
     return 1
@@ -1825,6 +2123,16 @@ EOF
       return 1
     fi
   fi
+  removed_task_count=$(printf '%s' "$dup_tab_ids" | grep -c '[^[:space:]]' || true)
+  task_count=$((existing_task_count - removed_task_count + 1))
+  if [ "$task_count" -eq 1 ]; then
+    single_lane=${label#fm-}
+  else
+    single_lane=""
+  fi
+  summary=$(fm_surface_name_lane_summary "$task_count" "$single_lane") || return 1
+  workspace_label=$(fm_surface_name_workspace_label "$(fm_backend_herdr_workspace_label)" "$summary") || return 1
+  fm_backend_herdr_cli "$session" workspace rename "$wsid" "$workspace_label" >/dev/null 2>&1 || return 1
   printf '%s %s' "$tab_id" "$pane_id"
 }
 
@@ -1969,10 +2277,18 @@ fm_backend_herdr_projection_cleanup_exact() {  # <session> <task-pane> <seeded-p
 fm_backend_herdr_projection_parent_workspace_exact() {  # <session> <parent-label>
   local session=$1 parent_label=$2 list
   list=$(fm_backend_herdr_cli "$session" workspace list 2>/dev/null) || return 1
+  # The parent is resolved by its SCOPE field, so a parent whose label also
+  # carries a lane summary is still found. A projection space is never a
+  # parent: it is a child of one.
   printf '%s' "$list" | jq -er --arg parent_label "$parent_label" '
+    def scope_of($l): ($l | split(" · ")[0]);
     (.result.workspaces // null) as $spaces
     | select(($spaces | type) == "array")
-    | [$spaces[]? | select(.label == $parent_label)]
+    | [$spaces[]?
+       | select((.label | type) == "string")
+       | select((.label | startswith("└ ")) | not)
+       | select((.label == $parent_label)
+                or (scope_of(.label) == scope_of($parent_label)))]
     | if length == 1
         and (.[0].workspace_id | type) == "string"
         and (.[0].workspace_id | length) > 0
@@ -2009,7 +2325,7 @@ fm_backend_herdr_projection_live_binding_matches() {  # <session> <token> <works
       | select(([$spaces[]? | select(.workspace_id == $workspace and .label == $workspace_label)] | length) == 1)
       | select(([$spaces[]? | select((.label | type) == "string" and (.label | endswith(" · p:" + $token)))] | length) == 1)
       | select(([$spaces[]? | select((.label | type) == "string" and (.label | endswith(" · p:" + $token)) and .workspace_id == $workspace)] | length) == 1)
-      | select(([$spaces[]? | select(.workspace_id == $parent_workspace and .label == $parent_label)] | length) == 1)
+      | select(([$spaces[]? | select(.workspace_id == $parent_workspace)] | length) == 1)
       | ([range(0; $spaces | length) | select($spaces[.].workspace_id == $parent_workspace)]) as $parents
       | ([range(0; $spaces | length) | select($spaces[.].workspace_id == $workspace)]) as $children
       | select(($parents | length) == 1 and ($children | length) == 1)
@@ -2747,12 +3063,15 @@ fm_backend_herdr_kill_serialized() {  # <session> <pane>
   local session=$1 pane=$2
   local before active_tab info target_pane target_tab target_ws plan shell_pid plan_move_record close_failed workspace_presence
   before=$(fm_backend_herdr_projection_focus_snapshot "$session") || before=
+  # The pane's owning workspace is read BEFORE the close: after the close the
+  # pane may be gone, and the parent container's lane summary must be
+  # recomputed for the container the CLOSED lane was in.
+  info=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null) || info=
+  target_pane=$(printf '%s' "$info" | jq -r '.result.pane.pane_id // empty' 2>/dev/null)
+  target_tab=$(printf '%s' "$info" | jq -r '.result.pane.tab_id // empty' 2>/dev/null)
+  target_ws=$(printf '%s' "$info" | jq -r '.result.pane.workspace_id // empty' 2>/dev/null)
   if [ -n "$before" ]; then
     active_tab=${before#*$'\t'}
-    info=$(fm_backend_herdr_cli "$session" pane get "$pane" 2>/dev/null) || info=
-    target_pane=$(printf '%s' "$info" | jq -r '.result.pane.pane_id // empty' 2>/dev/null)
-    target_tab=$(printf '%s' "$info" | jq -r '.result.pane.tab_id // empty' 2>/dev/null)
-    target_ws=$(printf '%s' "$info" | jq -r '.result.pane.workspace_id // empty' 2>/dev/null)
     if [ "$target_pane" = "$pane" ] && [ -n "$target_tab" ] && [ "$target_tab" != "$active_tab" ]; then
       plan=$(fm_backend_herdr_emptying_close_plan "$session" "$pane" "$target_ws" "$target_tab" "${before%%$'\t'*}")
       plan_move_record=
@@ -2786,10 +3105,22 @@ fm_backend_herdr_kill_serialized() {  # <session> <pane>
         fm_backend_herdr_emptying_move_rollback "$plan_move_record" || true
       fi
       fm_backend_herdr_projection_focus_restore "$session" "$before" "task kill" || true
+      # The lane summary is a LIVE count: the container the closed lane was
+      # in is relabelled so it says how many lanes it holds NOW.  Without
+      # this, closing one of two lanes leaves a syntactically valid but
+      # FALSE "scope + 2 lanes" on the running surface.  A failed refresh is
+      # REPORTED (the helper warns on stderr) and never swallowed into a
+      # silent success - the kill itself stays best-effort.
+      fm_backend_herdr_workspace_refresh_lane_summary "$session" "$target_ws" "pane $pane" || true
       return 0
     fi
   fi
   fm_backend_herdr_explicit_close_pane_confirmed "$session" "$pane" || true
+  # Same LIVE-COUNT refresh as the focus-safe path above.  When the pane
+  # lookup failed, target_ws is EMPTY: the container of the closed lane is
+  # then UNKNOWN, and the helper reports that the summary could not be
+  # refreshed instead of pretending the container held no lanes.
+  fm_backend_herdr_workspace_refresh_lane_summary "$session" "$target_ws" "pane $pane" || true
 }
 
 fm_backend_herdr_kill() {  # <target>

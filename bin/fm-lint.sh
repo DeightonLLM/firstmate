@@ -8,6 +8,21 @@
 # Tests stop source analysis at imported production modules because every
 # production shell is already a canonical, source-aware root of this same run.
 #
+# The verdict is a RATCHET, not a zero-findings gate. The diagnostics this run
+# collected are compared against the committed baseline
+# (bin/fm-lint-baseline.tsv) by bin/fm-lint-ratchet.sh, which owns the
+# baseline format, the comparison, and the update:
+#
+#   exit 0  no drift. Every diagnostic is already baselined, so the known
+#           findings stay visible while a new one is blocked.
+#   exit 1  drift. A new diagnostic appeared, or a baselined diagnostic
+#           disappeared and the baseline is stale.
+#   exit 2  usage or I/O error.
+#
+# The baseline only ratchets down: --update-baseline refuses to record any
+# diagnostic fingerprint is above the recorded one, so a new diagnostic has to
+# be fixed in the source before it can be recorded.
+#
 # Canonical lint defaults to two bounded workers over two stable logical shards.
 # Each shard writes separate diagnostics, and the parent replays those outputs in
 # deterministic shard and root order after every worker finishes. FM_LINT_JOBS=1
@@ -21,6 +36,8 @@
 #   fm-lint.sh <path>...               lint explicit roots with the same config
 #   fm-lint.sh --jobs <1|2> [path]...  override bounded worker count
 #   fm-lint.sh --telemetry <path> ...  write a quiet metrics snapshot
+#   fm-lint.sh --baseline <path>       use another baseline file
+#   fm-lint.sh --update-baseline       re-record the baseline from this run
 #   fm-lint.sh --required-version      print the ShellCheck pin
 #   fm-lint.sh --list-files            print the canonical file set
 #   fm-lint.sh --help                  print this usage
@@ -29,6 +46,8 @@ set -u
 REQUIRED_SHELLCHECK=0.11.0
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SELF_DIR/fm-lint.sh"
+RATCHET="$SELF_DIR/fm-lint-ratchet.sh"
+BASELINE_FILE="$SELF_DIR/fm-lint-baseline.tsv"
 ROOT="$(cd "$SELF_DIR/.." && pwd)"
 cd "$ROOT" || exit 1
 
@@ -84,12 +103,14 @@ if [ "${1:-}" = "--required-version" ]; then
 fi
 
 fm_lint_usage() {
-  sed -n '2,26{s/^# \{0,1\}//;p;}' "$SELF"
+  sed -n '2,/^[^#]/{/^[^#]/d;p}' "$SELF" | sed 's/^# \{0,1\}//'
 }
 
 JOBS=${FM_LINT_JOBS:-2}
 TELEMETRY=${FM_LINT_TELEMETRY:-}
 LIST_FILES=0
+UPDATE_BASELINE=0
+EXPLICIT_ROOTS=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --jobs)
@@ -108,6 +129,19 @@ while [ "$#" -gt 0 ]; do
       ;;
     --telemetry=*)
       TELEMETRY=${1#*=}
+      shift
+      ;;
+    --baseline)
+      [ "$#" -ge 2 ] || { printf 'fm-lint.sh: --baseline requires a path.\n' >&2; exit 2; }
+      BASELINE_FILE=$2
+      shift 2
+      ;;
+    --baseline=*)
+      BASELINE_FILE=${1#*=}
+      shift
+      ;;
+    --update-baseline)
+      UPDATE_BASELINE=1
       shift
       ;;
     --list-files)
@@ -132,11 +166,26 @@ case "$JOBS" in
 esac
 
 if [ "$#" -gt 0 ]; then
+  EXPLICIT_ROOTS=1
   ROOTS=("$@")
 else
   ROOTS=(bin/*.sh bin/backends/*.sh tests/*.sh)
 fi
 ROOT_COUNT=${#ROOTS[@]}
+
+if [ "$UPDATE_BASELINE" -eq 1 ] && [ "$EXPLICIT_ROOTS" -eq 1 ]; then
+  CANONICAL_ROOTS=(bin/*.sh bin/backends/*.sh tests/*.sh)
+  if [ "${#ROOTS[@]}" -ne "${#CANONICAL_ROOTS[@]}" ]; then
+    printf 'fm-lint.sh: --update-baseline requires the complete canonical file set.\n' >&2
+    exit 2
+  fi
+  for i in "${!CANONICAL_ROOTS[@]}"; do
+    if [ "${ROOTS[$i]}" != "${CANONICAL_ROOTS[$i]}" ]; then
+      printf 'fm-lint.sh: --update-baseline requires the complete canonical file set.\n' >&2
+      exit 2
+    fi
+  done
+fi
 
 if [ "$LIST_FILES" -eq 1 ]; then
   [ "$#" -eq 0 ] || {
@@ -338,11 +387,23 @@ fi
 
 # Replay both stable shards in deterministic order and select the first nonzero
 # shard status. ShellCheck processes every root in a shard after earlier findings.
+# The replayed diagnostics are also collected into one file so the ratchet can
+# compare them with the committed baseline.
 overall_rc=0
+DIAGNOSTICS_FILE="$TMP_ROOT/diagnostics.out"
+LINTED_FILES="$TMP_ROOT/linted-files.txt"
+: > "$DIAGNOSTICS_FILE"
+: > "$LINTED_FILES"
+for root in "${ROOTS[@]}"; do
+  printf '%s\n' "$root" >> "$LINTED_FILES"
+done
 worker=0
 while [ "$worker" -lt "$SHARD_COUNT" ]; do
   output="$OUTPUT_DIR/shard.$worker"
-  [ ! -f "$output.out" ] || cat "$output.out"
+  if [ -f "$output.out" ]; then
+    cat "$output.out" >> "$DIAGNOSTICS_FILE"
+    cat "$output.out"
+  fi
   if [ -f "$output.rc" ]; then
     rc=$(cat "$output.rc" 2>/dev/null || printf '2')
     case "$rc" in ''|*[!0-9]*) rc=2 ;; esac
@@ -355,6 +416,28 @@ while [ "$worker" -lt "$SHARD_COUNT" ]; do
   fi
   worker=$((worker + 1))
 done
+
+# The lint verdict is a ratchet against the committed baseline, not a zero
+# findings gate: the known findings stay visible, and a new one is blocked.
+# A shard failure (exit 2) is an infrastructure error and is never masked.
+if [ "$overall_rc" -lt 2 ]; then
+  if [ ! -x "$RATCHET" ]; then
+    printf 'fm-lint.sh: the lint ratchet is missing or not executable: %s\n' "$RATCHET" >&2
+    overall_rc=2
+  else
+    ratchet_rc=0
+    if [ "$UPDATE_BASELINE" -eq 1 ]; then
+      "$RATCHET" --update "$DIAGNOSTICS_FILE" "$BASELINE_FILE" "$LINTED_FILES" || ratchet_rc=$?
+    else
+      "$RATCHET" --compare "$DIAGNOSTICS_FILE" "$BASELINE_FILE" "$LINTED_FILES" || ratchet_rc=$?
+    fi
+    case "$ratchet_rc" in
+      0) overall_rc=0 ;;
+      1) overall_rc=1 ;;
+      *) overall_rc=2 ;;
+    esac
+  fi
+fi
 
 if [ -n "$TELEMETRY" ]; then
   TELEMETRY_END_EPOCH=$(date +%s)

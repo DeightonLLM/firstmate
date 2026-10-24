@@ -1,0 +1,298 @@
+# fm-lint-baseline.tsv - the committed ShellCheck diagnostic fingerprint baseline.
+#
+# One record per fingerprint: <file>\t<SCxxxx>\t<line>\t<column>\t<message>\t<count>, sorted by fingerprint.
+# bin/fm-lint.sh collects diagnostics; bin/fm-lint-ratchet.sh owns this format and comparison.
+#
+# Recorded: 290 diagnostics across 44 files.
+#
+# The ratchet only ratchets down; new fingerprints must be fixed before recording.
+bin/factory-health.sh	SC2010	68	34	Don't use ls | grep. Use a glob or a for loop with a condition to allow non-alphanumeric filenames.	1
+bin/factory-health.sh	SC2016	78	34	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-always-four.sh	SC1090	98	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1547	9	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1637	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1090	1925	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+bin/fm-always-four.sh	SC1091	78	5	Not following: ./fm-crew-state.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC1091	79	3	Not following: ./fm-classify-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC1091	89	3	Not following: ./fm-backend.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC1091	90	3	Not following: ./fm-busy-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC1091	93	3	Not following: ./fm-wake-lib.sh: openBinaryFile: does not exist (No such file or directory)	1
+bin/fm-always-four.sh	SC2034	75	1	CONFIG appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2034	122	1	CAP_REAP appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2034	1903	12	spawns_done appears unused. Verify use (or export if used externally).	1
+bin/fm-always-four.sh	SC2086	518	17	Double quote to prevent globbing and word splitting.	1
+bin/fm-campaign-worker-lib.sh	SC2174	103	36	When used with -p, -m only applies to the deepest directory.	1
+bin/fm-context-preflight.sh	SC2034	29	1	WAREHOUSE_DIR_DEFAULT appears unused. Verify use (or export if used externally).	1
+bin/fm-context-preflight.sh	SC2034	313	11	source_file appears unused. Verify use (or export if used externally).	1
+bin/fm-context-preflight.sh	SC2329	513	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+bin/fm-docs-drift-gate.sh	SC2329	55	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+bin/fm-fleet-status-by-name.sh	SC2016	92	16	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-fleet-status-by-name.sh	SC2029	83	35	Note that, unescaped, this expands on the client side.	1
+bin/fm-fleet-status-by-name.sh	SC2034	12	1	SCRIPT_DIR appears unused. Verify use (or export if used externally).	1
+bin/fm-fleet-status-by-name.sh	SC2034	197	7	P_AGENT appears unused. Verify use (or export if used externally).	1
+bin/fm-fleet-status-by-name.sh	SC2034	198	7	P_STATUS appears unused. Verify use (or export if used externally).	1
+bin/fm-gate-escalation-order.sh	SC2012	43	7	Use find instead of ls to better handle non-alphanumeric filenames.	1
+bin/fm-guard-attest.sh	SC2015	215	30	Note that A && B || C is not if-then-else. C may run when A is true.	1
+bin/fm-lock-reclaim-lib.sh	SC2034	96	1	FM_LOCK_RECLAIM_LIB_DIR appears unused. Verify use (or export if used externally).	1
+bin/fm-log-rotate.sh	SC2329	176	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+bin/fm-m3-review-loop.sh	SC2016	39	61	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-provider-route.sh	SC2016	130	12	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-provider-route.sh	SC2016	134	12	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-provider-route.sh	SC2016	138	12	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-provider-route.sh	SC2016	142	12	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-reap-gate.sh	SC2097	177	22	This assignment is only seen by the forked process.	1
+bin/fm-reap-gate.sh	SC2097	215	18	This assignment is only seen by the forked process.	1
+bin/fm-reap-gate.sh	SC2098	178	45	This expansion will not see the mentioned assignment.	1
+bin/fm-reap-gate.sh	SC2098	179	49	This expansion will not see the mentioned assignment.	1
+bin/fm-reap-gate.sh	SC2098	216	43	This expansion will not see the mentioned assignment.	1
+bin/fm-reap-gate.sh	SC2098	217	47	This expansion will not see the mentioned assignment.	1
+bin/fm-teardown.sh	SC2016	583	17	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-warehouse-submit.sh	SC2016	55	13	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-warehouse-submit.sh	SC2016	56	13	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-warehouse-submit.sh	SC2016	58	13	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-warehouse-submit.sh	SC2016	85	10	Expressions don't expand in single quotes, use double quotes for that.	1
+bin/fm-whoosh-fixture.sh	SC2034	9	1	CHILD_VERSION appears unused. Verify use (or export if used externally).	1
+bin/fm-whoosh-fixture.sh	SC2086	88	94	Double quote to prevent globbing and word splitting.	1
+bin/fm-whoosh-fixture.sh	SC2154	88	10	rc is referenced but not assigned.	1
+bin/test-ready-bridge.sh	SC2034	16	1	FAKE_LEDGER appears unused. Verify use (or export if used externally).	1
+bin/test-ready-bridge.sh	SC2034	17	1	FAKE_PENDING appears unused. Verify use (or export if used externally).	1
+bin/test-ready-bridge.sh	SC2329	29	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-afk-launch.test.sh	SC2031	172	16	marker was modified in a subshell. That change might be lost.	1
+tests/fm-afk-launch.test.sh	SC2031	269	12	marker was modified in a subshell. That change might be lost.	1
+tests/fm-afk-launch.test.sh	SC2031	279	26	marker was modified in a subshell. That change might be lost.	1
+tests/fm-agy-harness.test.sh	SC2016	283	30	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-agy-harness.test.sh	SC2016	285	23	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-agy-harness.test.sh	SC2016	288	19	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-agy-harness.test.sh	SC2016	401	11	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-agy-harness.test.sh	SC2016	402	6	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-always-four.test.sh	SC2030	142	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1036	5	Modification of PATH is local (to subshell caused by $(..) expansion).	1
+tests/fm-always-four.test.sh	SC2030	1174	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1178	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1182	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1289	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1352	65	Modification of FM_STATE_OVERRIDE is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1353	29	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1484	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1494	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1502	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2030	1510	5	Modification of PATH is local (to subshell caused by (..) group).	1
+tests/fm-always-four.test.sh	SC2031	952	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	958	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	965	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	968	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	983	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	995	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1001	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1013	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1018	26	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1036	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1058	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1064	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1095	27	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1147	27	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1174	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1178	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1182	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1205	39	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1234	70	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1289	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1353	44	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1435	28	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1436	27	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1453	12	FM_STATE_OVERRIDE was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1484	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1494	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1502	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1510	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2031	1513	20	PATH was modified in a subshell. That change might be lost.	1
+tests/fm-always-four.test.sh	SC2129	845	3	Consider using { cmd1; cmd2; } >> file instead of individual redirects.	1
+tests/fm-always-four.test.sh	SC2181	533	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	606	5	Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	680	5	Check exit code directly with e.g. 'if ! mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	720	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	806	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	1175	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-always-four.test.sh	SC2181	1485	5	Check exit code directly with e.g. 'if mycmd;', not indirectly with $?.	1
+tests/fm-brief.test.sh	SC2016	799	15	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-brief.test.sh	SC2016	826	15	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-brief.test.sh	SC2016	864	15	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-brief.test.sh	SC2034	767	5	FM_HARNESS_TODO_LIST appears unused. Verify use (or export if used externally).	1
+tests/fm-calm-pi-extension.test.sh	SC2034	40	3	step appears unused. Verify use (or export if used externally).	1
+tests/fm-campaign-worker-authority.test.sh	SC1090	20	3	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-campaign-worker-authority.test.sh	SC2174	26	10	When used with -p, -m only applies to the deepest directory.	1
+tests/fm-comms-ingest.test.sh	SC2317	83	7	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
+tests/fm-comms-ingest.test.sh	SC2317	91	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
+tests/fm-comms-ingest.test.sh	SC2317	95	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
+tests/fm-comms-ingest.test.sh	SC2317	329	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
+tests/fm-comms-notify-hang.test.sh	SC2034	40	16	mode appears unused. Verify use (or export if used externally).	1
+tests/fm-context-preflight.test.sh	SC2001	116	9	See if you can use ${variable//search/replace} instead.	1
+tests/fm-context-preflight.test.sh	SC2329	73	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-dead-pane-sweep.test.sh	SC2034	20	1	ROOT appears unused. Verify use (or export if used externally).	1
+tests/fm-dead-pane-sweep.test.sh	SC2155	95	9	Declare and assign separately to avoid masking return values.	1
+tests/fm-dead-pane-sweep.test.sh	SC2329	60	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	75	40	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	85	59	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	96	15	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	102	15	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2016	109	18	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-dispatch-guard-max-lanes.test.sh	SC2034	73	18	body appears unused. Verify use (or export if used externally).	1
+tests/fm-gate-lib.test.sh	SC2016	24	15	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-lock-reclaim-disk.test.sh	SC2329	57	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-pane-isolation.test.sh	SC2016	114	28	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-pane-isolation.test.sh	SC2016	115	30	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-provider-route-supervise.test.sh	SC2034	267	16	unexpected appears unused. Verify use (or export if used externally).	1
+tests/fm-provider-route-watch.test.sh	SC2034	16	1	ROUTE appears unused. Verify use (or export if used externally).	1
+tests/fm-provider-route.test.sh	SC2034	95	1	CALLS appears unused. Verify use (or export if used externally).	1
+tests/fm-provider-route.test.sh	SC2034	95	49	QUOTA_AXI_BIN appears unused. Verify use (or export if used externally).	1
+tests/fm-provider-route.test.sh	SC2269	95	30	This variable is assigned to itself, so the assignment does nothing.	1
+tests/fm-quota-board-browser.test.sh	SC2015	211	15	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	212	41	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	213	39	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	218	29	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	223	26	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	225	48	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	226	41	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	227	41	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	228	46	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	229	57	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	234	42	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	235	52	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	236	53	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	237	54	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	238	55	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	239	54	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	242	54	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	249	50	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	250	54	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	251	56	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	253	61	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	288	51	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	289	51	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	290	56	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	296	48	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	328	50	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	329	52	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	330	51	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	331	43	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-board-browser.test.sh	SC2015	333	54	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	100	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	127	19	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	137	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	142	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	147	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	152	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	157	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	162	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	167	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	172	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	176	37	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	193	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	199	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	205	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	262	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	271	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	276	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate-leave-refused.test.sh	SC2015	285	3	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	36	75	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	41	79	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	46	57	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	51	17	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	56	17	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	59	17	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	64	55	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	69	62	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	74	17	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	80	58	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	85	17	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	90	57	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-quota-gate.test.sh	SC2015	93	83	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	50	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	61	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	73	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	84	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	96	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	109	7	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	122	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	283	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	296	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	310	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC1090	371	5	ShellCheck can't follow non-constant source. Use a directive to specify location.	1
+tests/fm-raw-herdr-senpi.test.sh	SC2034	402	5	FM_HOME appears unused. Verify use (or export if used externally).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2034	403	5	FM_ROOT appears unused. Verify use (or export if used externally).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2034	405	5	FM_STATE_OVERRIDE appears unused. Verify use (or export if used externally).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2034	406	5	FM_DATA_OVERRIDE appears unused. Verify use (or export if used externally).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2034	438	3	RAW_HERDR_SENPI appears unused. Verify use (or export if used externally).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2034	439	5	FM_RAW_HERDR_SENPI_BYPASS appears unused. Verify use (or export if used externally).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2034	440	5	FM_CONFIG_OVERRIDE appears unused. Verify use (or export if used externally).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	46	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	58	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	69	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	81	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	92	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	105	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	118	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	131	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	150	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	170	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	188	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	207	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	226	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	245	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	262	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	279	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	293	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	306	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	323	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	337	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	350	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	366	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	379	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	397	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	416	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	436	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-raw-herdr-senpi.test.sh	SC2329	452	1	This function is never invoked. Check usage (or ignored if invoked indirectly).	1
+tests/fm-reap-gate.test.sh	SC2034	20	1	TEARDOWN appears unused. Verify use (or export if used externally).	1
+tests/fm-spawn-cap-enforcement.test.sh	SC2155	83	9	Declare and assign separately to avoid masking return values.	1
+tests/fm-spawn-cap-enforcement.test.sh	SC2155	208	9	Declare and assign separately to avoid masking return values.	1
+tests/fm-todo-gate.test.sh	SC2016	171	10	Expressions don't expand in single quotes, use double quotes for that.	1
+tests/fm-wake-drain-loop.test.sh	SC2015	41	15	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-wake-drain-loop.test.sh	SC2015	55	5	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-wake-drain-loop.test.sh	SC2015	60	17	Note that A && B || C is not if-then-else. C may run when A is true.	1
+tests/fm-watch-triage.test.sh	SC2031	1124	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1161	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1192	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1205	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1234	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1249	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1279	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1311	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1324	9	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1362	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1375	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1402	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1416	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1452	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1521	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1545	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1553	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1566	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1582	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1625	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1628	13	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1644	39	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1648	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1656	41	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1663	71	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1670	48	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1676	70	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1684	48	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1699	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1708	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1724	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1747	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1768	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1801	7	! was modified in a subshell. That change might be lost.	1
+tests/fm-watch-triage.test.sh	SC2031	1835	7	! was modified in a subshell. That change might be lost.	1
+tests/plan-page-contract.test.sh	SC2317	65	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1
+tests/plan-page-contract.test.sh	SC2317	115	5	Command appears to be unreachable. Check usage (or ignore if invoked indirectly).	1

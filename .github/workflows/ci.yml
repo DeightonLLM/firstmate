@@ -26,7 +26,25 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       # Single owner of the lint definition (file set + config + version). Do not
       # re-spell the shellcheck command here; keep CI and the pre-push gate on it.
-      - run: bin/fm-lint.sh
+      # The lint owner compares its findings against the committed baseline
+      # (bin/fm-lint-baseline.tsv), so this job BLOCKS a pull request that adds
+      # a new diagnostic while the baselined findings stay visible for burn-down.
+      - name: Lint shell scripts against the committed baseline
+        run: |
+          set -uo pipefail
+          bin/fm-lint.sh >"$RUNNER_TEMP/fm-lint.out" 2>&1
+          status=$?
+          cat "$RUNNER_TEMP/fm-lint.out"
+          {
+            echo "### Shell-lint burn-down"
+            echo ""
+            echo "The lint gate is a ratchet: the findings below are the committed"
+            echo "baseline. A NEW diagnostic fails the job."
+            echo ""
+            grep -E 'ratchet (OK|FAILED)|baseline updated' "$RUNNER_TEMP/fm-lint.out" \
+              || echo "no ratchet summary line was produced"
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
   # Deterministic proof that portable parallel shards + portable serial + Herdr
   # equal the complete tests/*.test.sh inventory with no missing or duplicates.

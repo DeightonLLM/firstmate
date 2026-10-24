@@ -60,7 +60,12 @@ ID=task
 WS=w2
 TAB=w2:t1
 PANE=w2:p1
-TITLE="└ task · p:$TOKEN"
+# The visible title is the CURRENT projection label for this home, built by
+# the one function that owns it (docs/surface-naming-contract.md). The
+# cleanup only retires a space whose live label equals that exact expected
+# label, so the fixture must use the real one.
+export FM_SURFACE_HOST=testhost
+TITLE=$(fm_backend_herdr_projection_workspace_label "$ID" "$TOKEN")
 FIXTURE_DIR="$TMP_ROOT/fixture"
 LOCK_LOG="$TMP_ROOT/locks.log"
 CLOSE_LOG="$TMP_ROOT/closes.log"
