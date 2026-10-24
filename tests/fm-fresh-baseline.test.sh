@@ -118,6 +118,7 @@ make_populated_home() {
   printf '# lean-ctx rules\n' > "$home/.codex/LEAN-CTX.md"
   printf '# herdr agent routing\n' > "$home/docs/agent-policy/HERDR_AGENT_ROUTING.md"
   printf '# herdr bounded execution\n' > "$home/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md"
+  printf '# watchers and polls contract\n' > "$home/docs/agent-policy/WATCHERS_AND_POLLS.md"
 }
 
 run_brief() {
@@ -162,6 +163,7 @@ for i in 0 1 2; do
   assert_contains "$manifest" "routing=$POPULATED/docs/agent-policy/HERDR_AGENT_ROUTING.md scope=home sha256:" "$label brief routing not resolved from the home"
   assert_contains "$manifest" "bounded=$POPULATED/docs/agent-policy/HERDR_BOUNDED_EXECUTION.md scope=home sha256:" "$label brief bounded-execution not resolved from the home"
   assert_contains "$manifest" "lean-ctx=$POPULATED/.codex/LEAN-CTX.md scope=home sha256:" "$label brief lean-ctx not resolved from the home"
+  assert_contains "$manifest" "watchers=$POPULATED/docs/agent-policy/WATCHERS_AND_POLLS.md scope=home sha256:" "$label brief watchers contract not resolved from the home"
   assert_contains "$manifest" "warehouse=$ROOT/docs/system-context/INDEX.md sha256:" "$label brief missing warehouse hash pointer"
   assert_contains "$manifest" "warehouse-preflight=$ROOT/bin/fm-context-preflight.sh" "$label brief missing warehouse preflight pointer"
   assert_contains "$manifest" "goal-queue=$POPULATED/data/backlog.md" "$label brief missing goal/queue handoff pointer"
@@ -175,6 +177,7 @@ for i in 0 1 2; do
   verify_resolved_pointer "$manifest" routing "$label brief"
   verify_resolved_pointer "$manifest" bounded "$label brief"
   verify_resolved_pointer "$manifest" lean-ctx "$label brief"
+  verify_resolved_pointer "$manifest" watchers "$label brief"
 done
 
 # The session-start emitter must resolve the same roles from the same home, and
@@ -185,6 +188,10 @@ populated_session=$(env HOME="$POPULATED" FM_HOME="$POPULATED" FM_ROOT_OVERRIDE=
 assert_contains "$populated_session" "policy=$POPULATED/AGENT-POLICY.md scope=home sha256:" 'session-start policy not resolved from the home'
 assert_contains "$populated_session" "routing=$POPULATED/docs/agent-policy/HERDR_AGENT_ROUTING.md scope=home sha256:" 'session-start routing not resolved from the home'
 assert_contains "$populated_session" "lean-ctx=$POPULATED/.codex/LEAN-CTX.md scope=home sha256:" 'session-start lean-ctx not resolved from the home'
+# The watchers-and-polls contract must reach a fresh agent at SESSION START, not
+# only in a brief. It was defined in the manifest and emitted only in briefs, so
+# every agent that started a session without a brief never saw it.
+assert_contains "$populated_session" "watchers=$POPULATED/docs/agent-policy/WATCHERS_AND_POLLS.md scope=home sha256:" 'session-start watchers contract not resolved from the home'
 assert_contains "$populated_session" "warehouse=$ROOT/docs/system-context/INDEX.md sha256:" 'session-start missing warehouse hash pointer'
 assert_contains "$populated_session" "warehouse-preflight=$ROOT/bin/fm-context-preflight.sh sha256:" 'session-start dropped the warehouse preflight digest'
 assert_no_manifest_pointer_to_other_home "$populated_session" 'populated session-start manifest' "$POPULATED"
@@ -275,7 +282,7 @@ bare_session=$(env HOME="$BARE" FM_HOME="$BARE" FM_ROOT_OVERRIDE="$ROOT" \
 assert_contains "$bare_brief" 'Baseline manifest: fresh-agent-baseline/v1' 'bare brief missing manifest version'
 assert_no_manifest_pointer_to_other_home "$bare_brief" 'bare brief' "$BARE"
 assert_no_manifest_pointer_to_other_home "$bare_session" 'bare session-start manifest' "$BARE"
-for role in policy project-policy routing bounded lean-ctx; do
+for role in policy project-policy routing bounded lean-ctx watchers; do
   assert_unavailable_line "$bare_brief" "$role" 'bare brief'
   assert_unavailable_line "$bare_session" "$role" 'bare session-start manifest'
 done

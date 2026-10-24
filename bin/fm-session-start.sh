@@ -277,7 +277,12 @@ fresh_agent_baseline_manifest() {
   # The policy-family roles resolve from this home, so a fresh agent is never
   # pointed at another host's account home. A role with no readable home-local
   # file is declared unavailable instead of being dropped or mislabeled.
-  for role in policy project-policy routing bounded lean-ctx; do
+  # `watchers` is in this list on purpose: the watchers-and-polls contract is
+  # the answer to a question every agent asks (should this watcher run, who
+  # owns it, how is it made safe), and a contract nobody is pointed at is not
+  # a contract. It was defined in the baseline manifest and emitted only in
+  # briefs, so a fresh agent's session start never saw it.
+  for role in policy project-policy routing bounded lean-ctx watchers; do
     if ! resolved="$(fm_baseline_resolve_role "$role")"; then
       fm_baseline_unavailable_line "$role"
       continue
