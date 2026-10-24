@@ -30,3 +30,18 @@ PLAN_20260927-refund-and-sprint.md
 REPORT.md
 REVIEW-gemini-20260927.md
 HANG_ANALYSIS_20260927.md
+
+# Local working files that must never be committed: the live ticket inbox the
+# publisher ingests from, the captain's standing-authority record, local
+# backups, local agent scratch, a local upstream mirror, and one stray file
+# written by a malformed command.
+#
+# These keep the checkout dirty for bin/fm-merge-local.sh, which refuses to
+# fast-forward into a tree that is not clean. Ignoring them is what lets the
+# guarded local-merge path land work without moving or deleting a single file.
+INBOX/
+STANDING-AUTHORITY.md
+*.bak-*
+.pi/agents/
+upstream-pi-subagents-candidate/
+/--json
